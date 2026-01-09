@@ -9,12 +9,10 @@ interface MainPageProps {
 
 export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
     return (
-        <div
-            className="relative w-full h-screen overflow-hidden bg-black cursor-pointer flex items-center justify-center font-sans"
-            onClick={onStart}
-        >
-            {/* Background Image - Reverted to Cover as requested */}
-            <div className="absolute inset-0">
+        <div className="relative w-full h-screen overflow-hidden bg-black font-sans flex items-center justify-center">
+
+            {/* Background Image */}
+            <div className="absolute inset-0 z-0">
                 <img
                     src={mafiaBg}
                     alt="Background"
@@ -22,12 +20,12 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                 />
             </div>
 
-            <div className="absolute inset-0 bg-black/30" />
+            <div className="absolute inset-0 bg-black/30 z-0" />
 
             {/* Content Container */}
             <div className="relative z-10 w-full flex flex-col items-center justify-center p-4">
 
-                {/* Main Title: Mafia Online (SVG for exact styling) */}
+                {/* Main Title */}
                 <motion.div
                     initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -61,7 +59,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     </svg>
                 </motion.div>
 
-                {/* Subtitle Row: Text + Logo to the right */}
+                {/* Subtitle Row */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -73,7 +71,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                             fontFamily: '"Montserrat", sans-serif',
                             color: '#ffb01d',
                             textTransform: 'uppercase',
-                            letterSpacing: '0.2em', // Adjusted for visual balance with adaptive sizing
+                            letterSpacing: '0.2em',
                             fontWeight: 600,
                             textShadow: '0px 2px 4px rgba(0,0,0,0.6)'
                         }}
@@ -89,14 +87,23 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     />
                 </motion.div>
 
-                {/* Start Prompt */}
+                {/* ENTER Button */}
                 <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 2, duration: 1, repeat: Infinity, repeatType: 'reverse' }}
-                    className="absolute bottom-12 text-white/50 font-mono text-xs md:text-sm tracking-[0.3em]"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 1.5, duration: 0.5 }}
+                    className="mt-16"
                 >
-                    CLICK ANYWHERE TO START
+                    <button
+                        onClick={onStart}
+                        className="px-8 py-3 rounded-xl font-mono font-bold text-black border border-white/20 shadow-[0_0_20px_rgba(231,213,113,0.3)] hover:shadow-[0_0_35px_rgba(231,213,113,0.5)] hover:scale-105 transition-all text-sm md:text-base tracking-wider"
+                        style={{
+                            background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
+                        }}
+                    >
+                        ENTER CITY
+                    </button>
+
                 </motion.div>
 
             </div>
