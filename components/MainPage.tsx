@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAccount } from 'wagmi';
 import somniaLogo from '../assets/somniayeal.png';
 import mafiaBg from '../assets/mafia1.jpg';
 
@@ -64,7 +66,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5, duration: 1 }}
-                    className="flex flex-row items-center justify-center gap-4 mt-[-10px] md:mt-[-20px]"
+                    className="flex flex-row items-center justify-center gap-2 mt-[-10px] md:mt-[-20px]"
                 >
                     <p
                         style={{
@@ -87,22 +89,86 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     />
                 </motion.div>
 
-                {/* ENTER Button */}
+                {/* CONNECT / ENTER Button */}
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 1.5, duration: 0.5 }}
                     className="mt-16"
                 >
-                    <button
-                        onClick={onStart}
-                        className="px-8 py-3 rounded-xl font-mono font-bold text-black border border-white/20 shadow-[0_0_20px_rgba(231,213,113,0.3)] hover:shadow-[0_0_35px_rgba(231,213,113,0.5)] hover:scale-105 transition-all text-sm md:text-base tracking-wider"
-                        style={{
-                            background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
+                    <ConnectButton.Custom>
+                        {({
+                            account,
+                            chain,
+                            openAccountModal,
+                            openChainModal,
+                            openConnectModal,
+                            authenticationStatus,
+                            mounted,
+                        }) => {
+                            // Note: If your app doesn't use authentication, you
+                            // can remove all 'authenticationStatus' checks
+                            const ready = mounted && authenticationStatus !== 'loading';
+                            const connected =
+                                ready &&
+                                account &&
+                                chain &&
+                                (!authenticationStatus ||
+                                    authenticationStatus === 'authenticated');
+
+                            return (
+                                <div
+                                    {...(!ready && {
+                                        'aria-hidden': true,
+                                        'style': {
+                                            opacity: 0,
+                                            pointerEvents: 'none',
+                                            userSelect: 'none',
+                                        },
+                                    })}
+                                >
+                                    {(() => {
+                                        if (!connected) {
+                                            return (
+                                                <button
+                                                    onClick={openConnectModal}
+                                                    className="px-8 py-3 rounded-xl font-mono font-bold text-black border border-white/20 shadow-[0_0_20px_rgba(231,213,113,0.3)] hover:shadow-[0_0_35px_rgba(231,213,113,0.5)] hover:scale-105 transition-all text-sm md:text-base tracking-wider"
+                                                    style={{
+                                                        background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
+                                                    }}
+                                                >
+                                                    CONNECT WALLET
+                                                </button>
+                                            );
+                                        }
+
+                                        if (chain.unsupported) {
+                                            return (
+                                                <button
+                                                    onClick={openChainModal}
+                                                    className="px-8 py-3 rounded-xl font-mono font-bold text-white bg-red-600 border border-white/20 shadow-lg hover:scale-105 transition-all text-sm md:text-base tracking-wider"
+                                                >
+                                                    WRONG NETWORK
+                                                </button>
+                                            );
+                                        }
+
+                                        return (
+                                            <button
+                                                onClick={onStart}
+                                                className="px-8 py-3 rounded-xl font-mono font-bold text-black border border-white/20 shadow-[0_0_20px_rgba(231,213,113,0.3)] hover:shadow-[0_0_35px_rgba(231,213,113,0.5)] hover:scale-105 transition-all text-sm md:text-base tracking-wider"
+                                                style={{
+                                                    background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
+                                                }}
+                                            >
+                                                ENTER CITY
+                                            </button>
+                                        );
+                                    })()}
+                                </div>
+                            );
                         }}
-                    >
-                        ENTER CITY
-                    </button>
+                    </ConnectButton.Custom>
 
                 </motion.div>
 
