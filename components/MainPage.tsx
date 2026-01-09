@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import somniaLogo from '../assets/somniayeal.png';
 import mafiaBg from '../assets/mafia1.jpg';
 
 interface MainPageProps {
@@ -9,16 +10,19 @@ interface MainPageProps {
 export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
     return (
         <div
-            className="relative w-full h-screen overflow-hidden text-white cursor-pointer"
+            className="relative w-full h-screen overflow-hidden bg-black cursor-pointer flex items-center justify-center"
             onClick={onStart}
         >
-            {/* Background Image */}
-            <div
-                className="absolute inset-0 bg-cover bg-center z-0"
-                style={{ backgroundImage: `url(${mafiaBg})` }}
-            >
-                <div className="absolute inset-0 bg-black/40" /> {/* Overlay for readability */}
+            {/* Background Image - Full Contain */}
+            <div className="absolute inset-0 flex items-center justify-center">
+                <img
+                    src={mafiaBg}
+                    alt="Background"
+                    className="max-w-full max-h-full object-contain opacity-80"
+                />
             </div>
+
+            <div className="absolute inset-0 bg-black/20" /> {/* Slight overlay */}
 
             {/* Content Container */}
             <div className="relative z-10 w-full h-full flex flex-col items-center justify-center p-4">
@@ -74,6 +78,16 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                 On Somnia Network
                             </text>
                         </svg>
+
+                        {/* Somnia Logo */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.8 }}
+                            className="flex justify-center mt-4"
+                        >
+                            <img src={somniaLogo} alt="Somnia" className="h-16 w-auto object-contain drop-shadow-lg" />
+                        </motion.div>
                     </div>
                 </motion.div>
 
