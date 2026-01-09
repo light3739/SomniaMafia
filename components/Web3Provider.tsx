@@ -31,9 +31,9 @@ const somniaTestnet = defineChain({
 
 const config = getDefaultConfig({
   appName: 'Somnia Mafia',
-  projectId: 'YOUR_PROJECT_ID', // TODO: Get a project ID or use a placeholder
+  projectId: 'YOUR_PROJECT_ID',
   chains: [somniaTestnet],
-  ssr: false, // Vite is client-side
+  ssr: false,
 });
 
 const queryClient = new QueryClient();
