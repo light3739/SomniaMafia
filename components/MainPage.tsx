@@ -132,12 +132,14 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                             return (
                                                 <button
                                                     onClick={openConnectModal}
-                                                    className="px-8 py-3 rounded-xl font-mono font-bold text-black border border-white/20 shadow-[0_0_20px_rgba(231,213,113,0.3)] hover:shadow-[0_0_35px_rgba(231,213,113,0.5)] hover:scale-105 transition-all text-sm md:text-base tracking-wider"
+                                                    className="px-8 py-3 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-105 transition-all text-sm md:text-base tracking-wider relative overflow-hidden ring-1 ring-white/10"
                                                     style={{
                                                         background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
                                                     }}
                                                 >
-                                                    CONNECT WALLET
+                                                    <span className="relative z-10">CONNECT WALLET</span>
+                                                    {/* Shine effect overlay */}
+                                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
                                                 </button>
                                             );
                                         }
@@ -146,7 +148,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                             return (
                                                 <button
                                                     onClick={openChainModal}
-                                                    className="px-8 py-3 rounded-xl font-mono font-bold text-white bg-red-600 border border-white/20 shadow-lg hover:scale-105 transition-all text-sm md:text-base tracking-wider"
+                                                    className="px-8 py-3 rounded-xl font-mono font-bold text-white bg-red-600 shadow-lg hover:scale-105 transition-all text-sm md:text-base tracking-wider ring-1 ring-red-400/50"
                                                 >
                                                     WRONG NETWORK
                                                 </button>
@@ -156,12 +158,13 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                         return (
                                             <button
                                                 onClick={onStart}
-                                                className="px-8 py-3 rounded-xl font-mono font-bold text-black border border-white/20 shadow-[0_0_20px_rgba(231,213,113,0.3)] hover:shadow-[0_0_35px_rgba(231,213,113,0.5)] hover:scale-105 transition-all text-sm md:text-base tracking-wider"
+                                                className="px-8 py-3 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-105 transition-all text-sm md:text-base tracking-wider relative overflow-hidden ring-1 ring-white/10"
                                                 style={{
                                                     background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
                                                 }}
                                             >
-                                                ENTER CITY
+                                                <span className="relative z-10">ENTER CITY</span>
+                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
                                             </button>
                                         );
                                     })()}
