@@ -10,93 +10,91 @@ interface MainPageProps {
 export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
     return (
         <div
-            className="relative w-full h-screen overflow-hidden bg-black cursor-pointer flex items-center justify-center"
+            className="relative w-full h-screen overflow-hidden bg-black cursor-pointer flex items-center justify-center font-sans"
             onClick={onStart}
         >
-            {/* Background Image - Full Contain */}
-            <div className="absolute inset-0 flex items-center justify-center">
+            {/* Background Image - Reverted to Cover as requested */}
+            <div className="absolute inset-0">
                 <img
                     src={mafiaBg}
                     alt="Background"
-                    className="max-w-full max-h-full object-contain opacity-80"
+                    className="w-full h-full object-cover opacity-80"
                 />
             </div>
 
-            <div className="absolute inset-0 bg-black/20" /> {/* Slight overlay */}
+            <div className="absolute inset-0 bg-black/30" />
 
             {/* Content Container */}
-            <div className="relative z-10 w-full h-full flex flex-col items-center justify-center p-4">
+            <div className="relative z-10 w-full flex flex-col items-center justify-center p-4">
 
-                {/* Main Title: Mafia Online */}
+                {/* Main Title: Mafia Online (SVG for exact styling) */}
                 <motion.div
                     initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 1.2, ease: "easeOut" }}
-                    className="text-center"
+                    className="w-full max-w-[90vw] md:max-w-[800px]"
                 >
-                    <div className="w-[80vw] max-w-[800px]">
-                        <svg width="100%" height="150" viewBox="0 0 600 150" className="overflow-visible">
-                            <text
-                                x="50%"
-                                y="40%"
-                                dominantBaseline="middle"
-                                textAnchor="middle"
-                                fill="#ffffff"
-                                stroke="#000000"
-                                strokeWidth="0"
-                                strokeOpacity="0"
-                                strokeLinecap="square"
-                                strokeLinejoin="bevel"
-                                textRendering="auto"
-                                letterSpacing="1.44"
-                                style={{
-                                    fontFamily: '"Playfair Display", serif',
-                                    fontSize: '72px',
-                                    fontStyle: 'italic',
-                                    fontWeight: 900,
-                                    filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.5))'
-                                }}
-                            >
-                                Mafia Online
-                            </text>
-
-                            <text
-                                x="50%"
-                                y="85%" // Positioned below
-                                dominantBaseline="middle"
-                                textAnchor="middle"
-                                fill="#ffb01d"
-                                strokeWidth="0"
-                                style={{
-                                    fontFamily: '"Montserrat", sans-serif',
-                                    fontSize: '18px',
-                                    fontWeight: 600,
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '7.2px'
-                                }}
-                            >
-                                On Somnia Network
-                            </text>
-                        </svg>
-
-                        {/* Somnia Logo */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.8 }}
-                            className="flex justify-center mt-4"
+                    <svg viewBox="0 0 600 120" className="w-full h-auto overflow-visible">
+                        <text
+                            x="50%"
+                            y="60%"
+                            dominantBaseline="middle"
+                            textAnchor="middle"
+                            fill="#ffffff"
+                            stroke="#000000"
+                            strokeWidth="0"
+                            strokeOpacity="0"
+                            strokeLinecap="square"
+                            strokeLinejoin="bevel"
+                            textRendering="auto"
+                            letterSpacing="1.44"
+                            style={{
+                                fontFamily: '"Playfair Display", serif',
+                                fontSize: '72px',
+                                fontStyle: 'italic',
+                                fontWeight: 900,
+                                filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.5))'
+                            }}
                         >
-                            <img src={somniaLogo} alt="Somnia" className="h-16 w-auto object-contain drop-shadow-lg" />
-                        </motion.div>
-                    </div>
+                            Mafia Online
+                        </text>
+                    </svg>
                 </motion.div>
 
-                {/* Start Prompt (Subtle) */}
+                {/* Subtitle Row: Text + Logo to the right */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5, duration: 1 }}
+                    className="flex flex-row items-center justify-center gap-4 mt-[-10px] md:mt-[-20px]"
+                >
+                    <p
+                        style={{
+                            fontFamily: '"Montserrat", sans-serif',
+                            color: '#ffb01d',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.2em', // Adjusted for visual balance with adaptive sizing
+                            fontWeight: 600,
+                            textShadow: '0px 2px 4px rgba(0,0,0,0.6)'
+                        }}
+                        className="text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap"
+                    >
+                        On Somnia Network
+                    </p>
+
+                    <img
+                        src={somniaLogo}
+                        alt="Somnia"
+                        className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md"
+                    />
+                </motion.div>
+
+                {/* Start Prompt */}
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 2, duration: 1, repeat: Infinity, repeatType: 'reverse' }}
-                    className="absolute bottom-12 text-gray-400 font-mono text-sm tracking-widest"
+                    className="absolute bottom-12 text-white/50 font-mono text-xs md:text-sm tracking-[0.3em]"
                 >
                     CLICK ANYWHERE TO START
                 </motion.div>
