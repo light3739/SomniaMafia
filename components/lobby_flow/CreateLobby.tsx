@@ -36,21 +36,21 @@ export const CreateLobby: React.FC = () => {
                 </div>
 
                 <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] p-8 border border-white/10 shadow-xl flex flex-col gap-6 items-center">
-                    <h2 className="text-white text-2xl font-['Playfair_Display']">Name Your Lobby</h2>
+                    <h2 className="text-white text-2xl font-['Montserrat']">Name Your Lobby</h2>
                     <Input
                         value={lobbyName}
                         onChange={(e) => setLobbyName(e.target.value)}
                         placeholder="e.g. Best Mafia Game"
                         autoFocus
                         containerClassName="w-full"
-                        className="h-[60px]"
+                        className="h-[60px] !font-['Montserrat']"
                     />
                 </div>
 
                 <Button
                     onClick={handleCreate}
                     disabled={!lobbyName.trim()}
-                    className="w-full h-[70px] text-2xl font-light tracking-widest uppercase rounded-[12px] shadow-2xl"
+                    className="w-full h-[60px] text-xl"
                 >
                     Create & Enter
                 </Button>

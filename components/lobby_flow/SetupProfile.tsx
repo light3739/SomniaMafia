@@ -38,7 +38,7 @@ export const SetupProfile: React.FC = () => {
             >
                 {/* Profile Section */}
                 <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] relative flex flex-col items-center p-8 border border-white/10 shadow-2xl">
-                    <h2 className="text-white/60 text-lg font-['Playfair_Display'] italic mb-6">Setup Your Profile</h2>
+                    <h2 className="text-white/60 text-lg font-['Montserrat'] italic mb-6">Setup Your Profile</h2>
 
                     {/* Photo Input */}
                     <div
@@ -65,13 +65,16 @@ export const SetupProfile: React.FC = () => {
                     </div>
 
                     {/* Name Input */}
-                    <Input
-                        label="Enter Name"
-                        value={playerName}
-                        onChange={(e) => setPlayerName(e.target.value)}
-                        placeholder="Your Name"
-                        containerClassName="w-full max-w-[300px]"
-                    />
+                    <div className="w-full max-w-[300px] flex flex-col items-center gap-2">
+                        <label className="text-white/40 text-sm font-['Montserrat'] italic">Enter Name</label>
+                        <Input
+                            value={playerName}
+                            onChange={(e) => setPlayerName(e.target.value)}
+                            placeholder="Your Name"
+                            containerClassName="w-full"
+                            className="!font-['Montserrat']"
+                        />
+                    </div>
                 </div>
 
                 {/* Actions */}

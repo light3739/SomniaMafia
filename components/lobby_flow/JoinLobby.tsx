@@ -34,7 +34,7 @@ export const JoinLobby: React.FC = () => {
                     <BackButton />
                 </div>
 
-                <h2 className="text-white text-3xl font-['Playfair_Display'] tracking-wide">Available Lobbies</h2>
+                <h2 className="text-white text-3xl font-['Montserrat'] tracking-wide">Available Lobbies</h2>
 
                 <div className="w-full flex flex-col gap-3">
                     {MOCK_LOBBIES.map((lobby) => (

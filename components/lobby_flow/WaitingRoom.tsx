@@ -29,25 +29,20 @@ export const WaitingRoom: React.FC = () => {
             </div>
 
             <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.4 }}
-                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-6 py-10"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-6 py-10 mt-16"
             >
-                {/* Header / Back */}
-                <div className="w-full flex items-center justify-between">
-                    <div className='flex items-center justify-center'>
-                        <BackButton to="/setup" className="bg-[#19130D]/60 p-3 rounded-full hover:bg-[#916A47]" label="" />
-                    </div>
+                <div className="w-full flex items-center justify-start">
+                    <BackButton />
+                </div>
 
-                    <div className="flex flex-col items-center">
-                        <h1 className="text-white text-2xl font-light tracking-widest font-['Playfair_Display']">
-                            {lobbyName}
-                        </h1>
-                        <span className="text-white/40 text-xs uppercase tracking-widest">Waiting for players</span>
-                    </div>
-                    <div className="w-12" /> {/* Spacer */}
+                <div className="flex flex-col items-center">
+                    <h1 className="text-white text-2xl font-light tracking-widest font-['Montserrat']">
+                        {lobbyName}
+                    </h1>
+                    <span className="text-white/40 text-xs uppercase tracking-widest">Waiting for players</span>
                 </div>
 
                 {/* Lobby List */}
@@ -80,7 +75,7 @@ export const WaitingRoom: React.FC = () => {
                 {/* Start Game Button */}
                 <Button
                     onClick={handleStart}
-                    className="w-full h-[70px] bg-gradient-to-r from-[#19130D] to-[#2a2118] hover:from-[#251c14] hover:to-[#362b22] text-2xl tracking-widest uppercase rounded-[12px] shadow-2xl border border-white/10"
+                    className="w-full h-[70px] text-2xl tracking-widest uppercase rounded-[12px] shadow-2xl border border-white/10"
                 >
                     Start Game
                 </Button>
