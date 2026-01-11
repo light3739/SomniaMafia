@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import lobbyBg from '../../assets/lobby_background.png';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
 
 export const SetupProfile: React.FC = () => {
     const { playerName, setPlayerName, avatarUrl, setAvatarUrl } = useGameContext();
@@ -63,34 +65,32 @@ export const SetupProfile: React.FC = () => {
                     </div>
 
                     {/* Name Input */}
-                    <div className="w-full max-w-[300px] flex flex-col items-center gap-2">
-                        <label className="text-white/40 text-sm font-['Playfair_Display'] italic">Enter Name</label>
-                        <input
-                            type="text"
-                            value={playerName}
-                            onChange={(e) => setPlayerName(e.target.value)}
-                            placeholder="Your Name"
-                            className="w-full h-[50px] bg-[#19130D]/60 rounded-[10px] border border-white/10 text-center text-white text-xl placeholder:text-white/20 focus:outline-none focus:border-[#916A47] transition-all font-['Playfair_Display']"
-                        />
-                    </div>
+                    <Input
+                        label="Enter Name"
+                        value={playerName}
+                        onChange={(e) => setPlayerName(e.target.value)}
+                        placeholder="Your Name"
+                        containerClassName="w-full max-w-[300px]"
+                    />
                 </div>
 
                 {/* Actions */}
                 <div className="w-full flex flex-col gap-4">
-                    <button
+                    <Button
                         onClick={() => navigate('/create')}
                         disabled={!playerName.trim()}
-                        className={`w-full h-[60px] ${playerName.trim() ? 'bg-[#916A47] hover:bg-[#a37a55] text-white/80' : 'bg-[#19130D]/50 cursor-not-allowed text-white/50'} text-xl font-medium rounded-[15px] shadow-lg transition-all active:scale-[0.98] border border-white/5`}
+                        className="w-full h-[60px] text-xl"
                     >
-                        <span>Create Game</span>
-                    </button>
-                    <button
+                        Create Game
+                    </Button>
+                    <Button
                         onClick={() => navigate('/join')}
                         disabled={!playerName.trim()}
-                        className={`w-full h-[60px] ${playerName.trim() ? 'bg-transparent border-2 border-[#916A47] text-[#916A47] hover:bg-[#916A47] hover:text-[#281608]' : 'bg-transparent border-2 border-white/10 text-white/20 cursor-not-allowed'} text-xl font-medium rounded-[15px] shadow-lg transition-all active:scale-[0.98] box-border`}
+                        variant="outline-gold"
+                        className="w-full h-[60px] text-xl"
                     >
                         Connect to Lobby
-                    </button>
+                    </Button>
                 </div>
             </motion.div>
         </div>
