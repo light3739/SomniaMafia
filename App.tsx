@@ -7,7 +7,6 @@ import { SystemLog } from './components/Narrator';
 import { GameControls } from './components/GameControls';
 import { Lobby } from './components/Lobby'; // Import Lobby
 import { Wallet, Play, Cpu, ShieldCheck, Lock, Users, FileCode, CheckCircle, Code } from 'lucide-react';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 
 // --- MOCK DATA ---
@@ -37,7 +36,6 @@ const App: React.FC = () => {
         winner: null
     });
 
-    const [activeTab, setActiveTab] = useState<'game' | 'contract'>('game');
     const [isZkGenerating, setIsZkGenerating] = useState(false);
     const [showLanding, setShowLanding] = useState(true);
 
@@ -90,7 +88,6 @@ const App: React.FC = () => {
     const startGame = async () => {
         if (isZkGenerating) return;
         setIsZkGenerating(true);
-        setActiveTab('game');
 
         // 1. ZK Initialization with Threshold Logic
         addLog("TX: joinGame() submitted...", 'phase');
@@ -245,125 +242,55 @@ const App: React.FC = () => {
                     </motion.div>
                 ) : (
                     <motion.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                        {/* Header */}
-                        <header className="p-6 flex justify-between items-center border-b border-white/10 bg-[#0a0a0a]">
-                            <div className="flex items-center gap-3">
-                                <div className="relative">
-                                    <div className="absolute inset-0 bg-green-500 blur-sm opacity-50"></div>
-                                    <div className="w-8 h-8 bg-black border border-green-500/50 rounded flex items-center justify-center relative z-10">
-                                        <ShieldCheck className="w-5 h-5 text-green-500" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <h1 className="text-xl font-bold tracking-tight font-mono">SOMNIA_MAFIA<span className="text-green-500 animate-pulse">_ZK</span></h1>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                {gameState.myPlayerId && (
-                                    <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded border border-white/10">
-                                        <Users className="w-3 h-3 text-purple-400" />
-                                        <span className="text-[10px] uppercase text-gray-400 font-mono">Peers: 7/8</span>
-                                    </div>
-                                )}
-                                <ConnectButton />
-                            </div>
-                        </header>
-
-                        {/* Tabs */}
-                        <div className="container mx-auto px-4 mt-6 border-b border-white/10 flex gap-6">
-                            <button
-                                onClick={() => setActiveTab('game')}
-                                className={`pb-3 font-mono text-sm font-bold transition-colors border-b-2 ${activeTab === 'game' ? 'text-green-400 border-green-500' : 'text-gray-500 border-transparent hover:text-white'}`}
-                            >
-                                GAME_INTERFACE
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('contract')}
-                                className={`pb-3 font-mono text-sm font-bold transition-colors border-b-2 ${activeTab === 'contract' ? 'text-purple-400 border-purple-500' : 'text-gray-500 border-transparent hover:text-white'}`}
-                            >
-                                SMART_CONTRACT.sol
-                            </button>
-                        </div>
-
-                        <main className="container mx-auto px-4 pt-8">
-
-                            {/* CONTRACT VIEW */}
-                            {activeTab === 'contract' && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="max-w-4xl mx-auto"
-                                >
-                                    <div className="bg-[#111] rounded-xl border border-white/10 overflow-hidden">
-                                        <div className="flex items-center justify-between px-4 py-3 bg-[#1a1a1a] border-b border-white/10">
-                                            <div className="flex items-center gap-2">
-                                                <FileCode className="w-4 h-4 text-purple-400" />
-                                                <span className="text-sm font-mono text-gray-300">contracts/SomniaMafia.sol</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 px-2 py-1 bg-green-900/20 rounded border border-green-900/50">
-                                                <CheckCircle className="w-3 h-3 text-green-500" />
-                                                <span className="text-[10px] text-green-400 font-mono">COMPILED</span>
-                                            </div>
-                                        </div>
-                                        <div className="p-4 overflow-x-auto">
-                                        </div>
-                                    </div>
-                                </motion.div>
+                        <main className="w-full h-full">
+                            {/* GAME INTERFACE */}
+                            {gameState.phase === GamePhase.LOBBY && (
+                                <Lobby
+                                    onStart={startGame}
+                                    connectedPlayers={
+                                        gameState.players
+                                            .filter(p => !p.id.startsWith('p-')) // Filter out initial mock emptiness if needed, but actually we probably want to show mock players. 
+                                            // Actually, let's just pass the players we have.
+                                            .map(p => ({
+                                                name: p.name,
+                                                address: p.address.slice(0, 6) + '...' + p.address.slice(-4)
+                                            }))
+                                    }
+                                />
                             )}
 
-                            {/* GAME INTERFACE */}
-                            {activeTab === 'game' && (
+                            {gameState.phase !== GamePhase.LOBBY && (
                                 <>
-                                    {gameState.phase === GamePhase.LOBBY && (
-                                        <Lobby
-                                            onStart={startGame}
-                                            connectedPlayers={
-                                                gameState.players
-                                                    .filter(p => !p.id.startsWith('p-')) // Filter out initial mock emptiness if needed, but actually we probably want to show mock players. 
-                                                    // Actually, let's just pass the players we have.
-                                                    .map(p => ({
-                                                        name: p.name,
-                                                        address: p.address.slice(0, 6) + '...' + p.address.slice(-4)
-                                                    }))
-                                            }
-                                        />
-                                    )}
+                                    <SystemLog logs={gameState.logs} />
 
-                                    {gameState.phase !== GamePhase.LOBBY && (
-                                        <>
-                                            <SystemLog logs={gameState.logs} />
+                                    {/* Grid of Players */}
+                                    <motion.div
+                                        layout
+                                        className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-24 container mx-auto px-4 pt-8"
+                                    >
+                                        {gameState.players.map((player) => (
+                                            <PlayerCard
+                                                key={player.id}
+                                                player={player}
+                                                isMe={player.id === gameState.myPlayerId}
+                                                onAction={handlePlayerAction}
+                                                canAct={canActOnPlayer(player)}
+                                                actionLabel={getActionLabel()}
+                                            />
+                                        ))}
+                                    </motion.div>
 
-                                            {/* Grid of Players */}
-                                            <motion.div
-                                                layout
-                                                className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-24"
-                                            >
-                                                {gameState.players.map((player) => (
-                                                    <PlayerCard
-                                                        key={player.id}
-                                                        player={player}
-                                                        isMe={player.id === gameState.myPlayerId}
-                                                        onAction={handlePlayerAction}
-                                                        canAct={canActOnPlayer(player)}
-                                                        actionLabel={getActionLabel()}
-                                                    />
-                                                ))}
-                                            </motion.div>
-
-                                            {/* Sticky Controls */}
-                                            <div className="fixed bottom-0 left-0 right-0 z-50 px-4 md:px-8 pb-4">
-                                                <div className="max-w-4xl mx-auto shadow-2xl shadow-black rounded-xl overflow-hidden border border-white/10">
-                                                    <GameControls
-                                                        phase={gameState.phase}
-                                                        myRole={myPlayer?.role || null}
-                                                        dayCount={gameState.dayCount}
-                                                        onNextPhase={handleNextPhase}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
+                                    {/* Sticky Controls */}
+                                    <div className="fixed bottom-0 left-0 right-0 z-50 px-4 md:px-8 pb-4">
+                                        <div className="max-w-4xl mx-auto shadow-2xl shadow-black rounded-xl overflow-hidden border border-white/10">
+                                            <GameControls
+                                                phase={gameState.phase}
+                                                myRole={myPlayer?.role || null}
+                                                dayCount={gameState.dayCount}
+                                                onNextPhase={handleNextPhase}
+                                            />
+                                        </div>
+                                    </div>
                                 </>
                             )}
                         </main>
