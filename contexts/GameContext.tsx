@@ -1,19 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAccount } from 'wagmi';
 import { GamePhase, GameState, Player, Role, LogEntry } from '../types';
-
-// --- MOCK DATA ---
-const MOCK_PLAYERS: Player[] = Array.from({ length: 8 }).map((_, i) => ({
-    id: `p-${i}`,
-    name: `Player ${i + 1}`,
-    nickname: `User${i + 1}`,
-    address: `0x${Math.random().toString(16).slice(2, 42)}`,
-    role: Role.CIVILIAN, // Will be shuffled
-    isAlive: true,
-    avatarUrl: `https://picsum.photos/seed/${i + 200}/200`,
-    votesReceived: 0,
-    status: 'connected'
-}));
+import { MOCK_PLAYERS } from '../services/mockData';
 
 interface GameContextType {
     // Session State

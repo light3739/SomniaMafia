@@ -1,19 +1,18 @@
 import React from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import lobbyBg from '../../assets/lobby_background.png';
+import { generateMockPlayers } from '../../services/mockData';
+import { Button } from '../ui/Button';
+import { BackButton } from '../ui/BackButton';
 
 export const WaitingRoom: React.FC = () => {
     const { lobbyName, playerName, startGame } = useGameContext();
     const navigate = useNavigate();
 
-    // Mock players
-    const players = Array(16).fill(null).map((_, i) => ({
-        name: i === 0 ? (playerName || 'Host') : 'Haiman',
-        address: `0x9c...${Math.floor(Math.random() * 1000).toString(16)}`
-    }));
+    // Use centralized generator, no inline mocks
+    const players = generateMockPlayers(16, playerName);
 
     const handleStart = async () => {
         await startGame();
@@ -38,12 +37,10 @@ export const WaitingRoom: React.FC = () => {
             >
                 {/* Header / Back */}
                 <div className="w-full flex items-center justify-between">
-                    <button
-                        onClick={() => navigate('/setup')} // Back to setup
-                        className="p-3 bg-[#19130D]/60 rounded-full hover:bg-[#916A47] transition-colors text-white"
-                    >
-                        <ArrowLeft className="w-6 h-6" />
-                    </button>
+                    <div className='flex items-center justify-center'>
+                        <BackButton to="/setup" className="bg-[#19130D]/60 p-3 rounded-full hover:bg-[#916A47]" label="" />
+                    </div>
+
                     <div className="flex flex-col items-center">
                         <h1 className="text-white text-2xl font-light tracking-widest font-['Playfair_Display']">
                             {lobbyName}
@@ -81,14 +78,12 @@ export const WaitingRoom: React.FC = () => {
                 </div>
 
                 {/* Start Game Button */}
-                <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                <Button
                     onClick={handleStart}
-                    className="w-full h-[70px] bg-gradient-to-r from-[#19130D] to-[#2a2118] hover:from-[#251c14] hover:to-[#362b22] text-white text-2xl tracking-widest font-light uppercase rounded-[12px] shadow-2xl border border-white/10 transition-all"
+                    className="w-full h-[70px] bg-gradient-to-r from-[#19130D] to-[#2a2118] hover:from-[#251c14] hover:to-[#362b22] text-2xl tracking-widest uppercase rounded-[12px] shadow-2xl border border-white/10"
                 >
                     Start Game
-                </motion.button>
+                </Button>
             </motion.div>
 
             <style>{`

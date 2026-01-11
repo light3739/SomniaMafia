@@ -1,16 +1,10 @@
 import React from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import lobbyBg from '../../assets/lobby_background.png';
-
-const MOCK_LOBBIES = [
-    { id: 1, name: "Chill Mafia Game", players: 12, max: 16 },
-    { id: 2, name: "Experts Only", players: 15, max: 16 },
-    { id: 3, name: "Fast Game", players: 4, max: 16 },
-    { id: 4, name: "Midnight Club", players: 8, max: 16 },
-];
+import { MOCK_LOBBIES } from '../../services/mockData';
+import { BackButton } from '../ui/BackButton';
 
 export const JoinLobby: React.FC = () => {
     const { setLobbyName } = useGameContext();
@@ -37,9 +31,7 @@ export const JoinLobby: React.FC = () => {
                 className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-6 py-10"
             >
                 <div className="w-full flex items-center justify-start">
-                    <button onClick={() => navigate(-1)} className="text-white/60 hover:text-white flex items-center gap-2">
-                        <ArrowLeft className="w-5 h-5" /> Back
-                    </button>
+                    <BackButton />
                 </div>
 
                 <h2 className="text-white text-3xl font-['Playfair_Display'] tracking-wide">Available Lobbies</h2>
