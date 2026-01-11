@@ -5,6 +5,7 @@ import { GamePhase, GameState, Player, Role, LogEntry } from './types';
 import { PlayerCard } from './components/PlayerCard';
 import { SystemLog } from './components/Narrator';
 import { GameControls } from './components/GameControls';
+import { Lobby } from './components/Lobby'; // Import Lobby
 import { Wallet, Play, Cpu, ShieldCheck, Lock, Users, FileCode, CheckCircle, Code } from 'lucide-react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
@@ -315,38 +316,18 @@ const App: React.FC = () => {
                             {activeTab === 'game' && (
                                 <>
                                     {gameState.phase === GamePhase.LOBBY && (
-                                        <div className="flex flex-col items-center justify-center min-h-[50vh] relative">
-                                            <div className="relative z-10 flex flex-col items-center">
-                                                <div className="mb-6 p-4 rounded-full bg-white/5 border border-white/10">
-                                                    <Code className="w-12 h-12 text-gray-400" />
-                                                </div>
-                                                <h2 className="text-4xl md:text-5xl font-bold text-center mb-6 font-mono tracking-tighter">
-                                                    SOMNIA <span className="text-purple-500">ZK-MAFIA</span>
-                                                </h2>
-                                                <p className="text-gray-400 mb-8 max-w-md text-center font-light leading-relaxed">
-                                                    Interact with the smart contract logic directly from the UI.
-                                                    Uses <span className="text-green-400 font-mono">ethers.js</span> and mock ZK-SNARKs.
-                                                </p>
-
-                                                {gameState.myPlayerId && (
-                                                    <button
-                                                        onClick={startGame}
-                                                        disabled={isZkGenerating}
-                                                        className={`px-10 py-4 bg-green-600 hover:bg-green-500 text-black rounded font-mono font-bold text-lg flex items-center gap-3 transition-all shadow-xl shadow-green-900/20 ${isZkGenerating ? 'opacity-70 cursor-not-allowed' : ''}`}
-                                                    >
-                                                        {isZkGenerating ? (
-                                                            <>
-                                                                <Cpu className="w-5 h-5 animate-spin" /> EXECUTING TXs...
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Play className="w-5 h-5" /> START_GAME_ON_CHAIN
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
+                                        <Lobby
+                                            onStart={startGame}
+                                            connectedPlayers={
+                                                gameState.players
+                                                    .filter(p => !p.id.startsWith('p-')) // Filter out initial mock emptiness if needed, but actually we probably want to show mock players. 
+                                                    // Actually, let's just pass the players we have.
+                                                    .map(p => ({
+                                                        name: p.name,
+                                                        address: p.address.slice(0, 6) + '...' + p.address.slice(-4)
+                                                    }))
+                                            }
+                                        />
                                     )}
 
                                     {gameState.phase !== GamePhase.LOBBY && (
