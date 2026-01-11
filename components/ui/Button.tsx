@@ -29,7 +29,7 @@ export const Button: React.FC<ButtonProps> = ({
             whileTap={{ scale: disabled ? 1 : 0.98 }}
             className={`${baseStyles} ${variants[variant]} ${className}`}
             disabled={disabled || isLoading}
-            {...props}
+            {...(props as any)}
         >
             {isLoading ? (
                 <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
