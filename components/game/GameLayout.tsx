@@ -7,7 +7,7 @@ import { PhaseIndicator } from './PhaseIndicator';
 import { Button } from '../ui/Button';
 import { GamePhase } from '../../types';
 import { MOCK_PLAYERS } from '../../services/mockData';
-import lobbyBg from '../../assets/lobby_background.png';
+import lobbyBg from '../../assets/game_background.png';
 import { BackButton } from '../ui/BackButton';
 
 export const GameLayout: React.FC = () => {
