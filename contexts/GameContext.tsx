@@ -98,12 +98,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // 1. Создать Лобби
     const createLobbyOnChain = async () => {
-        if (!playerName) return alert("Please set your name in Profile first!");
+        if (!playerName || !address) return alert("Setup profile first!");
         setIsTxPending(true);
+
         try {
             const keyPair = await generateKeyPair();
-            setKeys(keyPair);
             const pubKey = await exportPublicKey(keyPair.publicKey);
+
+            console.log("Creating room with:", { playerName, pubKey }); // Лог для отладки
 
             const hash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
@@ -111,14 +113,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'createRoom',
                 args: [BigInt(16), playerName, pubKey],
             });
-            addLog("Creating room on Somnia...", "warning");
+
             await publicClient?.waitForTransactionReceipt({ hash });
         } catch (e: any) {
-            addLog(e.message, "danger");
+            console.error("Full error object:", e);
+            addLog(e.shortMessage || "User rejected or internal error", "danger");
             setIsTxPending(false);
         }
     };
-
     // 2. Войти в Лобби
     const joinLobbyOnChain = async (roomId: number) => {
         if (!playerName) return alert("Please set your name in Profile first!");
@@ -138,7 +140,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(`Joining room #${roomId}...`, "info");
             await publicClient?.waitForTransactionReceipt({ hash });
 
-            // Сразу подгружаем список тех, кто уже в комнате
             await refreshPlayersList(BigInt(roomId));
         } catch (e: any) {
             addLog(e.message, "danger");
