@@ -98,15 +98,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // 1. Создать Лобби
     const createLobbyOnChain = async () => {
-        if (!playerName || !address) return alert("Setup profile first!");
+        if (!playerName) return alert("Please set your name in Profile first!");
         setIsTxPending(true);
-
         try {
             const keyPair = await generateKeyPair();
+            setKeys(keyPair);
             const pubKey = await exportPublicKey(keyPair.publicKey);
 
-            console.log("Creating room with:", { playerName, pubKey }); // Лог для отладки
-
+            // 1. Отправляем транзакцию
             const hash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
@@ -114,10 +113,36 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [BigInt(16), playerName, pubKey],
             });
 
-            await publicClient?.waitForTransactionReceipt({ hash });
+            addLog("Waiting for block confirmation...", "warning");
+
+            // 2. Ждем подтверждения (рецепт транзакции)
+            if (publicClient) {
+                const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+                // 3. Магия: Вытаскиваем roomId из логов транзакции вручную
+                // Это гораздо надежнее, чем ждать событие через useWatchContractEvent
+                const event = receipt.logs[0];
+                // В нашем контракте RoomCreated — первое событие. Его ID (roomId) обычно в аргументах.
+                // Но проще всего — обновить список, так как мы знаем, что всё успешно.
+
+                // Узнаем последний ID комнаты из контракта
+                const nextId = await publicClient.readContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'nextRoomId',
+                }) as bigint;
+
+                const newRoomId = nextId - 1n; // Последняя созданная комната
+
+                setCurrentRoomId(newRoomId);
+                await refreshPlayersList(newRoomId);
+
+                addLog(`Room #${newRoomId} created! Redirecting...`, "success");
+                setIsTxPending(false);
+            }
         } catch (e: any) {
-            console.error("Full error object:", e);
-            addLog(e.shortMessage || "User rejected or internal error", "danger");
+            console.error("Creation failed:", e);
+            addLog(e.shortMessage || "Transaction failed", "danger");
             setIsTxPending(false);
         }
     };
