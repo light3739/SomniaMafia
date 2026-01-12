@@ -1,30 +1,30 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
 import { GamePhase, GameState, Player, Role, LogEntry } from '../types';
-import { MOCK_PLAYERS } from '../services/mockData';
+import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../contracts/config';
+import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
 
 interface GameContextType {
-    // Session State
     playerName: string;
     setPlayerName: (name: string) => void;
     avatarUrl: string | null;
     setAvatarUrl: (url: string | null) => void;
     lobbyName: string;
     setLobbyName: (name: string) => void;
-
-    // Game State
     gameState: GameState;
-    setGameState: React.Dispatch<React.SetStateAction<GameState>>; // Expose setter for advanced usage if needed
-    isZkGenerating: boolean;
+    setGameState: React.Dispatch<React.SetStateAction<GameState>>;
+    isTxPending: boolean;
+    currentRoomId: bigint | null;
 
-    // Actions
+    createLobbyOnChain: () => Promise<void>;
+    joinLobbyOnChain: (roomId: number) => Promise<void>;
+    startGameOnChain: () => Promise<void>;
+    confirmRoleOnChain: () => Promise<void>;
+
+    handleNextPhase: () => void;
     addLog: (message: string, type?: LogEntry['type']) => void;
-    startGame: () => Promise<void>;
-    handleNextPhase: () => Promise<void>;
     handlePlayerAction: (targetId: string) => void;
     myPlayer: Player | undefined;
-
-    // Helper
     getActionLabel: () => string;
     canActOnPlayer: (target: Player) => boolean;
 }
@@ -32,12 +32,17 @@ interface GameContextType {
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    // --- Session State ---
     const [playerName, setPlayerName] = useState('');
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [lobbyName, setLobbyName] = useState('');
+    const [currentRoomId, setCurrentRoomId] = useState<bigint | null>(null);
+    const [keys, setKeys] = useState<CryptoKeyPair | null>(null);
 
-    // --- Game State ---
+    const { address } = useAccount();
+    const { writeContractAsync } = useWriteContract();
+    const publicClient = usePublicClient();
+    const [isTxPending, setIsTxPending] = useState(false);
+
     const [gameState, setGameState] = useState<GameState>({
         phase: GamePhase.LOBBY,
         dayCount: 0,
@@ -46,205 +51,227 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         logs: [],
         winner: null
     });
-    const [isZkGenerating, setIsZkGenerating] = useState(false);
-    const { address, isConnected } = useAccount();
 
-    // --- LOGGING ---
+    // Синхронизируем myPlayerId с адресом кошелька
+    useEffect(() => {
+        if (address) {
+            setGameState(prev => ({ ...prev, myPlayerId: address }));
+        }
+    }, [address]);
+
     const addLog = (message: string, type: LogEntry['type'] = 'info') => {
         const now = new Date();
         const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-
         setGameState(prev => ({
             ...prev,
-            logs: [...prev.logs, {
-                id: Math.random().toString(36).substr(2, 9),
-                timestamp: timeString,
-                message,
-                type
-            }]
+            logs: [...prev.logs, { id: Math.random().toString(36).substr(2, 9), timestamp: timeString, message, type }]
         }));
     };
 
-    // --- CONNECTION EFFECT ---
-    useEffect(() => {
-        if (isConnected && address && !gameState.myPlayerId) {
-            const myId = 'p-0';
-            // Update our player with real address
-            const realPlayers = MOCK_PLAYERS.map((p, i) =>
-                i === 0 ? { ...p, address: address, name: playerName || p.name } : p
-            );
+    // Вспомогательная функция для обновления списка игроков из блокчейна
+    const refreshPlayersList = async (roomId: bigint) => {
+        if (!publicClient) return;
+        try {
+            const data = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'getPlayers',
+                args: [roomId],
+            }) as any[];
 
-            setGameState(prev => ({
-                ...prev,
-                players: realPlayers,
-                myPlayerId: myId
+            const formattedPlayers: Player[] = data.map((p: any) => ({
+                id: p.wallet,
+                name: p.nickname,
+                address: p.wallet,
+                role: Role.UNKNOWN,
+                isAlive: true,
+                avatarUrl: `https://picsum.photos/seed/${p.wallet}/200`,
+                votesReceived: 0,
+                status: 'connected'
             }));
-            addLog(`Wallet connected: ${address.slice(0, 6)}...${address.slice(-4)}`, 'success');
-        } else if (!isConnected && gameState.myPlayerId) {
-            setGameState(prev => ({
-                ...prev,
-                myPlayerId: null,
-                players: []
-            }));
-            addLog("Wallet disconnected.", 'warning');
+
+            setGameState(prev => ({ ...prev, players: formattedPlayers }));
+        } catch (e) {
+            console.error("Failed to fetch players:", e);
         }
-    }, [isConnected, address, gameState.myPlayerId, playerName]);
+    };
 
-    // --- GAME ACTIONS ---
-    const startGame = async () => {
-        if (isZkGenerating) return;
-        setIsZkGenerating(true);
+    // 1. Создать Лобби
+    const createLobbyOnChain = async () => {
+        if (!playerName) return alert("Please set your name in Profile first!");
+        setIsTxPending(true);
+        try {
+            const keyPair = await generateKeyPair();
+            setKeys(keyPair);
+            const pubKey = await exportPublicKey(keyPair.publicKey);
 
-        // 1. ZK Initialization with Threshold Logic
-        addLog("TX: joinGame() submitted...", 'phase');
-        await new Promise(r => setTimeout(r, 500));
-        addLog("TX Confirmed: Staked 0.01 ETH", 'success');
+            const hash = await writeContractAsync({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'createRoom',
+                args: [BigInt(16), playerName, pubKey],
+            });
+            addLog("Creating room on Somnia...", "warning");
+            await publicClient?.waitForTransactionReceipt({ hash });
+        } catch (e: any) {
+            addLog(e.message, "danger");
+            setIsTxPending(false);
+        }
+    };
 
-        addLog("Phase: SHUFFLE started on-chain.", 'phase');
+    // 2. Войти в Лобби
+    const joinLobbyOnChain = async (roomId: number) => {
+        if (!playerName) return alert("Please set your name in Profile first!");
+        setIsTxPending(true);
+        try {
+            const keyPair = await generateKeyPair();
+            setKeys(keyPair);
+            const pubKey = await exportPublicKey(keyPair.publicKey);
 
-        // Simulate player 7 being slow/offline
-        setGameState(prev => ({
-            ...prev,
-            players: prev.players.map((p, i) => i === 7 ? { ...p, status: 'syncing' } : p)
-        }));
+            const hash = await writeContractAsync({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'joinRoom',
+                args: [BigInt(roomId), playerName, pubKey],
+            });
+            setCurrentRoomId(BigInt(roomId));
+            addLog(`Joining room #${roomId}...`, "info");
+            await publicClient?.waitForTransactionReceipt({ hash });
 
-        addLog("Generating ZK-SNARK Proof (Groth16)...", 'info');
-        await new Promise(r => setTimeout(r, 1200));
+            // Сразу подгружаем список тех, кто уже в комнате
+            await refreshPlayersList(BigInt(roomId));
+        } catch (e: any) {
+            addLog(e.message, "danger");
+            setIsTxPending(false);
+        }
+    };
 
-        addLog("TX: submitShuffleProof(0x4a...2b) sent.", 'info');
-        await new Promise(r => setTimeout(r, 800));
-        addLog("Contract: Proof Verified. State Updated.", 'success');
+    // 3. Старт игры (только хост)
+    const startGameOnChain = async () => {
+        if (!currentRoomId) return;
+        setIsTxPending(true);
+        try {
+            const hash = await writeContractAsync({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'startShuffle',
+                args: [currentRoomId],
+            });
+            addLog("Initiating on-chain shuffle...", "phase");
+            await publicClient?.waitForTransactionReceipt({ hash });
+        } catch (e: any) {
+            addLog(e.message, "danger");
+            setIsTxPending(false);
+        }
+    };
 
-        // Simulate timeout warning
-        addLog("Contract: Waiting for Player 8...", 'warning');
-        await new Promise(r => setTimeout(r, 1000));
+    const confirmRoleOnChain = async () => {
+        if (!currentRoomId) return;
+        setIsTxPending(true);
+        try {
+            const hash = await writeContractAsync({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'confirmRole',
+                args: [currentRoomId],
+            });
+            await publicClient?.waitForTransactionReceipt({ hash });
+        } catch (e: any) {
+            addLog(e.message, "danger");
+            setIsTxPending(false);
+        }
+    };
 
-        addLog("TX: slashTimeout(Player8) triggered by Validator.", 'danger');
+    // --- СЛУШАТЕЛИ СОБЫТИЙ (Real-time Sync) ---
 
-        setGameState(prev => ({
-            ...prev,
-            players: prev.players.map((p, i) => i === 7 ? { ...p, status: 'slashed', isAlive: false } : { ...p, status: 'connected' })
-        }));
-
-        await new Promise(r => setTimeout(r, 800));
-        addLog("Contract: Roles Assigned. Moving to Reveal.", 'success');
-
-        // 2. Assign Roles (Logic)
-        const newPlayers = [...gameState.players];
-        const roles = [Role.MAFIA, Role.MAFIA, Role.DOCTOR, Role.DETECTIVE, Role.CIVILIAN, Role.CIVILIAN, Role.CIVILIAN, Role.CIVILIAN];
-        roles.sort(() => Math.random() - 0.5);
-
-        newPlayers.forEach((p, i) => {
-            if (p.status !== 'slashed') {
-                p.role = roles[i];
-            } else {
-                p.role = Role.UNKNOWN;
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
+        eventName: 'RoomCreated',
+        onLogs(logs: any) {
+            const log = logs[0];
+            if (log.args.host.toLowerCase() === address?.toLowerCase()) {
+                const newId = log.args.roomId;
+                setCurrentRoomId(newId);
+                setIsTxPending(false);
+                addLog(`Room #${newId} created successfully!`, "success");
+                refreshPlayersList(newId);
             }
-        });
+        }
+    });
 
-        const myPlayerCalc = newPlayers.find(p => p.id === gameState.myPlayerId);
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
+        eventName: 'PlayerJoined',
+        onLogs(logs: any) {
+            logs.forEach((log: any) => {
+                if (currentRoomId && BigInt(log.args.roomId) === currentRoomId) {
+                    addLog(`${log.args.nickname} joined the room.`, "info");
+                    refreshPlayersList(currentRoomId); // Перечитываем список при каждом входе
+                }
+            });
+        }
+    });
 
-        setGameState(prev => ({
-            ...prev,
-            players: newPlayers,
-            phase: GamePhase.ROLE_REVEAL,
-            dayCount: 1
-        }));
-
-        setIsZkGenerating(false);
-        addLog(`Decrypted Role: ${myPlayerCalc?.role}`, 'success');
-    };
-
-    const handleNextPhase = async () => {
-        let nextPhase = gameState.phase;
-        let updatedPlayers = [...gameState.players];
-
-        // State Machine Logic
-        if (gameState.phase === GamePhase.ROLE_REVEAL) {
-            nextPhase = GamePhase.NIGHT;
-            addLog(`Contract: Phase changed to NIGHT.`, 'phase');
-
-        } else if (gameState.phase === GamePhase.NIGHT) {
-            nextPhase = GamePhase.DAY;
-            // Simulate Night Actions
-            const aliveCivilians = updatedPlayers.filter(p => p.isAlive && p.role !== Role.MAFIA && p.status !== 'slashed');
-
-            if (aliveCivilians.length > 0) {
-                const victimIndex = Math.floor(Math.random() * aliveCivilians.length);
-                const victim = aliveCivilians[victimIndex];
-                const actualIdx = updatedPlayers.findIndex(p => p.id === victim.id);
-
-                updatedPlayers[actualIdx].isAlive = false;
-                addLog(`Oracle: Player ${victim.name} is DEAD.`, 'danger');
-            } else {
-                addLog("Oracle: No deaths recorded.", 'success');
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
+        eventName: 'GameStarted',
+        onLogs(logs: any) {
+            if (currentRoomId && BigInt(logs[0].args.roomId) === currentRoomId) {
+                setGameState(prev => ({ ...prev, phase: GamePhase.SHUFFLING }));
+                setIsTxPending(false);
+                addLog("Shuffle started! Check your roles soon...", "phase");
             }
-
-        } else if (gameState.phase === GamePhase.DAY) {
-            nextPhase = GamePhase.VOTING;
-            addLog("Contract: Phase changed to VOTING.", 'phase');
-
-        } else if (gameState.phase === GamePhase.VOTING) {
-            nextPhase = GamePhase.NIGHT;
-            // Simulate Voting Result
-            const alive = updatedPlayers.filter(p => p.isAlive && p.status !== 'slashed');
-            const exiledIndex = Math.floor(Math.random() * alive.length);
-            const exiled = alive[exiledIndex];
-            const actualIdx = updatedPlayers.findIndex(p => p.id === exiled.id);
-            updatedPlayers[actualIdx].isAlive = false;
-
-            addLog(`Contract: Vote finalized. ${exiled.name} exiled.`, 'danger');
-
-            // Update Day Count
-            setGameState(prev => ({ ...prev, dayCount: prev.dayCount + 1 }));
         }
+    });
 
-        setGameState(prev => ({
-            ...prev,
-            phase: nextPhase,
-            players: updatedPlayers
-        }));
-    };
-
-    const handlePlayerAction = (targetId: string) => {
-        const target = gameState.players.find(p => p.id === targetId);
-        if (!target) return;
-
-        if (gameState.phase === GamePhase.VOTING) {
-            addLog(`TX: vote(${target.address}) pending...`, 'info');
-            setTimeout(() => addLog("TX Confirmed: Vote cast.", 'success'), 500);
-        } else {
-            addLog(`TX: submitAction(${target.address}) encrypted...`, 'info');
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
+        eventName: 'DayStarted',
+        onLogs(logs: any) {
+            if (currentRoomId && BigInt(logs[0].args.roomId) === currentRoomId) {
+                setGameState(prev => ({
+                    ...prev,
+                    phase: GamePhase.DAY,
+                    dayCount: Number(logs[0].args.dayNumber)
+                }));
+                addLog(`Day ${logs[0].args.dayNumber} has begun.`, "success");
+            }
         }
+    });
+
+    // --- UI HELPERS ---
+
+    const handlePlayerAction = (id: string) => {
+        addLog(`Action targeted at: ${id.slice(0, 6)}...`, "info");
     };
 
-    const myPlayer = gameState.players.find(p => p.id === gameState.myPlayerId);
-
-    const canActOnPlayer = (target: Player) => {
-        if (gameState.phase === GamePhase.VOTING && myPlayer?.isAlive) return true;
-        if (gameState.phase === GamePhase.NIGHT && myPlayer?.role === Role.MAFIA && myPlayer.isAlive) return true;
-        if (gameState.phase === GamePhase.NIGHT && myPlayer?.role === Role.DOCTOR && myPlayer.isAlive) return true;
-        if (gameState.phase === GamePhase.NIGHT && myPlayer?.role === Role.DETECTIVE && myPlayer.isAlive) return true;
-        return false;
+    const handleNextPhase = () => {
+        // В будущем это будет вызов контракта, пока оставим локально для тестов UI
+        addLog("Dev: Manual phase shift", "warning");
     };
+
+    const myPlayer = gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase());
 
     const getActionLabel = () => {
         if (gameState.phase === GamePhase.VOTING) return "VOTE";
         if (myPlayer?.role === Role.MAFIA) return "KILL";
-        if (myPlayer?.role === Role.DOCTOR) return "SAVE";
-        if (myPlayer?.role === Role.DETECTIVE) return "CHECK";
         return "SELECT";
+    };
+
+    const canActOnPlayer = (_target: Player) => {
+        return gameState.phase !== GamePhase.LOBBY;
     };
 
     return (
         <GameContext.Provider value={{
-            playerName, setPlayerName,
-            avatarUrl, setAvatarUrl,
-            lobbyName, setLobbyName,
-            gameState, setGameState,
-            isZkGenerating,
-            addLog, startGame, handleNextPhase, handlePlayerAction,
-            myPlayer, canActOnPlayer, getActionLabel
+            playerName, setPlayerName, avatarUrl, setAvatarUrl, lobbyName, setLobbyName,
+            gameState, setGameState, isTxPending, currentRoomId,
+            createLobbyOnChain, joinLobbyOnChain, startGameOnChain, confirmRoleOnChain,
+            addLog, handlePlayerAction, handleNextPhase, myPlayer, canActOnPlayer, getActionLabel
         }}>
             {children}
         </GameContext.Provider>
@@ -253,8 +280,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 export const useGameContext = () => {
     const context = useContext(GameContext);
-    if (!context) {
-        throw new Error("useGameContext must be used within a GameProvider");
-    }
+    if (!context) throw new Error("useGameContext must be used within a GameProvider");
     return context;
 };
