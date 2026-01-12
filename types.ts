@@ -12,7 +12,8 @@ export enum GamePhase {
   NIGHT = 'NIGHT',
   DAY = 'DAY',
   VOTING = 'VOTING',
-  GAME_OVER = 'GAME_OVER'
+  GAME_OVER = 'GAME_OVER',
+  SHUFFLING = "SHUFFLING"
 }
 
 export type ConnectionStatus = 'connected' | 'syncing' | 'offline' | 'slashed';
