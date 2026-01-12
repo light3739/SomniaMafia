@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
@@ -8,17 +8,30 @@ import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
 
 export const CreateLobby: React.FC = () => {
-    const { lobbyName, setLobbyName } = useGameContext();
+    const {
+        lobbyName,
+        setLobbyName,
+        createLobbyOnChain,
+        isTxPending,
+        currentRoomId
+    } = useGameContext();
+
     const navigate = useNavigate();
 
-    const handleCreate = () => {
-        if (!lobbyName.trim()) return;
-        navigate('/lobby');
+    // Как только транзакция прошла и контракт выдал нам ID комнаты — идем в ожидание
+    useEffect(() => {
+        if (currentRoomId !== null) {
+            navigate('/lobby');
+        }
+    }, [currentRoomId, navigate]);
+
+    const handleCreate = async () => {
+        if (!lobbyName.trim() || isTxPending) return;
+        await createLobbyOnChain();
     };
 
     return (
         <div className="relative w-full min-h-screen font-['Montserrat'] flex items-center justify-center p-4">
-            {/* Fixed Background */}
             <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
                 style={{ backgroundImage: `url(${lobbyBg})` }}
             >
@@ -42,6 +55,7 @@ export const CreateLobby: React.FC = () => {
                         onChange={(e) => setLobbyName(e.target.value)}
                         placeholder="e.g. Best Mafia Game"
                         autoFocus
+                        disabled={isTxPending}
                         containerClassName="w-full"
                         className="h-[60px] !font-['Montserrat']"
                     />
@@ -49,10 +63,11 @@ export const CreateLobby: React.FC = () => {
 
                 <Button
                     onClick={handleCreate}
-                    disabled={!lobbyName.trim()}
+                    isLoading={isTxPending}
+                    disabled={!lobbyName.trim() || isTxPending}
                     className="w-full h-[60px] text-xl"
                 >
-                    Create & Enter
+                    {isTxPending ? "Deploying on Somnia..." : "Create & Enter"}
                 </Button>
             </motion.div>
         </div>
