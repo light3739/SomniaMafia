@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { parseEther } from 'viem';
 import { 
   createNewSession, 
   loadSession, 
@@ -84,10 +85,12 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
   }, [txConfirmed, pendingTxHash]);
 
   /**
-   * Register a new session key on-chain
+   * Register a new session key on-chain AND fund it with gas
    * This is the ONE transaction the user signs with their main wallet
+   * @param targetRoomId - The room ID to register for
+   * @param fundAmount - Amount of STT to send for gas (default: 0.02)
    */
-  const registerSession = useCallback(async (targetRoomId: number) => {
+  const registerSession = useCallback(async (targetRoomId: number, fundAmount: string = '0.02') => {
     if (!mainWallet) {
       setError('Wallet not connected');
       return;
@@ -103,12 +106,13 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
         targetRoomId
       );
 
-      // 2. Register on-chain (user signs this one transaction)
+      // 2. Register on-chain AND fund in one transaction
       const hash = await writeContractAsync({
         address: MAFIA_CONTRACT_ADDRESS,
         abi: MAFIA_ABI,
         functionName: 'registerSessionKey',
         args: [newSessionAddr, BigInt(targetRoomId)],
+        value: parseEther(fundAmount), // Send STT for gas
       });
 
       setPendingTxHash(hash);

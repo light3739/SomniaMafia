@@ -21,7 +21,6 @@ export const DayPhase: React.FC = () => {
         myPlayer,
         startVotingOnChain,
         voteOnChain,
-        finalizeVotingOnChain,
         addLog,
         isTxPending
     } = useGameContext();
@@ -118,15 +117,7 @@ export const DayPhase: React.FC = () => {
         }
     };
 
-    // Завершить голосование
-    const handleFinalizeVoting = async () => {
-        setIsProcessing(true);
-        try {
-            await finalizeVotingOnChain();
-        } finally {
-            setIsProcessing(false);
-        }
-    };
+    // V3: Voting auto-finalizes when all players have voted
 
     // Посчитать общее количество голосов
     const totalVotes = Array.from(voteState.voteCounts.values()).reduce((a, b) => a + b, 0);
@@ -293,18 +284,10 @@ export const DayPhase: React.FC = () => {
                                     )}
                                 </Button>
 
-                                {/* Finalize voting (host only or when quorum reached) */}
-                                {(isHost || totalVotes >= alivePlayers.length) && (
-                                    <Button
-                                        onClick={handleFinalizeVoting}
-                                        isLoading={isProcessing || isTxPending}
-                                        disabled={isProcessing || isTxPending || totalVotes === 0}
-                                        variant="outline-gold"
-                                        className="w-full"
-                                    >
-                                        Finalize Voting ({totalVotes}/{alivePlayers.length} voted)
-                                    </Button>
-                                )}
+                                {/* V3: Auto-finalize info */}
+                                <div className="text-center text-white/40 text-sm">
+                                    {totalVotes}/{alivePlayers.length} voted • Auto-finalize when all vote
+                                </div>
                             </motion.div>
                         )}
                     </AnimatePresence>

@@ -56,7 +56,7 @@ export const RoleReveal: React.FC = () => {
         gameState, 
         currentRoomId, 
         myPlayer,
-        shareKeyOnChain,
+        shareKeysToAllOnChain,
         confirmRoleOnChain,
         addLog,
         isTxPending,
@@ -116,42 +116,41 @@ export const RoleReveal: React.FC = () => {
         }
     }, [publicClient, currentRoomId, findMyCardIndex]);
 
-    // Собрать ключи от других игроков
+    // V3: Собрать ключи - используем getMyKey (возвращает ключ для текущего игрока)
     const collectKeys = useCallback(async () => {
         if (!publicClient || !currentRoomId || !myPlayer || !address) return;
 
-        const keys = new Map<string, string>();
+        try {
+            // V3: getMyKey возвращает наш зашифрованный ключ напрямую
+            const myKey = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'getMyKey',
+                args: [currentRoomId],
+                account: address,
+            }) as `0x${string}`;
 
-        for (const player of gameState.players) {
-            if (player.address.toLowerCase() === myPlayer.address.toLowerCase()) continue;
-
-            try {
-                // Важно: передаём account чтобы контракт знал кто вызывает (для msg.sender в getKeyFrom)
-                const key = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MAFIA_ABI,
-                    functionName: 'getKeyFrom',
-                    args: [currentRoomId, player.address],
-                    account: address, // <-- Критически важно!
-                }) as string;
-
-                if (key && key !== '') {
-                    keys.set(player.address.toLowerCase(), key);
-                }
-            } catch (e) {
-                // Ключ ещё не отправлен
+            const keys = new Map<string, string>();
+            
+            // В V3 все ключи приходят в одном поле playerDeckKeys
+            // Для простоты пока храним один ключ
+            if (myKey && myKey !== '0x') {
+                keys.set('batch', myKey);
             }
+
+            setRevealState(prev => ({
+                ...prev,
+                collectedKeys: keys
+            }));
+
+            return keys;
+        } catch (e) {
+            console.error("Failed to collect keys:", e);
+            return new Map();
         }
+    }, [publicClient, currentRoomId, myPlayer, address]);
 
-        setRevealState(prev => ({
-            ...prev,
-            collectedKeys: keys
-        }));
-
-        return keys;
-    }, [publicClient, currentRoomId, myPlayer, gameState.players, address]);
-
-    // Поделиться своим ключом со всеми
+    // V3: Поделиться своим ключом со всеми (batch - одна транзакция!)
     const shareMyKey = async () => {
         if (!myPlayer || isProcessing) return;
 
@@ -160,15 +159,20 @@ export const RoleReveal: React.FC = () => {
             const shuffleService = getShuffleService();
             const myDecryptionKey = shuffleService.getDecryptionKey();
 
-            // Отправляем ключ каждому игроку
+            // V3: Собираем всех получателей и ключи в массивы
+            const recipients: string[] = [];
+            const encryptedKeys: string[] = [];
+            
             for (const player of gameState.players) {
                 if (player.address.toLowerCase() === myPlayer.address.toLowerCase()) continue;
-                
-                addLog(`Sharing key with ${player.name}...`, "info");
-                await shareKeyOnChain(player.address, myDecryptionKey);
+                recipients.push(player.address);
+                // В V3 ключи передаются как bytes, пока просто hex строки
+                encryptedKeys.push(myDecryptionKey);
             }
 
-            addLog("All keys shared!", "success");
+            addLog(`Sharing keys to ${recipients.length} players...`, "info");
+            await shareKeysToAllOnChain(recipients, encryptedKeys);
+            addLog("All keys shared in one tx!", "success");
         } catch (e: any) {
             console.error("Failed to share keys:", e);
             addLog(e.message || "Failed to share keys", "danger");
