@@ -17,6 +17,8 @@ const somniaChain = {
     },
 } as const;
 
+import shotSound from '../assets/mafia_shot.wav';
+
 interface GameContextType {
     playerName: string;
     setPlayerName: (name: string) => void;
@@ -28,27 +30,28 @@ interface GameContextType {
     setGameState: React.Dispatch<React.SetStateAction<GameState>>;
     isTxPending: boolean;
     currentRoomId: bigint | null;
+    selectedTarget: string | null;
+    setSelectedTarget: (target: string | null) => void;
 
     // Lobby
     createLobbyOnChain: () => Promise<void>;
     joinLobbyOnChain: (roomId: number) => Promise<void>;
-    
+
     // Shuffle
     startGameOnChain: () => Promise<void>;
     submitDeckOnChain: (deck: string[]) => Promise<void>;
-    
+
     // Reveal (V3: batch share keys)
     shareKeysToAllOnChain: (recipients: string[], encryptedKeys: string[]) => Promise<void>;
     confirmRoleOnChain: () => Promise<void>;
-    
+
     // Day/Voting (V3: auto-finalize on last vote)
     startVotingOnChain: () => Promise<void>;
     voteOnChain: (targetAddress: string) => Promise<void>;
-    
+
     // Night (V3: auto-finalize on last reveal)
     commitNightActionOnChain: (hash: string) => Promise<void>;
     revealNightActionOnChain: (action: number, target: string, salt: string) => Promise<void>;
-    
     // Utility
     kickStalledPlayerOnChain: () => Promise<void>;
     refreshPlayersList: (roomId: bigint) => Promise<void>;
@@ -71,7 +74,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         sessionStorage.getItem('currentRoomId') ? BigInt(sessionStorage.getItem('currentRoomId')!) : null
     );
     const [keys, setKeys] = useState<CryptoKeyPair | null>(null);
-    
+    const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+
     // Ref для currentRoomId чтобы избежать проблем с замыканием в callbacks
     const currentRoomIdRef = useRef<bigint | null>(currentRoomId);
     useEffect(() => {
@@ -90,7 +94,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!session || !session.registeredOnChain || Date.now() >= session.expiresAt) {
             return null;
         }
-        
+
         try {
             const account = privateKeyToAccount(session.privateKey);
             return createWalletClient({
@@ -111,7 +115,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     ): Promise<`0x${string}`> => {
         const session = loadSession();
         const roomId = currentRoomIdRef.current;
-        
+
         // Debug: показываем все условия
         console.log(`[TX Debug] ${functionName}:`, {
             useSessionKeyParam,
@@ -122,17 +126,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             sessionRoomId: session?.roomId,
             roomMatch: session && roomId !== null ? session.roomId === Number(roomId) : false,
         });
-        
+
         // Проверяем можно ли использовать session key
-        const canUseSession = useSessionKeyParam && 
-                              session && 
-                              session.registeredOnChain && 
-                              Date.now() < session.expiresAt &&
-                              roomId !== null &&
-                              session.roomId === Number(roomId);
-        
+        const canUseSession = useSessionKeyParam &&
+            session &&
+            session.registeredOnChain &&
+            Date.now() < session.expiresAt &&
+            roomId !== null &&
+            session.roomId === Number(roomId);
+
         console.log(`[TX Debug] canUseSession: ${canUseSession}`);
-        
+
         if (canUseSession) {
             const sessionClient = getSessionWalletClient();
             console.log(`[TX Debug] sessionClient exists: ${!!sessionClient}`);
@@ -155,7 +159,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
         }
-        
+
         // Fallback на main wallet (с попапом)
         console.log(`[Main Wallet TX] ${functionName} - requires signature`);
         return writeContractAsync({
@@ -236,7 +240,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const flags = Number(p.flags);
                     const isActive = (flags & FLAG_ACTIVE) !== 0;
                     const hasConfirmedRole = (flags & FLAG_CONFIRMED_ROLE) !== 0;
-                    
+
                     return {
                         id: p.wallet,
                         name: p.nickname,
@@ -250,8 +254,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     };
                 });
 
-                return { 
-                    ...prev, 
+                return {
+                    ...prev,
                     players: formattedPlayers,
                     phase,
                     dayCount
@@ -272,11 +276,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Polling для регулярного обновления состояния (backup для events)
     useEffect(() => {
         if (!currentRoomId || !publicClient) return;
-        
+
         const interval = setInterval(() => {
             refreshPlayersList(currentRoomId);
         }, 5000); // Каждые 5 секунд
-        
+
         return () => clearInterval(interval);
     }, [currentRoomId, publicClient, refreshPlayersList]);
 
@@ -295,22 +299,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
             addLog("Creating room...", "warning");
             await publicClient?.waitForTransactionReceipt({ hash: createHash });
-            
             const nextId = await publicClient?.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'nextRoomId',
             }) as bigint;
             const newRoomId = nextId - 1n;
-            
+
             // 2. Generate crypto keys
             const keyPair = await generateKeyPair();
             setKeys(keyPair);
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
-            
+
             // 3. Generate session key
             const { sessionAddress } = createNewSession(address, Number(newRoomId));
-            
+
             // 4. Join room with session key + fund it (V3: all in one tx)
             const joinHash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
@@ -320,10 +323,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 value: parseEther('0.02'), // Fund session key
             });
             await publicClient?.waitForTransactionReceipt({ hash: joinHash });
-            
+
             // 5. Mark session as registered
             markSessionRegistered();
-            
+
             setCurrentRoomId(newRoomId);
             await refreshPlayersList(newRoomId);
             addLog(`Room #${newRoomId} created with auto-sign enabled!`, "success");
@@ -342,7 +345,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const keyPair = await generateKeyPair();
             setKeys(keyPair);
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
-            
+
             // 2. Generate session key
             const { sessionAddress } = createNewSession(address, roomId);
 
@@ -356,10 +359,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
             addLog("Joining with auto-sign...", "info");
             await publicClient?.waitForTransactionReceipt({ hash });
-            
+
             // 4. Mark session as registered
             markSessionRegistered();
-            
+
             setCurrentRoomId(BigInt(roomId));
             await refreshPlayersList(BigInt(roomId));
             addLog("Joined with auto-sign enabled!", "success");
@@ -416,8 +419,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             // V3: shareKeysToAll - one transaction for all keys
             const hash = await sendGameTransaction('shareKeysToAll', [
-                currentRoomId, 
-                recipients, 
+                currentRoomId,
+                recipients,
                 encryptedKeys.map(k => k as `0x${string}`) // Convert to bytes
             ]);
             addLog(`Keys shared to ${recipients.length} players!`, "success");
@@ -465,7 +468,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!currentRoomId) return;
         try {
             const hash = await sendGameTransaction('vote', [currentRoomId, targetAddress]);
-            addLog(`Voted for ${targetAddress.slice(0,6)}...`, "warning");
+            addLog(`Voted for ${targetAddress.slice(0, 6)}...`, "warning");
             await publicClient?.waitForTransactionReceipt({ hash });
             // V3: auto-finalize when all voted - just refresh
             await refreshPlayersList(currentRoomId);
@@ -519,15 +522,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     // --- EVENTS (используем ref чтобы избежать проблем с замыканием) ---
-    
+
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'PlayerJoined',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             logs.forEach((log: any) => {
                 if (BigInt(log.args.roomId) === roomId) {
                     addLog(`${log.args.nickname} joined!`, "info");
@@ -538,13 +541,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'GameStarted',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 addLog("Shuffle started!", "phase");
                 refreshPlayersList(roomId);
@@ -553,13 +556,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'DayStarted',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 addLog(`Day ${logs[0].args.dayNumber} has begun!`, "phase");
                 refreshPlayersList(roomId);
@@ -568,13 +571,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'VotingStarted',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 addLog("Voting has started!", "phase");
                 refreshPlayersList(roomId);
@@ -583,13 +586,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'NightStarted',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 addLog("Night falls...", "phase");
                 refreshPlayersList(roomId);
@@ -598,46 +601,46 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'PlayerEliminated',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const victim = logs[0].args.player;
                 const reason = logs[0].args.reason;
-                addLog(`${victim.slice(0,6)}... ${reason}!`, "danger");
+                addLog(`${victim.slice(0, 6)}... ${reason}!`, "danger");
                 refreshPlayersList(roomId);
             }
         }
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'PlayerKicked',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const kicked = logs[0].args.player;
-                addLog(`${kicked.slice(0,6)}... was kicked (AFK)!`, "danger");
+                addLog(`${kicked.slice(0, 6)}... was kicked (AFK)!`, "danger");
                 refreshPlayersList(roomId);
             }
         }
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'GameEnded',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 addLog(`Game Over: ${logs[0].args.reason}`, "phase");
                 refreshPlayersList(roomId);
@@ -646,99 +649,108 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'RoleConfirmed',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const player = logs[0].args.player;
-                addLog(`${player.slice(0,6)}... confirmed role`, "info");
+                addLog(`${player.slice(0, 6)}... confirmed role`, "info");
                 refreshPlayersList(roomId);
             }
         }
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'DeckSubmitted',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const player = logs[0].args.byPlayer;
                 const nextIndex = Number(logs[0].args.nextIndex);
-                addLog(`${player.slice(0,6)}... shuffled the deck`, "info");
+                addLog(`${player.slice(0, 6)}... shuffled the deck`, "info");
                 refreshPlayersList(roomId);
             }
         }
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'KeyShared',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const from = logs[0].args.from;
                 const to = logs[0].args.to;
                 // Только логируем если ключ отправлен мне
                 if (to.toLowerCase() === address?.toLowerCase()) {
-                    addLog(`Key received from ${from.slice(0,6)}...`, "success");
+                    addLog(`Key received from ${from.slice(0, 6)}...`, "success");
                 }
             }
         }
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'VoteCast',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const voter = logs[0].args.voter;
                 const target = logs[0].args.target;
-                addLog(`${voter.slice(0,6)}... voted for ${target.slice(0,6)}...`, "warning");
+                addLog(`${voter.slice(0, 6)}... voted for ${target.slice(0, 6)}...`, "warning");
             }
         }
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'NightActionCommitted',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const player = logs[0].args.player;
-                addLog(`${player.slice(0,6)}... committed night action`, "info");
+                addLog(`${player.slice(0, 6)}... committed night action`, "info");
+
+                // Play shot sound
+                try {
+                    const audio = new Audio(shotSound);
+                    audio.volume = 0.2;
+                    audio.play().catch(e => console.error("Audio play failed:", e));
+                } catch (e) {
+                    console.error("Audio error:", e);
+                }
             }
         }
     });
 
     useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS, 
-        abi: MAFIA_ABI, 
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'NightActionRevealed',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
-            
+
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const player = logs[0].args.player;
-                addLog(`${player.slice(0,6)}... revealed action`, "success");
+                addLog(`${player.slice(0, 6)}... revealed action`, "success");
             }
         }
     });
@@ -746,16 +758,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Helper для UI
     const handlePlayerAction = (targetId: string) => {
         if (gameState.phase === GamePhase.VOTING) {
-            voteOnChain(targetId);
+            setSelectedTarget(prev => prev === targetId ? null : targetId);
         } else {
             console.log("Not voting phase");
         }
     };
 
     // Ищем myPlayer: сначала по реальному адресу кошелька, потом по myPlayerId (для тестового режима)
-    const myPlayer = gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase()) 
+    const myPlayer = gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase())
         || gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase());
-    
+
     const getActionLabel = () => gameState.phase === GamePhase.VOTING ? "VOTE" : "SELECT";
     const canActOnPlayer = (target: Player) => gameState.phase === GamePhase.VOTING && target.isAlive;
 
@@ -763,13 +775,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         <GameContext.Provider value={{
             playerName, setPlayerName, avatarUrl, setAvatarUrl, lobbyName, setLobbyName,
             gameState, setGameState, isTxPending, currentRoomId,
-            createLobbyOnChain, joinLobbyOnChain, 
+            createLobbyOnChain, joinLobbyOnChain,
             startGameOnChain, submitDeckOnChain,
             shareKeysToAllOnChain, confirmRoleOnChain,
             startVotingOnChain, voteOnChain,
             commitNightActionOnChain, revealNightActionOnChain,
             kickStalledPlayerOnChain, refreshPlayersList,
-            addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel
+            addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
+            selectedTarget, setSelectedTarget
         }}>
             {children}
         </GameContext.Provider>

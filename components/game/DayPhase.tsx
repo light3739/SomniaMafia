@@ -22,7 +22,9 @@ export const DayPhase: React.FC = () => {
         startVotingOnChain,
         voteOnChain,
         addLog,
-        isTxPending
+        isTxPending,
+        selectedTarget,
+        setSelectedTarget,
     } = useGameContext();
 
     const publicClient = usePublicClient();
@@ -31,7 +33,6 @@ export const DayPhase: React.FC = () => {
         voteCounts: new Map(),
         hasVoted: false
     });
-    const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
 
     const isVotingPhase = gameState.phase === GamePhase.VOTING;
@@ -145,89 +146,6 @@ export const DayPhase: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Player Grid */}
-                <div className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 p-6 mb-6">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {gameState.players.map(player => {
-                            const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
-                            const voteCount = voteState.voteCounts.get(player.address.toLowerCase()) || 0;
-                            const isSelected = selectedTarget === player.address;
-                            const isMyVote = voteState.myVote?.toLowerCase() === player.address.toLowerCase();
-                            const isDead = !player.isAlive;
-
-                            return (
-                                <motion.button
-                                    key={player.address}
-                                    onClick={() => {
-                                        if (!isDead && !isMe && isVotingPhase && !isProcessing) {
-                                            setSelectedTarget(isSelected ? null : player.address);
-                                        }
-                                    }}
-                                    disabled={isDead || isMe || !isVotingPhase || isProcessing}
-                                    whileHover={!isDead && !isMe && isVotingPhase ? { scale: 1.02 } : {}}
-                                    whileTap={!isDead && !isMe && isVotingPhase ? { scale: 0.98 } : {}}
-                                    className={`
-                                        relative p-4 rounded-2xl border transition-all text-left
-                                        ${isDead
-                                            ? 'bg-gray-900/50 border-gray-800 opacity-50 cursor-not-allowed'
-                                            : isSelected
-                                                ? 'bg-red-900/30 border-red-500/50 ring-2 ring-red-500/30'
-                                                : isMyVote
-                                                    ? 'bg-[#916A47]/20 border-[#916A47]/50'
-                                                    : isMe
-                                                        ? 'bg-[#916A47]/10 border-[#916A47]/30 cursor-default'
-                                                        : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
-                                        }
-                                    `}
-                                >
-                                    {/* Dead overlay */}
-                                    {isDead && (
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <Skull className="w-8 h-8 text-red-500/50" />
-                                        </div>
-                                    )}
-
-                                    {/* Player info */}
-                                    <div className={`flex items-center gap-3 ${isDead ? 'opacity-30' : ''}`}>
-                                        <div className={`
-                                            w-10 h-10 rounded-full flex items-center justify-center
-                                            ${isMe ? 'bg-[#916A47]' : 'bg-white/10'}
-                                        `}>
-                                            <User className={`w-5 h-5 ${isMe ? 'text-black' : 'text-white/60'}`} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className={`font-medium truncate ${isMe ? 'text-[#916A47]' : 'text-white'}`}>
-                                                {player.name} {isMe && '(You)'}
-                                            </p>
-                                            <p className="text-xs text-white/30 font-mono">
-                                                {player.address.slice(0, 6)}...
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Vote count badge */}
-                                    {isVotingPhase && voteCount > 0 && !isDead && (
-                                        <motion.div
-                                            initial={{ scale: 0 }}
-                                            animate={{ scale: 1 }}
-                                            className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center shadow-lg"
-                                        >
-                                            {voteCount}
-                                        </motion.div>
-                                    )}
-
-                                    {/* My vote indicator */}
-                                    {isMyVote && (
-                                        <div className="absolute top-2 right-2">
-                                            <Check className="w-4 h-4 text-[#916A47]" />
-                                        </div>
-                                    )}
-                                </motion.button>
-                            );
-                        })}
-                    </div>
-                </div>
-
                 {/* Actions */}
                 <div className="space-y-3">
                     <AnimatePresence mode="wait">
@@ -242,9 +160,9 @@ export const DayPhase: React.FC = () => {
                                     onClick={handleStartVoting}
                                     isLoading={isProcessing || isTxPending}
                                     disabled={isProcessing || isTxPending}
-                                    className="w-full"
+                                    className="w-full h-[50px]"
                                 >
-                                    <Vote className="w-5 h-10 mr-2" />
+                                    <Vote className="w-5 h-5 mr-2" />
                                     Start Voting
                                 </Button>
                                 <p className="text-center text-white/30 text-xs mt-2">
@@ -267,16 +185,16 @@ export const DayPhase: React.FC = () => {
                                     isLoading={isProcessing || isTxPending}
                                     disabled={!selectedTarget || isProcessing || isTxPending}
                                     variant={selectedTarget ? 'primary' : 'outline-gold'}
-                                    className="w-full"
+                                    className="w-full h-[50px]"
                                 >
                                     {selectedTarget ? (
                                         <>
-                                            <Vote className="w-5 h-10 mr-2" />
+                                            <Vote className="w-5 h-5 mr-2" />
                                             Vote for {gameState.players.find(p => p.address === selectedTarget)?.name}
                                         </>
                                     ) : voteState.hasVoted ? (
                                         <>
-                                            <Check className="w-5 h-10 mr-2" />
+                                            <Check className="w-5 h-5 mr-2" />
                                             Vote Cast (tap player to change)
                                         </>
                                     ) : (

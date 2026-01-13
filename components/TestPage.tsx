@@ -12,6 +12,18 @@ import { JoinLobby } from './lobby_flow/JoinLobby';
 import { WaitingRoom } from './lobby_flow/WaitingRoom';
 import { GameLayout } from './game/GameLayout';
 import { GamePhase, Role } from '../types';
+import { VotingAnnouncement } from './game/VotingAnnouncement';
+
+// Wrapper for testing VotingAnnouncement state
+const VotingAnnouncementWrapper = () => {
+    const [show, setShow] = useState(false);
+    return (
+        <div className="flex flex-col items-center gap-4">
+            <Button onClick={() => setShow(true)}>Trigger Animation</Button>
+            <VotingAnnouncement show={show} onComplete={() => setShow(false)} />
+        </div>
+    );
+};
 
 // Mock Props
 const mockPlayer = {
@@ -55,6 +67,7 @@ export const TestPage: React.FC = () => {
         { name: 'PlayerCard', group: 'Game Components', component: <div className="w-60"><PlayerCard player={mockPlayer as any} isMe={false} onAction={() => { }} canAct={true} actionLabel="VOTE" /></div> },
         { name: 'GameControls', group: 'Game Components', component: <GameControls phase={GamePhase.DAY} myRole={Role.CIVILIAN} dayCount={1} onNextPhase={() => console.log('next phase')} /> },
         { name: 'SystemLog', group: 'Game Components', component: <div className="h-60"><SystemLog logs={mockLogs as any} /></div> },
+        { name: 'VotingAnnouncement', group: 'Game Components', component: <VotingAnnouncementWrapper /> },
 
         // Pages
         { name: 'MainPage', group: 'Pages', component: <MainPage onStart={() => console.log('Start')} /> },
