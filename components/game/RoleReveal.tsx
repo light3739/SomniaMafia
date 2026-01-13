@@ -3,6 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
+import { stringToHex, hexToString } from '../../services/cryptoUtils';
 import { usePublicClient, useAccount } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { Role, GamePhase } from '../../types';
@@ -116,26 +117,27 @@ export const RoleReveal: React.FC = () => {
         }
     }, [publicClient, currentRoomId, findMyCardIndex]);
 
-    // V3: Собрать ключи - используем getMyKey (возвращает ключ для текущего игрока)
+    // V3.1: Собрать ВСЕ ключи от всех игроков - используем getAllKeysForMe
     const collectKeys = useCallback(async () => {
         if (!publicClient || !currentRoomId || !myPlayer || !address) return;
 
         try {
-            // V3: getMyKey возвращает наш зашифрованный ключ напрямую
-            const myKey = await publicClient.readContract({
+            // V3.1: getAllKeysForMe возвращает все ключи, которые другие игроки расшарили МНЕ
+            const [senders, keyBytes] = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
-                functionName: 'getMyKey',
+                functionName: 'getAllKeysForMe',
                 args: [currentRoomId],
                 account: address,
-            }) as `0x${string}`;
+            }) as [string[], string[]];
 
             const keys = new Map<string, string>();
             
-            // В V3 все ключи приходят в одном поле playerDeckKeys
-            // Для простоты пока храним один ключ
-            if (myKey && myKey !== '0x') {
-                keys.set('batch', myKey);
+            // Собираем все ключи от всех отправителей
+            for (let i = 0; i < senders.length; i++) {
+                if (keyBytes[i] && keyBytes[i] !== '0x') {
+                    keys.set(senders[i], keyBytes[i]);
+                }
             }
 
             setRevealState(prev => ({
@@ -143,12 +145,13 @@ export const RoleReveal: React.FC = () => {
                 collectedKeys: keys
             }));
 
+            addLog(`Collected ${keys.size} decryption keys`, "info");
             return keys;
         } catch (e) {
             console.error("Failed to collect keys:", e);
             return new Map();
         }
-    }, [publicClient, currentRoomId, myPlayer, address]);
+    }, [publicClient, currentRoomId, myPlayer, address, addLog]);
 
     // V3: Поделиться своим ключом со всеми (batch - одна транзакция!)
     const shareMyKey = async () => {
@@ -166,8 +169,8 @@ export const RoleReveal: React.FC = () => {
             for (const player of gameState.players) {
                 if (player.address.toLowerCase() === myPlayer.address.toLowerCase()) continue;
                 recipients.push(player.address);
-                // В V3 ключи передаются как bytes, пока просто hex строки
-                encryptedKeys.push(myDecryptionKey);
+                // Convert decryption key to hex bytes for Solidity
+                encryptedKeys.push(stringToHex(myDecryptionKey));
             }
 
             addLog(`Sharing keys to ${recipients.length} players...`, "info");
@@ -204,7 +207,9 @@ export const RoleReveal: React.FC = () => {
 
             // Расшифровываем ключами других игроков
             for (const [_, key] of keys) {
-                myEncryptedCard = shuffleService.decryptWithKey(myEncryptedCard, key);
+                // Convert hex bytes back to string before using as decryption key
+                const decryptionKey = hexToString(key);
+                myEncryptedCard = shuffleService.decryptWithKey(myEncryptedCard, decryptionKey);
             }
 
             // Преобразуем число в роль

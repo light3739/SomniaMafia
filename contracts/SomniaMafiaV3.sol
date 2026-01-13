@@ -2,12 +2,13 @@
 pragma solidity ^0.8.28;
 
 /**
- * @title MafiaPortal V3 - Optimized
- * @notice Optimizations:
- *   1. Batch Share Keys - one tx instead of N×(N-1)
- *   2. Auto-Finalize - no separate finalize transactions
- *   3. Join + Session Key - register session on join
- *   4. Gas-optimized structures
+ * @title MafiaPortal V3.1 - Security Fixes
+ * @notice Fixes:
+ *   1. shareKeysToAll - one-time per player, counter tracking
+ *   2. Night phase - timeout + default action for AFK
+ *   3. VoteCounts - proper reset for alive only
+ *   4. _findNextActive - fixed edge case
+ *   5. Timeout enforcement for all phases
  */
 contract MafiaPortalV3 {
     // ============ ENUMS ============
@@ -19,7 +20,7 @@ contract MafiaPortalV3 {
         address wallet;
         string nickname;
         bytes publicKey;          // bytes instead of string - gas saving
-        uint32 flags;             // packed: bit0=hasConfirmedRole, bit1=isActive, bit2=hasVoted, bit3=hasCommitted, bit4=hasRevealed
+        uint32 flags;             // packed flags: bit0-5 for various states
     }
 
     struct GameRoom {
@@ -32,12 +33,14 @@ contract MafiaPortalV3 {
         uint16 dayCount;
         uint8 currentShufflerIndex;
         uint32 lastActionTimestamp;
+        uint32 phaseDeadline;     // NEW: deadline for current phase
         
         // Auto-finalize counters
         uint8 confirmedCount;     // for REVEAL phase
         uint8 votedCount;         // for VOTING phase  
         uint8 committedCount;     // for NIGHT phase
         uint8 revealedCount;      // for NIGHT phase
+        uint8 keysSharedCount;    // NEW: track how many shared keys
     }
 
     struct SessionKey {
@@ -59,8 +62,9 @@ contract MafiaPortalV3 {
     mapping(uint256 => mapping(address => uint8)) public playerIndex; // address => index for O(1) lookup
     mapping(uint256 => string[]) public roomDeck;
     
-    // Batch keys: roomId => player => encrypted deck key for that player
-    mapping(uint256 => mapping(address => bytes)) public playerDeckKeys;
+    // FIX: 3D mapping - roomId => from => to => encryptedKey
+    // Each sender stores their key for each recipient
+    mapping(uint256 => mapping(address => mapping(address => bytes))) public playerDeckKeys;
     
     // Voting
     mapping(uint256 => mapping(address => address)) public votes;
@@ -77,8 +81,9 @@ contract MafiaPortalV3 {
 
     uint256 public nextRoomId = 1;
     
-    // Constants - using uint32 for gas
+    // Timeouts
     uint32 public constant TURN_TIMEOUT = 2 minutes;
+    uint32 public constant PHASE_TIMEOUT = 5 minutes;    // Max time per phase
     uint32 public constant SESSION_DURATION = 4 hours;
     uint256 public constant DEFAULT_SESSION_FUND = 0.02 ether;
 
@@ -88,6 +93,7 @@ contract MafiaPortalV3 {
     uint32 constant FLAG_HAS_VOTED = 4;
     uint32 constant FLAG_HAS_COMMITTED = 8;
     uint32 constant FLAG_HAS_REVEALED = 16;
+    uint32 constant FLAG_HAS_SHARED_KEYS = 32;  // NEW: prevent double key sharing
 
     // ============ EVENTS ============
     event RoomCreated(uint256 indexed roomId, address host, uint256 maxPlayers);
@@ -98,6 +104,7 @@ contract MafiaPortalV3 {
     
     // Batch events
     event KeysSharedToAll(uint256 indexed roomId, address from);
+    event AllKeysShared(uint256 indexed roomId);  // NEW: all players shared
     event RoleConfirmed(uint256 indexed roomId, address player);
     event AllRolesConfirmed(uint256 indexed roomId); // Auto-transition to DAY
     
@@ -110,6 +117,7 @@ contract MafiaPortalV3 {
     event NightActionCommitted(uint256 indexed roomId, address player);
     event NightActionRevealed(uint256 indexed roomId, address player, NightActionType action);
     event NightFinalized(uint256 indexed roomId, address killed, address healed);
+    event PhaseTimeout(uint256 indexed roomId, GamePhase phase);
     
     event PlayerEliminated(uint256 indexed roomId, address player, string reason);
     event GameEnded(uint256 indexed roomId, string winCondition);
@@ -132,10 +140,12 @@ contract MafiaPortalV3 {
     error AlreadyRevealed();
     error AlreadyVoted();
     error AlreadyCommitted();
+    error AlreadySharedKeys();   // NEW
     error SessionExpired();
     error SessionNotForThisRoom();
     error InvalidSessionKey();
     error InvalidArrayLength();
+    error PhaseDeadlinePassed(); // NEW
 
     // ============ MODIFIERS ============
     
@@ -143,6 +153,13 @@ contract MafiaPortalV3 {
         address player = _resolvePlayer(roomId);
         if (!isPlayerInRoom[roomId][player]) revert NotParticipant();
         if (!_hasFlag(roomId, player, FLAG_ACTIVE)) revert PlayerInactive();
+        _;
+    }
+
+    modifier beforeDeadline(uint256 roomId) {
+        if (rooms[roomId].phaseDeadline != 0 && block.timestamp > rooms[roomId].phaseDeadline) {
+            revert PhaseDeadlinePassed();
+        }
         _;
     }
 
@@ -244,10 +261,12 @@ contract MafiaPortalV3 {
             dayCount: 0,
             currentShufflerIndex: 0,
             lastActionTimestamp: uint32(block.timestamp),
+            phaseDeadline: 0,
             confirmedCount: 0,
             votedCount: 0,
             committedCount: 0,
-            revealedCount: 0
+            revealedCount: 0,
+            keysSharedCount: 0
         });
         
         emit RoomCreated(roomId, msg.sender, maxPlayers);
@@ -325,13 +344,18 @@ contract MafiaPortalV3 {
         if (room.playersCount < 2) revert("Need at least 2 players");
 
         room.phase = GamePhase.SHUFFLING;
-        room.currentShufflerIndex = 0;
+        room.currentShufflerIndex = _findNextActive(roomId, 0);
         room.lastActionTimestamp = uint32(block.timestamp);
+        room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
         
         emit GameStarted(roomId);
     }
 
-    function submitDeck(uint256 roomId, string[] calldata deck) external onlyActiveParticipant(roomId) {
+    function submitDeck(uint256 roomId, string[] calldata deck) 
+        external 
+        onlyActiveParticipant(roomId)
+        beforeDeadline(roomId)
+    {
         address player = _resolvePlayer(roomId);
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.SHUFFLING) revert WrongPhase();
@@ -345,59 +369,96 @@ contract MafiaPortalV3 {
         }
 
         roomDeck[roomId] = deck;
-        room.currentShufflerIndex = _findNextActive(roomId, room.currentShufflerIndex + 1);
+        
+        uint8 nextIndex = _findNextActive(roomId, room.currentShufflerIndex + 1);
+        room.currentShufflerIndex = nextIndex;
         room.lastActionTimestamp = uint32(block.timestamp);
+        room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
 
-        emit DeckSubmitted(roomId, player, room.currentShufflerIndex);
+        emit DeckSubmitted(roomId, player, nextIndex);
 
-        // Auto-transition to REVEAL when all shuffled
-        if (room.currentShufflerIndex >= roomPlayers[roomId].length) {
-            room.phase = GamePhase.REVEAL;
+        // FIX: transition to REVEAL only when all have shuffled
+        if (nextIndex >= roomPlayers[roomId].length) {
+            _transitionToReveal(roomId);
         }
     }
 
+    function _transitionToReveal(uint256 roomId) internal {
+        GameRoom storage room = rooms[roomId];
+        room.phase = GamePhase.REVEAL;
+        room.keysSharedCount = 0;
+        room.confirmedCount = 0;
+        room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
+        
+        // Reset shared keys flag for all alive players
+        Player[] storage players = roomPlayers[roomId];
+        for (uint8 i = 0; i < players.length; i++) {
+            if ((players[i].flags & FLAG_ACTIVE) != 0) {
+                players[i].flags &= ~(FLAG_HAS_SHARED_KEYS | FLAG_CONFIRMED_ROLE);
+            }
+        }
+    }
+
+    // FIX: Returns length if no active found (instead of potential loop/stuck)
     function _findNextActive(uint256 roomId, uint8 startIndex) internal view returns (uint8) {
         Player[] storage players = roomPlayers[roomId];
-        for (uint8 i = startIndex; i < players.length; i++) {
+        uint8 len = uint8(players.length);
+        
+        for (uint8 i = startIndex; i < len; i++) {
             if ((players[i].flags & FLAG_ACTIVE) != 0) {
                 return i;
             }
         }
-        return uint8(players.length);
+        return len; // No more active players - signals completion
     }
 
-    // ============ REVEAL - BATCH SHARE KEYS ============
+    // ============ REVEAL - BATCH SHARE KEYS (FIXED) ============
 
     /**
      * @notice Share encrypted deck keys to ALL players in ONE transaction
-     * @param roomId Room ID
-     * @param recipients Array of player addresses
-     * @param encryptedKeys Array of encrypted keys (one per recipient)
-     * @dev Arrays must be same length and cover all other active players
+     * @dev FIX: Each player can only share once, counter tracks completion
      */
     function shareKeysToAll(
         uint256 roomId, 
         address[] calldata recipients, 
         bytes[] calldata encryptedKeys
-    ) external onlyActiveParticipant(roomId) {
+    ) external onlyActiveParticipant(roomId) beforeDeadline(roomId) {
         address player = _resolvePlayer(roomId);
-        if (rooms[roomId].phase != GamePhase.REVEAL) revert WrongPhase();
+        GameRoom storage room = rooms[roomId];
+        
+        if (room.phase != GamePhase.REVEAL) revert WrongPhase();
         if (recipients.length != encryptedKeys.length) revert InvalidArrayLength();
         
-        // Store all keys in one tx
+        // FIX: Check player hasn't already shared
+        if (_hasFlag(roomId, player, FLAG_HAS_SHARED_KEYS)) revert AlreadySharedKeys();
+        
+        // Store all keys in one tx (FIX: 3D mapping - sender => recipient)
         for (uint256 i = 0; i < recipients.length; i++) {
             address to = recipients[i];
             if (!isPlayerInRoom[roomId][to]) revert NotParticipant();
-            playerDeckKeys[roomId][to] = encryptedKeys[i];
+            playerDeckKeys[roomId][player][to] = encryptedKeys[i];
         }
         
+        // Mark player as having shared
+        _setFlag(roomId, player, FLAG_HAS_SHARED_KEYS);
+        room.keysSharedCount++;
+        
         emit KeysSharedToAll(roomId, player);
+        
+        // Check if all alive players have shared
+        if (room.keysSharedCount == room.aliveCount) {
+            emit AllKeysShared(roomId);
+        }
     }
 
     /**
      * @notice Confirm role after decrypting - with AUTO-FINALIZE
      */
-    function confirmRole(uint256 roomId) external onlyActiveParticipant(roomId) {
+    function confirmRole(uint256 roomId) 
+        external 
+        onlyActiveParticipant(roomId) 
+        beforeDeadline(roomId) 
+    {
         address player = _resolvePlayer(roomId);
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.REVEAL) revert WrongPhase();
@@ -412,12 +473,18 @@ contract MafiaPortalV3 {
         
         // AUTO-FINALIZE: Check if all confirmed
         if (room.confirmedCount == room.aliveCount) {
-            room.phase = GamePhase.DAY;
-            room.dayCount = 1;
-            room.lastActionTimestamp = uint32(block.timestamp);
+            _transitionToDay(roomId);
             emit AllRolesConfirmed(roomId);
-            emit DayStarted(roomId, 1);
         }
+    }
+
+    function _transitionToDay(uint256 roomId) internal {
+        GameRoom storage room = rooms[roomId];
+        room.phase = GamePhase.DAY;
+        room.dayCount++;
+        room.lastActionTimestamp = uint32(block.timestamp);
+        room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
+        emit DayStarted(roomId, room.dayCount);
     }
 
     // ============ DAY & VOTING - AUTO-FINALIZE ============
@@ -428,11 +495,18 @@ contract MafiaPortalV3 {
         
         room.phase = GamePhase.VOTING;
         room.votedCount = 0;
+        room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
         
-        // Reset vote flags for all alive players
-        for (uint8 i = 0; i < roomPlayers[roomId].length; i++) {
-            if ((roomPlayers[roomId][i].flags & FLAG_ACTIVE) != 0) {
-                roomPlayers[roomId][i].flags &= ~FLAG_HAS_VOTED;
+        // FIX: Reset vote flags AND voteCounts for all ALIVE players only
+        Player[] storage players = roomPlayers[roomId];
+        for (uint8 i = 0; i < players.length; i++) {
+            address p = players[i].wallet;
+            players[i].flags &= ~FLAG_HAS_VOTED;
+            votes[roomId][p] = address(0);
+            
+            // Only reset voteCounts for alive players
+            if ((players[i].flags & FLAG_ACTIVE) != 0) {
+                voteCounts[roomId][p] = 0;
             }
         }
         
@@ -442,7 +516,11 @@ contract MafiaPortalV3 {
     /**
      * @notice Cast vote - with AUTO-FINALIZE when all voted
      */
-    function vote(uint256 roomId, address target) external onlyActiveParticipant(roomId) {
+    function vote(uint256 roomId, address target) 
+        external 
+        onlyActiveParticipant(roomId) 
+        beforeDeadline(roomId) 
+    {
         address player = _resolvePlayer(roomId);
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.VOTING) revert WrongPhase();
@@ -504,11 +582,28 @@ contract MafiaPortalV3 {
         _resetVotingState(roomId);
 
         if (!_checkWinCondition(roomId)) {
-            room.phase = GamePhase.NIGHT;
-            room.committedCount = 0;
-            room.revealedCount = 0;
-            emit NightStarted(roomId);
+            _transitionToNight(roomId);
         }
+    }
+
+    function _transitionToNight(uint256 roomId) internal {
+        GameRoom storage room = rooms[roomId];
+        room.phase = GamePhase.NIGHT;
+        room.committedCount = 0;
+        room.revealedCount = 0;
+        room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
+        
+        // Reset night flags for all players
+        Player[] storage players = roomPlayers[roomId];
+        for (uint8 i = 0; i < players.length; i++) {
+            address p = players[i].wallet;
+            players[i].flags &= ~(FLAG_HAS_COMMITTED | FLAG_HAS_REVEALED);
+            delete nightCommits[roomId][p];
+            delete revealedActions[roomId][p];
+            delete revealedTargets[roomId][p];
+        }
+        
+        emit NightStarted(roomId);
     }
 
     // ============ NIGHT - AUTO-FINALIZE ============
@@ -516,7 +611,11 @@ contract MafiaPortalV3 {
     /**
      * @notice Commit night action - tracks count for auto-finalize
      */
-    function commitNightAction(uint256 roomId, bytes32 hash) external onlyActiveParticipant(roomId) {
+    function commitNightAction(uint256 roomId, bytes32 hash) 
+        external 
+        onlyActiveParticipant(roomId) 
+        beforeDeadline(roomId)
+    {
         address player = _resolvePlayer(roomId);
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.NIGHT) revert WrongPhase();
@@ -541,11 +640,20 @@ contract MafiaPortalV3 {
         NightActionType action, 
         address target, 
         string calldata salt
-    ) external onlyActiveParticipant(roomId) {
+    ) external onlyActiveParticipant(roomId) beforeDeadline(roomId) {
         address player = _resolvePlayer(roomId);
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.NIGHT) revert WrongPhase();
         if (_hasFlag(roomId, player, FLAG_HAS_REVEALED)) revert AlreadyRevealed();
+        
+        // Must have committed first
+        require(_hasFlag(roomId, player, FLAG_HAS_COMMITTED), "Must commit first");
+        
+        // FIX: Validate target is alive (for KILL/HEAL/CHECK actions)
+        if (action != NightActionType.NONE && target != address(0)) {
+            require(isPlayerInRoom[roomId][target], "Target not in room");
+            require(_hasFlag(roomId, target, FLAG_ACTIVE), "Target is dead");
+        }
 
         bytes32 calculatedHash = keccak256(abi.encodePacked(action, target, salt));
         if (calculatedHash != nightCommits[roomId][player].commitHash) revert InvalidReveal();
@@ -565,11 +673,28 @@ contract MafiaPortalV3 {
         }
     }
 
+    /**
+     * @notice Finalize night - supports MULTIPLE kills (mafia + maniac)
+     * @dev Collects all KILL actions, applies single HEAL, kills remaining victims
+     */
     function _finalizeNight(uint256 roomId) internal {
         GameRoom storage room = rooms[roomId];
         
-        address victim = address(0);
+        // FIX: If no one committed, just skip night (no free pass for mafia)
+        if (room.committedCount == 0) {
+            emit NightFinalized(roomId, address(0), address(0));
+            _resetNightState(roomId);
+            if (!_checkWinCondition(roomId)) {
+                _transitionToDay(roomId);
+            }
+            return;
+        }
+        
+        // Collect all victims and healed target
+        address[] memory victims = new address[](room.aliveCount);
+        uint8 victimCount = 0;
         address healed = address(0);
+        bool healedSet = false;  // FIX: first HEAL wins
         
         Player[] storage players = roomPlayers[roomId];
         for (uint8 i = 0; i < players.length; i++) {
@@ -577,36 +702,54 @@ contract MafiaPortalV3 {
             NightActionType action = revealedActions[roomId][p];
             
             if (action == NightActionType.KILL) {
-                victim = revealedTargets[roomId][p];
+                address target = revealedTargets[roomId][p];
+                // Check if not already in victims array (no duplicates)
+                bool isDuplicate = false;
+                for (uint8 j = 0; j < victimCount; j++) {
+                    if (victims[j] == target) {
+                        isDuplicate = true;
+                        break;
+                    }
+                }
+                if (!isDuplicate && target != address(0)) {
+                    victims[victimCount] = target;
+                    victimCount++;
+                }
             }
-            if (action == NightActionType.HEAL) {
+            // FIX: First HEAL wins (deterministic behavior)
+            if (action == NightActionType.HEAL && !healedSet) {
                 healed = revealedTargets[roomId][p];
+                healedSet = true;
             }
         }
 
-        emit NightFinalized(roomId, victim, healed);
+        // Emit event with first victim and healed (for compatibility)
+        emit NightFinalized(roomId, victimCount > 0 ? victims[0] : address(0), healed);
 
-        if (victim != address(0) && victim != healed) {
-            _killPlayer(roomId, victim);
-            emit PlayerEliminated(roomId, victim, "Killed at night");
+        // Kill all victims except the healed one
+        for (uint8 i = 0; i < victimCount; i++) {
+            address victim = victims[i];
+            if (victim != healed) {
+                _killPlayer(roomId, victim);
+                emit PlayerEliminated(roomId, victim, "Killed at night");
+            }
         }
 
         _resetNightState(roomId);
 
         if (!_checkWinCondition(roomId)) {
-            room.phase = GamePhase.DAY;
-            room.dayCount++;
-            room.lastActionTimestamp = uint32(block.timestamp);
-            emit DayStarted(roomId, room.dayCount);
+            _transitionToDay(roomId);
         }
     }
 
     // ============ HELPERS ============
 
     function _killPlayer(uint256 roomId, address victim) internal {
+        if (!_hasFlag(roomId, victim, FLAG_ACTIVE)) return;
         _clearFlag(roomId, victim, FLAG_ACTIVE);
         rooms[roomId].aliveCount--;
     }
+
 
     function _resetVotingState(uint256 roomId) internal {
         Player[] storage players = roomPlayers[roomId];
@@ -636,8 +779,7 @@ contract MafiaPortalV3 {
         GameRoom storage room = rooms[roomId];
         
         if (room.aliveCount <= 1) {
-            room.phase = GamePhase.ENDED;
-            emit GameEnded(roomId, room.aliveCount == 0 ? "Draw" : "Last player standing");
+            _endGame(roomId, room.aliveCount == 0 ? "Draw" : "Last player standing");
             return true;
         }
         
@@ -645,6 +787,104 @@ contract MafiaPortalV3 {
         // (requires tracking roles on-chain or trusting frontend)
         
         return false;
+    }
+
+    function _endGame(uint256 roomId, string memory reason) internal {
+        rooms[roomId].phase = GamePhase.ENDED;
+        rooms[roomId].phaseDeadline = 0;
+        emit GameEnded(roomId, reason);
+    }
+
+    // ============ TIMEOUT ENFORCEMENT ============
+
+    /**
+     * @notice Force phase transition when deadline passed
+     * @dev Anyone can call if deadline passed - griefing protection
+     */
+    function forcePhaseTimeout(uint256 roomId) external {
+        GameRoom storage room = rooms[roomId];
+        
+        require(room.phaseDeadline != 0, "No deadline set");
+        require(block.timestamp > room.phaseDeadline, "Deadline not passed");
+        require(room.phase != GamePhase.LOBBY && room.phase != GamePhase.ENDED, "Cannot timeout this phase");
+        
+        emit PhaseTimeout(roomId, room.phase);
+        
+        if (room.phase == GamePhase.SHUFFLING) {
+            _kickCurrentShuffler(roomId);
+        } 
+        else if (room.phase == GamePhase.REVEAL) {
+            _kickUnconfirmedPlayers(roomId);
+            if (room.aliveCount >= 2) {
+                _transitionToDay(roomId);
+            } else {
+                _endGame(roomId, "Too few players remaining");
+            }
+        }
+        else if (room.phase == GamePhase.VOTING) {
+            // Finalize with current votes
+            _finalizeVoting(roomId);
+        }
+        else if (room.phase == GamePhase.NIGHT) {
+            // FIX: If no commits, skip night; otherwise finalize with current reveals
+            if (room.committedCount == 0) {
+                emit NightFinalized(roomId, address(0), address(0));
+                _resetNightState(roomId);
+                if (!_checkWinCondition(roomId)) {
+                    _transitionToDay(roomId);
+                }
+            } else {
+                _finalizeNight(roomId);
+            }
+        }
+        else if (room.phase == GamePhase.DAY) {
+            // Auto-start voting
+            room.phase = GamePhase.VOTING;
+            room.votedCount = 0;
+            room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
+            emit VotingStarted(roomId);
+        }
+    }
+
+    function _kickCurrentShuffler(uint256 roomId) internal {
+        GameRoom storage room = rooms[roomId];
+        
+        if (room.currentShufflerIndex < roomPlayers[roomId].length) {
+            address stalledPlayer = roomPlayers[roomId][room.currentShufflerIndex].wallet;
+            _killPlayer(roomId, stalledPlayer);
+            emit PlayerKicked(roomId, stalledPlayer, "Timeout during shuffle");
+        }
+        
+        // Find next active
+        uint8 nextIndex = _findNextActive(roomId, room.currentShufflerIndex + 1);
+        room.currentShufflerIndex = nextIndex;
+        room.lastActionTimestamp = uint32(block.timestamp);
+        room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
+        
+        if (nextIndex >= roomPlayers[roomId].length) {
+            if (room.aliveCount >= 2) {
+                _transitionToReveal(roomId);
+            } else {
+                _endGame(roomId, "Too few players remaining");
+            }
+        }
+    }
+
+    function _kickUnconfirmedPlayers(uint256 roomId) internal {
+        Player[] storage players = roomPlayers[roomId];
+        
+        for (uint8 i = 0; i < players.length; i++) {
+            if ((players[i].flags & FLAG_ACTIVE) != 0) {
+                // Kick if didn't share keys OR didn't confirm role
+                bool shared = (players[i].flags & FLAG_HAS_SHARED_KEYS) != 0;
+                bool confirmed = (players[i].flags & FLAG_CONFIRMED_ROLE) != 0;
+                
+                if (!shared || !confirmed) {
+                    _killPlayer(roomId, players[i].wallet);
+                    emit PlayerKicked(roomId, players[i].wallet, "Timeout during reveal");
+                }
+            }
+        }
     }
 
     // ============ VIEW FUNCTIONS ============
@@ -661,12 +901,50 @@ contract MafiaPortalV3 {
         return rooms[roomId];
     }
     
-    function getMyKey(uint256 roomId) external view returns (bytes memory) {
+    /**
+     * @notice Get decryption key that `from` shared for `to`
+     * @dev FIX: Updated for 3D mapping
+     */
+    function getKeyFromTo(uint256 roomId, address from, address to) external view returns (bytes memory) {
+        return playerDeckKeys[roomId][from][to];
+    }
+    
+    /**
+     * @notice Get all decryption keys shared TO me (by all other players)
+     * @dev Returns arrays of senders and their keys
+     */
+    function getAllKeysForMe(uint256 roomId) external view returns (address[] memory senders, bytes[] memory keys) {
         address player = sessionToMain[msg.sender];
         if (player == address(0)) {
             player = msg.sender;
         }
-        return playerDeckKeys[roomId][player];
+        
+        Player[] storage players = roomPlayers[roomId];
+        uint8 count = 0;
+        
+        // Count how many keys we have
+        for (uint8 i = 0; i < players.length; i++) {
+            address sender = players[i].wallet;
+            if (sender != player && playerDeckKeys[roomId][sender][player].length > 0) {
+                count++;
+            }
+        }
+        
+        // Build arrays
+        senders = new address[](count);
+        keys = new bytes[](count);
+        uint8 idx = 0;
+        
+        for (uint8 i = 0; i < players.length; i++) {
+            address sender = players[i].wallet;
+            if (sender != player && playerDeckKeys[roomId][sender][player].length > 0) {
+                senders[idx] = sender;
+                keys[idx] = playerDeckKeys[roomId][sender][player];
+                idx++;
+            }
+        }
+        
+        return (senders, keys);
     }
 
     function getPlayerFlags(uint256 roomId, address player) external view returns (
@@ -674,7 +952,8 @@ contract MafiaPortalV3 {
         bool hasConfirmedRole,
         bool hasVoted,
         bool hasCommitted,
-        bool hasRevealed
+        bool hasRevealed,
+        bool hasSharedKeys
     ) {
         uint8 idx = playerIndex[roomId][player];
         uint32 flags = roomPlayers[roomId][idx].flags;
@@ -683,7 +962,12 @@ contract MafiaPortalV3 {
             (flags & FLAG_CONFIRMED_ROLE) != 0,
             (flags & FLAG_HAS_VOTED) != 0,
             (flags & FLAG_HAS_COMMITTED) != 0,
-            (flags & FLAG_HAS_REVEALED) != 0
+            (flags & FLAG_HAS_REVEALED) != 0,
+            (flags & FLAG_HAS_SHARED_KEYS) != 0
         );
+    }
+
+    function getPhaseDeadline(uint256 roomId) external view returns (uint32) {
+        return rooms[roomId].phaseDeadline;
     }
 }
