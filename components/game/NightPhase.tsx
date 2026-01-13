@@ -151,7 +151,7 @@ export const NightPhase: React.FC = () => {
 
     // V3: Night auto-finalizes when all players have revealed
 
-    // Civilians just wait
+    // Civilians just wait - show blocked UI
     if (!canAct) {
         return (
             <div className="w-full h-full flex flex-col items-center justify-center p-8">
@@ -160,20 +160,40 @@ export const NightPhase: React.FC = () => {
                     animate={{ opacity: 1, scale: 1 }}
                     className="max-w-md w-full bg-indigo-950/30 backdrop-blur-xl rounded-3xl border border-indigo-500/20 p-8 text-center"
                 >
+                    {/* Lock Icon */}
                     <motion.div
                         animate={{
+                            scale: [1, 1.1, 1],
                             opacity: [0.5, 1, 0.5],
                         }}
                         transition={{ duration: 2, repeat: Infinity }}
+                        className="relative mx-auto mb-6"
                     >
-                        <Moon className="w-16 h-16 text-indigo-400 mx-auto mb-6" />
+                        <Moon className="w-16 h-16 text-indigo-400" />
+                        <div className="absolute -bottom-1 -right-1 bg-indigo-900/80 rounded-full p-1">
+                            <Lock className="w-5 h-5 text-indigo-300" />
+                        </div>
                     </motion.div>
+
                     <h2 className="text-2xl font-['Playfair_Display'] text-white mb-2">
-                        Night Falls...
+                        Actions Locked
                     </h2>
-                    <p className="text-white/50 text-sm mb-6">
-                        You are a {myRole}. Close your eyes and wait for dawn.
+                    <p className="text-white/50 text-sm mb-4">
+                        You are a <span className="text-indigo-300 font-medium">{myRole}</span>.
+                        You have no night abilities.
                     </p>
+
+                    {/* Blocked message */}
+                    <div className="bg-indigo-900/30 rounded-xl p-4 border border-indigo-500/20 mb-4">
+                        <div className="flex items-center justify-center gap-2 text-indigo-300 mb-2">
+                            <Lock className="w-4 h-4" />
+                            <span className="text-sm font-medium">Player cards are disabled</span>
+                        </div>
+                        <p className="text-indigo-200/50 text-xs">
+                            Close your eyes and wait for dawn
+                        </p>
+                    </div>
+
                     <div className="flex items-center justify-center gap-2 text-indigo-300">
                         <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
                         <span className="text-sm">Others are making their moves...</span>
