@@ -121,28 +121,39 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [roomId],
             }) as any;
 
-            const formattedPlayers: Player[] = data.map((p: any) => ({
-                id: p.wallet,
-                name: p.nickname,
-                address: p.wallet,
-                role: Role.UNKNOWN,
-                isAlive: p.isActive,
-                hasConfirmedRole: p.hasConfirmedRole,
-                avatarUrl: `https://picsum.photos/seed/${p.wallet}/200`,
-                votesReceived: 0,
-                status: p.isActive ? 'connected' : 'slashed'
-            }));
-
             // roomData tuple: [id, host, phase, maxPlayers, playersCount, dayCount, currentShufflerIndex, lastActionTimestamp]
             const phase = Number(roomData[2]) as GamePhase;
             const dayCount = Number(roomData[5]);
 
-            setGameState(prev => ({ 
-                ...prev, 
-                players: formattedPlayers,
-                phase,
-                dayCount
-            }));
+            setGameState(prev => {
+                // Сохраняем текущие роли игроков (они известны только локально после расшифровки)
+                const existingRoles = new Map<string, Role>();
+                prev.players.forEach(p => {
+                    if (p.role !== Role.UNKNOWN) {
+                        existingRoles.set(p.address.toLowerCase(), p.role);
+                    }
+                });
+
+                const formattedPlayers: Player[] = data.map((p: any) => ({
+                    id: p.wallet,
+                    name: p.nickname,
+                    address: p.wallet,
+                    // Сохраняем роль если она уже была расшифрована
+                    role: existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN,
+                    isAlive: p.isActive,
+                    hasConfirmedRole: p.hasConfirmedRole,
+                    avatarUrl: `https://picsum.photos/seed/${p.wallet}/200`,
+                    votesReceived: 0,
+                    status: p.isActive ? 'connected' : 'slashed'
+                }));
+
+                return { 
+                    ...prev, 
+                    players: formattedPlayers,
+                    phase,
+                    dayCount
+                };
+            });
         } catch (e) {
             console.error("Sync error:", e);
         }
