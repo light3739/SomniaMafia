@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
-import { usePublicClient } from 'wagmi';
+import { usePublicClient, useAccount } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { Role, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
@@ -64,6 +64,7 @@ export const RoleReveal: React.FC = () => {
     } = useGameContext();
     
     const publicClient = usePublicClient();
+    const { address } = useAccount();
     const [revealState, setRevealState] = useState<RevealState>({
         deck: [],
         collectedKeys: new Map(),
@@ -110,7 +111,7 @@ export const RoleReveal: React.FC = () => {
 
     // Собрать ключи от других игроков
     const collectKeys = useCallback(async () => {
-        if (!publicClient || !currentRoomId || !myPlayer) return;
+        if (!publicClient || !currentRoomId || !myPlayer || !address) return;
 
         const keys = new Map<string, string>();
 
@@ -118,11 +119,13 @@ export const RoleReveal: React.FC = () => {
             if (player.address.toLowerCase() === myPlayer.address.toLowerCase()) continue;
 
             try {
+                // Важно: передаём account чтобы контракт знал кто вызывает (для msg.sender в getKeyFrom)
                 const key = await publicClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'getKeyFrom',
                     args: [currentRoomId, player.address],
+                    account: address, // <-- Критически важно!
                 }) as string;
 
                 if (key && key !== '') {
@@ -139,7 +142,7 @@ export const RoleReveal: React.FC = () => {
         }));
 
         return keys;
-    }, [publicClient, currentRoomId, myPlayer, gameState.players]);
+    }, [publicClient, currentRoomId, myPlayer, gameState.players, address]);
 
     // Поделиться своим ключом со всеми
     const shareMyKey = async () => {
