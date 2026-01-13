@@ -19,8 +19,12 @@ export const PhaseIndicator: React.FC<PhaseIndicatorProps> = ({ phase, dayCount 
                 return { icon: <Sun className="w-5 h-5" />, label: "Day Phase", color: "bg-amber-950/50 text-amber-300 border-amber-500/30" };
             case GamePhase.VOTING:
                 return { icon: <Vote className="w-5 h-5" />, label: "Voting Session", color: "bg-red-950/50 text-red-300 border-red-500/30" };
-            case GamePhase.GAME_OVER:
+            case GamePhase.ENDED:
                 return { icon: <Skull className="w-5 h-5" />, label: "Game Over", color: "bg-gray-900 text-gray-300 border-gray-700" };
+            case GamePhase.SHUFFLING:
+                return { icon: <div className="w-5 h-5 rounded-full border-2 border-current border-dashed animate-spin" />, label: "Shuffling Deck", color: "bg-purple-950/50 text-purple-300 border-purple-500/30" };
+            case GamePhase.REVEAL:
+                return { icon: <div className="w-5 h-5 rounded-full border-2 border-current" />, label: "Revealing Roles", color: "bg-teal-950/50 text-teal-300 border-teal-500/30" };
             default:
                 return { icon: <div className="w-5 h-5 rounded-full border-2 border-current border-dashed animate-spin" />, label: "Syncing...", color: "bg-gray-900 text-gray-400 border-gray-800" };
         }
