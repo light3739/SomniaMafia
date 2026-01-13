@@ -10,11 +10,13 @@ import { DayPhase } from './DayPhase';
 import { NightPhase } from './NightPhase';
 import { GameOver } from './GameOver';
 import { VotingAnnouncement } from './VotingAnnouncement';
+import { NightAnnouncement } from './NightAnnouncement';
 import { SessionKeyBanner } from './SessionKeyBanner';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { GamePhase, Role } from '../../types';
-import lobbyBg from '../../assets/game_background.png';
+import dayBg from '../../assets/game_background_light.png';
+import nightBg from '../../assets/game_background.png';
 
 // Coordinates for 14 players, clockwise starting from Top-Left
 const PLAYER_POSITIONS = [
@@ -55,12 +57,25 @@ export const GameLayout: React.FC = () => {
     const [showVotingAnnouncement, setShowVotingAnnouncement] = useState(false);
     const [lastVotingDay, setLastVotingDay] = useState<number | null>(null);
 
+    // Night announcement state
+    const [showNightAnnouncement, setShowNightAnnouncement] = useState(false);
+    const [lastNightDay, setLastNightDay] = useState<number | null>(null);
+
+    // Trigger Voting Announcement
     useEffect(() => {
         if (gameState.phase === GamePhase.VOTING && gameState.dayCount !== lastVotingDay) {
             setShowVotingAnnouncement(true);
             setLastVotingDay(gameState.dayCount);
         }
     }, [gameState.phase, gameState.dayCount, lastVotingDay]);
+
+    // Trigger Night Announcement
+    useEffect(() => {
+        if (gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDay) {
+            setShowNightAnnouncement(true);
+            setLastNightDay(gameState.dayCount);
+        }
+    }, [gameState.phase, gameState.dayCount, lastNightDay]);
 
     useEffect(() => {
         const handleResize = () => {
@@ -115,10 +130,14 @@ export const GameLayout: React.FC = () => {
         GamePhase.ENDED
     ].includes(gameState.phase);
 
+    // Determine which background to use
+    const isNightPhase = gameState.phase === GamePhase.NIGHT;
+    const currentBg = isNightPhase ? nightBg : dayBg;
+
     if (players.length === 0) {
         return (
             <div className="w-full h-screen bg-black flex flex-col items-center justify-center gap-4 text-white">
-                <div className="fixed inset-0 z-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url(${lobbyBg})` }} />
+                <div className="fixed inset-0 z-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url(${dayBg})` }} />
                 <h2 className="text-2xl font-['Playfair_Display'] z-10">Game Session Not Found</h2>
                 <p className="text-white/50 z-10">Join or create a lobby to start playing</p>
                 <BackButton to="/setup" label="Back to Menu" />
@@ -129,15 +148,24 @@ export const GameLayout: React.FC = () => {
     return (
         <div className="relative w-full h-screen overflow-hidden bg-[#050505] font-['Montserrat'] flex items-center justify-center">
 
-            {/* 1. ФОН (Fixed Background) */}
+            {/* 1. ФОН (Fixed Background) - Smooth transition between day/night */}
             <div className="fixed inset-0 z-0 pointer-events-none">
+                {/* Day Background */}
                 <div
-                    className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out"
+                    className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out"
                     style={{
-                        backgroundImage: `url(${lobbyBg})`,
-                        filter: gameState.phase === GamePhase.NIGHT
-                            ? 'grayscale(100%) brightness(25%) contrast(120%)'
-                            : 'grayscale(30%) brightness(40%)'
+                        backgroundImage: `url(${dayBg})`,
+                        opacity: isNightPhase ? 0 : 1,
+                        filter: 'grayscale(30%) brightness(40%)'
+                    }}
+                />
+                {/* Night Background */}
+                <div
+                    className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out"
+                    style={{
+                        backgroundImage: `url(${nightBg})`,
+                        opacity: isNightPhase ? 1 : 0,
+                        filter: 'grayscale(100%) brightness(25%) contrast(120%)'
                     }}
                 />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#000_100%)]" />
@@ -147,6 +175,12 @@ export const GameLayout: React.FC = () => {
             <VotingAnnouncement
                 show={showVotingAnnouncement}
                 onComplete={() => setShowVotingAnnouncement(false)}
+            />
+
+            {/* Night Announcement Overlay */}
+            <NightAnnouncement
+                show={showNightAnnouncement}
+                onComplete={() => setShowNightAnnouncement(false)}
             />
 
             {/* 2. SCALABLE GAME CONTAINER */}

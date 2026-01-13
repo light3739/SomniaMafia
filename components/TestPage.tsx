@@ -13,14 +13,26 @@ import { WaitingRoom } from './lobby_flow/WaitingRoom';
 import { GameLayout } from './game/GameLayout';
 import { GamePhase, Role } from '../types';
 import { VotingAnnouncement } from './game/VotingAnnouncement';
+import { NightAnnouncement } from './game/NightAnnouncement';
 
 // Wrapper for testing VotingAnnouncement state
 const VotingAnnouncementWrapper = () => {
     const [show, setShow] = useState(false);
     return (
         <div className="flex flex-col items-center gap-4">
-            <Button onClick={() => setShow(true)}>Trigger Animation</Button>
+            <Button onClick={() => setShow(true)}>Trigger Voting Animation</Button>
             <VotingAnnouncement show={show} onComplete={() => setShow(false)} />
+        </div>
+    );
+};
+
+// Wrapper for testing NightAnnouncement state
+const NightAnnouncementWrapper = () => {
+    const [show, setShow] = useState(false);
+    return (
+        <div className="flex flex-col items-center gap-4">
+            <Button onClick={() => setShow(true)}>Trigger Night Animation</Button>
+            <NightAnnouncement show={show} onComplete={() => setShow(false)} />
         </div>
     );
 };
@@ -68,6 +80,7 @@ export const TestPage: React.FC = () => {
         { name: 'GameControls', group: 'Game Components', component: <GameControls phase={GamePhase.DAY} myRole={Role.CIVILIAN} dayCount={1} onNextPhase={() => console.log('next phase')} /> },
         { name: 'SystemLog', group: 'Game Components', component: <div className="h-60"><SystemLog logs={mockLogs as any} /></div> },
         { name: 'VotingAnnouncement', group: 'Game Components', component: <VotingAnnouncementWrapper /> },
+        { name: 'NightAnnouncement', group: 'Game Components', component: <NightAnnouncementWrapper /> },
 
         // Pages
         { name: 'MainPage', group: 'Pages', component: <MainPage onStart={() => console.log('Start')} /> },

@@ -1,7 +1,5 @@
-// components/game/VotingAnnouncement.tsx
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Gavel } from 'lucide-react';
 
 interface VotingAnnouncementProps {
     show: boolean;
@@ -22,62 +20,46 @@ export const VotingAnnouncement: React.FC<VotingAnnouncementProps> = ({ show, on
         <AnimatePresence>
             {show && (
                 <motion.div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+                    className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.5 }}
                 >
+                    {/* Blurred Background with explicit animation */}
                     <motion.div
-                        className="flex flex-col items-center gap-6"
-                        initial={{ scale: 0.5, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.5, opacity: 0 }}
-                        transition={{ 
-                            type: "spring", 
-                            stiffness: 300, 
+                        initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+                        animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
+                        exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+                        transition={{ duration: 1, ease: "easeOut" }}
+                        className="absolute inset-0 bg-black/60"
+                    />
+
+                    {/* Animated Text */}
+                    <motion.div
+                        initial={{ scale: 0.5, opacity: 0, y: 50 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        exit={{ scale: 1.5, opacity: 0, filter: 'blur(10px)' }}
+                        transition={{
+                            type: "spring",
+                            stiffness: 200,
                             damping: 20,
-                            delay: 0.1 
+                            duration: 0.8
                         }}
+                        className="relative z-10 flex flex-col items-center"
                     >
-                        {/* Gavel Icon */}
+                        <h1 className="text-6xl md:text-8xl font-['Playfair_Display'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-[#916A47] to-[#5e4026] drop-shadow-[0_0_20px_rgba(145,106,71,0.5)]">
+                            VOTING
+                        </h1>
                         <motion.div
-                            className="p-6 rounded-full bg-amber-500/20 border-2 border-amber-500"
-                            animate={{ 
-                                rotate: [0, -15, 15, -10, 10, 0],
-                                scale: [1, 1.1, 1]
-                            }}
-                            transition={{ 
-                                duration: 0.8,
-                                delay: 0.3,
-                                ease: "easeInOut"
-                            }}
-                        >
-                            <Gavel className="w-16 h-16 text-amber-500" />
-                        </motion.div>
-
-                        {/* Text */}
-                        <motion.div
-                            className="text-center"
-                            initial={{ y: 20, opacity: 0 }}
-                            animate={{ y: 0, opacity: 1 }}
-                            transition={{ delay: 0.4 }}
-                        >
-                            <h2 className="text-4xl font-bold text-white mb-2 tracking-wider">
-                                VOTING TIME
-                            </h2>
-                            <p className="text-amber-500 text-lg">
-                                Choose who to eliminate
-                            </p>
-                        </motion.div>
-
-                        {/* Decorative line */}
-                        <motion.div
-                            className="w-64 h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent"
-                            initial={{ scaleX: 0 }}
-                            animate={{ scaleX: 1 }}
-                            transition={{ delay: 0.5, duration: 0.5 }}
+                            initial={{ width: 0 }}
+                            animate={{ width: "100%" }}
+                            transition={{ delay: 0.3, duration: 0.5 }}
+                            className="h-1 bg-[#916A47]/50 mt-4 rounded-full"
                         />
+                        <p className="mt-4 text-white/80 font-['Montserrat'] tracking-[0.5em] uppercase text-sm md:text-base">
+                            Cast Your Vote
+                        </p>
                     </motion.div>
                 </motion.div>
             )}
