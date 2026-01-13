@@ -129,11 +129,15 @@ export const GameOver: React.FC = () => {
                     transition={{ delay: 1.2 }}
                     className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 p-6 mb-6"
                 >
-                    <h3 className="text-white/50 text-sm uppercase tracking-wider mb-4">All Players Revealed</h3>
+                    <h3 className="text-white/50 text-sm uppercase tracking-wider mb-4">Game Results</h3>
+                    <p className="text-white/30 text-xs mb-4">
+                        Note: Only your role is revealed. Other players' roles remain encrypted.
+                    </p>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {gameState.players.map((player, index) => {
                             const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
                             const isDead = !player.isAlive;
+                            const roleKnown = player.role !== Role.UNKNOWN;
 
                             return (
                                 <motion.div
@@ -167,18 +171,20 @@ export const GameOver: React.FC = () => {
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className={`font-medium truncate ${isMe ? 'text-[#916A47]' : 'text-white'}`}>
-                                                {player.name}
+                                                {player.name} {isMe && '(You)'}
                                             </p>
                                             <p className={`text-xs ${
-                                                player.role === Role.MAFIA 
-                                                    ? 'text-red-400' 
-                                                    : player.role === Role.DOCTOR
-                                                        ? 'text-green-400'
-                                                        : player.role === Role.DETECTIVE
-                                                            ? 'text-blue-400'
-                                                            : 'text-amber-400'
+                                                !roleKnown
+                                                    ? 'text-gray-500'
+                                                    : player.role === Role.MAFIA 
+                                                        ? 'text-red-400' 
+                                                        : player.role === Role.DOCTOR
+                                                            ? 'text-green-400'
+                                                            : player.role === Role.DETECTIVE
+                                                                ? 'text-blue-400'
+                                                                : 'text-amber-400'
                                             }`}>
-                                                {player.role}
+                                                {roleKnown ? player.role : '🔒 Hidden'}
                                             </p>
                                         </div>
                                         {isDead && (
