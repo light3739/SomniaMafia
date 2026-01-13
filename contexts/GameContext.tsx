@@ -683,7 +683,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const myPlayer = gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase());
+    // Ищем myPlayer: сначала по реальному адресу кошелька, потом по myPlayerId (для тестового режима)
+    const myPlayer = gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase()) 
+        || gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase());
+    
     const getActionLabel = () => gameState.phase === GamePhase.VOTING ? "VOTE" : "SELECT";
     const canActOnPlayer = (target: Player) => gameState.phase === GamePhase.VOTING && target.isAlive;
 

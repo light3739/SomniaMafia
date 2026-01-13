@@ -2,6 +2,7 @@
 // Mental Poker implementation for role distribution
 
 import { Role } from '../types';
+import { keccak256, encodePacked } from 'viem';
 
 // Простое число для модульной арифметики (в продакшене использовать большие простые)
 const PRIME = 2147483647n; // Mersenne prime 2^31 - 1
@@ -185,10 +186,6 @@ export class ShuffleService {
         target: string, 
         salt: string
     ): `0x${string}` {
-        // Импортируем функции из viem динамически чтобы избежать циклических зависимостей
-        // В реальности нужно импортировать в начале файла
-        const { keccak256, encodePacked } = require('viem');
-        
         return keccak256(
             encodePacked(
                 ['uint8', 'address', 'string'],
