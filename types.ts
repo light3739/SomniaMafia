@@ -6,15 +6,15 @@ export enum Role {
   UNKNOWN = 'UNKNOWN' // For other players
 }
 
-// Должен соответствовать контракту: LOBBY=0, SHUFFLING=1, REVEAL=2, DAY=3, NIGHT=4, VOTING=5, ENDED=6
+// Должен соответствовать контракту: LOBBY=0, SHUFFLING=1, REVEAL=2, DAY=3, VOTING=4, NIGHT=5, ENDED=6
 export enum GamePhase {
   LOBBY = 0,
   SHUFFLING = 1,
-  REVEAL = 2,       // Контракт: REVEAL
+  REVEAL = 2,
   DAY = 3,
-  NIGHT = 4,
-  VOTING = 5,
-  ENDED = 6         // Контракт: ENDED
+  VOTING = 4,    // FIX: was incorrectly 5
+  NIGHT = 5,     // FIX: was incorrectly 4
+  ENDED = 6
 }
 
 // Маппинг для UI
