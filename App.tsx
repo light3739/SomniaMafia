@@ -7,9 +7,7 @@ import { CreateLobby } from './components/lobby_flow/CreateLobby';
 import { JoinLobby } from './components/lobby_flow/JoinLobby';
 import { WaitingRoom } from './components/lobby_flow/WaitingRoom';
 import { GameLayout } from './components/game/GameLayout';
-import { PlayerCard } from './components/PlayerCard';
-import { SystemLog } from './components/Narrator';
-import { GameControls } from './components/GameControls';
+import { MockGameLayout } from './components/game/MockGameLayout';
 import { useGameContext } from './contexts/GameContext';
 
 const App: React.FC = () => {
@@ -34,6 +32,8 @@ const App: React.FC = () => {
                     <Route path="/join" element={<JoinLobby />} />
                     <Route path="/lobby" element={<WaitingRoom />} />
                     <Route path="/game" element={<GameLayout />} />
+                    {/* Test route with mock data for UI development */}
+                    <Route path="/test" element={<MockGameLayout />} />
                     {/* Fallback */}
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
