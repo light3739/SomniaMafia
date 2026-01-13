@@ -6,15 +6,27 @@ export enum Role {
   UNKNOWN = 'UNKNOWN' // For other players
 }
 
+// Должен соответствовать контракту: LOBBY=0, SHUFFLING=1, REVEAL=2, DAY=3, NIGHT=4, VOTING=5, ENDED=6
 export enum GamePhase {
-  LOBBY = 'LOBBY',
-  ROLE_REVEAL = 'ROLE_REVEAL',
-  NIGHT = 'NIGHT',
-  DAY = 'DAY',
-  VOTING = 'VOTING',
-  GAME_OVER = 'GAME_OVER',
-  SHUFFLING = "SHUFFLING"
+  LOBBY = 0,
+  SHUFFLING = 1,
+  REVEAL = 2,       // Контракт: REVEAL
+  DAY = 3,
+  NIGHT = 4,
+  VOTING = 5,
+  ENDED = 6         // Контракт: ENDED
 }
+
+// Маппинг для UI
+export const GamePhaseLabels: Record<GamePhase, string> = {
+  [GamePhase.LOBBY]: 'Lobby',
+  [GamePhase.SHUFFLING]: 'Shuffling Deck',
+  [GamePhase.REVEAL]: 'Role Reveal',
+  [GamePhase.DAY]: 'Day Discussion',
+  [GamePhase.NIGHT]: 'Night',
+  [GamePhase.VOTING]: 'Voting',
+  [GamePhase.ENDED]: 'Game Over'
+};
 
 export type ConnectionStatus = 'connected' | 'syncing' | 'offline' | 'slashed';
 
@@ -23,10 +35,11 @@ export interface Player {
   name: string;
   address: string; // Wallet address
   role: Role; // In a real app, this is hidden for others!
-  isAlive: boolean;
+  isAlive: boolean; // Это будет мапиться на isActive из контракта
   avatarUrl: string;
   votesReceived: number;
-  status: ConnectionStatus;
+  status: ConnectionStatus; // Для UI (connected/offline)
+  hasConfirmedRole: boolean; // Новое поле
 }
 
 export interface LogEntry {

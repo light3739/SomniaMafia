@@ -4,14 +4,19 @@ import { useGameContext } from '../../contexts/GameContext';
 import { GameLog } from './GameLog';
 import { PlayerSpot } from './PlayerSpot';
 import { PhaseIndicator } from './PhaseIndicator';
+import { ShufflePhase } from './ShufflePhase';
+import { RoleReveal } from './RoleReveal';
+import { DayPhase } from './DayPhase';
+import { NightPhase } from './NightPhase';
+import { GameOver } from './GameOver';
 import { Button } from '../ui/Button';
-import { GamePhase } from '../../types';
+import { GamePhase, Role } from '../../types';
 import { MOCK_PLAYERS } from '../../services/mockData';
 import lobbyBg from '../../assets/game_background.png';
 import { BackButton } from '../ui/BackButton';
 
 export const GameLayout: React.FC = () => {
-    const { gameState, setGameState, handleNextPhase, handlePlayerAction, canActOnPlayer, getActionLabel } = useGameContext();
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer } = useGameContext();
     const players = gameState.players || [];
 
     // --- ЛОГИКА РАССАДКИ ---
@@ -29,19 +34,39 @@ export const GameLayout: React.FC = () => {
     const loadMockData = () => {
         setGameState(prev => ({
             ...prev,
-            players: MOCK_PLAYERS,
-            myPlayerId: 'p-0',
+            players: MOCK_PLAYERS.map(p => ({ ...p, hasConfirmedRole: false })),
+            myPlayerId: MOCK_PLAYERS[0].address,
             dayCount: 1,
             phase: GamePhase.DAY
         }));
     };
 
-    // --- FIX КНОПКИ ---
-    const onNextPhaseClick = (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        handleNextPhase();
+    // Render phase-specific content
+    const renderPhaseContent = () => {
+        switch (gameState.phase) {
+            case GamePhase.SHUFFLING:
+                return <ShufflePhase />;
+            case GamePhase.REVEAL:
+                return <RoleReveal />;
+            case GamePhase.DAY:
+            case GamePhase.VOTING:
+                return <DayPhase />;
+            case GamePhase.NIGHT:
+                return <NightPhase />;
+            case GamePhase.ENDED:
+                return <GameOver />;
+            default:
+                return null;
+        }
     };
+
+    // For Shuffle/Reveal/Night phases, show full-screen overlay
+    const isOverlayPhase = [
+        GamePhase.SHUFFLING, 
+        GamePhase.REVEAL, 
+        GamePhase.NIGHT,
+        GamePhase.ENDED
+    ].includes(gameState.phase);
 
     if (players.length === 0) {
         return (
@@ -87,15 +112,23 @@ export const GameLayout: React.FC = () => {
                     <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />
                 </div>
 
-                {/* Правая часть: Кнопка DEV */}
+                {/* Правая часть: My Role Badge */}
                 <div className="pointer-events-auto flex items-center gap-2">
-                    <Button
-                        onClick={onNextPhaseClick}
-                        variant="outline-gold"
-                        className="h-8 text-[10px] px-4 bg-black/60 backdrop-blur border-[#916A47]/40 hover:bg-[#916A47] hover:text-black shadow-[0_0_20px_rgba(145,106,71,0.2)] active:scale-95 transition-all z-50"
-                    >
-                        NEXT PHASE (DEV)
-                    </Button>
+                    {myPlayer?.role && myPlayer.role !== Role.UNKNOWN && (
+                        <div className={`
+                            px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
+                            ${myPlayer.role === Role.MAFIA 
+                                ? 'bg-red-900/50 text-red-400 border border-red-500/30' 
+                                : myPlayer.role === Role.DOCTOR
+                                    ? 'bg-green-900/50 text-green-400 border border-green-500/30'
+                                    : myPlayer.role === Role.DETECTIVE
+                                        ? 'bg-blue-900/50 text-blue-400 border border-blue-500/30'
+                                        : 'bg-amber-900/50 text-amber-400 border border-amber-500/30'
+                            }
+                        `}>
+                            {myPlayer.role}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -107,15 +140,22 @@ export const GameLayout: React.FC = () => {
             */}
             <div className="relative z-10 w-full h-full pt-16 pb-2 px-2 md:px-6 container mx-auto flex flex-col md:grid md:grid-cols-[260px_minmax(0,1fr)_260px] md:grid-rows-[130px_minmax(0,1fr)_130px]">
 
+                {/* Overlay Phases (Shuffle, Reveal, Night, GameOver) */}
+                {isOverlayPhase && (
+                    <div className="absolute inset-0 z-30 pt-16">
+                        {renderPhaseContent()}
+                    </div>
+                )}
+
                 {/* --- TOP ROW (5 Players) --- */}
                 {/* col-span-3 означает растянуться на всю ширину. z-20 чтобы быть над столом */}
-                <div className="hidden md:flex col-span-3 row-start-1 justify-center items-start gap-4 lg:gap-12 z-20 pt-2">
+                <div className={`hidden md:flex col-span-3 row-start-1 justify-center items-start gap-4 lg:gap-12 z-20 pt-2 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`}>
                     {topRow.map(player => (
                         <div key={player.id} className="w-[130px] lg:w-[140px] flex justify-center">
                             <PlayerSpot
                                 player={player}
-                                isMe={player.id === gameState.myPlayerId}
-                                onClick={() => handlePlayerAction(player.id)}
+                                isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
+                                onClick={() => handlePlayerAction(player.address)}
                                 canAct={canActOnPlayer(player)}
                             />
                         </div>
@@ -123,49 +163,56 @@ export const GameLayout: React.FC = () => {
                 </div>
 
                 {/* --- LEFT COLUMN (3 Players) --- */}
-                <div className="hidden md:flex col-start-1 row-start-2 flex-col justify-center gap-4 lg:gap-8 items-start pl-2">
+                <div className={`hidden md:flex col-start-1 row-start-2 flex-col justify-center gap-4 lg:gap-8 items-start pl-2 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`}>
                     {leftCol.map(player => (
                         <div key={player.id} className="w-[180px]">
                             <PlayerSpot
                                 player={player}
-                                isMe={player.id === gameState.myPlayerId}
-                                onClick={() => handlePlayerAction(player.id)}
+                                isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
+                                onClick={() => handlePlayerAction(player.address)}
                                 canAct={canActOnPlayer(player)}
                             />
                         </div>
                     ))}
                 </div>
 
-                {/* --- CENTER LOG (The Feed) --- */}
-                <div className="flex-1 col-start-2 row-start-2 flex flex-col justify-center items-center min-h-0 min-w-0 px-4 py-2 relative">
+                {/* --- CENTER CONTENT --- */}
+                <div className={`flex-1 col-start-2 row-start-2 flex flex-col justify-center items-center min-h-0 min-w-0 px-4 py-2 relative ${isOverlayPhase ? 'opacity-0 pointer-events-none' : ''}`}>
 
-                    {/* Banner */}
-                    <motion.div
-                        key={gameState.phase}
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mb-3 text-center pointer-events-none"
-                    >
-                        <span className="inline-block px-3 py-1 rounded-md bg-black/40 border border-[#916A47]/20 text-[#916A47] text-[10px] font-bold tracking-widest uppercase backdrop-blur-sm">
-                            {getActionLabel() === "VOTE" ? "Target Required" : "Live Feed"}
-                        </span>
-                    </motion.div>
+                    {/* Day/Voting Phase Content */}
+                    {(gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) && (
+                        <DayPhase />
+                    )}
 
-                    {/* Log Container - Ограничен по высоте и ширине */}
-                    <div className="w-full h-full max-h-[500px] max-w-3xl rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden border border-white/5 relative bg-[#050505]/60 backdrop-blur-sm group">
-                        <GameLog />
-                    </div>
+                    {/* Lobby Phase - Show Log */}
+                    {gameState.phase === GamePhase.LOBBY && (
+                        <>
+                            <motion.div
+                                key={gameState.phase}
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="mb-3 text-center pointer-events-none"
+                            >
+                                <span className="inline-block px-3 py-1 rounded-md bg-black/40 border border-[#916A47]/20 text-[#916A47] text-[10px] font-bold tracking-widest uppercase backdrop-blur-sm">
+                                    Live Feed
+                                </span>
+                            </motion.div>
+                            <div className="w-full h-full max-h-[500px] max-w-3xl rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden border border-white/5 relative bg-[#050505]/60 backdrop-blur-sm group">
+                                <GameLog />
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* --- RIGHT COLUMN (3 Players) --- */}
-                <div className="hidden md:flex col-start-3 row-start-2 flex-col justify-center gap-4 lg:gap-8 items-end pr-2">
+                <div className={`hidden md:flex col-start-3 row-start-2 flex-col justify-center gap-4 lg:gap-8 items-end pr-2 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`}>
                     {rightCol.map(player => (
                         <div key={player.id} className="w-[180px] flex justify-end">
                             <div className="w-full">
                                 <PlayerSpot
                                     player={player}
-                                    isMe={player.id === gameState.myPlayerId}
-                                    onClick={() => handlePlayerAction(player.id)}
+                                    isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
+                                    onClick={() => handlePlayerAction(player.address)}
                                     canAct={canActOnPlayer(player)}
                                 />
                             </div>
@@ -174,13 +221,13 @@ export const GameLayout: React.FC = () => {
                 </div>
 
                 {/* --- BOTTOM ROW (5 Players) --- */}
-                <div className="hidden md:flex col-span-3 row-start-3 justify-center items-end gap-4 lg:gap-12 z-20 pb-2">
+                <div className={`hidden md:flex col-span-3 row-start-3 justify-center items-end gap-4 lg:gap-12 z-20 pb-2 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`}>
                     {bottomRow.map(player => (
                         <div key={player.id} className="w-[130px] lg:w-[140px] flex justify-center">
                             <PlayerSpot
                                 player={player}
-                                isMe={player.id === gameState.myPlayerId}
-                                onClick={() => handlePlayerAction(player.id)}
+                                isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
+                                onClick={() => handlePlayerAction(player.address)}
                                 canAct={canActOnPlayer(player)}
                             />
                         </div>
@@ -188,9 +235,13 @@ export const GameLayout: React.FC = () => {
                 </div>
 
                 {/* --- MOBILE LAYOUT --- */}
-                <div className="md:hidden flex-1 flex flex-col h-full overflow-hidden">
+                <div className={`md:hidden flex-1 flex flex-col h-full overflow-hidden ${isOverlayPhase ? 'hidden' : ''}`}>
                     <div className="flex-1 min-h-0 mb-3 relative">
-                        <GameLog />
+                        {(gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) ? (
+                            <DayPhase />
+                        ) : (
+                            <GameLog />
+                        )}
                     </div>
                     {/* Горизонтальный скролл игроков */}
                     <div className="h-[130px] shrink-0 bg-[#0a0a0a]/50 backdrop-blur-md border-t border-white/5 -mx-4 px-4 py-2">
@@ -199,8 +250,8 @@ export const GameLayout: React.FC = () => {
                                 <div key={player.id} className="min-w-[110px] snap-center">
                                     <PlayerSpot
                                         player={player}
-                                        isMe={player.id === gameState.myPlayerId}
-                                        onClick={() => handlePlayerAction(player.id)}
+                                        isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
+                                        onClick={() => handlePlayerAction(player.address)}
                                         canAct={canActOnPlayer(player)}
                                     />
                                 </div>
@@ -208,6 +259,13 @@ export const GameLayout: React.FC = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Mobile overlay phases */}
+                {isOverlayPhase && (
+                    <div className="md:hidden absolute inset-0 z-30 pt-16">
+                        {renderPhaseContent()}
+                    </div>
+                )}
 
             </div>
         </div>

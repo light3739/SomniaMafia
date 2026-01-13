@@ -21,7 +21,7 @@ export const WaitingRoom: React.FC = () => {
 
     // 1. Авто-переход при смене фазы в блокчейне
     useEffect(() => {
-        if (gameState.phase === GamePhase.SHUFFLING || gameState.phase === GamePhase.ROLE_REVEAL) {
+        if (gameState.phase === GamePhase.SHUFFLING || gameState.phase === GamePhase.REVEAL) {
             navigate('/game');
         }
     }, [gameState.phase, navigate]);
