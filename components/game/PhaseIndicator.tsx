@@ -37,15 +37,24 @@ export const PhaseIndicator: React.FC<PhaseIndicatorProps> = ({ phase, dayCount 
             key={phase}
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className={`
-                flex items-center gap-3 px-6 py-2 rounded-full border backdrop-blur-md shadow-lg
-                ${config.color}
-            `}
+            className="flex items-center gap-3"
         >
-            {config.icon}
-            <div className="flex flex-col leading-none">
-                <span className="text-[10px] uppercase font-bold tracking-widest opacity-60">Status</span>
-                <span className="text-sm font-bold font-['Montserrat']">{config.label} • Day {dayCount}</span>
+            {/* Icon separate and outside */}
+            <div className={`p-2 rounded-full backdrop-blur-sm ${config.color.split(' ')[1]}`}> {/* Using text color for icon color roughly, or just rely on the component */}
+                {React.cloneElement(config.icon as React.ReactElement, { className: "w-8 h-8 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" })}
+            </div>
+
+            {/* Text badge with border */}
+            <div className={`
+                px-6 py-2 rounded-full border backdrop-blur-md shadow-lg
+                ${config.color}
+            `}>
+                <span className="text-lg font-bold font-['Montserrat'] uppercase tracking-widest">
+                    {phase === GamePhase.DAY ? `Day ${dayCount}` :
+                        phase === GamePhase.NIGHT ? `Night ${dayCount}` :
+                            phase === GamePhase.VOTING ? `Voting` :
+                                config.label}
+                </span>
             </div>
         </motion.div>
     );

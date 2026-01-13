@@ -24,50 +24,50 @@ interface NightState {
 }
 
 const RoleActions: Record<Role, { action: NightActionType; label: string; icon: React.ReactNode; color: string }> = {
-    [Role.MAFIA]: { 
-        action: NightActionType.KILL, 
-        label: 'Kill', 
+    [Role.MAFIA]: {
+        action: NightActionType.KILL,
+        label: 'Kill',
         icon: <Skull className="w-5 h-5" />,
         color: 'text-red-500'
     },
-    [Role.DOCTOR]: { 
-        action: NightActionType.HEAL, 
-        label: 'Heal', 
+    [Role.DOCTOR]: {
+        action: NightActionType.HEAL,
+        label: 'Heal',
         icon: <Shield className="w-5 h-5" />,
         color: 'text-green-500'
     },
-    [Role.DETECTIVE]: { 
-        action: NightActionType.CHECK, 
-        label: 'Investigate', 
+    [Role.DETECTIVE]: {
+        action: NightActionType.CHECK,
+        label: 'Investigate',
         icon: <Search className="w-5 h-5" />,
         color: 'text-blue-500'
     },
-    [Role.CIVILIAN]: { 
-        action: NightActionType.NONE, 
-        label: 'Sleep', 
+    [Role.CIVILIAN]: {
+        action: NightActionType.NONE,
+        label: 'Sleep',
         icon: <Moon className="w-5 h-5" />,
         color: 'text-gray-500'
     },
-    [Role.UNKNOWN]: { 
-        action: NightActionType.NONE, 
-        label: 'Wait', 
+    [Role.UNKNOWN]: {
+        action: NightActionType.NONE,
+        label: 'Wait',
         icon: <Clock className="w-5 h-5" />,
         color: 'text-gray-500'
     }
 };
 
 export const NightPhase: React.FC = () => {
-    const { 
-        gameState, 
-        currentRoomId, 
+    const {
+        gameState,
+        currentRoomId,
         myPlayer,
         commitNightActionOnChain,
         revealNightActionOnChain,
         finalizeNightOnChain,
         addLog,
-        isTxPending 
+        isTxPending
     } = useGameContext();
-    
+
     const [nightState, setNightState] = useState<NightState>({
         selectedTarget: null,
         hasCommitted: false,
@@ -96,12 +96,12 @@ export const NightPhase: React.FC = () => {
     // Commit action
     const handleCommit = async () => {
         if (!nightState.selectedTarget || nightState.hasCommitted) return;
-        
+
         setIsProcessing(true);
         try {
             // Генерируем соль
             const salt = ShuffleService.generateSalt();
-            
+
             // Создаём хэш: keccak256(abi.encodePacked(action, target, salt))
             const hash = ShuffleService.createCommitHash(
                 roleConfig.action,
@@ -131,7 +131,7 @@ export const NightPhase: React.FC = () => {
     // Reveal action
     const handleReveal = async () => {
         if (!nightState.selectedTarget || !nightState.salt || nightState.hasRevealed) return;
-        
+
         setIsProcessing(true);
         try {
             await revealNightActionOnChain(
@@ -139,7 +139,7 @@ export const NightPhase: React.FC = () => {
                 nightState.selectedTarget,
                 nightState.salt
             );
-            
+
             setNightState(prev => ({ ...prev, hasRevealed: true }));
             addLog("Night action revealed!", "success");
         } catch (e: any) {
@@ -170,7 +170,7 @@ export const NightPhase: React.FC = () => {
                     className="max-w-md w-full bg-indigo-950/30 backdrop-blur-xl rounded-3xl border border-indigo-500/20 p-8 text-center"
                 >
                     <motion.div
-                        animate={{ 
+                        animate={{
                             opacity: [0.5, 1, 0.5],
                         }}
                         transition={{ duration: 2, repeat: Infinity }}
@@ -213,11 +213,8 @@ export const NightPhase: React.FC = () => {
             >
                 {/* Header */}
                 <div className="text-center mb-6">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-950/50 text-indigo-400 border border-indigo-500/30 mb-4">
-                        <Moon className="w-5 h-5" />
-                        <span className="font-bold uppercase tracking-wider text-sm">Night Phase</span>
-                    </div>
-                    
+
+
                     <h2 className="text-2xl font-['Playfair_Display'] text-white mb-2">
                         Your Role: <span className={roleConfig.color}>{myRole}</span>
                     </h2>
@@ -252,13 +249,13 @@ export const NightPhase: React.FC = () => {
                                     whileTap={!nightState.hasCommitted ? { scale: 0.98 } : {}}
                                     className={`
                                         p-4 rounded-2xl border transition-all text-left
-                                        ${nightState.hasCommitted 
-                                            ? 'opacity-50 cursor-not-allowed' 
+                                        ${nightState.hasCommitted
+                                            ? 'opacity-50 cursor-not-allowed'
                                             : ''
                                         }
                                         ${isSelected
-                                            ? `${roleConfig.color === 'text-red-500' 
-                                                ? 'bg-red-900/30 border-red-500/50 ring-2 ring-red-500/30' 
+                                            ? `${roleConfig.color === 'text-red-500'
+                                                ? 'bg-red-900/30 border-red-500/50 ring-2 ring-red-500/30'
                                                 : roleConfig.color === 'text-green-500'
                                                     ? 'bg-green-900/30 border-green-500/50 ring-2 ring-green-500/30'
                                                     : 'bg-blue-900/30 border-blue-500/50 ring-2 ring-blue-500/30'
@@ -315,7 +312,7 @@ export const NightPhase: React.FC = () => {
                                     className="w-full"
                                 >
                                     <Lock className="w-5 h-5 mr-2" />
-                                    {nightState.selectedTarget 
+                                    {nightState.selectedTarget
                                         ? `Commit: ${roleConfig.label} ${gameState.players.find(p => p.address === nightState.selectedTarget)?.name}`
                                         : 'Select a target first'
                                     }
