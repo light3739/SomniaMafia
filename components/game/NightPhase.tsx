@@ -63,7 +63,6 @@ export const NightPhase: React.FC = () => {
         myPlayer,
         commitNightActionOnChain,
         revealNightActionOnChain,
-        finalizeNightOnChain,
         addLog,
         isTxPending
     } = useGameContext();
@@ -150,15 +149,7 @@ export const NightPhase: React.FC = () => {
         }
     };
 
-    // Finalize night
-    const handleFinalizeNight = async () => {
-        setIsProcessing(true);
-        try {
-            await finalizeNightOnChain();
-        } finally {
-            setIsProcessing(false);
-        }
-    };
+    // V3: Night auto-finalizes when all players have revealed
 
     // Civilians just wait
     if (!canAct) {
@@ -188,17 +179,10 @@ export const NightPhase: React.FC = () => {
                         <span className="text-sm">Others are making their moves...</span>
                     </div>
 
-                    {/* Host can finalize */}
-                    {isHost && (
-                        <Button
-                            onClick={handleFinalizeNight}
-                            isLoading={isProcessing || isTxPending}
-                            disabled={isProcessing || isTxPending}
-                            className="mt-6 w-full"
-                        >
-                            End Night Phase
-                        </Button>
-                    )}
+                    {/* V3: Auto-finalize info */}
+                    <div className="mt-6 text-center text-indigo-300/60 text-sm">
+                        Night will end automatically when all actions are revealed
+                    </div>
                 </motion.div>
             </div>
         );
@@ -358,20 +342,8 @@ export const NightPhase: React.FC = () => {
                                     <span className="font-medium">Action Completed!</span>
                                 </div>
                                 <p className="text-white/40 text-sm">
-                                    Waiting for night to end...
+                                    Night will end automatically when all reveal
                                 </p>
-
-                                {/* Host can finalize */}
-                                {isHost && (
-                                    <Button
-                                        onClick={handleFinalizeNight}
-                                        isLoading={isProcessing || isTxPending}
-                                        disabled={isProcessing || isTxPending}
-                                        className="mt-4 w-full"
-                                    >
-                                        End Night Phase
-                                    </Button>
-                                )}
                             </motion.div>
                         )}
                     </AnimatePresence>

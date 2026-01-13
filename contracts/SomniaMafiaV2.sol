@@ -116,8 +116,9 @@ contract MafiaPortalV2 {
      * @param sessionAddress The address of the temporary session key (generated client-side)
      * @param roomId The room this session key is valid for
      * @dev Player signs this once with main wallet, then uses sessionAddress for all game actions
+     * @dev If ETH is sent with this call, it will be forwarded to the session key for gas
      */
-    function registerSessionKey(address sessionAddress, uint256 roomId) external {
+    function registerSessionKey(address sessionAddress, uint256 roomId) external payable {
         require(sessionAddress != address(0), "Invalid session address");
         require(isPlayerInRoom[roomId][msg.sender], "Not in room");
         
@@ -136,6 +137,12 @@ contract MafiaPortalV2 {
         });
         
         sessionToMain[sessionAddress] = msg.sender;
+        
+        // Forward any ETH sent to the session key for gas
+        if (msg.value > 0) {
+            (bool success, ) = payable(sessionAddress).call{value: msg.value}("");
+            require(success, "ETH transfer failed");
+        }
         
         emit SessionKeyRegistered(msg.sender, sessionAddress, roomId, block.timestamp + SESSION_DURATION);
     }

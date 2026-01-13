@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
-import { createWalletClient, http } from 'viem';
+import { createWalletClient, http, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
-import { loadSession, hasValidSession } from '../services/sessionKeyService';
+import { loadSession, hasValidSession, createNewSession, markSessionRegistered } from '../services/sessionKeyService';
 
 // Somnia testnet chain config
 const somniaChain = {
@@ -37,19 +37,17 @@ interface GameContextType {
     startGameOnChain: () => Promise<void>;
     submitDeckOnChain: (deck: string[]) => Promise<void>;
     
-    // Reveal
-    shareKeyOnChain: (to: string, encryptedKey: string) => Promise<void>;
+    // Reveal (V3: batch share keys)
+    shareKeysToAllOnChain: (recipients: string[], encryptedKeys: string[]) => Promise<void>;
     confirmRoleOnChain: () => Promise<void>;
     
-    // Day/Voting
+    // Day/Voting (V3: auto-finalize on last vote)
     startVotingOnChain: () => Promise<void>;
     voteOnChain: (targetAddress: string) => Promise<void>;
-    finalizeVotingOnChain: () => Promise<void>;
     
-    // Night
+    // Night (V3: auto-finalize on last reveal)
     commitNightActionOnChain: (hash: string) => Promise<void>;
     revealNightActionOnChain: (action: number, target: string, salt: string) => Promise<void>;
-    finalizeNightOnChain: () => Promise<void>;
     
     // Utility
     kickStalledPlayerOnChain: () => Promise<void>;
@@ -199,6 +197,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     // --- DATA SYNC ---
+    // V3 flag constants (must match contract)
+    const FLAG_CONFIRMED_ROLE = 1;
+    const FLAG_ACTIVE = 2;
+
     const refreshPlayersList = useCallback(async (roomId: bigint) => {
         if (!publicClient) return;
         try {
@@ -212,13 +214,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const roomData = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
-                functionName: 'rooms',
+                functionName: 'getRoom',
                 args: [roomId],
             }) as any;
 
-            // roomData tuple: [id, host, phase, maxPlayers, playersCount, dayCount, currentShufflerIndex, lastActionTimestamp]
-            const phase = Number(roomData[2]) as GamePhase;
-            const dayCount = Number(roomData[5]);
+            // V3 GameRoom: {id, host, phase, maxPlayers, playersCount, aliveCount, dayCount, currentShufflerIndex, lastActionTimestamp, confirmedCount, votedCount, committedCount, revealedCount}
+            const phase = Number(roomData.phase) as GamePhase;
+            const dayCount = Number(roomData.dayCount);
 
             setGameState(prev => {
                 // Сохраняем текущие роли игроков (они известны только локально после расшифровки)
@@ -229,18 +231,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
                 });
 
-                const formattedPlayers: Player[] = data.map((p: any) => ({
-                    id: p.wallet,
-                    name: p.nickname,
-                    address: p.wallet,
-                    // Сохраняем роль если она уже была расшифрована
-                    role: existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN,
-                    isAlive: p.isActive,
-                    hasConfirmedRole: p.hasConfirmedRole,
-                    avatarUrl: `https://picsum.photos/seed/${p.wallet}/200`,
-                    votesReceived: 0,
-                    status: p.isActive ? 'connected' : 'slashed'
-                }));
+                // V3: Player struct has flags instead of separate bools
+                const formattedPlayers: Player[] = data.map((p: any) => {
+                    const flags = Number(p.flags);
+                    const isActive = (flags & FLAG_ACTIVE) !== 0;
+                    const hasConfirmedRole = (flags & FLAG_CONFIRMED_ROLE) !== 0;
+                    
+                    return {
+                        id: p.wallet,
+                        name: p.nickname,
+                        address: p.wallet,
+                        role: existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN,
+                        isAlive: isActive,
+                        hasConfirmedRole,
+                        avatarUrl: `https://picsum.photos/seed/${p.wallet}/200`,
+                        votesReceived: 0,
+                        status: isActive ? 'connected' : 'slashed'
+                    };
+                });
 
                 return { 
                     ...prev, 
@@ -272,34 +280,53 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return () => clearInterval(interval);
     }, [currentRoomId, publicClient, refreshPlayersList]);
 
-    // --- LOBBY ACTIONS ---
+    // --- LOBBY ACTIONS (V3: createRoom only, then joinRoom with session) ---
 
     const createLobbyOnChain = async () => {
-        if (!playerName) return alert("Enter name!");
+        if (!playerName || !address) return alert("Enter name and connect wallet!");
         setIsTxPending(true);
         try {
-            const keyPair = await generateKeyPair();
-            setKeys(keyPair);
-            const pubKey = await exportPublicKey(keyPair.publicKey);
-
-            const hash = await writeContractAsync({
+            // 1. Create room (host only sets max players)
+            const createHash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'createRoom',
-                args: [BigInt(16), playerName, pubKey],
+                args: [16], // uint8 maxPlayers
             });
             addLog("Creating room...", "warning");
-            await publicClient?.waitForTransactionReceipt({ hash });
+            await publicClient?.waitForTransactionReceipt({ hash: createHash });
             
             const nextId = await publicClient?.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'nextRoomId',
             }) as bigint;
-            const newId = nextId - 1n;
-            setCurrentRoomId(newId);
-            await refreshPlayersList(newId);
-            addLog(`Room #${newId} created!`, "success");
+            const newRoomId = nextId - 1n;
+            
+            // 2. Generate crypto keys
+            const keyPair = await generateKeyPair();
+            setKeys(keyPair);
+            const pubKeyHex = await exportPublicKey(keyPair.publicKey);
+            
+            // 3. Generate session key
+            const { sessionAddress } = createNewSession(address, Number(newRoomId));
+            
+            // 4. Join room with session key + fund it (V3: all in one tx)
+            const joinHash = await writeContractAsync({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'joinRoom',
+                args: [newRoomId, playerName, pubKeyHex, sessionAddress],
+                value: parseEther('0.02'), // Fund session key
+            });
+            await publicClient?.waitForTransactionReceipt({ hash: joinHash });
+            
+            // 5. Mark session as registered
+            markSessionRegistered();
+            
+            setCurrentRoomId(newRoomId);
+            await refreshPlayersList(newRoomId);
+            addLog(`Room #${newRoomId} created with auto-sign enabled!`, "success");
             setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
@@ -308,24 +335,34 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const joinLobbyOnChain = async (roomId: number) => {
-        if (!playerName) return alert("Enter name!");
+        if (!playerName || !address) return alert("Enter name and connect wallet!");
         setIsTxPending(true);
         try {
+            // 1. Generate crypto keys
             const keyPair = await generateKeyPair();
             setKeys(keyPair);
-            const pubKey = await exportPublicKey(keyPair.publicKey);
+            const pubKeyHex = await exportPublicKey(keyPair.publicKey);
+            
+            // 2. Generate session key
+            const { sessionAddress } = createNewSession(address, roomId);
 
+            // 3. Join room with session key + fund it (V3: all in one tx)
             const hash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
-                args: [BigInt(roomId), playerName, pubKey],
+                args: [BigInt(roomId), playerName, pubKeyHex, sessionAddress],
+                value: parseEther('0.02'), // Fund session key
             });
-            addLog("Joining...", "info");
+            addLog("Joining with auto-sign...", "info");
             await publicClient?.waitForTransactionReceipt({ hash });
+            
+            // 4. Mark session as registered
+            markSessionRegistered();
+            
             setCurrentRoomId(BigInt(roomId));
             await refreshPlayersList(BigInt(roomId));
-            addLog("Joined successfully!", "success");
+            addLog("Joined with auto-sign enabled!", "success");
             setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
@@ -339,13 +376,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
+            // V3: function is 'startGame' not 'startShuffle'
             const hash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
-                functionName: 'startShuffle',
+                functionName: 'startGame',
                 args: [currentRoomId],
             });
-            addLog("Starting Shuffle...", "phase");
+            addLog("Starting game...", "phase");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
@@ -370,16 +408,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    // --- REVEAL PHASE ---
+    // --- REVEAL PHASE (V3: batch share keys) ---
 
-    const shareKeyOnChain = async (to: string, encryptedKey: string) => {
+    const shareKeysToAllOnChain = async (recipients: string[], encryptedKeys: string[]) => {
         if (!currentRoomId) return;
+        setIsTxPending(true);
         try {
-            const hash = await sendGameTransaction('shareKey', [currentRoomId, to, encryptedKey]);
-            addLog(`Key shared with ${to.slice(0,6)}...`, "info");
+            // V3: shareKeysToAll - one transaction for all keys
+            const hash = await sendGameTransaction('shareKeysToAll', [
+                currentRoomId, 
+                recipients, 
+                encryptedKeys.map(k => k as `0x${string}`) // Convert to bytes
+            ]);
+            addLog(`Keys shared to ${recipients.length} players!`, "success");
             await publicClient?.waitForTransactionReceipt({ hash });
+            setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
+            setIsTxPending(false);
         }
     };
 
@@ -421,27 +467,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const hash = await sendGameTransaction('vote', [currentRoomId, targetAddress]);
             addLog(`Voted for ${targetAddress.slice(0,6)}...`, "warning");
             await publicClient?.waitForTransactionReceipt({ hash });
-        } catch (e: any) {
-            addLog(e.shortMessage || e.message, "danger");
-        }
-    };
-
-    const finalizeVotingOnChain = async () => {
-        if (!currentRoomId) return;
-        setIsTxPending(true);
-        try {
-            const hash = await sendGameTransaction('finalizeVoting', [currentRoomId]);
-            addLog("Voting finalized!", "phase");
-            await publicClient?.waitForTransactionReceipt({ hash });
+            // V3: auto-finalize when all voted - just refresh
             await refreshPlayersList(currentRoomId);
-            setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
-            setIsTxPending(false);
         }
     };
 
-    // --- NIGHT PHASE ---
+    // V3: finalizeVoting removed - auto-triggers on last vote
+
+    // --- NIGHT PHASE (V3: auto-finalize) ---
 
     const commitNightActionOnChain = async (hash: string) => {
         if (!currentRoomId) return;
@@ -460,25 +495,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const hash = await sendGameTransaction('revealNightAction', [currentRoomId, action, target, salt]);
             addLog("Night action revealed!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
+            // V3: auto-finalize when all revealed - just refresh
+            await refreshPlayersList(currentRoomId);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
         }
     };
 
-    const finalizeNightOnChain = async () => {
-        if (!currentRoomId) return;
-        setIsTxPending(true);
-        try {
-            const hash = await sendGameTransaction('finalizeNight', [currentRoomId]);
-            addLog("Night finalized!", "phase");
-            await publicClient?.waitForTransactionReceipt({ hash });
-            await refreshPlayersList(currentRoomId);
-            setIsTxPending(false);
-        } catch (e: any) {
-            addLog(e.shortMessage || e.message, "danger");
-            setIsTxPending(false);
-        }
-    };
+    // V3: finalizeNight removed - auto-triggers on last reveal
 
     // --- UTILITY ---
 
@@ -741,9 +765,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             gameState, setGameState, isTxPending, currentRoomId,
             createLobbyOnChain, joinLobbyOnChain, 
             startGameOnChain, submitDeckOnChain,
-            shareKeyOnChain, confirmRoleOnChain,
-            startVotingOnChain, voteOnChain, finalizeVotingOnChain,
-            commitNightActionOnChain, revealNightActionOnChain, finalizeNightOnChain,
+            shareKeysToAllOnChain, confirmRoleOnChain,
+            startVotingOnChain, voteOnChain,
+            commitNightActionOnChain, revealNightActionOnChain,
             kickStalledPlayerOnChain, refreshPlayersList,
             addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel
         }}>
