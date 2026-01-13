@@ -122,8 +122,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             hasSession: !!session,
             registeredOnChain: session?.registeredOnChain,
             expired: session ? Date.now() >= session.expiresAt : 'no session',
+            expiresAt: session?.expiresAt,
+            now: Date.now(),
             roomId: roomId !== null ? Number(roomId) : null,
             sessionRoomId: session?.roomId,
+            sessionAddress: session?.address,
             roomMatch: session && roomId !== null ? session.roomId === Number(roomId) : false,
         });
 
@@ -139,7 +142,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (canUseSession) {
             const sessionClient = getSessionWalletClient();
-            console.log(`[TX Debug] sessionClient exists: ${!!sessionClient}`);
+            console.log(`[TX Debug] sessionClient exists: ${!!sessionClient}, address: ${sessionClient?.account?.address}`);
             if (sessionClient) {
                 // Используем session key - без попапа!
                 console.log(`[Session TX] ${functionName} via session key`);
@@ -667,6 +670,36 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useWatchContractEvent({
         address: MAFIA_CONTRACT_ADDRESS,
         abi: MAFIA_ABI,
+        eventName: 'AllRolesConfirmed',
+        onLogs: (logs: any) => {
+            const roomId = currentRoomIdRef.current;
+            if (!roomId) return;
+
+            if (BigInt(logs[0].args.roomId) === roomId) {
+                addLog("All roles confirmed! Day begins...", "phase");
+                refreshPlayersList(roomId);
+            }
+        }
+    });
+
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
+        eventName: 'AllKeysShared',
+        onLogs: (logs: any) => {
+            const roomId = currentRoomIdRef.current;
+            if (!roomId) return;
+
+            if (BigInt(logs[0].args.roomId) === roomId) {
+                addLog("All players shared keys! Decrypt your role.", "success");
+                refreshPlayersList(roomId);
+            }
+        }
+    });
+
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'DeckSubmitted',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
@@ -684,18 +717,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useWatchContractEvent({
         address: MAFIA_CONTRACT_ADDRESS,
         abi: MAFIA_ABI,
-        eventName: 'KeyShared',
+        eventName: 'KeysSharedToAll',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
 
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const from = logs[0].args.from;
-                const to = logs[0].args.to;
-                // Только логируем если ключ отправлен мне
-                if (to.toLowerCase() === address?.toLowerCase()) {
-                    addLog(`Key received from ${from.slice(0, 6)}...`, "success");
-                }
+                addLog(`${from.slice(0, 6)}... shared decryption keys`, "success");
             }
         }
     });
@@ -712,6 +741,52 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const voter = logs[0].args.voter;
                 const target = logs[0].args.target;
                 addLog(`${voter.slice(0, 6)}... voted for ${target.slice(0, 6)}...`, "warning");
+            }
+        }
+    });
+
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
+        eventName: 'VotingFinalized',
+        onLogs: (logs: any) => {
+            const roomId = currentRoomIdRef.current;
+            if (!roomId) return;
+
+            if (BigInt(logs[0].args.roomId) === roomId) {
+                const eliminated = logs[0].args.eliminated;
+                const voteCount = Number(logs[0].args.voteCount);
+                if (eliminated !== '0x0000000000000000000000000000000000000000') {
+                    addLog(`${eliminated.slice(0, 6)}... was eliminated with ${voteCount} votes!`, "danger");
+                } else {
+                    addLog("No one was eliminated - no majority reached.", "warning");
+                }
+                refreshPlayersList(roomId);
+            }
+        }
+    });
+
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
+        eventName: 'NightFinalized',
+        onLogs: (logs: any) => {
+            const roomId = currentRoomIdRef.current;
+            if (!roomId) return;
+
+            if (BigInt(logs[0].args.roomId) === roomId) {
+                const killed = logs[0].args.killed;
+                const healed = logs[0].args.healed;
+                if (killed !== '0x0000000000000000000000000000000000000000') {
+                    if (killed === healed) {
+                        addLog(`Someone was saved by the doctor!`, "success");
+                    } else {
+                        addLog(`${killed.slice(0, 6)}... was killed during the night!`, "danger");
+                    }
+                } else {
+                    addLog("The night passes peacefully...", "info");
+                }
+                refreshPlayersList(roomId);
             }
         }
     });

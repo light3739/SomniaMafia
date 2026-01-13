@@ -17,6 +17,7 @@ interface RevealState {
     myRole: Role | null;
     isRevealed: boolean;
     hasConfirmed: boolean;
+    hasSharedKeys: boolean;  // Track if we already shared
 }
 
 const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; description: string }> = {
@@ -72,7 +73,8 @@ export const RoleReveal: React.FC = () => {
         myCardIndex: -1,
         myRole: null,
         isRevealed: false,
-        hasConfirmed: false
+        hasConfirmed: false,
+        hasSharedKeys: false
     });
     const [isProcessing, setIsProcessing] = useState(false);
     const [showRole, setShowRole] = useState(false);
@@ -153,9 +155,38 @@ export const RoleReveal: React.FC = () => {
         }
     }, [publicClient, currentRoomId, myPlayer, address, addLog]);
 
+    // Check if we already shared keys (from contract)
+    const checkIfShared = useCallback(async () => {
+        if (!publicClient || !currentRoomId || !address) return;
+        
+        try {
+            const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys] = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'getPlayerFlags',
+                args: [currentRoomId, address],
+            }) as [boolean, boolean, boolean, boolean, boolean, boolean];
+            
+            setRevealState(prev => ({
+                ...prev,
+                hasSharedKeys,
+                hasConfirmed: hasConfirmedRole
+            }));
+        } catch (e) {
+            console.error("Failed to check flags:", e);
+        }
+    }, [publicClient, currentRoomId, address]);
+
+    // Check flags on mount and periodically
+    useEffect(() => {
+        checkIfShared();
+        const interval = setInterval(checkIfShared, 2000);
+        return () => clearInterval(interval);
+    }, [checkIfShared]);
+
     // V3: Поделиться своим ключом со всеми (batch - одна транзакция!)
     const shareMyKey = async () => {
-        if (!myPlayer || isProcessing) return;
+        if (!myPlayer || isProcessing || revealState.hasSharedKeys) return;
 
         setIsProcessing(true);
         try {
@@ -175,6 +206,7 @@ export const RoleReveal: React.FC = () => {
 
             addLog(`Sharing keys to ${recipients.length} players...`, "info");
             await shareKeysToAllOnChain(recipients, encryptedKeys);
+            setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
             addLog("All keys shared in one tx!", "success");
         } catch (e: any) {
             console.error("Failed to share keys:", e);
@@ -314,12 +346,18 @@ export const RoleReveal: React.FC = () => {
                             <div className="space-y-3">
                                 <Button
                                     onClick={shareMyKey}
-                                    isLoading={isProcessing && !revealState.isRevealed}
-                                    disabled={isProcessing || isTxPending}
+                                    isLoading={isProcessing && !revealState.hasSharedKeys}
+                                    disabled={isProcessing || isTxPending || revealState.hasSharedKeys}
                                     variant="outline-gold"
                                     className="w-full"
                                 >
-                                    Share My Decryption Key
+                                    {revealState.hasSharedKeys ? (
+                                        <span className="flex items-center gap-2">
+                                            <Check className="w-4 h-4" /> Keys Shared
+                                        </span>
+                                    ) : (
+                                        'Share My Decryption Key'
+                                    )}
                                 </Button>
                                 
                                 <Button
