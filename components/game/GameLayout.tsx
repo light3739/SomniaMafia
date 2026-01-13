@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { GameLog } from './GameLog';
@@ -11,25 +11,70 @@ import { NightPhase } from './NightPhase';
 import { GameOver } from './GameOver';
 import { SessionKeyBanner } from './SessionKeyBanner';
 import { Button } from '../ui/Button';
+import { BackButton } from '../ui/BackButton';
 import { GamePhase, Role } from '../../types';
 import lobbyBg from '../../assets/game_background.png';
-import { BackButton } from '../ui/BackButton';
+
+// Coordinates for 14 players, clockwise starting from Top-Left
+const PLAYER_POSITIONS = [
+    // Top Row (Left to Right)
+    { id: 'p1', x: 176, y: 89 },
+    { id: 'p2', x: 472, y: 89 },
+    { id: 'p3', x: 767, y: 89 },
+    { id: 'p4', x: 1062, y: 89 },
+
+    // Right Col (Top to Bottom)
+    { id: 'p5', x: 1187, y: 256 },
+    { id: 'p6', x: 1187, y: 443 },
+    { id: 'p7', x: 1187, y: 630 },
+
+    // Bottom Row (Right to Left)
+    { id: 'p8', x: 1062, y: 804 },
+    { id: 'p9', x: 767, y: 804 },
+    { id: 'p10', x: 459, y: 804 },
+    { id: 'p11', x: 176, y: 804 },
+
+    // Left Col (Bottom to Top)
+    { id: 'p12', x: 51, y: 630 },
+    { id: 'p13', x: 51, y: 443 },
+    { id: 'p14', x: 51, y: 256 }
+];
+
+const BASE_WIDTH = 1488;
+const BASE_HEIGHT = 1024;
 
 export const GameLayout: React.FC = () => {
     const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId } = useGameContext();
     const players = gameState.players || [];
 
-    // --- ЛОГИКА РАССАДКИ ---
-    const { topRow, bottomRow, leftCol, rightCol } = useMemo(() => {
-        const p = [...players];
-        // Балансируем: 5 сверху, 5 снизу, остальные по бокам
-        return {
-            topRow: p.slice(0, 5),
-            rightCol: p.slice(5, 8),
-            bottomRow: p.slice(8, 13),
-            leftCol: p.slice(13, 16)
+    // Handle window resize for scaling
+    const [scale, setScale] = useState(1);
+
+    useEffect(() => {
+        const handleResize = () => {
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+
+            // Calculate scale to fit both width and height with some padding
+            const scaleX = windowWidth / BASE_WIDTH;
+            const scaleY = windowHeight / BASE_HEIGHT;
+
+            // Choose the smaller scale to fit entirely, or maybe cover? 
+            // "contain" behavior is usually safer for game boards so nothing gets cut off.
+            // But if it's too small on mobile, we might need a different strategy. 
+            // For now, let's try to fill the screen as much as possible while maintaining aspect ratio.
+            const newScale = Math.min(scaleX, scaleY);
+
+            // On very small screens, exact fit might make things tiny. 
+            // But user asked for this exact layout.
+            setScale(newScale);
         };
-    }, [players]);
+
+        window.addEventListener('resize', handleResize);
+        handleResize(); // Initial call
+
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Render phase-specific content
     const renderPhaseContent = () => {
@@ -52,8 +97,8 @@ export const GameLayout: React.FC = () => {
 
     // For Shuffle/Reveal/Night phases, show full-screen overlay
     const isOverlayPhase = [
-        GamePhase.SHUFFLING, 
-        GamePhase.REVEAL, 
+        GamePhase.SHUFFLING,
+        GamePhase.REVEAL,
         GamePhase.NIGHT,
         GamePhase.ENDED
     ].includes(gameState.phase);
@@ -70,10 +115,10 @@ export const GameLayout: React.FC = () => {
     }
 
     return (
-        <div className="relative w-full h-screen overflow-hidden bg-[#050505] font-['Montserrat']">
+        <div className="relative w-full h-screen overflow-hidden bg-[#050505] font-['Montserrat'] flex items-center justify-center">
 
-            {/* 1. ФОН */}
-            <div className="absolute inset-0 z-0 pointer-events-none">
+            {/* 1. ФОН (Fixed Background) */}
+            <div className="fixed inset-0 z-0 pointer-events-none">
                 <div
                     className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out"
                     style={{
@@ -83,14 +128,106 @@ export const GameLayout: React.FC = () => {
                             : 'grayscale(30%) brightness(40%)'
                     }}
                 />
-                {/* Стол */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92%] h-[88%] rounded-[80px] border border-white/5 bg-[#916A47]/[0.02] shadow-[0_0_150px_rgba(0,0,0,0.6)_inset]" />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#000_100%)]" />
             </div>
 
-            {/* 2. HEADER HUD */}
-            <div className="absolute top-0 left-0 right-0 z-40 h-16 px-6 flex items-center justify-between pointer-events-none select-none">
-                {/* Левая часть */}
+            {/* 2. SCALABLE GAME CONTAINER */}
+            <div
+                className="relative transform-gpu transition-transform duration-200 ease-out"
+                style={{
+                    width: BASE_WIDTH,
+                    height: BASE_HEIGHT,
+                    transform: `scale(${scale})`,
+                    // We render it at full size then scale it down/up
+                    flexShrink: 0
+                }}
+            >
+                {/* Board Background/Table Area - matching user's "relative" container bg for visualization? 
+                    User code had: background: '#FFF2E2' and overflow: 'hidden'. 
+                    But usually we want transparent to see the rich game background. 
+                    I'll keep it transparent but maintain the layout structure. 
+                */}
+
+                {/* Table Graphic (Optional - can be added here if needed to match the 'table' feel) */}
+
+
+
+                {/* HEADER HUD INSIDE SCALED CONTAINER? 
+                    Usually HUD is fixed to screen edges. But if we want it part of the "board layout" it goes here.
+                    Let's keep Header fixed to viewport for better UX on small screens, OR scaled?
+                    If we scale everything, the text might get too small.
+                    Let's keep the main HUD elements FIXED to the screen (outside this container) for usability,
+                    AND put the PLAYERS inside this container.
+                */}
+
+                {/* Players */}
+                {PLAYER_POSITIONS.map((pos, index) => {
+                    const player = players[index];
+                    if (!player) return null; // Slot empty
+
+                    return (
+                        <div
+                            key={player.id}
+                            className={`absolute transition-all duration-500 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`}
+                            style={{
+                                left: pos.x,
+                                top: pos.y,
+                                // PlayerSpot components are fixed size 250x130, so we just position them
+                            }}
+                        >
+                            <PlayerSpot
+                                player={player}
+                                isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
+                                onClick={() => handlePlayerAction(player.address)}
+                                canAct={canActOnPlayer(player)}
+                            />
+                        </div>
+                    );
+                })}
+
+
+                {/* CENTER CONTENT (Day Phase, Vote, Logs etc) */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[500px] flex items-center justify-center z-10">
+                    {/* Overlay Phases (Shuffle, Reveal, Night, GameOver) */}
+                    {isOverlayPhase && (
+                        <div className="absolute inset-0 z-30 flex items-center justify-center">
+                            <div className="scale-150"> {/* Scale up phase content since board might be scaled down */}
+                                {renderPhaseContent()}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Day/Voting Phase Content */}
+                    {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) && (
+                        <div className="w-full h-full">
+                            <DayPhase />
+                        </div>
+                    )}
+
+                    {/* Lobby Phase - Show Log */}
+                    {!isOverlayPhase && gameState.phase === GamePhase.LOBBY && (
+                        <div className="w-full h-full max-h-[400px]">
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="mb-3 text-center pointer-events-none"
+                            >
+                                <span className="inline-block px-3 py-1 rounded-md bg-black/40 border border-[#916A47]/20 text-[#916A47] text-[10px] font-bold tracking-widest uppercase backdrop-blur-sm">
+                                    Live Feed
+                                </span>
+                            </motion.div>
+                            <div className="w-full h-full rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden border border-white/5 relative bg-[#050505]/60 backdrop-blur-sm">
+                                <GameLog />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+            </div>
+
+            {/* UI OVERLAYS (Fixed to Screen, ignoring scale) */}
+            <div className="fixed top-0 left-0 right-0 z-40 h-16 px-6 flex items-center justify-between pointer-events-none select-none">
+                {/* Left */}
                 <div className="flex items-center gap-4 pointer-events-auto">
                     <BackButton to="/lobby" className="bg-black/40 p-2 rounded-full hover:bg-[#916A47]" label="" />
                     <div className="hidden md:block">
@@ -98,18 +235,17 @@ export const GameLayout: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Центр: Индикатор фазы */}
-                <div className="absolute left-1/2 -translate-x-1/2 top-3 pointer-events-auto">
-                    <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />
-                </div>
 
-                {/* Правая часть: My Role Badge */}
-                <div className="pointer-events-auto flex items-center gap-2">
+
+                {/* Right: Phase & Role */}
+                <div className="pointer-events-auto flex items-center gap-4">
+                    <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />
+
                     {myPlayer?.role && myPlayer.role !== Role.UNKNOWN && (
                         <div className={`
                             px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
-                            ${myPlayer.role === Role.MAFIA 
-                                ? 'bg-red-900/50 text-red-400 border border-red-500/30' 
+                            ${myPlayer.role === Role.MAFIA
+                                ? 'bg-red-900/50 text-red-400 border border-red-500/30'
                                 : myPlayer.role === Role.DOCTOR
                                     ? 'bg-green-900/50 text-green-400 border border-green-500/30'
                                     : myPlayer.role === Role.DETECTIVE
@@ -130,142 +266,10 @@ export const GameLayout: React.FC = () => {
                 </div>
             )}
 
-            {/* 3. MAIN ARENA GRID */}
-            {/*
-                GRID CONFIG:
-                Columns: [260px] [1fr (auto)] [260px]  -> Бока фиксированы, центр резиновый
-                Rows:    [130px] [1fr (auto)] [130px]  -> Верх/Низ фиксированы, центр резиновый
+            {/* Mobile Fallback/Warning? 
+                The scaled view should work on mobile in landscape. In portrait it will be very small. 
+                We might want to force landscape or just let it be small.
             */}
-            <div className="relative z-10 w-full h-full pt-16 pb-2 px-2 md:px-6 container mx-auto flex flex-col md:grid md:grid-cols-[260px_minmax(0,1fr)_260px] md:grid-rows-[130px_minmax(0,1fr)_130px]">
-
-                {/* Overlay Phases (Shuffle, Reveal, Night, GameOver) */}
-                {isOverlayPhase && (
-                    <div className="absolute inset-0 z-30 pt-16">
-                        {renderPhaseContent()}
-                    </div>
-                )}
-
-                {/* --- TOP ROW (5 Players) --- */}
-                {/* col-span-3 означает растянуться на всю ширину. z-20 чтобы быть над столом */}
-                <div className={`hidden md:flex col-span-3 row-start-1 justify-center items-start gap-4 lg:gap-12 z-20 pt-2 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`}>
-                    {topRow.map(player => (
-                        <div key={player.id} className="w-[130px] lg:w-[140px] flex justify-center">
-                            <PlayerSpot
-                                player={player}
-                                isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
-                                onClick={() => handlePlayerAction(player.address)}
-                                canAct={canActOnPlayer(player)}
-                            />
-                        </div>
-                    ))}
-                </div>
-
-                {/* --- LEFT COLUMN (3 Players) --- */}
-                <div className={`hidden md:flex col-start-1 row-start-2 flex-col justify-center gap-4 lg:gap-8 items-start pl-2 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`}>
-                    {leftCol.map(player => (
-                        <div key={player.id} className="w-[180px]">
-                            <PlayerSpot
-                                player={player}
-                                isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
-                                onClick={() => handlePlayerAction(player.address)}
-                                canAct={canActOnPlayer(player)}
-                            />
-                        </div>
-                    ))}
-                </div>
-
-                {/* --- CENTER CONTENT --- */}
-                <div className={`flex-1 col-start-2 row-start-2 flex flex-col justify-center items-center min-h-0 min-w-0 px-4 py-2 relative ${isOverlayPhase ? 'opacity-0 pointer-events-none' : ''}`}>
-
-                    {/* Day/Voting Phase Content */}
-                    {(gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) && (
-                        <DayPhase />
-                    )}
-
-                    {/* Lobby Phase - Show Log */}
-                    {gameState.phase === GamePhase.LOBBY && (
-                        <>
-                            <motion.div
-                                key={gameState.phase}
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="mb-3 text-center pointer-events-none"
-                            >
-                                <span className="inline-block px-3 py-1 rounded-md bg-black/40 border border-[#916A47]/20 text-[#916A47] text-[10px] font-bold tracking-widest uppercase backdrop-blur-sm">
-                                    Live Feed
-                                </span>
-                            </motion.div>
-                            <div className="w-full h-full max-h-[500px] max-w-3xl rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden border border-white/5 relative bg-[#050505]/60 backdrop-blur-sm group">
-                                <GameLog />
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                {/* --- RIGHT COLUMN (3 Players) --- */}
-                <div className={`hidden md:flex col-start-3 row-start-2 flex-col justify-center gap-4 lg:gap-8 items-end pr-2 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`}>
-                    {rightCol.map(player => (
-                        <div key={player.id} className="w-[180px] flex justify-end">
-                            <div className="w-full">
-                                <PlayerSpot
-                                    player={player}
-                                    isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
-                                    onClick={() => handlePlayerAction(player.address)}
-                                    canAct={canActOnPlayer(player)}
-                                />
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* --- BOTTOM ROW (5 Players) --- */}
-                <div className={`hidden md:flex col-span-3 row-start-3 justify-center items-end gap-4 lg:gap-12 z-20 pb-2 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`}>
-                    {bottomRow.map(player => (
-                        <div key={player.id} className="w-[130px] lg:w-[140px] flex justify-center">
-                            <PlayerSpot
-                                player={player}
-                                isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
-                                onClick={() => handlePlayerAction(player.address)}
-                                canAct={canActOnPlayer(player)}
-                            />
-                        </div>
-                    ))}
-                </div>
-
-                {/* --- MOBILE LAYOUT --- */}
-                <div className={`md:hidden flex-1 flex flex-col h-full overflow-hidden ${isOverlayPhase ? 'hidden' : ''}`}>
-                    <div className="flex-1 min-h-0 mb-3 relative">
-                        {(gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) ? (
-                            <DayPhase />
-                        ) : (
-                            <GameLog />
-                        )}
-                    </div>
-                    {/* Горизонтальный скролл игроков */}
-                    <div className="h-[130px] shrink-0 bg-[#0a0a0a]/50 backdrop-blur-md border-t border-white/5 -mx-4 px-4 py-2">
-                        <div className="flex gap-3 overflow-x-auto h-full items-center snap-x no-scrollbar">
-                            {players.map((player) => (
-                                <div key={player.id} className="min-w-[110px] snap-center">
-                                    <PlayerSpot
-                                        player={player}
-                                        isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
-                                        onClick={() => handlePlayerAction(player.address)}
-                                        canAct={canActOnPlayer(player)}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Mobile overlay phases */}
-                {isOverlayPhase && (
-                    <div className="md:hidden absolute inset-0 z-30 pt-16">
-                        {renderPhaseContent()}
-                    </div>
-                )}
-
-            </div>
         </div>
     );
 };

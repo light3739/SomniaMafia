@@ -11,13 +11,10 @@ interface PlayerSpotProps {
 }
 
 export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, canAct }) => {
-    
-    // Иконка роли (видна только мне или если игрок мертв/раскрыт)
+
     const getRoleIcon = () => {
         if (!isMe && player.isAlive && player.role === Role.UNKNOWN) return null;
-        
-        // В реальной игре роль других видна только после смерти или в конце
-        // Для демо показываем свою роль
+
         switch (player.role) {
             case Role.MAFIA: return <Crosshair className="w-3 h-3 text-red-500" />;
             case Role.DOCTOR: return <Shield className="w-3 h-3 text-green-500" />;
@@ -34,56 +31,66 @@ export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, c
             whileHover={player.isAlive && canAct ? { scale: 1.05, y: -5 } : {}}
             onClick={() => (player.isAlive && canAct ? onClick() : null)}
             className={`
-                relative flex flex-col items-center gap-2 p-3 rounded-xl transition-all duration-300
-                ${canAct && player.isAlive ? 'cursor-pointer hover:bg-white/5' : 'cursor-default'}
-                ${isMe ? 'bg-[#916A47]/10 border border-[#916A47]/50' : 'bg-[#19130D]/60 border border-white/5'}
+                relative flex flex-row items-center gap-4 p-4 rounded-xl transition-all duration-300
+                w-[250px] h-[130px]
+                ${canAct && player.isAlive ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}
+                bg-[#916A47]/10 border border-[#916A47]/50
+                ${isMe ? 'ring-1 ring-[#916A47]/50' : ''}
             `}
         >
-            {/* Аватар */}
-            <div className="relative">
-                <div className={`
-                    w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 
-                    ${isMe ? 'border-[#916A47] shadow-[0_0_15px_rgba(145,106,71,0.3)]' : 'border-white/10'}
-                    ${!player.isAlive ? 'grayscale opacity-50' : ''}
-                `}>
-                    <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
+            {/* YOU Badge */}
+            {isMe && (
+                <div className="absolute top-2 right-2 px-2 py-0.5 bg-[#916A47] text-black text-[8px] font-bold uppercase tracking-wider rounded-full z-10">
+                    YOU
                 </div>
-                
-                {/* Бейдж смерти */}
-                {!player.isAlive && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full">
-                        <Skull className="w-8 h-8 text-white/80" />
-                    </div>
-                )}
+            )}
 
-                {/* Индикатор статуса (онлайн/оффлайн) */}
+            {/* Avatar Container */}
+            <div className="relative shrink-0">
+                <div className={`
+                    w-16 h-16 rounded-full overflow-hidden border-2 
+                    ${isMe ? 'border-[#916A47] shadow-[0_0_15px_rgba(145,106,71,0.3)]' : 'border-[#916A47]'}
+                    ${!player.isAlive ? 'grayscale opacity-50' : ''}
+                    bg-[#D9D9D9] relative
+                `}>
+                    {player.avatarUrl ? (
+                        <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
+                    ) : (
+                        <div className="w-full h-full bg-[#19130D]" />
+                    )}
+
+                    {/* Dead Overlay in Avatar */}
+                    {!player.isAlive && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                            <Skull className="w-8 h-8 text-white/80" />
+                        </div>
+                    )}
+                </div>
+
+                {/* Online/Offline Status Dot */}
                 {player.isAlive && (
                     <div className={`
                         absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-[#19130D]
                         ${player.status === 'connected' ? 'bg-green-500' : 'bg-red-500'}
-                    `} />
+                    `}></div>
                 )}
             </div>
 
-            {/* Инфо */}
-            <div className="text-center w-full">
-                <div className="flex items-center justify-center gap-1">
-                    <span className={`text-xs md:text-sm font-bold truncate max-w-[100px] ${isMe ? 'text-[#916A47]' : 'text-white/90'}`}>
+            {/* Text Info */}
+            <div className="flex flex-col items-start min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1 w-full">
+                    <span className="text-sm md:text-base font-bold truncate text-[#916A47] block max-w-full">
                         {player.name}
                     </span>
-                    {getRoleIcon()}
+                    <div className="shrink-0">
+                        {getRoleIcon()}
+                    </div>
                 </div>
                 <div className="text-[10px] text-white/30 font-mono">
-                    {player.address.slice(0, 4)}...{player.address.slice(-4)}
+                    {player.address ? `${player.address.slice(0, 4)}...${player.address.slice(-4)}` : '0x...'}
                 </div>
             </div>
-            
-            {/* Метка "ВЫ" */}
-            {isMe && (
-                <div className="absolute -top-2 px-2 py-0.5 bg-[#916A47] text-black text-[8px] font-bold uppercase tracking-wider rounded-full">
-                    YOU
-                </div>
-            )}
+
         </motion.div>
     );
 };
