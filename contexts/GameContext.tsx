@@ -147,11 +147,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Используем session key - без попапа!
                 console.log(`[Session TX] ${functionName} via session key`);
                 try {
+                    // Fixed gas limit to prevent overspending on session key balance
+                    // Most game actions need 100-200k gas, 300k is safe buffer
+                    const gasLimit = 300_000n;
+                    console.log(`[Session TX] Using gas limit: ${gasLimit}`);
+                    
                     const hash = await sessionClient.writeContract({
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI as any,
                         functionName,
                         args,
+                        gas: gasLimit,
                     });
                     console.log(`[Session TX] Success! Hash: ${hash}`);
                     return hash;
@@ -333,7 +339,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [newRoomId, playerName, pubKeyHex, sessionAddress],
-                value: parseEther('0.02'), // Fund session key
+                value: parseEther('0.05'), // Fund session key (enough for ~30-50 txs)
             });
             await publicClient?.waitForTransactionReceipt({ hash: joinHash });
 
@@ -368,7 +374,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), playerName, pubKeyHex, sessionAddress],
-                value: parseEther('0.02'), // Fund session key
+                value: parseEther('0.05'), // Fund session key (enough for ~30-50 txs)
             });
             addLog("Joining with auto-sign...", "info");
             await publicClient?.waitForTransactionReceipt({ hash });
