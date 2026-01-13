@@ -39,11 +39,11 @@ export const ShufflePhase: React.FC = () => {
         if (!publicClient || !currentRoomId) return;
 
         try {
-            // Получаем данные комнаты
+            // Получаем данные комнаты через getRoom (возвращает именованную структуру)
             const roomData = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
-                functionName: 'rooms',
+                functionName: 'getRoom',
                 args: [currentRoomId],
             }) as any;
 
@@ -55,7 +55,8 @@ export const ShufflePhase: React.FC = () => {
                 args: [currentRoomId],
             }) as string[];
 
-            const currentIndex = Number(roomData[6]); // currentShufflerIndex
+            // V3.1: Use named property instead of index
+            const currentIndex = Number(roomData.currentShufflerIndex);
             const currentShuffler = gameState.players[currentIndex];
             const isMyTurn = currentShuffler?.address.toLowerCase() === myPlayer?.address.toLowerCase();
 
