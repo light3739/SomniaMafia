@@ -166,6 +166,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [currentRoomId, publicClient, refreshPlayersList]);
 
+    // Polling для регулярного обновления состояния (backup для events)
+    useEffect(() => {
+        if (!currentRoomId || !publicClient) return;
+        
+        const interval = setInterval(() => {
+            refreshPlayersList(currentRoomId);
+        }, 5000); // Каждые 5 секунд
+        
+        return () => clearInterval(interval);
+    }, [currentRoomId, publicClient, refreshPlayersList]);
+
     // --- LOBBY ACTIONS ---
 
     const createLobbyOnChain = async () => {
