@@ -76,6 +76,13 @@ export const RoleReveal: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [showRole, setShowRole] = useState(false);
 
+    // Синхронизируем локальный hasConfirmed с данными из контракта
+    useEffect(() => {
+        if (myPlayer?.hasConfirmedRole && !revealState.hasConfirmed) {
+            setRevealState(prev => ({ ...prev, hasConfirmed: true }));
+        }
+    }, [myPlayer?.hasConfirmedRole, revealState.hasConfirmed]);
+
     // Найти индекс моей карты в колоде
     const findMyCardIndex = useCallback((): number => {
         if (!myPlayer) return -1;
