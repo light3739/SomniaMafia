@@ -26,7 +26,7 @@ export const generateNarrative = async (
     case GamePhase.DAY:
       prompt = `It is Day ${dayCount}. The sun rises. ${events.join(" ")} Describe the reaction of the villagers in 2 sentences.`;
       break;
-    case GamePhase.GAME_OVER:
+    case GamePhase.ENDED:
       prompt = `The game is over. ${events.join(" ")} Write a short 2-sentence epilogue about the fate of the village.`;
       break;
     default:

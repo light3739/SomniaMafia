@@ -11,7 +11,6 @@ import { NightPhase } from './NightPhase';
 import { GameOver } from './GameOver';
 import { Button } from '../ui/Button';
 import { GamePhase, Role } from '../../types';
-import { MOCK_PLAYERS } from '../../services/mockData';
 import lobbyBg from '../../assets/game_background.png';
 import { BackButton } from '../ui/BackButton';
 
@@ -30,16 +29,6 @@ export const GameLayout: React.FC = () => {
             leftCol: p.slice(13, 16)
         };
     }, [players]);
-
-    const loadMockData = () => {
-        setGameState(prev => ({
-            ...prev,
-            players: MOCK_PLAYERS.map(p => ({ ...p, hasConfirmedRole: false })),
-            myPlayerId: MOCK_PLAYERS[0].address,
-            dayCount: 1,
-            phase: GamePhase.DAY
-        }));
-    };
 
     // Render phase-specific content
     const renderPhaseContent = () => {
@@ -73,7 +62,8 @@ export const GameLayout: React.FC = () => {
             <div className="w-full h-screen bg-black flex flex-col items-center justify-center gap-4 text-white">
                 <div className="fixed inset-0 z-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url(${lobbyBg})` }} />
                 <h2 className="text-2xl font-['Playfair_Display'] z-10">Game Session Not Found</h2>
-                <Button onClick={loadMockData} className="z-10 px-8 pointer-events-auto">Load Mock Simulation</Button>
+                <p className="text-white/50 z-10">Join or create a lobby to start playing</p>
+                <BackButton to="/setup" label="Back to Menu" />
             </div>
         );
     }
