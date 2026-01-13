@@ -2,6 +2,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
+import { usePublicClient, useAccount } from 'wagmi';
+import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { ShuffleService } from '../../services/shuffleService';
 import { Role, Player } from '../../types';
 import { Button } from '../ui/Button';
@@ -75,6 +77,37 @@ export const NightPhase: React.FC = () => {
         salt: null
     });
     const [isProcessing, setIsProcessing] = useState(false);
+    const publicClient = usePublicClient();
+    const { address } = useAccount();
+
+    // Sync with contract flags (hasCommitted, hasRevealed)
+    const syncWithContract = useCallback(async () => {
+        if (!publicClient || !currentRoomId || !address) return;
+        
+        try {
+            const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys] = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'getPlayerFlags',
+                args: [currentRoomId, address],
+            }) as [boolean, boolean, boolean, boolean, boolean, boolean];
+            
+            setNightState(prev => ({
+                ...prev,
+                hasCommitted,
+                hasRevealed
+            }));
+        } catch (e) {
+            console.error("Failed to sync night state:", e);
+        }
+    }, [publicClient, currentRoomId, address]);
+
+    // Sync on mount and periodically
+    useEffect(() => {
+        syncWithContract();
+        const interval = setInterval(syncWithContract, 2000);
+        return () => clearInterval(interval);
+    }, [syncWithContract]);
 
     // Моя роль
     const myRole = myPlayer?.role || Role.UNKNOWN;
@@ -92,9 +125,39 @@ export const NightPhase: React.FC = () => {
     // Первый игрок может финализировать ночь
     const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
 
+    // Storage key for night commit data
+    const NIGHT_COMMIT_KEY = `mafia_night_commit_${currentRoomId}_${address}`;
+
+    // Load saved commit data from localStorage on mount
+    useEffect(() => {
+        if (!currentRoomId || !address) return;
+        
+        const saved = localStorage.getItem(NIGHT_COMMIT_KEY);
+        if (saved) {
+            try {
+                const { salt, commitHash, selectedTarget } = JSON.parse(saved);
+                setNightState(prev => ({
+                    ...prev,
+                    salt,
+                    commitHash,
+                    selectedTarget
+                }));
+            } catch (e) {
+                console.error("Failed to load night commit data:", e);
+            }
+        }
+    }, [currentRoomId, address, NIGHT_COMMIT_KEY]);
+
     // Commit action
     const handleCommit = async () => {
         if (!nightState.selectedTarget || nightState.hasCommitted) return;
+
+        // Check if we're actually in NIGHT phase
+        if (gameState.phase !== 5) { // 5 = NIGHT
+            addLog(`Cannot commit: game is in phase ${gameState.phase}, not NIGHT (5)`, "danger");
+            console.error('[Night] Wrong phase for commit:', gameState.phase);
+            return;
+        }
 
         setIsProcessing(true);
         try {
@@ -108,6 +171,25 @@ export const NightPhase: React.FC = () => {
                 salt
             );
 
+            // DEBUG: Log commit details
+            console.log('[Night Commit]', {
+                action: roleConfig.action,
+                target: nightState.selectedTarget,
+                salt: salt,
+                hash: hash
+            });
+
+            // Отправляем хэш в контракт СНАЧАЛА
+            await commitNightActionOnChain(hash);
+            
+            // Только после успешного commit сохраняем данные
+            localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
+                salt,
+                commitHash: hash,
+                selectedTarget: nightState.selectedTarget,
+                action: roleConfig.action
+            }));
+
             // Сохраняем локально для reveal
             setNightState(prev => ({
                 ...prev,
@@ -115,9 +197,7 @@ export const NightPhase: React.FC = () => {
                 salt: salt,
                 hasCommitted: true
             }));
-
-            // Отправляем хэш в контракт
-            await commitNightActionOnChain(hash);
+            
             addLog("Night action committed!", "success");
         } catch (e: any) {
             console.error("Commit failed:", e);
@@ -131,6 +211,14 @@ export const NightPhase: React.FC = () => {
     const handleReveal = async () => {
         if (!nightState.selectedTarget || !nightState.salt || nightState.hasRevealed) return;
 
+        // DEBUG: Log reveal details
+        console.log('[Night Reveal]', {
+            action: roleConfig.action,
+            target: nightState.selectedTarget,
+            salt: nightState.salt,
+            expectedHash: nightState.commitHash
+        });
+
         setIsProcessing(true);
         try {
             await revealNightActionOnChain(
@@ -138,6 +226,9 @@ export const NightPhase: React.FC = () => {
                 nightState.selectedTarget,
                 nightState.salt
             );
+
+            // Clear localStorage after successful reveal
+            localStorage.removeItem(NIGHT_COMMIT_KEY);
 
             setNightState(prev => ({ ...prev, hasRevealed: true }));
             addLog("Night action revealed!", "success");

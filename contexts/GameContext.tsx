@@ -229,6 +229,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const phase = Number(roomData.phase) as GamePhase;
             const dayCount = Number(roomData.dayCount);
 
+            // DEBUG: Log current phase from contract
+            console.log('[Phase Sync]', {
+                contractPhase: phase,
+                phaseName: GamePhase[phase],
+                dayCount,
+                aliveCount: Number(roomData.aliveCount),
+                committedCount: Number(roomData.committedCount),
+                revealedCount: Number(roomData.revealedCount)
+            });
+
             setGameState(prev => {
                 // Сохраняем текущие роли игроков (они известны только локально после расшифровки)
                 const existingRoles = new Map<string, Role>();
@@ -492,11 +502,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await publicClient?.waitForTransactionReceipt({ hash: txHash });
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
+            throw e; // Re-throw so caller knows it failed
         }
     };
 
     const revealNightActionOnChain = async (action: number, target: string, salt: string) => {
         if (!currentRoomId) return;
+        
+        // DEBUG: Log what we're sending to contract
+        console.log('[Reveal TX]', {
+            roomId: Number(currentRoomId),
+            action,
+            target,
+            salt,
+            saltLength: salt.length
+        });
+        
         try {
             const hash = await sendGameTransaction('revealNightAction', [currentRoomId, action, target, salt]);
             addLog("Night action revealed!", "success");
@@ -504,7 +525,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // V3: auto-finalize when all revealed - just refresh
             await refreshPlayersList(currentRoomId);
         } catch (e: any) {
+            console.error('[Reveal TX Failed]', e);
             addLog(e.shortMessage || e.message, "danger");
+            throw e; // Re-throw so caller knows it failed
         }
     };
 
