@@ -9,6 +9,7 @@ import { RoleReveal } from './RoleReveal';
 import { DayPhase } from './DayPhase';
 import { NightPhase } from './NightPhase';
 import { GameOver } from './GameOver';
+import { VotingAnnouncement } from './VotingAnnouncement';
 import { SessionKeyBanner } from './SessionKeyBanner';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
@@ -44,11 +45,22 @@ const BASE_WIDTH = 1488;
 const BASE_HEIGHT = 1024;
 
 export const GameLayout: React.FC = () => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId } = useGameContext();
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget } = useGameContext();
     const players = gameState.players || [];
 
     // Handle window resize for scaling
     const [scale, setScale] = useState(1);
+
+    // Voting announcement state
+    const [showVotingAnnouncement, setShowVotingAnnouncement] = useState(false);
+    const [lastVotingDay, setLastVotingDay] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (gameState.phase === GamePhase.VOTING && gameState.dayCount !== lastVotingDay) {
+            setShowVotingAnnouncement(true);
+            setLastVotingDay(gameState.dayCount);
+        }
+    }, [gameState.phase, gameState.dayCount, lastVotingDay]);
 
     useEffect(() => {
         const handleResize = () => {
@@ -131,6 +143,12 @@ export const GameLayout: React.FC = () => {
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#000_100%)]" />
             </div>
 
+            {/* Voting Announcement Overlay */}
+            <VotingAnnouncement
+                show={showVotingAnnouncement}
+                onComplete={() => setShowVotingAnnouncement(false)}
+            />
+
             {/* 2. SCALABLE GAME CONTAINER */}
             <div
                 className="relative transform-gpu transition-transform duration-200 ease-out"
@@ -180,6 +198,7 @@ export const GameLayout: React.FC = () => {
                                 isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
                                 onClick={() => handlePlayerAction(player.address)}
                                 canAct={canActOnPlayer(player)}
+                                isSelected={selectedTarget === player.address}
                             />
                         </div>
                     );
@@ -191,7 +210,7 @@ export const GameLayout: React.FC = () => {
                     {/* Overlay Phases (Shuffle, Reveal, Night, GameOver) */}
                     {isOverlayPhase && (
                         <div className="absolute inset-0 z-30 flex items-center justify-center">
-                            <div className="scale-150"> {/* Scale up phase content since board might be scaled down */}
+                            <div> {/* Removed scale-150 to prevent oversized UI */}
                                 {renderPhaseContent()}
                             </div>
                         </div>

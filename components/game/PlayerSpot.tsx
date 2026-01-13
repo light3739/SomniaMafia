@@ -8,9 +8,10 @@ interface PlayerSpotProps {
     onClick: () => void;
     isMe: boolean;
     canAct: boolean;
+    isSelected?: boolean;
 }
 
-export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, canAct }) => {
+export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, canAct, isSelected }) => {
 
     const getRoleIcon = () => {
         if (!isMe && player.isAlive && player.role === Role.UNKNOWN) return null;
@@ -34,8 +35,11 @@ export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, c
                 relative flex flex-row items-center gap-4 p-4 rounded-xl transition-all duration-300
                 w-[250px] h-[130px]
                 ${canAct && player.isAlive ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}
-                bg-[#916A47]/10 border border-[#916A47]/50
-                ${isMe ? 'ring-1 ring-[#916A47]/50' : ''}
+                ${isSelected
+                    ? 'bg-[#916A47]/50 border border-[#916A47] ring-2 ring-[#916A47] shadow-[0_0_20px_rgba(145,106,71,0.5)]'
+                    : 'bg-[#916A47]/20 border border-[#916A47]/80'
+                }
+                ${isMe && !isSelected ? 'ring-1 ring-[#916A47]/50' : ''}
             `}
         >
             {/* YOU Badge */}

@@ -18,7 +18,7 @@ export const PhaseIndicator: React.FC<PhaseIndicatorProps> = ({ phase, dayCount 
             case GamePhase.DAY:
                 return { icon: <Sun className="w-5 h-5" />, label: "Day Phase", color: "bg-amber-950/50 text-amber-300 border-amber-500/30" };
             case GamePhase.VOTING:
-                return { icon: <Vote className="w-5 h-5" />, label: "Voting Session", color: "bg-red-950/50 text-red-300 border-red-500/30" };
+                return { icon: <Sun className="w-5 h-5" />, label: "Voting Session", color: "bg-amber-950/50 text-amber-300 border-amber-500/30" };
             case GamePhase.ENDED:
                 return { icon: <Skull className="w-5 h-5" />, label: "Game Over", color: "bg-gray-900 text-gray-300 border-gray-700" };
             case GamePhase.SHUFFLING:
@@ -33,29 +33,34 @@ export const PhaseIndicator: React.FC<PhaseIndicatorProps> = ({ phase, dayCount 
     const config = getConfig();
 
     return (
-        <motion.div
-            key={phase}
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="flex items-center gap-3"
-        >
+        <div className="flex items-center gap-3">
             {/* Icon separate and outside */}
-            <div className={`p-2 rounded-full backdrop-blur-sm ${config.color.split(' ')[1]}`}> {/* Using text color for icon color roughly, or just rely on the component */}
-                {React.cloneElement(config.icon as React.ReactElement, { className: "w-8 h-8 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" })}
+            <div className={`
+                p-2 rounded-full backdrop-blur-sm transition-all duration-500 ease-in-out
+                ${config.color.split(' ')[1]}
+            `}>
+                <motion.div
+                    key={phase} // Animate icon switch
+                    initial={{ opacity: 0, scale: 0.5, rotate: -90 }}
+                    animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                    transition={{ duration: 0.5 }}
+                >
+                    {React.cloneElement(config.icon as React.ReactElement, { className: "w-8 h-8 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" })}
+                </motion.div>
             </div>
 
             {/* Text badge with border */}
             <div className={`
-                px-6 py-2 rounded-full border backdrop-blur-md shadow-lg
+                px-6 py-2 rounded-full border backdrop-blur-md shadow-lg transition-all duration-500 ease-in-out
                 ${config.color}
             `}>
                 <span className="text-lg font-bold font-['Montserrat'] uppercase tracking-widest">
                     {phase === GamePhase.DAY ? `Day ${dayCount}` :
-                        phase === GamePhase.NIGHT ? `Night ${dayCount}` :
-                            phase === GamePhase.VOTING ? `Voting` :
+                        phase === GamePhase.NIGHT ? `Day ${dayCount}` :
+                            phase === GamePhase.VOTING ? `Day ${dayCount}` :
                                 config.label}
                 </span>
             </div>
-        </motion.div>
+        </div>
     );
 };
