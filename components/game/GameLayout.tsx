@@ -9,13 +9,14 @@ import { RoleReveal } from './RoleReveal';
 import { DayPhase } from './DayPhase';
 import { NightPhase } from './NightPhase';
 import { GameOver } from './GameOver';
+import { SessionKeyBanner } from './SessionKeyBanner';
 import { Button } from '../ui/Button';
 import { GamePhase, Role } from '../../types';
 import lobbyBg from '../../assets/game_background.png';
 import { BackButton } from '../ui/BackButton';
 
 export const GameLayout: React.FC = () => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer } = useGameContext();
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId } = useGameContext();
     const players = gameState.players || [];
 
     // --- ЛОГИКА РАССАДКИ ---
@@ -121,6 +122,13 @@ export const GameLayout: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            {/* Session Key Banner */}
+            {currentRoomId !== null && (
+                <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
+                    <SessionKeyBanner roomId={Number(currentRoomId)} />
+                </div>
+            )}
 
             {/* 3. MAIN ARENA GRID */}
             {/*
