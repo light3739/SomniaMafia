@@ -1,8 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
+import { createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
+import { loadSession, hasValidSession } from '../services/sessionKeyService';
+
+// Somnia testnet chain config
+const somniaChain = {
+    id: 50312,
+    name: 'Somnia Testnet',
+    nativeCurrency: { name: 'STT', symbol: 'STT', decimals: 18 },
+    rpcUrls: {
+        default: { http: ['https://dream-rpc.somnia.network'] },
+    },
+} as const;
 
 interface GameContextType {
     playerName: string;
@@ -72,6 +85,88 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
     const [isTxPending, setIsTxPending] = useState(false);
+
+    // Функция для получения session wallet client (вызывается при каждой транзакции)
+    const getSessionWalletClient = useCallback(() => {
+        const session = loadSession();
+        if (!session || !session.registeredOnChain || Date.now() >= session.expiresAt) {
+            return null;
+        }
+        
+        try {
+            const account = privateKeyToAccount(session.privateKey);
+            return createWalletClient({
+                account,
+                chain: somniaChain,
+                transport: http(),
+            });
+        } catch {
+            return null;
+        }
+    }, []);
+
+    // Wrapper для транзакций - использует session key если доступен
+    const sendGameTransaction = useCallback(async (
+        functionName: string,
+        args: any[],
+        useSessionKeyParam: boolean = true // для lobby actions ставим false
+    ): Promise<`0x${string}`> => {
+        const session = loadSession();
+        const roomId = currentRoomIdRef.current;
+        
+        // Debug: показываем все условия
+        console.log(`[TX Debug] ${functionName}:`, {
+            useSessionKeyParam,
+            hasSession: !!session,
+            registeredOnChain: session?.registeredOnChain,
+            expired: session ? Date.now() >= session.expiresAt : 'no session',
+            roomId: roomId !== null ? Number(roomId) : null,
+            sessionRoomId: session?.roomId,
+            roomMatch: session && roomId !== null ? session.roomId === Number(roomId) : false,
+        });
+        
+        // Проверяем можно ли использовать session key
+        const canUseSession = useSessionKeyParam && 
+                              session && 
+                              session.registeredOnChain && 
+                              Date.now() < session.expiresAt &&
+                              roomId !== null &&
+                              session.roomId === Number(roomId);
+        
+        console.log(`[TX Debug] canUseSession: ${canUseSession}`);
+        
+        if (canUseSession) {
+            const sessionClient = getSessionWalletClient();
+            console.log(`[TX Debug] sessionClient exists: ${!!sessionClient}`);
+            if (sessionClient) {
+                // Используем session key - без попапа!
+                console.log(`[Session TX] ${functionName} via session key`);
+                try {
+                    const hash = await sessionClient.writeContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI as any,
+                        functionName,
+                        args,
+                    });
+                    console.log(`[Session TX] Success! Hash: ${hash}`);
+                    return hash;
+                } catch (err: any) {
+                    console.error('[Session TX] Failed:', err.message || err);
+                    // Если session key не работает - fallback на main wallet
+                    console.log('[Session TX] Falling back to main wallet...');
+                }
+            }
+        }
+        
+        // Fallback на main wallet (с попапом)
+        console.log(`[Main Wallet TX] ${functionName} - requires signature`);
+        return writeContractAsync({
+            address: MAFIA_CONTRACT_ADDRESS,
+            abi: MAFIA_ABI,
+            functionName,
+            args,
+        });
+    }, [getSessionWalletClient, writeContractAsync]);
 
     const [gameState, setGameState] = useState<GameState>({
         phase: GamePhase.LOBBY,
@@ -264,12 +359,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
-            const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'submitDeck',
-                args: [currentRoomId, deck],
-            });
+            const hash = await sendGameTransaction('submitDeck', [currentRoomId, deck]);
             addLog("Deck submitted!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
@@ -285,12 +375,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const shareKeyOnChain = async (to: string, encryptedKey: string) => {
         if (!currentRoomId) return;
         try {
-            const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'shareKey',
-                args: [currentRoomId, to, encryptedKey],
-            });
+            const hash = await sendGameTransaction('shareKey', [currentRoomId, to, encryptedKey]);
             addLog(`Key shared with ${to.slice(0,6)}...`, "info");
             await publicClient?.waitForTransactionReceipt({ hash });
         } catch (e: any) {
@@ -302,12 +387,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
-            const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'confirmRole',
-                args: [currentRoomId],
-            });
+            const hash = await sendGameTransaction('confirmRole', [currentRoomId]);
             addLog("Role confirmed.", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
@@ -324,12 +404,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
-            const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'startVoting',
-                args: [currentRoomId],
-            });
+            const hash = await sendGameTransaction('startVoting', [currentRoomId]);
             addLog("Voting started!", "phase");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
@@ -343,12 +418,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const voteOnChain = async (targetAddress: string) => {
         if (!currentRoomId) return;
         try {
-            const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'vote',
-                args: [currentRoomId, targetAddress],
-            });
+            const hash = await sendGameTransaction('vote', [currentRoomId, targetAddress]);
             addLog(`Voted for ${targetAddress.slice(0,6)}...`, "warning");
             await publicClient?.waitForTransactionReceipt({ hash });
         } catch (e: any) {
@@ -360,12 +430,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
-            const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'finalizeVoting',
-                args: [currentRoomId],
-            });
+            const hash = await sendGameTransaction('finalizeVoting', [currentRoomId]);
             addLog("Voting finalized!", "phase");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
@@ -381,12 +446,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const commitNightActionOnChain = async (hash: string) => {
         if (!currentRoomId) return;
         try {
-            const txHash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'commitNightAction',
-                args: [currentRoomId, hash as `0x${string}`],
-            });
+            const txHash = await sendGameTransaction('commitNightAction', [currentRoomId, hash as `0x${string}`]);
             addLog("Night action committed!", "info");
             await publicClient?.waitForTransactionReceipt({ hash: txHash });
         } catch (e: any) {
@@ -397,12 +457,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const revealNightActionOnChain = async (action: number, target: string, salt: string) => {
         if (!currentRoomId) return;
         try {
-            const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'revealNightAction',
-                args: [currentRoomId, action, target, salt],
-            });
+            const hash = await sendGameTransaction('revealNightAction', [currentRoomId, action, target, salt]);
             addLog("Night action revealed!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
         } catch (e: any) {
@@ -414,12 +469,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
-            const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'finalizeNight',
-                args: [currentRoomId],
-            });
+            const hash = await sendGameTransaction('finalizeNight', [currentRoomId]);
             addLog("Night finalized!", "phase");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
@@ -435,12 +485,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const kickStalledPlayerOnChain = async () => {
         if (!currentRoomId) return;
         try {
-            const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'kickStalledPlayer',
-                args: [currentRoomId],
-            });
+            const hash = await sendGameTransaction('kickStalledPlayer', [currentRoomId]);
             addLog("Kick initiated...", "danger");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);

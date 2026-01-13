@@ -11,6 +11,7 @@ import { CreateLobby } from './lobby_flow/CreateLobby';
 import { JoinLobby } from './lobby_flow/JoinLobby';
 import { WaitingRoom } from './lobby_flow/WaitingRoom';
 import { GameLayout } from './game/GameLayout';
+import { GamePhase, Role } from '../types';
 
 // Mock Props
 const mockPlayer = {
@@ -52,7 +53,7 @@ export const TestPage: React.FC = () => {
 
         // Game Components
         { name: 'PlayerCard', group: 'Game Components', component: <div className="w-60"><PlayerCard player={mockPlayer as any} isMe={false} onAction={() => { }} canAct={true} actionLabel="VOTE" /></div> },
-        { name: 'GameControls', group: 'Game Components', component: <GameControls /> },
+        { name: 'GameControls', group: 'Game Components', component: <GameControls phase={GamePhase.DAY} myRole={Role.CIVILIAN} dayCount={1} onNextPhase={() => console.log('next phase')} /> },
         { name: 'SystemLog', group: 'Game Components', component: <div className="h-60"><SystemLog logs={mockLogs as any} /></div> },
 
         // Pages
