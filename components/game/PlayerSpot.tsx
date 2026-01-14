@@ -9,9 +9,35 @@ interface PlayerSpotProps {
     isMe: boolean;
     canAct: boolean;
     isSelected?: boolean;
+    isNight?: boolean;
+    myRole?: Role; // Role of the current player (for night selection colors)
 }
 
-export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, canAct, isSelected }) => {
+export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, canAct, isSelected, isNight = false, myRole }) => {
+
+    // Determine selection color based on role during night
+    const getSelectionClasses = () => {
+        if (!isSelected) {
+            return 'bg-[#916A47]/20 border border-[#916A47]/80';
+        }
+
+        // Night phase - use role-specific colors
+        if (isNight && myRole) {
+            switch (myRole) {
+                case Role.MAFIA:
+                    return 'bg-red-500/30 border border-red-500 ring-2 ring-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]';
+                case Role.DOCTOR:
+                    return 'bg-green-500/30 border border-green-500 ring-2 ring-green-500 shadow-[0_0_20px_rgba(34,197,94,0.5)]';
+                case Role.DETECTIVE:
+                    return 'bg-blue-500/30 border border-blue-500 ring-2 ring-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)]';
+                default:
+                    return 'bg-[#916A47]/50 border border-[#916A47] ring-2 ring-[#916A47] shadow-[0_0_20px_rgba(145,106,71,0.5)]';
+            }
+        }
+
+        // Day/Voting phase - brown color
+        return 'bg-[#916A47]/50 border border-[#916A47] ring-2 ring-[#916A47] shadow-[0_0_20px_rgba(145,106,71,0.5)]';
+    };
 
     const getRoleIcon = () => {
         if (!isMe && player.isAlive && player.role === Role.UNKNOWN) return null;
@@ -36,10 +62,7 @@ export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, c
                 relative flex flex-row items-center gap-4 p-4 rounded-xl transition-all duration-300
                 w-[250px] h-[130px]
                 ${canAct && player.isAlive ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}
-                ${isSelected
-                    ? 'bg-[#916A47]/50 border border-[#916A47] ring-2 ring-[#916A47] shadow-[0_0_20px_rgba(145,106,71,0.5)]'
-                    : 'bg-[#916A47]/20 border border-[#916A47]/80'
-                }
+                ${getSelectionClasses()}
                 ${isMe && !isSelected ? 'ring-1 ring-[#916A47]/50' : ''}
             `}
         >

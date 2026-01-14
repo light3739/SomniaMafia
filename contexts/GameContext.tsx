@@ -910,21 +910,52 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     });
 
-    // Helper для UI
+    // Helper для UI - works for both VOTING and NIGHT phases
     const handlePlayerAction = (targetId: string) => {
-        if (gameState.phase === GamePhase.VOTING) {
+        if (gameState.phase === GamePhase.VOTING || gameState.phase === GamePhase.NIGHT) {
             setSelectedTarget(prev => prev === targetId ? null : targetId);
         } else {
-            console.log("Not voting phase");
+            console.log("Cannot select player in this phase");
         }
     };
 
-    // Ищем myPlayer: сначала по реальному адресу кошелька, потом по myPlayerId (для тестового режима)
-    const myPlayer = gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase())
-        || gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase());
+    // Ищем myPlayer: если myPlayerId установлен (тестовый режим), используем его, иначе - адрес кошелька
+    const myPlayerById = gameState.myPlayerId
+        ? gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase())
+        : null;
+    const myPlayerByWallet = gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase());
+    // Приоритет: myPlayerId (тестовый режим) > адрес кошелька
+    const myPlayer = myPlayerById || myPlayerByWallet;
 
-    const getActionLabel = () => gameState.phase === GamePhase.VOTING ? "VOTE" : "SELECT";
-    const canActOnPlayer = (target: Player) => gameState.phase === GamePhase.VOTING && target.isAlive;
+    const getActionLabel = () => {
+        if (gameState.phase === GamePhase.VOTING) return "VOTE";
+        if (gameState.phase === GamePhase.NIGHT) return "TARGET";
+        return "SELECT";
+    };
+
+    // Check if current player can act on target
+    const canActOnPlayer = (target: Player) => {
+        if (!target.isAlive) return false;
+
+        if (gameState.phase === GamePhase.VOTING) {
+            return true;
+        }
+
+        if (gameState.phase === GamePhase.NIGHT) {
+            // Only roles with night abilities can act
+            const myRole = myPlayer?.role;
+            if (myRole === Role.MAFIA || myRole === Role.DETECTIVE || myRole === Role.DOCTOR) {
+                // Doctor can target self, others cannot
+                if (myRole !== Role.DOCTOR && target.address.toLowerCase() === myPlayer?.address.toLowerCase()) {
+                    return false;
+                }
+                return true;
+            }
+            return false; // Civilians cannot act at night
+        }
+
+        return false;
+    };
 
     return (
         <GameContext.Provider value={{

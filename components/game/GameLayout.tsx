@@ -122,11 +122,10 @@ export const GameLayout: React.FC = () => {
         }
     };
 
-    // For Shuffle/Reveal/Night phases, show full-screen overlay
+    // For Shuffle/Reveal phases, show full-screen overlay (NIGHT is NOT overlay - side cards are clickable)
     const isOverlayPhase = [
         GamePhase.SHUFFLING,
         GamePhase.REVEAL,
-        GamePhase.NIGHT,
         GamePhase.ENDED
     ].includes(gameState.phase);
 
@@ -233,6 +232,8 @@ export const GameLayout: React.FC = () => {
                                 onClick={() => handlePlayerAction(player.address)}
                                 canAct={canActOnPlayer(player)}
                                 isSelected={selectedTarget === player.address}
+                                isNight={isNightPhase}
+                                myRole={myPlayer?.role}
                             />
                         </div>
                     );
@@ -241,7 +242,7 @@ export const GameLayout: React.FC = () => {
 
                 {/* CENTER CONTENT (Day Phase, Vote, Logs etc) */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[500px] flex items-center justify-center z-10">
-                    {/* Overlay Phases (Shuffle, Reveal, Night, GameOver) */}
+                    {/* Overlay Phases (Shuffle, Reveal, GameOver) */}
                     {isOverlayPhase && (
                         <div className="absolute inset-0 z-30 flex items-center justify-center">
                             <div> {/* Removed scale-150 to prevent oversized UI */}
@@ -254,6 +255,13 @@ export const GameLayout: React.FC = () => {
                     {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) && (
                         <div className="w-full h-full">
                             <DayPhase />
+                        </div>
+                    )}
+
+                    {/* Night Phase Content */}
+                    {!isOverlayPhase && gameState.phase === GamePhase.NIGHT && (
+                        <div className="w-full h-full">
+                            <NightPhase />
                         </div>
                     )}
 
