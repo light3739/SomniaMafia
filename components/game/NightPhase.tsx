@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
-import { ShuffleService } from '../../services/shuffleService';
+import { ShuffleService, getShuffleService } from '../../services/shuffleService';
+import { hexToString } from '../../services/cryptoUtils';
 import { Role, Player } from '../../types';
 import { Button } from '../ui/Button';
-import { Moon, Skull, Shield, Search, Eye, Check, Clock, User, Lock } from 'lucide-react';
+import { Moon, Skull, Shield, Search, Eye, Check, Clock, User, Lock, AlertCircle } from 'lucide-react';
 
 // Night action types matching contract enum
 enum NightActionType {
@@ -23,6 +24,8 @@ interface NightState {
     hasRevealed: boolean;
     commitHash: string | null;
     salt: string | null;
+    investigationResult: Role | null; // Detective's investigation result
+    teammates: string[]; // Fellow mafia members (addresses)
 }
 
 const RoleActions: Record<Role, { action: NightActionType; label: string; icon: React.ReactNode; color: string }> = {
@@ -31,6 +34,12 @@ const RoleActions: Record<Role, { action: NightActionType; label: string; icon: 
         label: 'Kill',
         icon: <Skull className="w-5 h-5" />,
         color: 'text-red-500'
+    },
+    [Role.MANIAC]: {
+        action: NightActionType.KILL,
+        label: 'Murder',
+        icon: <Skull className="w-5 h-5" />,
+        color: 'text-purple-500'
     },
     [Role.DOCTOR]: {
         action: NightActionType.HEAL,
@@ -74,7 +83,9 @@ export const NightPhase: React.FC = () => {
         hasCommitted: false,
         hasRevealed: false,
         commitHash: null,
-        salt: null
+        salt: null,
+        investigationResult: null,
+        teammates: []
     });
     const [isProcessing, setIsProcessing] = useState(false);
     const publicClient = usePublicClient();
@@ -127,6 +138,92 @@ export const NightPhase: React.FC = () => {
 
     // Storage key for night commit data
     const NIGHT_COMMIT_KEY = `mafia_night_commit_${currentRoomId}_${address}`;
+
+    // Load mafia teammates on mount (only for mafia role)
+    const loadMafiaTeammates = useCallback(async () => {
+        if (!publicClient || !currentRoomId || !myPlayer || myRole !== Role.MAFIA) return;
+        if (nightState.teammates.length > 0) return; // Already loaded
+
+        try {
+            // Get deck from contract
+            const deck = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'getDeck',
+                args: [currentRoomId],
+            }) as string[];
+
+            // Get all keys shared with me
+            const [senders, keyBytes] = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'getAllKeysForMe',
+                args: [currentRoomId],
+                account: address,
+            }) as [string[], string[]];
+
+            const keys = new Map<string, string>();
+            for (let i = 0; i < senders.length; i++) {
+                if (keyBytes[i] && keyBytes[i] !== '0x') {
+                    keys.set(senders[i], keyBytes[i]);
+                }
+            }
+
+            // Find my card index
+            const myCardIndex = gameState.players.findIndex(
+                p => p.address.toLowerCase() === myPlayer.address.toLowerCase()
+            );
+
+            const shuffleService = getShuffleService();
+            const teammates: string[] = [];
+
+            // Decrypt all cards to find fellow mafia
+            for (let i = 0; i < deck.length; i++) {
+                if (i === myCardIndex) continue; // Skip my own card
+
+                try {
+                    let encryptedCard = deck[i];
+                    
+                    // Decrypt with my key
+                    encryptedCard = shuffleService.decrypt(encryptedCard);
+                    
+                    // Decrypt with other players' keys
+                    for (const [_, key] of keys) {
+                        const decryptionKey = hexToString(key);
+                        encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
+                    }
+
+                    const cardRole = ShuffleService.roleNumberToRole(encryptedCard);
+                    
+                    if (cardRole === Role.MAFIA) {
+                        const player = gameState.players[i];
+                        if (player && player.isAlive) {
+                            teammates.push(player.address);
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`Failed to decrypt card ${i}:`, e);
+                }
+            }
+
+            if (teammates.length > 0) {
+                setNightState(prev => ({ ...prev, teammates }));
+                const names = teammates.map(addr => 
+                    gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase())?.name || addr.slice(0, 8)
+                );
+                addLog(`Your mafia allies: ${names.join(', ')}`, "info");
+            }
+        } catch (e) {
+            console.error("Failed to load mafia teammates:", e);
+        }
+    }, [publicClient, currentRoomId, myPlayer, myRole, address, gameState.players, nightState.teammates.length, addLog]);
+
+    // Load teammates when mafia enters night phase
+    useEffect(() => {
+        if (myRole === Role.MAFIA) {
+            loadMafiaTeammates();
+        }
+    }, [myRole, loadMafiaTeammates]);
 
     // Load saved commit data from localStorage on mount
     useEffect(() => {
@@ -207,6 +304,74 @@ export const NightPhase: React.FC = () => {
         }
     };
 
+    // Decrypt target's role (for Detective)
+    const decryptTargetRole = useCallback(async (targetAddress: string): Promise<Role | null> => {
+        if (!publicClient || !currentRoomId) return null;
+        
+        try {
+            // Find target's index in players array
+            const targetIndex = gameState.players.findIndex(
+                p => p.address.toLowerCase() === targetAddress.toLowerCase()
+            );
+            if (targetIndex < 0) return null;
+            
+            // Get deck from contract
+            const deckLength = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'getDeckLength',
+                args: [currentRoomId],
+            }) as bigint;
+            
+            const deck: string[] = [];
+            for (let i = 0; i < Number(deckLength); i++) {
+                const card = await publicClient.readContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'roomDeck',
+                    args: [currentRoomId, BigInt(i)],
+                }) as string;
+                deck.push(card);
+            }
+            
+            if (targetIndex >= deck.length) return null;
+            
+            // Collect all keys
+            const keys = new Map<string, string>();
+            for (const player of gameState.players) {
+                if (player.address.toLowerCase() === address?.toLowerCase()) continue;
+                try {
+                    const key = await publicClient.readContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'playerDeckKeys',
+                        args: [currentRoomId, player.address, address],
+                    }) as `0x${string}`;
+                    if (key && key !== '0x') {
+                        keys.set(player.address, key);
+                    }
+                } catch { }
+            }
+            
+            const shuffleService = getShuffleService();
+            let encryptedCard = deck[targetIndex];
+            
+            // Decrypt with my key
+            encryptedCard = shuffleService.decrypt(encryptedCard);
+            
+            // Decrypt with others' keys
+            for (const [_, key] of keys) {
+                const decryptionKey = hexToString(key);
+                encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
+            }
+            
+            return ShuffleService.roleNumberToRole(encryptedCard);
+        } catch (e) {
+            console.error("Failed to decrypt target role:", e);
+            return null;
+        }
+    }, [publicClient, currentRoomId, gameState.players, address]);
+
     // Reveal action
     const handleReveal = async () => {
         if (!nightState.selectedTarget || !nightState.salt || nightState.hasRevealed) return;
@@ -230,7 +395,23 @@ export const NightPhase: React.FC = () => {
             // Clear localStorage after successful reveal
             localStorage.removeItem(NIGHT_COMMIT_KEY);
 
-            setNightState(prev => ({ ...prev, hasRevealed: true }));
+            // If detective, decrypt target's role
+            let investigationResult: Role | null = null;
+            if (myRole === Role.DETECTIVE && roleConfig.action === NightActionType.CHECK) {
+                investigationResult = await decryptTargetRole(nightState.selectedTarget);
+                if (investigationResult) {
+                    const targetName = gameState.players.find(
+                        p => p.address.toLowerCase() === nightState.selectedTarget?.toLowerCase()
+                    )?.name || 'Unknown';
+                    addLog(`Investigation: ${targetName} is ${investigationResult}!`, "success");
+                }
+            }
+
+            setNightState(prev => ({ 
+                ...prev, 
+                hasRevealed: true,
+                investigationResult 
+            }));
             addLog("Night action revealed!", "success");
         } catch (e: any) {
             console.error("Reveal failed:", e);
@@ -315,10 +496,42 @@ export const NightPhase: React.FC = () => {
                     </h2>
                     <p className="text-white/50 text-sm">
                         {myRole === Role.MAFIA && 'Choose your target to eliminate'}
+                        {myRole === Role.MANIAC && 'Choose your victim - you work alone!'}
                         {myRole === Role.DOCTOR && 'Choose a player to protect tonight'}
                         {myRole === Role.DETECTIVE && 'Choose a player to investigate'}
                     </p>
                 </div>
+
+                {/* Mafia Teammates */}
+                {myRole === Role.MAFIA && nightState.teammates.length > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-4 p-4 bg-red-950/30 border border-red-500/30 rounded-2xl"
+                    >
+                        <div className="flex items-center gap-2 mb-2">
+                            <Skull className="w-4 h-4 text-red-500" />
+                            <span className="text-red-400 text-sm font-medium">Your Fellow Mafia</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {nightState.teammates.map(addr => {
+                                const teammate = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
+                                return (
+                                    <span 
+                                        key={addr}
+                                        className={`px-3 py-1 rounded-full text-sm ${
+                                            teammate?.isAlive 
+                                                ? 'bg-red-900/50 text-red-300 border border-red-500/30'
+                                                : 'bg-gray-900/50 text-gray-500 border border-gray-500/30 line-through'
+                                        }`}
+                                    >
+                                        {teammate?.name || addr.slice(0, 8)}
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    </motion.div>
+                )}
 
                 {/* Target Selection */}
                 <div className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 p-6 mb-6">
@@ -452,7 +665,36 @@ export const NightPhase: React.FC = () => {
                                     <Check className="w-5 h-5" />
                                     <span className="font-medium">Action Completed!</span>
                                 </div>
-                                <p className="text-white/40 text-sm">
+                                
+                                {/* Detective Investigation Result */}
+                                {myRole === Role.DETECTIVE && nightState.investigationResult && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className={`mt-4 p-4 rounded-xl border ${
+                                            nightState.investigationResult === Role.MAFIA || nightState.investigationResult === Role.MANIAC
+                                                ? 'bg-red-950/30 border-red-500/30'
+                                                : 'bg-green-950/30 border-green-500/30'
+                                        }`}
+                                    >
+                                        <p className="text-xs uppercase tracking-wider mb-2 flex items-center justify-center gap-2">
+                                            <Search className="w-4 h-4" />
+                                            Investigation Result
+                                        </p>
+                                        <p className={`text-xl font-bold ${
+                                            nightState.investigationResult === Role.MAFIA ? 'text-red-400' 
+                                            : nightState.investigationResult === Role.MANIAC ? 'text-purple-400'
+                                            : 'text-green-400'
+                                        }`}>
+                                            {gameState.players.find(p => p.address.toLowerCase() === nightState.selectedTarget?.toLowerCase())?.name} is {nightState.investigationResult === Role.MAFIA || nightState.investigationResult === Role.MANIAC ? '🔴 EVIL' : '🟢 INNOCENT'}
+                                        </p>
+                                        <p className="text-white/40 text-xs mt-1">
+                                            Role: {nightState.investigationResult}
+                                        </p>
+                                    </motion.div>
+                                )}
+                                
+                                <p className="text-white/40 text-sm mt-4">
                                     Night will end automatically when all reveal
                                 </p>
                             </motion.div>

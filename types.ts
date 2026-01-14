@@ -3,7 +3,8 @@ export enum Role {
   MAFIA = 'MAFIA',
   DETECTIVE = 'DETECTIVE',
   DOCTOR = 'DOCTOR',
-  UNKNOWN = 'UNKNOWN' // For other players
+  MANIAC = 'MANIAC',   // Solo killer - wins alone
+  UNKNOWN = 'UNKNOWN'  // For other players
 }
 
 // Должен соответствовать контракту: LOBBY=0, SHUFFLING=1, REVEAL=2, DAY=3, VOTING=4, NIGHT=5, ENDED=6
@@ -55,7 +56,7 @@ export interface GameState {
   players: Player[];
   myPlayerId: string | null;
   logs: LogEntry[];
-  winner: 'MAFIA' | 'CIVILIANS' | null;
+  winner: 'MAFIA' | 'MANIAC' | 'TOWN' | null;
 }
 
 // For Framer Motion variants

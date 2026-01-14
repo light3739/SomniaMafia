@@ -18,6 +18,7 @@ export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, c
 
         switch (player.role) {
             case Role.MAFIA: return <Crosshair className="w-3 h-3 text-red-500" />;
+            case Role.MANIAC: return <Crosshair className="w-3 h-3 text-purple-500" />;
             case Role.DOCTOR: return <Shield className="w-3 h-3 text-green-500" />;
             case Role.DETECTIVE: return <Eye className="w-3 h-3 text-blue-500" />;
             default: return null;

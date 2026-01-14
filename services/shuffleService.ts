@@ -159,6 +159,11 @@ export class ShuffleService {
             deck.push(3); // DETECTIVE = 3
         }
         
+        // Добавляем маньяка (если >= 6 игроков)
+        if (playerCount >= 6) {
+            deck.push(5); // MANIAC = 5
+        }
+        
         // Остальные — мирные жители
         while (deck.length < playerCount) {
             deck.push(4); // CIVILIAN = 4
@@ -174,6 +179,7 @@ export class ShuffleService {
             case 1: return Role.MAFIA;
             case 2: return Role.DOCTOR;
             case 3: return Role.DETECTIVE;
+            case 5: return Role.MANIAC;
             case 4: 
             default: return Role.CIVILIAN;
         }

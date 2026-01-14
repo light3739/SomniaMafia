@@ -18,6 +18,7 @@ interface RevealState {
     isRevealed: boolean;
     hasConfirmed: boolean;
     hasSharedKeys: boolean;  // Track if we already shared
+    teammates: string[];     // Addresses of fellow mafia members
 }
 
 const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; description: string }> = {
@@ -26,6 +27,12 @@ const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: 
         color: 'text-red-500',
         bgColor: 'from-red-950/50 to-red-900/30',
         description: 'Eliminate all civilians to win. Vote by day, kill by night.'
+    },
+    [Role.MANIAC]: {
+        icon: <Skull className="w-16 h-16" />,
+        color: 'text-purple-500',
+        bgColor: 'from-purple-950/50 to-purple-900/30',
+        description: 'Kill everyone to win. You play alone - trust no one.'
     },
     [Role.DOCTOR]: {
         icon: <Shield className="w-16 h-16" />,
@@ -74,7 +81,8 @@ export const RoleReveal: React.FC = () => {
         myRole: null,
         isRevealed: false,
         hasConfirmed: false,
-        hasSharedKeys: false
+        hasSharedKeys: false,
+        teammates: []
     });
     const [isProcessing, setIsProcessing] = useState(false);
     const [showRole, setShowRole] = useState(false);
@@ -247,10 +255,23 @@ export const RoleReveal: React.FC = () => {
             // Преобразуем число в роль
             const role = ShuffleService.roleNumberToRole(myEncryptedCard);
 
+            // Если я мафия — расшифровываем ВСЕ карты чтобы найти союзников
+            let teammates: string[] = [];
+            if (role === Role.MAFIA) {
+                teammates = await decryptAllCardsForTeammates(keys, shuffleService, Role.MAFIA);
+                if (teammates.length > 0) {
+                    const names = teammates.map(addr => 
+                        gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase())?.name || addr.slice(0, 8)
+                    );
+                    addLog(`Your fellow mafia: ${names.join(', ')}`, "info");
+                }
+            }
+
             setRevealState(prev => ({
                 ...prev,
                 myRole: role,
-                isRevealed: true
+                isRevealed: true,
+                teammates
             }));
 
             // Обновляем gameState с моей ролью
@@ -270,6 +291,47 @@ export const RoleReveal: React.FC = () => {
         } finally {
             setIsProcessing(false);
         }
+    };
+
+    // Расшифровать все карты чтобы найти союзников по роли
+    const decryptAllCardsForTeammates = async (
+        keys: Map<string, string>, 
+        shuffleService: ShuffleService,
+        targetRole: Role
+    ): Promise<string[]> => {
+        const teammates: string[] = [];
+        
+        for (let i = 0; i < revealState.deck.length; i++) {
+            // Пропускаем свою карту
+            if (i === revealState.myCardIndex) continue;
+            
+            try {
+                let encryptedCard = revealState.deck[i];
+                
+                // Расшифровываем своим ключом
+                encryptedCard = shuffleService.decrypt(encryptedCard);
+                
+                // Расшифровываем ключами других игроков
+                for (const [_, key] of keys) {
+                    const decryptionKey = hexToString(key);
+                    encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
+                }
+                
+                const cardRole = ShuffleService.roleNumberToRole(encryptedCard);
+                
+                if (cardRole === targetRole) {
+                    // Находим игрока по индексу
+                    const player = gameState.players[i];
+                    if (player) {
+                        teammates.push(player.address);
+                    }
+                }
+            } catch (e) {
+                console.warn(`Failed to decrypt card ${i}:`, e);
+            }
+        }
+        
+        return teammates;
     };
 
     // Подтвердить роль
@@ -438,10 +500,38 @@ export const RoleReveal: React.FC = () => {
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
                                         transition={{ delay: 0.7 }}
-                                        className="text-white/60 text-sm mb-8 max-w-xs mx-auto"
+                                        className="text-white/60 text-sm mb-4 max-w-xs mx-auto"
                                     >
                                         {roleConfig.description}
                                     </motion.p>
+                                )}
+
+                                {/* Mafia Teammates - shown only to mafia members */}
+                                {showRole && revealState.myRole === Role.MAFIA && revealState.teammates.length > 0 && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.9 }}
+                                        className="mb-6 p-4 bg-red-950/30 border border-red-500/30 rounded-xl"
+                                    >
+                                        <p className="text-red-400 text-xs uppercase tracking-wider mb-2 flex items-center justify-center gap-2">
+                                            <Skull className="w-4 h-4" />
+                                            Your Fellow Mafia
+                                        </p>
+                                        <div className="flex flex-wrap justify-center gap-2">
+                                            {revealState.teammates.map(addr => {
+                                                const player = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
+                                                return (
+                                                    <span 
+                                                        key={addr}
+                                                        className="px-3 py-1 bg-red-500/20 border border-red-500/40 rounded-full text-red-300 text-sm"
+                                                    >
+                                                        {player?.name || addr.slice(0, 8)}
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    </motion.div>
                                 )}
 
                                 {/* Toggle visibility */}

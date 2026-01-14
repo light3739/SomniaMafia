@@ -299,11 +299,13 @@ export const GameLayout: React.FC = () => {
                             px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
                             ${myPlayer.role === Role.MAFIA
                                 ? 'bg-red-900/50 text-red-400 border border-red-500/30'
-                                : myPlayer.role === Role.DOCTOR
-                                    ? 'bg-green-900/50 text-green-400 border border-green-500/30'
-                                    : myPlayer.role === Role.DETECTIVE
-                                        ? 'bg-blue-900/50 text-blue-400 border border-blue-500/30'
-                                        : 'bg-amber-900/50 text-amber-400 border border-amber-500/30'
+                                : myPlayer.role === Role.MANIAC
+                                    ? 'bg-purple-900/50 text-purple-400 border border-purple-500/30'
+                                    : myPlayer.role === Role.DOCTOR
+                                        ? 'bg-green-900/50 text-green-400 border border-green-500/30'
+                                        : myPlayer.role === Role.DETECTIVE
+                                            ? 'bg-blue-900/50 text-blue-400 border border-blue-500/30'
+                                            : 'bg-amber-900/50 text-amber-400 border border-amber-500/30'
                             }
                         `}>
                             {myPlayer.role}
