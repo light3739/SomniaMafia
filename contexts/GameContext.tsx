@@ -214,6 +214,48 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const FLAG_CONFIRMED_ROLE = 1;
     const FLAG_ACTIVE = 2;
 
+    // Check win condition on frontend (since contract doesn't know roles)
+    const checkWinCondition = useCallback((players: Player[], contractPhase: GamePhase): 'MAFIA' | 'MANIAC' | 'TOWN' | null => {
+        // Don't check in early phases
+        if (contractPhase < GamePhase.DAY) return null;
+        
+        const alivePlayers = players.filter(p => p.isAlive);
+        if (alivePlayers.length === 0) return 'TOWN'; // Draw technically, but contract handles this
+        
+        let aliveMafia = 0;
+        let aliveManiac = 0;
+        let aliveTown = 0;
+        let unknownRoles = 0;
+        
+        for (const player of alivePlayers) {
+            if (player.role === Role.MAFIA) aliveMafia++;
+            else if (player.role === Role.MANIAC) aliveManiac++;
+            else if (player.role === Role.UNKNOWN) unknownRoles++;
+            else aliveTown++; // CIVILIAN, DOCTOR, DETECTIVE
+        }
+        
+        // Can't determine winner if we don't know all roles
+        if (unknownRoles > 0) return null;
+        
+        // Win conditions:
+        // MAFIA wins: mafia >= town AND maniac is dead
+        if (aliveMafia > 0 && aliveMafia >= aliveTown && aliveManiac === 0) {
+            return 'MAFIA';
+        }
+        
+        // MANIAC wins: only maniac alive, or maniac + 1 town and no mafia
+        if (aliveManiac > 0 && aliveMafia === 0 && aliveTown <= 1) {
+            return 'MANIAC';
+        }
+        
+        // TOWN wins: no mafia AND no maniac
+        if (aliveMafia === 0 && aliveManiac === 0) {
+            return 'TOWN';
+        }
+        
+        return null; // Game continues
+    }, []);
+
     const refreshPlayersList = useCallback(async (roomId: bigint) => {
         if (!publicClient) return;
         try {
@@ -273,11 +315,20 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     };
                 });
 
+                // Check win condition on frontend (contract doesn't know roles)
+                const winner = checkWinCondition(formattedPlayers, phase);
+                const finalPhase = winner ? GamePhase.ENDED : phase;
+                
+                if (winner && phase !== GamePhase.ENDED) {
+                    console.log('[Win Condition] Game over!', { winner, alivePlayers: formattedPlayers.filter(p => p.isAlive).length });
+                }
+
                 return {
                     ...prev,
                     players: formattedPlayers,
-                    phase,
-                    dayCount
+                    phase: finalPhase,
+                    dayCount,
+                    winner: winner || prev.winner
                 };
             });
         } catch (e) {
