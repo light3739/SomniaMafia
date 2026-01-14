@@ -1,5 +1,5 @@
 // components/game/NightPhase.tsx
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
@@ -19,13 +19,13 @@ enum NightActionType {
 }
 
 interface NightState {
-    selectedTarget: string | null;
     hasCommitted: boolean;
     hasRevealed: boolean;
     commitHash: string | null;
     salt: string | null;
     investigationResult: Role | null; // Detective's investigation result
     teammates: string[]; // Fellow mafia members (addresses)
+    committedTarget: string | null; // Store the committed target
 }
 
 const RoleActions: Record<Role, { action: NightActionType; label: string; icon: React.ReactNode; color: string }> = {
@@ -43,7 +43,7 @@ const RoleActions: Record<Role, { action: NightActionType; label: string; icon: 
     },
     [Role.DOCTOR]: {
         action: NightActionType.HEAL,
-        label: 'Heal',
+        label: 'Protect',
         icon: <Shield className="w-5 h-5" />,
         color: 'text-green-500'
     },
@@ -62,7 +62,7 @@ const RoleActions: Record<Role, { action: NightActionType; label: string; icon: 
     [Role.UNKNOWN]: {
         action: NightActionType.NONE,
         label: 'Wait',
-        icon: <Clock className="w-5 h-5" />,
+        icon: <Moon className="w-5 h-5" />,
         color: 'text-gray-500'
     }
 };
@@ -70,22 +70,24 @@ const RoleActions: Record<Role, { action: NightActionType; label: string; icon: 
 export const NightPhase: React.FC = () => {
     const {
         gameState,
-        currentRoomId,
         myPlayer,
         commitNightActionOnChain,
         revealNightActionOnChain,
         addLog,
-        isTxPending
+        isTxPending,
+        selectedTarget,
+        setSelectedTarget,
+        currentRoomId
     } = useGameContext();
 
     const [nightState, setNightState] = useState<NightState>({
-        selectedTarget: null,
         hasCommitted: false,
         hasRevealed: false,
         commitHash: null,
         salt: null,
         investigationResult: null,
-        teammates: []
+        teammates: [],
+        committedTarget: null
     });
     const [isProcessing, setIsProcessing] = useState(false);
     const publicClient = usePublicClient();
@@ -94,7 +96,7 @@ export const NightPhase: React.FC = () => {
     // Sync with contract flags (hasCommitted, hasRevealed)
     const syncWithContract = useCallback(async () => {
         if (!publicClient || !currentRoomId || !address) return;
-        
+
         try {
             const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys] = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
@@ -102,7 +104,7 @@ export const NightPhase: React.FC = () => {
                 functionName: 'getPlayerFlags',
                 args: [currentRoomId, address],
             }) as [boolean, boolean, boolean, boolean, boolean, boolean];
-            
+
             setNightState(prev => ({
                 ...prev,
                 hasCommitted,
@@ -125,16 +127,8 @@ export const NightPhase: React.FC = () => {
     const roleConfig = RoleActions[myRole];
     const canAct = roleConfig.action !== NightActionType.NONE;
 
-    // Живые игроки (исключая себя для некоторых ролей)
-    const alivePlayers = gameState.players.filter(p => p.isAlive);
-    const validTargets = alivePlayers.filter(p => {
-        // Доктор может лечить себя, остальные — только других
-        if (myRole === Role.DOCTOR) return true;
-        return p.address.toLowerCase() !== myPlayer?.address.toLowerCase();
-    });
-
-    // Первый игрок может финализировать ночь
-    const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+    // Get selected player name (from side card selection)
+    const selectedPlayer = gameState.players.find(p => p.address === selectedTarget);
 
     // Storage key for night commit data
     const NIGHT_COMMIT_KEY = `mafia_night_commit_${currentRoomId}_${address}`;
@@ -183,10 +177,10 @@ export const NightPhase: React.FC = () => {
 
                 try {
                     let encryptedCard = deck[i];
-                    
+
                     // Decrypt with my key
                     encryptedCard = shuffleService.decrypt(encryptedCard);
-                    
+
                     // Decrypt with other players' keys
                     for (const [_, key] of keys) {
                         const decryptionKey = hexToString(key);
@@ -194,7 +188,7 @@ export const NightPhase: React.FC = () => {
                     }
 
                     const cardRole = ShuffleService.roleNumberToRole(encryptedCard);
-                    
+
                     if (cardRole === Role.MAFIA) {
                         const player = gameState.players[i];
                         if (player && player.isAlive) {
@@ -208,7 +202,7 @@ export const NightPhase: React.FC = () => {
 
             if (teammates.length > 0) {
                 setNightState(prev => ({ ...prev, teammates }));
-                const names = teammates.map(addr => 
+                const names = teammates.map(addr =>
                     gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase())?.name || addr.slice(0, 8)
                 );
                 addLog(`Your mafia allies: ${names.join(', ')}`, "info");
@@ -228,16 +222,16 @@ export const NightPhase: React.FC = () => {
     // Load saved commit data from localStorage on mount
     useEffect(() => {
         if (!currentRoomId || !address) return;
-        
+
         const saved = localStorage.getItem(NIGHT_COMMIT_KEY);
         if (saved) {
             try {
-                const { salt, commitHash, selectedTarget } = JSON.parse(saved);
+                const { salt, commitHash, committedTarget } = JSON.parse(saved);
                 setNightState(prev => ({
                     ...prev,
                     salt,
                     commitHash,
-                    selectedTarget
+                    committedTarget
                 }));
             } catch (e) {
                 console.error("Failed to load night commit data:", e);
@@ -247,7 +241,7 @@ export const NightPhase: React.FC = () => {
 
     // Commit action
     const handleCommit = async () => {
-        if (!nightState.selectedTarget || nightState.hasCommitted) return;
+        if (!selectedTarget || nightState.hasCommitted) return;
 
         // Check if we're actually in NIGHT phase
         if (gameState.phase !== 5) { // 5 = NIGHT
@@ -264,26 +258,26 @@ export const NightPhase: React.FC = () => {
             // Создаём хэш: keccak256(abi.encodePacked(action, target, salt))
             const hash = ShuffleService.createCommitHash(
                 roleConfig.action,
-                nightState.selectedTarget,
+                selectedTarget,
                 salt
             );
 
             // DEBUG: Log commit details
             console.log('[Night Commit]', {
                 action: roleConfig.action,
-                target: nightState.selectedTarget,
+                target: selectedTarget,
                 salt: salt,
                 hash: hash
             });
 
             // Отправляем хэш в контракт СНАЧАЛА
             await commitNightActionOnChain(hash);
-            
+
             // Только после успешного commit сохраняем данные
             localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
                 salt,
                 commitHash: hash,
-                selectedTarget: nightState.selectedTarget,
+                committedTarget: selectedTarget,
                 action: roleConfig.action
             }));
 
@@ -292,9 +286,10 @@ export const NightPhase: React.FC = () => {
                 ...prev,
                 commitHash: hash,
                 salt: salt,
-                hasCommitted: true
+                hasCommitted: true,
+                committedTarget: selectedTarget
             }));
-            
+
             addLog("Night action committed!", "success");
         } catch (e: any) {
             console.error("Commit failed:", e);
@@ -307,14 +302,14 @@ export const NightPhase: React.FC = () => {
     // Decrypt target's role (for Detective)
     const decryptTargetRole = useCallback(async (targetAddress: string): Promise<Role | null> => {
         if (!publicClient || !currentRoomId) return null;
-        
+
         try {
             // Find target's index in players array
             const targetIndex = gameState.players.findIndex(
                 p => p.address.toLowerCase() === targetAddress.toLowerCase()
             );
             if (targetIndex < 0) return null;
-            
+
             // Get deck from contract
             const deckLength = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
@@ -322,7 +317,7 @@ export const NightPhase: React.FC = () => {
                 functionName: 'getDeckLength',
                 args: [currentRoomId],
             }) as bigint;
-            
+
             const deck: string[] = [];
             for (let i = 0; i < Number(deckLength); i++) {
                 const card = await publicClient.readContract({
@@ -333,9 +328,9 @@ export const NightPhase: React.FC = () => {
                 }) as string;
                 deck.push(card);
             }
-            
+
             if (targetIndex >= deck.length) return null;
-            
+
             // Collect all keys
             const keys = new Map<string, string>();
             for (const player of gameState.players) {
@@ -352,19 +347,19 @@ export const NightPhase: React.FC = () => {
                     }
                 } catch { }
             }
-            
+
             const shuffleService = getShuffleService();
             let encryptedCard = deck[targetIndex];
-            
+
             // Decrypt with my key
             encryptedCard = shuffleService.decrypt(encryptedCard);
-            
+
             // Decrypt with others' keys
             for (const [_, key] of keys) {
                 const decryptionKey = hexToString(key);
                 encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
             }
-            
+
             return ShuffleService.roleNumberToRole(encryptedCard);
         } catch (e) {
             console.error("Failed to decrypt target role:", e);
@@ -374,12 +369,12 @@ export const NightPhase: React.FC = () => {
 
     // Reveal action
     const handleReveal = async () => {
-        if (!nightState.selectedTarget || !nightState.salt || nightState.hasRevealed) return;
+        if (!nightState.committedTarget || !nightState.salt || nightState.hasRevealed) return;
 
         // DEBUG: Log reveal details
         console.log('[Night Reveal]', {
             action: roleConfig.action,
-            target: nightState.selectedTarget,
+            target: nightState.committedTarget,
             salt: nightState.salt,
             expectedHash: nightState.commitHash
         });
@@ -388,7 +383,7 @@ export const NightPhase: React.FC = () => {
         try {
             await revealNightActionOnChain(
                 roleConfig.action,
-                nightState.selectedTarget,
+                nightState.committedTarget,
                 nightState.salt
             );
 
@@ -398,20 +393,21 @@ export const NightPhase: React.FC = () => {
             // If detective, decrypt target's role
             let investigationResult: Role | null = null;
             if (myRole === Role.DETECTIVE && roleConfig.action === NightActionType.CHECK) {
-                investigationResult = await decryptTargetRole(nightState.selectedTarget);
+                investigationResult = await decryptTargetRole(nightState.committedTarget || '');
                 if (investigationResult) {
                     const targetName = gameState.players.find(
-                        p => p.address.toLowerCase() === nightState.selectedTarget?.toLowerCase()
+                        p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase()
                     )?.name || 'Unknown';
                     addLog(`Investigation: ${targetName} is ${investigationResult}!`, "success");
                 }
             }
 
-            setNightState(prev => ({ 
-                ...prev, 
+            setNightState(prev => ({
+                ...prev,
                 hasRevealed: true,
-                investigationResult 
+                investigationResult
             }));
+            setSelectedTarget(null); // Clear selection after reveal
             addLog("Night action revealed!", "success");
         } catch (e: any) {
             console.error("Reveal failed:", e);
@@ -420,8 +416,6 @@ export const NightPhase: React.FC = () => {
             setIsProcessing(false);
         }
     };
-
-    // V3: Night auto-finalizes when all players have revealed
 
     // Civilians just wait - show blocked UI
     if (!canAct) {
@@ -439,7 +433,7 @@ export const NightPhase: React.FC = () => {
                             opacity: [0.5, 1, 0.5],
                         }}
                         transition={{ duration: 2, repeat: Infinity }}
-                        className="relative mx-auto mb-6"
+                        className="relative mx-auto mb-6 w-fit"
                     >
                         <Moon className="w-16 h-16 text-indigo-400" />
                         <div className="absolute -bottom-1 -right-1 bg-indigo-900/80 rounded-full p-1">
@@ -448,7 +442,7 @@ export const NightPhase: React.FC = () => {
                     </motion.div>
 
                     <h2 className="text-2xl font-['Playfair_Display'] text-white mb-2">
-                        Actions Locked
+                        Night Phase
                     </h2>
                     <p className="text-white/50 text-sm mb-4">
                         You are a <span className="text-indigo-300 font-medium">{myRole}</span>.
@@ -459,7 +453,7 @@ export const NightPhase: React.FC = () => {
                     <div className="bg-indigo-900/30 rounded-xl p-4 border border-indigo-500/20 mb-4">
                         <div className="flex items-center justify-center gap-2 text-indigo-300 mb-2">
                             <Lock className="w-4 h-4" />
-                            <span className="text-sm font-medium">Player cards are disabled</span>
+                            <span className="text-sm font-medium">Actions locked</span>
                         </div>
                         <p className="text-indigo-200/50 text-xs">
                             Close your eyes and wait for dawn
@@ -470,29 +464,30 @@ export const NightPhase: React.FC = () => {
                         <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
                         <span className="text-sm">Others are making their moves...</span>
                     </div>
-
-                    {/* V3: Auto-finalize info */}
-                    <div className="mt-6 text-center text-indigo-300/60 text-sm">
-                        Night will end automatically when all actions are revealed
-                    </div>
                 </motion.div>
             </div>
         );
     }
 
+    // Active role UI (Mafia/Doctor/Detective) - NO central grid, use side cards
     return (
         <div className="w-full h-full flex flex-col items-center justify-center p-4 md:p-8">
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="max-w-xl w-full"
+                className="max-w-lg w-full"
             >
                 {/* Header */}
                 <div className="text-center mb-6">
-
+                    <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black/40 border border-white/10 mb-4`}>
+                        <span className={roleConfig.color}>{roleConfig.icon}</span>
+                        <span className={`font-bold ${roleConfig.color}`}>{myRole}</span>
+                    </div>
 
                     <h2 className="text-2xl font-['Playfair_Display'] text-white mb-2">
-                        Your Role: <span className={roleConfig.color}>{myRole}</span>
+                        {myRole === Role.MAFIA && 'Choose your victim'}
+                        {myRole === Role.DOCTOR && 'Choose who to protect'}
+                        {myRole === Role.DETECTIVE && 'Choose who to investigate'}
                     </h2>
                     <p className="text-white/50 text-sm">
                         {myRole === Role.MAFIA && 'Choose your target to eliminate'}
@@ -517,13 +512,12 @@ export const NightPhase: React.FC = () => {
                             {nightState.teammates.map(addr => {
                                 const teammate = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
                                 return (
-                                    <span 
+                                    <span
                                         key={addr}
-                                        className={`px-3 py-1 rounded-full text-sm ${
-                                            teammate?.isAlive 
-                                                ? 'bg-red-900/50 text-red-300 border border-red-500/30'
-                                                : 'bg-gray-900/50 text-gray-500 border border-gray-500/30 line-through'
-                                        }`}
+                                        className={`px-3 py-1 rounded-full text-sm ${teammate?.isAlive
+                                            ? 'bg-red-900/50 text-red-300 border border-red-500/30'
+                                            : 'bg-gray-900/50 text-gray-500 border border-gray-500/30 line-through'
+                                            }`}
                                     >
                                         {teammate?.name || addr.slice(0, 8)}
                                     </span>
@@ -533,78 +527,48 @@ export const NightPhase: React.FC = () => {
                     </motion.div>
                 )}
 
-                {/* Target Selection */}
-                <div className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 p-6 mb-6">
-                    <p className="text-white/40 text-xs uppercase tracking-wider mb-4">Select Target</p>
-                    <div className="grid grid-cols-2 gap-3">
-                        {validTargets.map(player => {
-                            const isSelected = nightState.selectedTarget === player.address;
-                            const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
+                {/* Selected Target Display */}
+                <div className="bg-black/40 backdrop-blur-xl rounded-2xl border border-white/10 p-6 mb-6">
+                    <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Selected Target</p>
+                    <p className="text-white/30 text-[10px] mb-3">Click on a player card on the sides to select</p>
 
-                            return (
-                                <motion.button
-                                    key={player.address}
-                                    onClick={() => {
-                                        if (!nightState.hasCommitted && !isProcessing) {
-                                            setNightState(prev => ({
-                                                ...prev,
-                                                selectedTarget: isSelected ? null : player.address
-                                            }));
-                                        }
-                                    }}
-                                    disabled={nightState.hasCommitted || isProcessing}
-                                    whileHover={!nightState.hasCommitted ? { scale: 1.02 } : {}}
-                                    whileTap={!nightState.hasCommitted ? { scale: 0.98 } : {}}
-                                    className={`
-                                        p-4 rounded-2xl border transition-all text-left
-                                        ${nightState.hasCommitted
-                                            ? 'opacity-50 cursor-not-allowed'
-                                            : ''
-                                        }
-                                        ${isSelected
-                                            ? `${roleConfig.color === 'text-red-500'
-                                                ? 'bg-red-900/30 border-red-500/50 ring-2 ring-red-500/30'
-                                                : roleConfig.color === 'text-green-500'
-                                                    ? 'bg-green-900/30 border-green-500/50 ring-2 ring-green-500/30'
-                                                    : 'bg-blue-900/30 border-blue-500/50 ring-2 ring-blue-500/30'
-                                            }`
-                                            : isMe
-                                                ? 'bg-[#916A47]/10 border-[#916A47]/30'
-                                                : 'bg-white/5 border-white/10 hover:bg-white/10'
-                                        }
-                                    `}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`
-                                            w-10 h-10 rounded-full flex items-center justify-center
-                                            ${isMe ? 'bg-[#916A47]' : isSelected ? 'bg-white/20' : 'bg-white/10'}
-                                        `}>
-                                            <User className={`w-5 h-5 ${isMe ? 'text-black' : 'text-white/60'}`} />
-                                        </div>
-                                        <div>
-                                            <p className={`font-medium ${isMe ? 'text-[#916A47]' : 'text-white'}`}>
-                                                {player.name} {isMe && '(You)'}
-                                            </p>
-                                            <p className="text-xs text-white/30">
-                                                {player.address.slice(0, 6)}...
-                                            </p>
-                                        </div>
+                    {selectedTarget && selectedPlayer ? (
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className={`p-4 rounded-xl border-2 ${myRole === Role.MAFIA ? 'bg-red-900/20 border-red-500/50' :
+                                myRole === Role.DOCTOR ? 'bg-green-900/20 border-green-500/50' :
+                                    'bg-blue-900/20 border-blue-500/50'
+                                }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${myRole === Role.MAFIA ? 'bg-red-500/30' :
+                                        myRole === Role.DOCTOR ? 'bg-green-500/30' :
+                                            'bg-blue-500/30'
+                                        }`}>
+                                        {roleConfig.icon}
                                     </div>
-                                    {isSelected && (
-                                        <div className="mt-2 flex items-center gap-1 text-xs">
-                                            {roleConfig.icon}
-                                            <span className={roleConfig.color}>{roleConfig.label} target</span>
-                                        </div>
-                                    )}
-                                </motion.button>
-                            );
-                        })}
-                    </div>
+                                    <div>
+                                        <p className="font-bold text-white text-lg">{selectedPlayer.name}</p>
+                                        <p className="text-white/40 text-xs font-mono">
+                                            {selectedPlayer.address.slice(0, 6)}...{selectedPlayer.address.slice(-4)}
+                                        </p>
+                                    </div>
+                                </div>
+                                <span className={`${roleConfig.color} font-medium`}>{roleConfig.label}</span>
+                            </div>
+                        </motion.div>
+                    ) : (
+                        <div className="p-4 rounded-xl border border-dashed border-white/20 text-center">
+                            <p className="text-white/30">No target selected</p>
+                            <p className="text-white/20 text-xs mt-1">Click on a player card on the sides</p>
+                        </div>
+                    )}
                 </div>
 
-                {/* Action Steps */}
+                {/* Action Buttons */}
                 <div className="space-y-3">
-                    {/* Step 1: Commit */}
                     <AnimatePresence mode="wait">
                         {!nightState.hasCommitted ? (
                             <motion.div
@@ -616,12 +580,12 @@ export const NightPhase: React.FC = () => {
                                 <Button
                                     onClick={handleCommit}
                                     isLoading={isProcessing || isTxPending}
-                                    disabled={!nightState.selectedTarget || isProcessing || isTxPending}
-                                    className="w-full"
+                                    disabled={!selectedTarget || isProcessing || isTxPending}
+                                    className="w-full h-[50px]"
                                 >
                                     <Lock className="w-5 h-5 mr-2" />
-                                    {nightState.selectedTarget
-                                        ? `Commit: ${roleConfig.label} ${gameState.players.find(p => p.address === nightState.selectedTarget)?.name}`
+                                    {selectedTarget
+                                        ? `Confirm: ${roleConfig.label} ${selectedPlayer?.name}`
                                         : 'Select a target first'
                                     }
                                 </Button>
@@ -645,7 +609,7 @@ export const NightPhase: React.FC = () => {
                                     isLoading={isProcessing || isTxPending}
                                     disabled={isProcessing || isTxPending}
                                     variant="outline-gold"
-                                    className="w-full"
+                                    className="w-full h-[50px]"
                                 >
                                     <Eye className="w-5 h-5 mr-2" />
                                     Reveal Action
@@ -665,35 +629,33 @@ export const NightPhase: React.FC = () => {
                                     <Check className="w-5 h-5" />
                                     <span className="font-medium">Action Completed!</span>
                                 </div>
-                                
+
                                 {/* Detective Investigation Result */}
                                 {myRole === Role.DETECTIVE && nightState.investigationResult && (
                                     <motion.div
                                         initial={{ opacity: 0, scale: 0.9 }}
                                         animate={{ opacity: 1, scale: 1 }}
-                                        className={`mt-4 p-4 rounded-xl border ${
-                                            nightState.investigationResult === Role.MAFIA || nightState.investigationResult === Role.MANIAC
-                                                ? 'bg-red-950/30 border-red-500/30'
-                                                : 'bg-green-950/30 border-green-500/30'
-                                        }`}
+                                        className={`mt-4 p-4 rounded-xl border ${nightState.investigationResult === Role.MAFIA || nightState.investigationResult === Role.MANIAC
+                                            ? 'bg-red-950/30 border-red-500/30'
+                                            : 'bg-green-950/30 border-green-500/30'
+                                            }`}
                                     >
                                         <p className="text-xs uppercase tracking-wider mb-2 flex items-center justify-center gap-2">
                                             <Search className="w-4 h-4" />
                                             Investigation Result
                                         </p>
-                                        <p className={`text-xl font-bold ${
-                                            nightState.investigationResult === Role.MAFIA ? 'text-red-400' 
+                                        <p className={`text-xl font-bold ${nightState.investigationResult === Role.MAFIA ? 'text-red-400'
                                             : nightState.investigationResult === Role.MANIAC ? 'text-purple-400'
-                                            : 'text-green-400'
-                                        }`}>
-                                            {gameState.players.find(p => p.address.toLowerCase() === nightState.selectedTarget?.toLowerCase())?.name} is {nightState.investigationResult === Role.MAFIA || nightState.investigationResult === Role.MANIAC ? '🔴 EVIL' : '🟢 INNOCENT'}
+                                                : 'text-green-400'
+                                            }`}>
+                                            {gameState.players.find(p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase())?.name} is {nightState.investigationResult === Role.MAFIA || nightState.investigationResult === Role.MANIAC ? '🔴 EVIL' : '🟢 INNOCENT'}
                                         </p>
                                         <p className="text-white/40 text-xs mt-1">
                                             Role: {nightState.investigationResult}
                                         </p>
                                     </motion.div>
                                 )}
-                                
+
                                 <p className="text-white/40 text-sm mt-4">
                                     Night will end automatically when all reveal
                                 </p>
