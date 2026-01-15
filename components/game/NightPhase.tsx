@@ -309,26 +309,15 @@ export const NightPhase: React.FC = () => {
                 p => p.address.toLowerCase() === targetAddress.toLowerCase()
             );
             if (targetIndex < 0) return null;
-
-            // Get deck from contract
-            const deckLength = await publicClient.readContract({
+            
+            // Get deck from contract (single call)
+            const deck = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
-                functionName: 'getDeckLength',
+                functionName: 'getDeck',
                 args: [currentRoomId],
-            }) as bigint;
-
-            const deck: string[] = [];
-            for (let i = 0; i < Number(deckLength); i++) {
-                const card = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MAFIA_ABI,
-                    functionName: 'roomDeck',
-                    args: [currentRoomId, BigInt(i)],
-                }) as string;
-                deck.push(card);
-            }
-
+            }) as string[];
+            
             if (targetIndex >= deck.length) return null;
 
             // Collect all keys

@@ -55,24 +55,13 @@ export const GameOver: React.FC = () => {
         
         setIsRevealing(true);
         try {
-            // Получаем колоду
-            const deckLength = await publicClient.readContract({
+            // Получаем колоду одним вызовом
+            const deck = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
-                functionName: 'getDeckLength',
+                functionName: 'getDeck',
                 args: [currentRoomId],
-            }) as bigint;
-            
-            const deck: string[] = [];
-            for (let i = 0; i < Number(deckLength); i++) {
-                const card = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MAFIA_ABI,
-                    functionName: 'roomDeck',
-                    args: [currentRoomId, BigInt(i)],
-                }) as string;
-                deck.push(card);
-            }
+            }) as string[];
             
             // Собираем ключи от всех игроков
             const keys = new Map<string, string>();
@@ -174,7 +163,7 @@ export const GameOver: React.FC = () => {
     // Reveal на монтирование
     useEffect(() => {
         revealAllRoles();
-    }, []);
+    }, [revealAllRoles]);
 
     const myRole = revealedRoles.get(myPlayer?.address.toLowerCase() || '') || myPlayer?.role || Role.UNKNOWN;
     
