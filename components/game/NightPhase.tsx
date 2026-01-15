@@ -8,7 +8,7 @@ import { ShuffleService, getShuffleService } from '../../services/shuffleService
 import { hexToString } from '../../services/cryptoUtils';
 import { Role, Player } from '../../types';
 import { Button } from '../ui/Button';
-import { Moon, Skull, Shield, Search, Eye, Check, Clock, User, Lock, AlertCircle } from 'lucide-react';
+import { Moon, Skull, Shield, Search, Eye, Check, Clock, User, Lock, AlertCircle, Users } from 'lucide-react';
 
 // Night action types matching contract enum
 enum NightActionType {
@@ -26,6 +26,10 @@ interface NightState {
     investigationResult: Role | null; // Detective's investigation result
     teammates: string[]; // Fellow mafia members (addresses)
     committedTarget: string | null; // Store the committed target
+    // V4: Mafia consensus state
+    mafiaCommitted: number;
+    mafiaRevealed: number;
+    mafiaConsensusTarget: string | null;
 }
 
 const RoleActions: Record<Role, { action: NightActionType; label: string; icon: React.ReactNode; color: string }> = {
@@ -67,6 +71,9 @@ export const NightPhase: React.FC = () => {
         myPlayer,
         commitNightActionOnChain,
         revealNightActionOnChain,
+        commitMafiaTargetOnChain,
+        revealMafiaTargetOnChain,
+        endNightOnChain,
         addLog,
         isTxPending,
         selectedTarget,
@@ -81,28 +88,44 @@ export const NightPhase: React.FC = () => {
         salt: null,
         investigationResult: null,
         teammates: [],
-        committedTarget: null
+        committedTarget: null,
+        // V4: Mafia consensus
+        mafiaCommitted: 0,
+        mafiaRevealed: 0,
+        mafiaConsensusTarget: null
     });
     const [isProcessing, setIsProcessing] = useState(false);
     const publicClient = usePublicClient();
     const { address } = useAccount();
 
-    // Sync with contract flags (hasCommitted, hasRevealed)
+    // Sync with contract flags (hasCommitted, hasRevealed) + mafia consensus
     const syncWithContract = useCallback(async () => {
         if (!publicClient || !currentRoomId || !address) return;
 
         try {
-            const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys] = await publicClient.readContract({
+            // V4: getPlayerFlags now returns 7 values (added hasClaimedMafia)
+            const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys, hasClaimedMafia] = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'getPlayerFlags',
                 args: [currentRoomId, address],
-            }) as [boolean, boolean, boolean, boolean, boolean, boolean];
+            }) as [boolean, boolean, boolean, boolean, boolean, boolean, boolean];
+
+            // V4: Get mafia consensus status
+            const [mafiaCommitted, mafiaRevealed, consensusTarget] = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'getMafiaConsensus',
+                args: [currentRoomId],
+            }) as [number, number, string];
 
             setNightState(prev => ({
                 ...prev,
                 hasCommitted,
-                hasRevealed
+                hasRevealed,
+                mafiaCommitted: Number(mafiaCommitted),
+                mafiaRevealed: Number(mafiaRevealed),
+                mafiaConsensusTarget: consensusTarget === '0x0000000000000000000000000000000000000000' ? null : consensusTarget
             }));
         } catch (e) {
             console.error("Failed to sync night state:", e);
@@ -233,7 +256,7 @@ export const NightPhase: React.FC = () => {
         }
     }, [currentRoomId, address, NIGHT_COMMIT_KEY]);
 
-    // Commit action
+    // Commit action - V4: Mafia uses commitMafiaTarget, others use commitNightAction
     const handleCommit = async () => {
         if (!selectedTarget || nightState.hasCommitted) return;
 
@@ -249,23 +272,36 @@ export const NightPhase: React.FC = () => {
             // Генерируем соль
             const salt = ShuffleService.generateSalt();
 
-            // Создаём хэш: keccak256(abi.encodePacked(action, target, salt))
-            const hash = ShuffleService.createCommitHash(
-                roleConfig.action,
-                selectedTarget,
-                salt
-            );
+            let hash: string;
+            
+            if (myRole === Role.MAFIA) {
+                // V4: Mafia uses commitMafiaTarget with hash = keccak256(abi.encode(target, salt))
+                hash = ShuffleService.createMafiaTargetHash(selectedTarget, salt);
+                
+                console.log('[Mafia Commit]', {
+                    target: selectedTarget,
+                    salt: salt,
+                    hash: hash
+                });
 
-            // DEBUG: Log commit details
-            console.log('[Night Commit]', {
-                action: roleConfig.action,
-                target: selectedTarget,
-                salt: salt,
-                hash: hash
-            });
+                await commitMafiaTargetOnChain(hash);
+            } else {
+                // Doctor/Detective use commitNightAction with hash = keccak256(abi.encode(action, target, salt))
+                hash = ShuffleService.createCommitHash(
+                    roleConfig.action,
+                    selectedTarget,
+                    salt
+                );
 
-            // Отправляем хэш в контракт СНАЧАЛА
-            await commitNightActionOnChain(hash);
+                console.log('[Night Commit]', {
+                    action: roleConfig.action,
+                    target: selectedTarget,
+                    salt: salt,
+                    hash: hash
+                });
+
+                await commitNightActionOnChain(hash);
+            }
 
             // Только после успешного commit сохраняем данные
             localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
@@ -350,25 +386,39 @@ export const NightPhase: React.FC = () => {
         }
     }, [publicClient, currentRoomId, gameState.players, address]);
 
-    // Reveal action
+    // Reveal action - V4: Mafia uses revealMafiaTarget, others use revealNightAction
     const handleReveal = async () => {
         if (!nightState.committedTarget || !nightState.salt || nightState.hasRevealed) return;
 
-        // DEBUG: Log reveal details
-        console.log('[Night Reveal]', {
-            action: roleConfig.action,
-            target: nightState.committedTarget,
-            salt: nightState.salt,
-            expectedHash: nightState.commitHash
-        });
-
         setIsProcessing(true);
         try {
-            await revealNightActionOnChain(
-                roleConfig.action,
-                nightState.committedTarget,
-                nightState.salt
-            );
+            if (myRole === Role.MAFIA) {
+                // V4: Mafia uses revealMafiaTarget(target, salt)
+                console.log('[Mafia Reveal]', {
+                    target: nightState.committedTarget,
+                    salt: nightState.salt,
+                    expectedHash: nightState.commitHash
+                });
+
+                await revealMafiaTargetOnChain(
+                    nightState.committedTarget,
+                    nightState.salt
+                );
+            } else {
+                // Doctor/Detective use revealNightAction(action, target, salt)
+                console.log('[Night Reveal]', {
+                    action: roleConfig.action,
+                    target: nightState.committedTarget,
+                    salt: nightState.salt,
+                    expectedHash: nightState.commitHash
+                });
+
+                await revealNightActionOnChain(
+                    roleConfig.action,
+                    nightState.committedTarget,
+                    nightState.salt
+                );
+            }
 
             // Clear localStorage after successful reveal
             localStorage.removeItem(NIGHT_COMMIT_KEY);
@@ -506,6 +556,37 @@ export const NightPhase: React.FC = () => {
                                 );
                             })}
                         </div>
+                    </motion.div>
+                )}
+
+                {/* V4: Mafia Consensus Status */}
+                {myRole === Role.MAFIA && (nightState.mafiaCommitted > 0 || nightState.mafiaRevealed > 0) && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-4 p-4 bg-red-950/20 border border-red-500/20 rounded-2xl"
+                    >
+                        <div className="flex items-center gap-2 mb-2">
+                            <Users className="w-4 h-4 text-red-400" />
+                            <span className="text-red-300 text-sm font-medium">Mafia Consensus</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-red-200/60">Committed: {nightState.mafiaCommitted}</span>
+                            <span className="text-red-200/60">Revealed: {nightState.mafiaRevealed}</span>
+                        </div>
+                        {nightState.mafiaConsensusTarget && (
+                            <div className="mt-2 p-2 bg-red-900/30 rounded-lg">
+                                <span className="text-xs text-red-300">Consensus Target: </span>
+                                <span className="text-red-200 font-medium">
+                                    {gameState.players.find(p => p.address.toLowerCase() === nightState.mafiaConsensusTarget?.toLowerCase())?.name || nightState.mafiaConsensusTarget?.slice(0, 8)}
+                                </span>
+                            </div>
+                        )}
+                        {nightState.mafiaRevealed === nightState.mafiaCommitted && nightState.mafiaRevealed > 0 && !nightState.mafiaConsensusTarget && (
+                            <div className="mt-2 p-2 bg-yellow-900/30 rounded-lg">
+                                <span className="text-xs text-yellow-300">⚠️ No consensus - targets don't match!</span>
+                            </div>
+                        )}
                     </motion.div>
                 )}
 
