@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { BackButton } from './ui/BackButton';
@@ -11,9 +11,10 @@ import { CreateLobby } from './lobby_flow/CreateLobby';
 import { JoinLobby } from './lobby_flow/JoinLobby';
 import { WaitingRoom } from './lobby_flow/WaitingRoom';
 import { GameLayout } from './game/GameLayout';
-import { GamePhase, Role } from '../types';
+import { GamePhase, Role, Player } from '../types';
 import { VotingAnnouncement } from './game/VotingAnnouncement';
 import { NightAnnouncement } from './game/NightAnnouncement';
+import { useGameContext } from '../contexts/GameContext';
 
 // Wrapper for testing VotingAnnouncement state
 const VotingAnnouncementWrapper = () => {
@@ -35,6 +36,121 @@ const NightAnnouncementWrapper = () => {
             <NightAnnouncement show={show} onComplete={() => setShow(false)} />
         </div>
     );
+};
+
+// === TEST WRAPPERS FOR NIGHT PHASE WITH SPECIFIC ROLES ===
+
+// Generate mock players for testing
+const generateMockPlayers = (myRole: Role, myAddress: string): Player[] => {
+    return [
+        { id: '1', name: 'You (Test)', role: myRole, isAlive: true, address: myAddress, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true },
+        { id: '2', name: 'Alice', role: Role.CIVILIAN, isAlive: true, address: '0x2222222222222222', avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true },
+        { id: '3', name: 'Bob', role: Role.CIVILIAN, isAlive: true, address: '0x3333333333333333', avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true },
+        { id: '4', name: 'Charlie', role: Role.MAFIA, isAlive: true, address: '0x4444444444444444', avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true },
+        { id: '5', name: 'Diana', role: Role.DOCTOR, isAlive: true, address: '0x5555555555555555', avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true },
+        { id: '6', name: 'Eve', role: Role.DETECTIVE, isAlive: true, address: '0x6666666666666666', avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true },
+    ];
+};
+
+const TEST_ADDRESS = '0x1111111111111111';
+
+// Wrapper that sets up GameLayout for Night phase with a specific role
+const NightPhaseTestWrapper: React.FC<{ testRole: Role }> = ({ testRole }) => {
+    const { setGameState, gameState } = useGameContext();
+    const [isReady, setIsReady] = useState(false);
+
+    useEffect(() => {
+        // Set up test game state with Night phase and proper role
+        setGameState({
+            phase: GamePhase.NIGHT,
+            dayCount: 1,
+            myPlayerId: TEST_ADDRESS,
+            players: generateMockPlayers(testRole, TEST_ADDRESS),
+            logs: [
+                { id: '1', timestamp: '12:00:00', message: 'Night falls...', type: 'phase' },
+                { id: '2', timestamp: '12:00:01', message: `You are a ${testRole}`, type: 'info' }
+            ],
+            winner: null
+        });
+        // Small delay to ensure state is propagated
+        setTimeout(() => setIsReady(true), 50);
+    }, [setGameState, testRole]);
+
+    // Wait for state to be set up before rendering GameLayout
+    if (!isReady) {
+        return (
+            <div className="w-full h-full flex items-center justify-center text-white">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mx-auto mb-2"></div>
+                    <p>Setting up {testRole} test...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Verify state was set correctly
+    const myPlayer = gameState.players.find(p => p.address.toLowerCase() === TEST_ADDRESS.toLowerCase());
+    console.log('[Test Debug]', {
+        phase: gameState.phase,
+        myPlayerId: gameState.myPlayerId,
+        myPlayerRole: myPlayer?.role,
+        expectedRole: testRole,
+        playersCount: gameState.players.length
+    });
+
+    return <GameLayout />;
+};
+
+// Wrapper for Day phase testing
+const DayPhaseTestWrapper: React.FC = () => {
+    const { setGameState } = useGameContext();
+    const [isReady, setIsReady] = useState(false);
+
+    useEffect(() => {
+        setGameState({
+            phase: GamePhase.DAY,
+            dayCount: 1,
+            myPlayerId: TEST_ADDRESS,
+            players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS),
+            logs: [
+                { id: '1', timestamp: '12:00:00', message: 'Day 1 begins!', type: 'phase' }
+            ],
+            winner: null
+        });
+        setTimeout(() => setIsReady(true), 50);
+    }, [setGameState]);
+
+    if (!isReady) {
+        return <div className="w-full h-full flex items-center justify-center text-white">Loading Day Phase...</div>;
+    }
+
+    return <GameLayout />;
+};
+
+// Wrapper for Voting phase testing
+const VotingPhaseTestWrapper: React.FC = () => {
+    const { setGameState } = useGameContext();
+    const [isReady, setIsReady] = useState(false);
+
+    useEffect(() => {
+        setGameState({
+            phase: GamePhase.VOTING,
+            dayCount: 1,
+            myPlayerId: TEST_ADDRESS,
+            players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS),
+            logs: [
+                { id: '1', timestamp: '12:00:00', message: 'Voting has started!', type: 'phase' }
+            ],
+            winner: null
+        });
+        setTimeout(() => setIsReady(true), 50);
+    }, [setGameState]);
+
+    if (!isReady) {
+        return <div className="w-full h-full flex items-center justify-center text-white">Loading Voting Phase...</div>;
+    }
+
+    return <GameLayout />;
 };
 
 // Mock Props
@@ -82,13 +198,21 @@ export const TestPage: React.FC = () => {
         { name: 'VotingAnnouncement', group: 'Game Components', component: <VotingAnnouncementWrapper /> },
         { name: 'NightAnnouncement', group: 'Game Components', component: <NightAnnouncementWrapper /> },
 
+        // Game Phases (Test different phases and roles)
+        { name: 'Night - Mafia', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.MAFIA} /> },
+        { name: 'Night - Doctor', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.DOCTOR} /> },
+        { name: 'Night - Detective', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.DETECTIVE} /> },
+        { name: 'Night - Civilian', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.CIVILIAN} /> },
+        { name: 'Day Phase', group: 'Game Phases', component: <DayPhaseTestWrapper /> },
+        { name: 'Voting Phase', group: 'Game Phases', component: <VotingPhaseTestWrapper /> },
+
         // Pages
         { name: 'MainPage', group: 'Pages', component: <MainPage onStart={() => console.log('Start')} /> },
         { name: 'SetupProfile', group: 'Pages', component: <SetupProfile /> },
         { name: 'CreateLobby', group: 'Pages', component: <CreateLobby /> },
         { name: 'JoinLobby', group: 'Pages', component: <JoinLobby /> },
         { name: 'WaitingRoom', group: 'Pages', component: <WaitingRoom /> },
-        { name: 'GameLayout', group: 'Pages', component: <GameLayout /> },
+        { name: 'GameLayout (Raw)', group: 'Pages', component: <GameLayout /> },
     ];
 
     const groupedComponents = components.reduce((acc, curr) => {
@@ -104,7 +228,11 @@ export const TestPage: React.FC = () => {
         return (
             <div className="w-full h-full p-8 overflow-auto bg-gray-900/50">
                 <h2 className="text-xl font-bold mb-4 text-green-400">{entry.name}</h2>
-                <div className="border border-gray-700 p-4 rounded-lg bg-black/50 min-h-[500px] flex items-center justify-center relative">
+                {/* Key forces full remount when switching components */}
+                <div
+                    key={entry.name}
+                    className="border border-gray-700 p-4 rounded-lg bg-black/50 min-h-[500px] flex items-center justify-center relative"
+                >
                     {entry.component}
                 </div>
             </div>
