@@ -7,7 +7,7 @@ import lobbyBg from '../../assets/lobby_background.png';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { GamePhase } from '../../types';
-import { Zap, Check, Loader2 } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 
 export const WaitingRoom: React.FC = () => {
     const {
@@ -21,9 +21,7 @@ export const WaitingRoom: React.FC = () => {
 
     const roomIdNumber = currentRoomId ? Number(currentRoomId) : null;
     const { 
-        hasSession, 
-        isRegistering, 
-        registerSession, 
+        hasSession,
         error: sessionError 
     } = useSessionKey(roomIdNumber);
 
@@ -130,7 +128,7 @@ export const WaitingRoom: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Session Key Setup - пока ждём других игроков */}
+                {/* Session Key Status - V4: Already registered on join */}
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -142,47 +140,25 @@ export const WaitingRoom: React.FC = () => {
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                                 hasSession 
                                     ? 'bg-green-500/20 border border-green-500/40' 
-                                    : 'bg-[#916A47]/20 border border-[#916A47]/40'
+                                    : 'bg-yellow-500/20 border border-yellow-500/40'
                             }`}>
                                 {hasSession ? (
                                     <Check className="w-5 h-5 text-green-400" />
                                 ) : (
-                                    <Zap className="w-5 h-5 text-[#916A47]" />
+                                    <Loader2 className="w-5 h-5 text-yellow-400 animate-spin" />
                                 )}
                             </div>
                             <div>
-                                <h3 className={`font-medium ${hasSession ? 'text-green-400' : 'text-white'}`}>
-                                    {hasSession ? 'Auto-Sign Active ✓' : 'Enable Auto-Sign'}
+                                <h3 className={`font-medium ${hasSession ? 'text-green-400' : 'text-yellow-400'}`}>
+                                    {hasSession ? 'Auto-Sign Active ✓' : 'Checking Session...'}
                                 </h3>
                                 <p className="text-[11px] text-white/40">
                                     {hasSession 
                                         ? 'All game actions signed automatically • Gas funded' 
-                                        : 'One tx: register + fund 0.02 STT for gas'}
+                                        : 'Session registered when you joined the room'}
                                 </p>
                             </div>
                         </div>
-                        
-                        {!hasSession && roomIdNumber && (
-                            <button
-                                onClick={() => registerSession(roomIdNumber)}
-                                disabled={isRegistering || isTxPending}
-                                className="px-4 py-2 bg-[#916A47] hover:bg-[#a67a52] disabled:bg-gray-600 
-                                         text-black text-xs font-bold uppercase tracking-wider rounded-lg
-                                         transition-all flex items-center gap-2 whitespace-nowrap"
-                            >
-                                {isRegistering ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        Signing...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Zap className="w-4 h-4" />
-                                        Activate (+0.02 STT)
-                                    </>
-                                )}
-                            </button>
-                        )}
                     </div>
                     
                     {sessionError && (

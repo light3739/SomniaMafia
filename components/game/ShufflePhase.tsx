@@ -12,7 +12,10 @@ interface ShuffleState {
     currentShufflerIndex: number;
     deck: string[];
     isMyTurn: boolean;
-    hasSubmitted: boolean;
+    hasCommitted: boolean;
+    hasRevealed: boolean;
+    pendingDeck: string[] | null;
+    pendingSalt: string | null;
 }
 
 export const ShufflePhase: React.FC = () => {
@@ -20,7 +23,8 @@ export const ShufflePhase: React.FC = () => {
         gameState, 
         currentRoomId, 
         myPlayer, 
-        submitDeckOnChain, 
+        commitDeckOnChain,
+        revealDeckOnChain,
         addLog,
         isTxPending 
     } = useGameContext();
@@ -30,7 +34,10 @@ export const ShufflePhase: React.FC = () => {
         currentShufflerIndex: 0,
         deck: [],
         isMyTurn: false,
-        hasSubmitted: false
+        hasCommitted: false,
+        hasRevealed: false,
+        pendingDeck: null,
+        pendingSalt: null
     });
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -64,7 +71,7 @@ export const ShufflePhase: React.FC = () => {
                 ...prev,
                 currentShufflerIndex: currentIndex,
                 deck: deck,
-                isMyTurn: isMyTurn && !prev.hasSubmitted
+                isMyTurn: isMyTurn && !prev.hasCommitted
             }));
         } catch (e) {
             console.error("Failed to fetch shuffle data:", e);
@@ -78,7 +85,11 @@ export const ShufflePhase: React.FC = () => {
         return () => clearInterval(interval);
     }, [fetchShuffleData]);
 
-    // Обработка моего хода
+    // Состояние для pending deck и salt (для reveal фазы)
+    const [pendingDeck, setPendingDeck] = useState<string[] | null>(null);
+    const [pendingSalt, setPendingSalt] = useState<`0x${string}` | null>(null);
+
+    // Обработка моего хода - фаза COMMIT
     const handleMyTurn = async () => {
         if (!currentRoomId || !myPlayer || isProcessing) return;
         
@@ -114,18 +125,59 @@ export const ShufflePhase: React.FC = () => {
                 addLog("Deck re-shuffled and encrypted!", "success");
             }
             
-            // Отправляем в контракт
-            await submitDeckOnChain(newDeck);
+            // Генерируем соль для commit-reveal
+            const salt = ShuffleService.generateSalt();
+            
+            // Вычисляем хеш колоды
+            const deckHash = ShuffleService.createDeckCommitHash(newDeck, salt);
+            
+            // Отправляем commit в контракт
+            addLog("Committing deck hash...", "info");
+            await commitDeckOnChain(deckHash);
+            
+            // Сохраняем deck и salt для reveal
+            setPendingDeck(newDeck);
+            setPendingSalt(salt);
             
             setShuffleState(prev => ({
                 ...prev,
-                hasSubmitted: true,
+                hasCommitted: true,
                 isMyTurn: false
             }));
             
+            addLog("Commit successful! Click Reveal to complete.", "success");
+            
         } catch (e: any) {
-            console.error("Shuffle failed:", e);
-            addLog(e.message || "Shuffle failed", "danger");
+            console.error("Commit failed:", e);
+            addLog(e.message || "Commit failed", "danger");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // Обработка reveal фазы
+    const handleReveal = async () => {
+        if (!currentRoomId || !pendingDeck || !pendingSalt || isProcessing) return;
+        
+        setIsProcessing(true);
+        try {
+            addLog("Revealing deck...", "info");
+            await revealDeckOnChain(pendingDeck, pendingSalt);
+            
+            // Очищаем pending данные
+            setPendingDeck(null);
+            setPendingSalt(null);
+            
+            setShuffleState(prev => ({
+                ...prev,
+                hasRevealed: true
+            }));
+            
+            addLog("Deck revealed successfully!", "success");
+            
+        } catch (e: any) {
+            console.error("Reveal failed:", e);
+            addLog(e.message || "Reveal failed", "danger");
         } finally {
             setIsProcessing(false);
         }
@@ -232,7 +284,7 @@ export const ShufflePhase: React.FC = () => {
 
                 {/* Action Button */}
                 <AnimatePresence mode="wait">
-                    {shuffleState.isMyTurn && !shuffleState.hasSubmitted ? (
+                    {shuffleState.isMyTurn && !shuffleState.hasCommitted ? (
                         <motion.div
                             key="my-turn"
                             initial={{ opacity: 0, y: 20 }}
@@ -251,7 +303,26 @@ export const ShufflePhase: React.FC = () => {
                                 Your turn! Click to shuffle and encrypt the deck.
                             </p>
                         </motion.div>
-                    ) : shuffleState.hasSubmitted ? (
+                    ) : shuffleState.hasCommitted && !shuffleState.hasRevealed ? (
+                        <motion.div
+                            key="reveal"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                        >
+                            <Button
+                                onClick={handleReveal}
+                                isLoading={isProcessing || isTxPending}
+                                disabled={isProcessing || isTxPending}
+                                className="w-full h-14 text-lg"
+                            >
+                                {isProcessing ? 'Revealing...' : 'Reveal Deck'}
+                            </Button>
+                            <p className="text-center text-white/40 text-xs mt-3">
+                                Commit successful! Click to reveal the deck.
+                            </p>
+                        </motion.div>
+                    ) : shuffleState.hasRevealed ? (
                         <motion.div
                             key="submitted"
                             initial={{ opacity: 0, y: 20 }}

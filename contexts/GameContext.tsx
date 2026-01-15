@@ -37,9 +37,10 @@ interface GameContextType {
     createLobbyOnChain: () => Promise<void>;
     joinLobbyOnChain: (roomId: number) => Promise<void>;
 
-    // Shuffle
+    // Shuffle (V4: commit-reveal)
     startGameOnChain: () => Promise<void>;
-    submitDeckOnChain: (deck: string[]) => Promise<void>;
+    commitDeckOnChain: (deckHash: string) => Promise<void>;
+    revealDeckOnChain: (deck: string[], salt: string) => Promise<void>;
 
     // Reveal (V3: batch share keys)
     shareKeysToAllOnChain: (recipients: string[], encryptedKeys: string[]) => Promise<void>;
@@ -476,12 +477,27 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const submitDeckOnChain = async (deck: string[]) => {
+    // V4: Deck commit-reveal
+    const commitDeckOnChain = async (deckHash: string) => {
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
-            const hash = await sendGameTransaction('submitDeck', [currentRoomId, deck]);
-            addLog("Deck submitted!", "success");
+            const hash = await sendGameTransaction('commitDeck', [currentRoomId, deckHash]);
+            addLog("Deck committed!", "success");
+            await publicClient?.waitForTransactionReceipt({ hash });
+            setIsTxPending(false);
+        } catch (e: any) {
+            addLog(e.shortMessage || e.message, "danger");
+            setIsTxPending(false);
+        }
+    };
+
+    const revealDeckOnChain = async (deck: string[], salt: string) => {
+        if (!currentRoomId) return;
+        setIsTxPending(true);
+        try {
+            const hash = await sendGameTransaction('revealDeck', [currentRoomId, deck, salt]);
+            addLog("Deck revealed!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
@@ -972,7 +988,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             playerName, setPlayerName, avatarUrl, setAvatarUrl, lobbyName, setLobbyName,
             gameState, setGameState, isTxPending, currentRoomId,
             createLobbyOnChain, joinLobbyOnChain,
-            startGameOnChain, submitDeckOnChain,
+            startGameOnChain, commitDeckOnChain, revealDeckOnChain,
             shareKeysToAllOnChain, confirmRoleOnChain,
             startVotingOnChain, voteOnChain,
             commitNightActionOnChain, revealNightActionOnChain,
