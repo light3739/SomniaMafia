@@ -28,12 +28,6 @@ const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: 
         bgColor: 'from-red-950/50 to-red-900/30',
         description: 'Eliminate all civilians to win. Vote by day, kill by night.'
     },
-    [Role.MANIAC]: {
-        icon: <Skull className="w-16 h-16" />,
-        color: 'text-purple-500',
-        bgColor: 'from-purple-950/50 to-purple-900/30',
-        description: 'Kill everyone to win. You play alone - trust no one.'
-    },
     [Role.DOCTOR]: {
         icon: <Shield className="w-16 h-16" />,
         color: 'text-green-500',

@@ -232,7 +232,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const FLAG_ACTIVE = 2;
 
     // Check win condition on frontend (since contract doesn't know roles)
-    const checkWinCondition = useCallback((players: Player[], contractPhase: GamePhase): 'MAFIA' | 'MANIAC' | 'TOWN' | null => {
+    const checkWinCondition = useCallback((players: Player[], contractPhase: GamePhase): 'MAFIA' | 'TOWN' | null => {
         // Don't check in early phases
         if (contractPhase < GamePhase.DAY) return null;
 
@@ -240,13 +240,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (alivePlayers.length === 0) return 'TOWN'; // Draw technically, but contract handles this
 
         let aliveMafia = 0;
-        let aliveManiac = 0;
         let aliveTown = 0;
         let unknownRoles = 0;
 
         for (const player of alivePlayers) {
             if (player.role === Role.MAFIA) aliveMafia++;
-            else if (player.role === Role.MANIAC) aliveManiac++;
             else if (player.role === Role.UNKNOWN) unknownRoles++;
             else aliveTown++; // CIVILIAN, DOCTOR, DETECTIVE
         }
@@ -255,18 +253,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (unknownRoles > 0) return null;
 
         // Win conditions:
-        // MAFIA wins: mafia >= town AND maniac is dead
-        if (aliveMafia > 0 && aliveMafia >= aliveTown && aliveManiac === 0) {
+        // MAFIA wins: mafia >= town
+        if (aliveMafia > 0 && aliveMafia >= aliveTown) {
             return 'MAFIA';
         }
 
-        // MANIAC wins: only maniac alive, or maniac + 1 town and no mafia
-        if (aliveManiac > 0 && aliveMafia === 0 && aliveTown <= 1) {
-            return 'MANIAC';
-        }
-
-        // TOWN wins: no mafia AND no maniac
-        if (aliveMafia === 0 && aliveManiac === 0) {
+        // TOWN wins: no mafia
+        if (aliveMafia === 0) {
             return 'TOWN';
         }
 

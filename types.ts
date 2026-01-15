@@ -3,7 +3,6 @@ export enum Role {
   MAFIA = 'MAFIA',
   DETECTIVE = 'DETECTIVE',
   DOCTOR = 'DOCTOR',
-  MANIAC = 'MANIAC',   // Solo killer - wins alone
   UNKNOWN = 'UNKNOWN'  // For other players
 }
 
@@ -56,7 +55,7 @@ export interface GameState {
   players: Player[];
   myPlayerId: string | null;
   logs: LogEntry[];
-  winner: 'MAFIA' | 'MANIAC' | 'TOWN' | null;
+  winner: 'MAFIA' | 'TOWN' | null;
 }
 
 // For Framer Motion variants

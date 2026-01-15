@@ -35,12 +35,6 @@ const RoleActions: Record<Role, { action: NightActionType; label: string; icon: 
         icon: <Skull className="w-5 h-5" />,
         color: 'text-red-500'
     },
-    [Role.MANIAC]: {
-        action: NightActionType.KILL,
-        label: 'Murder',
-        icon: <Skull className="w-5 h-5" />,
-        color: 'text-purple-500'
-    },
     [Role.DOCTOR]: {
         action: NightActionType.HEAL,
         label: 'Protect',
@@ -480,7 +474,6 @@ export const NightPhase: React.FC = () => {
                     </h2>
                     <p className="text-white/50 text-sm">
                         {myRole === Role.MAFIA && 'Choose your target to eliminate'}
-                        {myRole === Role.MANIAC && 'Choose your victim - you work alone!'}
                         {myRole === Role.DOCTOR && 'Choose a player to protect tonight'}
                         {myRole === Role.DETECTIVE && 'Choose a player to investigate'}
                     </p>
@@ -624,7 +617,7 @@ export const NightPhase: React.FC = () => {
                                     <motion.div
                                         initial={{ opacity: 0, scale: 0.9 }}
                                         animate={{ opacity: 1, scale: 1 }}
-                                        className={`mt-4 p-4 rounded-xl border ${nightState.investigationResult === Role.MAFIA || nightState.investigationResult === Role.MANIAC
+                                        className={`mt-4 p-4 rounded-xl border ${nightState.investigationResult === Role.MAFIA
                                             ? 'bg-red-950/30 border-red-500/30'
                                             : 'bg-green-950/30 border-green-500/30'
                                             }`}
@@ -633,11 +626,8 @@ export const NightPhase: React.FC = () => {
                                             <Search className="w-4 h-4" />
                                             Investigation Result
                                         </p>
-                                        <p className={`text-xl font-bold ${nightState.investigationResult === Role.MAFIA ? 'text-red-400'
-                                            : nightState.investigationResult === Role.MANIAC ? 'text-purple-400'
-                                                : 'text-green-400'
-                                            }`}>
-                                            {gameState.players.find(p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase())?.name} is {nightState.investigationResult === Role.MAFIA || nightState.investigationResult === Role.MANIAC ? '🔴 EVIL' : '🟢 INNOCENT'}
+                                        <p className={`text-xl font-bold ${nightState.investigationResult === Role.MAFIA ? 'text-red-400' : 'text-green-400'}`}>
+                                            {gameState.players.find(p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase())?.name} is {nightState.investigationResult === Role.MAFIA ? '🔴 EVIL' : '🟢 INNOCENT'}
                                         </p>
                                         <p className="text-white/40 text-xs mt-1">
                                             Role: {nightState.investigationResult}
