@@ -50,9 +50,14 @@ interface GameContextType {
     startVotingOnChain: () => Promise<void>;
     voteOnChain: (targetAddress: string) => Promise<void>;
 
-    // Night (V3: auto-finalize on last reveal)
+    // Night (V4: Mafia uses consensus, Doctor/Detective use commit-reveal)
     commitNightActionOnChain: (hash: string) => Promise<void>;
     revealNightActionOnChain: (action: number, target: string, salt: string) => Promise<void>;
+    // Mafia consensus kill (V4)
+    commitMafiaTargetOnChain: (targetHash: string) => Promise<void>;
+    revealMafiaTargetOnChain: (target: string, salt: string) => Promise<void>;
+    endNightOnChain: () => Promise<void>;
+    endGameAutomaticallyOnChain: () => Promise<void>;
     // Utility
     kickStalledPlayerOnChain: () => Promise<void>;
     refreshPlayersList: (roomId: bigint) => Promise<void>;
@@ -307,11 +312,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
                 });
 
-                // V3: Player struct has flags instead of separate bools
+// V4: Player struct has flags instead of separate bools
                 const formattedPlayers: Player[] = data.map((p: any) => {
                     const flags = Number(p.flags);
                     const isActive = (flags & FLAG_ACTIVE) !== 0;
                     const hasConfirmedRole = (flags & FLAG_CONFIRMED_ROLE) !== 0;
+                    // V4 adds FLAG_CLAIMED_MAFIA (128) - tracked but not used in frontend yet
 
                     return {
                         id: p.wallet,
@@ -614,15 +620,67 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    // V3: finalizeNight removed - auto-triggers on last reveal
+    // --- V4: MAFIA CONSENSUS KILL FUNCTIONS ---
+    
+    const commitMafiaTargetOnChain = async (targetHash: string) => {
+        if (!currentRoomId) return;
+        try {
+            const hash = await sendGameTransaction('commitMafiaTarget', [currentRoomId, targetHash as `0x${string}`]);
+            addLog("Mafia target committed!", "info");
+            await publicClient?.waitForTransactionReceipt({ hash });
+        } catch (e: any) {
+            addLog(e.shortMessage || e.message, "danger");
+            throw e;
+        }
+    };
+
+    const revealMafiaTargetOnChain = async (target: string, salt: string) => {
+        if (!currentRoomId) return;
+        try {
+            const hash = await sendGameTransaction('revealMafiaTarget', [currentRoomId, target, salt]);
+            addLog("Mafia target revealed!", "success");
+            await publicClient?.waitForTransactionReceipt({ hash });
+            await refreshPlayersList(currentRoomId);
+        } catch (e: any) {
+            addLog(e.shortMessage || e.message, "danger");
+            throw e;
+        }
+    };
+
+    const endNightOnChain = async () => {
+        if (!currentRoomId) return;
+        try {
+            const hash = await sendGameTransaction('endNight', [currentRoomId]);
+            addLog("Night ended!", "phase");
+            await publicClient?.waitForTransactionReceipt({ hash });
+            await refreshPlayersList(currentRoomId);
+        } catch (e: any) {
+            addLog(e.shortMessage || e.message, "danger");
+            throw e;
+        }
+    };
+
+    const endGameAutomaticallyOnChain = async () => {
+        if (!currentRoomId) return;
+        try {
+            const hash = await sendGameTransaction('endGameAutomatically', [currentRoomId]);
+            addLog("Game ended automatically!", "phase");
+            await publicClient?.waitForTransactionReceipt({ hash });
+            await refreshPlayersList(currentRoomId);
+        } catch (e: any) {
+            addLog(e.shortMessage || e.message, "danger");
+            throw e;
+        }
+    };
 
     // --- UTILITY ---
 
+    // V4: forcePhaseTimeout - kicks stalled player and advances phase
     const kickStalledPlayerOnChain = async () => {
         if (!currentRoomId) return;
         try {
-            const hash = await sendGameTransaction('kickStalledPlayer', [currentRoomId]);
-            addLog("Kick initiated...", "danger");
+            const hash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
+            addLog("Force timeout initiated...", "danger");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
         } catch (e: any) {
@@ -992,6 +1050,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             shareKeysToAllOnChain, confirmRoleOnChain,
             startVotingOnChain, voteOnChain,
             commitNightActionOnChain, revealNightActionOnChain,
+            commitMafiaTargetOnChain, revealMafiaTargetOnChain,
+            endNightOnChain, endGameAutomaticallyOnChain,
             kickStalledPlayerOnChain, refreshPlayersList,
             addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
             selectedTarget, setSelectedTarget

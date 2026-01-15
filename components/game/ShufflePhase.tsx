@@ -89,6 +89,29 @@ export const ShufflePhase: React.FC = () => {
     const [pendingDeck, setPendingDeck] = useState<string[] | null>(null);
     const [pendingSalt, setPendingSalt] = useState<`0x${string}` | null>(null);
 
+    // LocalStorage key для persistence
+    const SHUFFLE_COMMIT_KEY = `mafia_shuffle_commit_${currentRoomId}_${myPlayer?.address}`;
+
+    // Загружаем данные из localStorage при монтировании
+    useEffect(() => {
+        if (!currentRoomId || !myPlayer?.address) return;
+
+        const saved = localStorage.getItem(SHUFFLE_COMMIT_KEY);
+        if (saved) {
+            try {
+                const { deck, salt, hasCommitted } = JSON.parse(saved);
+                if (deck && salt) {
+                    setPendingDeck(deck);
+                    setPendingSalt(salt);
+                    setShuffleState(prev => ({ ...prev, hasCommitted: true }));
+                    addLog("Restored pending shuffle from previous session", "info");
+                }
+            } catch (e) {
+                console.error("Failed to load shuffle commit data:", e);
+            }
+        }
+    }, [currentRoomId, myPlayer?.address, SHUFFLE_COMMIT_KEY, addLog]);
+
     // Обработка моего хода - фаза COMMIT
     const handleMyTurn = async () => {
         if (!currentRoomId || !myPlayer || isProcessing) return;
@@ -135,6 +158,13 @@ export const ShufflePhase: React.FC = () => {
             addLog("Committing deck hash...", "info");
             await commitDeckOnChain(deckHash);
             
+            // Сохраняем deck и salt для reveal в localStorage
+            localStorage.setItem(SHUFFLE_COMMIT_KEY, JSON.stringify({
+                deck: newDeck,
+                salt: salt,
+                hasCommitted: true
+            }));
+            
             // Сохраняем deck и salt для reveal
             setPendingDeck(newDeck);
             setPendingSalt(salt);
@@ -163,6 +193,9 @@ export const ShufflePhase: React.FC = () => {
         try {
             addLog("Revealing deck...", "info");
             await revealDeckOnChain(pendingDeck, pendingSalt);
+            
+            // Очищаем localStorage после успешного reveal
+            localStorage.removeItem(SHUFFLE_COMMIT_KEY);
             
             // Очищаем pending данные
             setPendingDeck(null);

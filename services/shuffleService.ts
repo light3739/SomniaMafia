@@ -179,7 +179,7 @@ export class ShuffleService {
         }
     }
 
-    // Создать хэш для commit-reveal (для ночных действий)
+    // Создать хэш для commit-reveal (для ночных действий Doctor/Detective)
     // V4: Использует keccak256(abi.encode(...)) вместо encodePacked
     public static createCommitHash(
         action: number, 
@@ -190,6 +190,20 @@ export class ShuffleService {
             encodeAbiParameters(
                 parseAbiParameters('uint8, address, string'),
                 [action, target as `0x${string}`, salt]
+            )
+        );
+    }
+
+    // V4: Создать хэш для mafia target commit-reveal
+    // keccak256(abi.encode(target, salt))
+    public static createMafiaTargetHash(
+        target: string, 
+        salt: string
+    ): `0x${string}` {
+        return keccak256(
+            encodeAbiParameters(
+                parseAbiParameters('address, string'),
+                [target as `0x${string}`, salt]
             )
         );
     }

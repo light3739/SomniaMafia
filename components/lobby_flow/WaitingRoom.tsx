@@ -34,9 +34,14 @@ export const WaitingRoom: React.FC = () => {
         }
     }, [gameState.phase, navigate]);
 
-    // 2. Логика Хоста: Хост тот, чей адрес совпадает с полем host в первой комнате 
-    // или просто первый игрок в списке (как в нашем контракте)
-    const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+    // 2. V4: Any participant can start the game (HOST_ROLE removed)
+    // We still show who created the room (first player), but anyone can start
+    const isRoomCreator = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+    const isParticipant = gameState.players.some(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+    
+    // V4: Min 4 players for proper mafia game
+    const minPlayers = 4;
+    const canStartGame = isParticipant && gameState.players.length >= minPlayers;
 
     const handleStart = async () => {
         if (isTxPending) return;
@@ -104,7 +109,7 @@ export const WaitingRoom: React.FC = () => {
                                     </div>
                                     {index === 0 && (
                                         <span className="text-[9px] bg-[#916A47]/20 text-[#916A47] px-2 py-1 rounded border border-[#916A47]/30 uppercase font-bold">
-                                            Host
+                                            Creator
                                         </span>
                                     )}
                                 </motion.div>
@@ -166,19 +171,26 @@ export const WaitingRoom: React.FC = () => {
                     )}
                 </motion.div>
 
-                {isHost ? (
+                {/* V4: Any participant can start the game when enough players */}
+                {canStartGame ? (
                     <Button
                         onClick={handleStart}
                         isLoading={isTxPending}
-                        disabled={isTxPending || gameState.players.length < 2} // Для теста 2, в идеале 4
+                        disabled={isTxPending}
                         className="w-full h-[70px] text-xl tracking-widest uppercase shadow-[0_10px_40px_rgba(145,106,71,0.2)]"
                     >
                         {isTxPending ? "Starting..." : "Start Game"}
                     </Button>
+                ) : isParticipant ? (
+                    <div className="w-full p-6 rounded-2xl bg-white/[0.02] border border-white/5 text-center backdrop-blur-sm">
+                        <p className="text-white/30 text-sm italic">
+                            Waiting for more players ({gameState.players.length}/{minPlayers} minimum)...
+                        </p>
+                    </div>
                 ) : (
                     <div className="w-full p-6 rounded-2xl bg-white/[0.02] border border-white/5 text-center backdrop-blur-sm">
                         <p className="text-white/30 text-sm italic">
-                            Waiting for the Host to start the transaction...
+                            Connecting to room...
                         </p>
                     </div>
                 )}
