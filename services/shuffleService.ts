@@ -2,7 +2,7 @@
 // Mental Poker implementation for role distribution
 
 import { Role } from '../types';
-import { keccak256, encodePacked } from 'viem';
+import { keccak256, encodePacked, encodeAbiParameters, parseAbiParameters } from 'viem';
 
 // Простое число для модульной арифметики (в продакшене использовать большие простые)
 const PRIME = 2147483647n; // Mersenne prime 2^31 - 1
@@ -180,25 +180,38 @@ export class ShuffleService {
     }
 
     // Создать хэш для commit-reveal (для ночных действий)
-    // Использует keccak256 как в Solidity: keccak256(abi.encodePacked(action, target, salt))
+    // V4: Использует keccak256(abi.encode(...)) вместо encodePacked
     public static createCommitHash(
         action: number, 
         target: string, 
         salt: string
     ): `0x${string}` {
         return keccak256(
-            encodePacked(
-                ['uint8', 'address', 'string'],
+            encodeAbiParameters(
+                parseAbiParameters('uint8, address, string'),
                 [action, target as `0x${string}`, salt]
             )
         );
     }
 
+    // Создать хэш для deck commit-reveal (V4)
+    public static createDeckCommitHash(
+        deck: string[], 
+        salt: string
+    ): `0x${string}` {
+        return keccak256(
+            encodeAbiParameters(
+                parseAbiParameters('string[], string'),
+                [deck, salt]
+            )
+        );
+    }
+
     // Генерация случайной соли
-    public static generateSalt(): string {
+    public static generateSalt(): `0x${string}` {
         const array = new Uint8Array(32);
         crypto.getRandomValues(array);
-        return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+        return `0x${Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('')}`;
     }
 }
 

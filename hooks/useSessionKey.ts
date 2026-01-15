@@ -2,18 +2,15 @@
  * useSessionKey Hook
  * 
  * React hook for managing session keys in the Mafia game.
- * Handles creation, registration, and automatic signing of game transactions.
+ * In V4 contract, session keys are registered automatically during joinRoom.
+ * This hook checks session status and allows revoking.
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseEther } from 'viem';
+import { useAccount, useWriteContract } from 'wagmi';
 import { 
-  createNewSession, 
-  loadSession, 
   clearSession, 
   hasValidSession,
-  markSessionRegistered,
   getSessionInfo,
   getSessionAccount,
 } from '../services/sessionKeyService';
@@ -42,10 +39,8 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingTxHash, setPendingTxHash] = useState<`0x${string}` | undefined>();
 
   const { writeContractAsync } = useWriteContract();
-  const { isSuccess: txConfirmed } = useWaitForTransactionReceipt({ hash: pendingTxHash });
 
   // Check session status on mount and when roomId/wallet changes
   useEffect(() => {
@@ -68,62 +63,31 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
     }
   }, [roomId, mainWallet]);
 
-  // Mark as registered when tx confirms
-  useEffect(() => {
-    if (txConfirmed && pendingTxHash) {
-      markSessionRegistered();
-      setHasSession(true);
-      setIsRegistering(false);
-      setPendingTxHash(undefined);
-      
-      const info = getSessionInfo();
-      if (info) {
-        setSessionAddress(info.address);
-        setExpiresAt(info.expiresAt);
-      }
-    }
-  }, [txConfirmed, pendingTxHash]);
-
   /**
-   * Register a new session key on-chain AND fund it with gas
-   * This is the ONE transaction the user signs with their main wallet
-   * @param targetRoomId - The room ID to register for
-   * @param fundAmount - Amount of STT to send for gas (default: 0.02)
+   * NOTE: In V4 contract, session key is registered automatically during joinRoom.
+   * This function is kept for backwards compatibility but is now a no-op.
+   * The session is already active if you successfully joined a room.
    */
-  const registerSession = useCallback(async (targetRoomId: number, fundAmount: string = '0.02') => {
+  const registerSession = useCallback(async (_targetRoomId: number, _fundAmount: string = '0.02') => {
+    // V4: Session key is already registered during joinRoom
+    // Just check if we have a valid session
     if (!mainWallet) {
       setError('Wallet not connected');
       return;
     }
 
-    setIsRegistering(true);
-    setError(null);
-
-    try {
-      // 1. Generate session key locally
-      const { sessionAddress: newSessionAddr } = createNewSession(
-        mainWallet,
-        targetRoomId
-      );
-
-      // 2. Register on-chain AND fund in one transaction
-      const hash = await writeContractAsync({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        functionName: 'registerSessionKey',
-        args: [newSessionAddr, BigInt(targetRoomId)],
-        value: parseEther(fundAmount), // Send STT for gas
-      });
-
-      setPendingTxHash(hash);
-      setSessionAddress(newSessionAddr);
-      
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to register session');
-      setIsRegistering(false);
-      clearSession();
+    const valid = hasValidSession(_targetRoomId, mainWallet);
+    if (valid) {
+      setHasSession(true);
+      const info = getSessionInfo();
+      if (info) {
+        setSessionAddress(info.address);
+        setExpiresAt(info.expiresAt);
+      }
+    } else {
+      setError('Session not found. Please rejoin the room.');
     }
-  }, [mainWallet, writeContractAsync]);
+  }, [mainWallet]);
 
   /**
    * Revoke the current session key
