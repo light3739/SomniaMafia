@@ -692,7 +692,7 @@ contract MafiaPortalV3 {
         
         // Count votes for each target and find healed player
         address[] memory targets = new address[](room.aliveCount);
-        uint8[] memory votes = new uint8[](room.aliveCount);
+        uint8[] memory killVotes = new uint8[](room.aliveCount);
         uint8 targetCount = 0;
         uint8 totalKillVotes = 0;
         address healed = address(0);
@@ -713,14 +713,14 @@ contract MafiaPortalV3 {
                 bool found = false;
                 for (uint8 j = 0; j < targetCount; j++) {
                     if (targets[j] == target) {
-                        votes[j]++;
+                        killVotes[j]++;
                         found = true;
                         break;
                     }
                 }
                 if (!found) {
                     targets[targetCount] = target;
-                    votes[targetCount] = 1;
+                    killVotes[targetCount] = 1;
                     targetCount++;
                 }
             }
@@ -736,7 +736,7 @@ contract MafiaPortalV3 {
         uint8 majorityThreshold = (totalKillVotes / 2) + 1; // strict majority
         
         for (uint8 i = 0; i < targetCount; i++) {
-            if (votes[i] >= majorityThreshold) {
+            if (killVotes[i] >= majorityThreshold) {
                 victim = targets[i];
                 break;
             }
