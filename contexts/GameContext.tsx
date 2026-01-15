@@ -151,7 +151,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     // Most game actions need 100-200k gas, 300k is safe buffer
                     const gasLimit = 300_000n;
                     console.log(`[Session TX] Using gas limit: ${gasLimit}`);
-                    
+
                     const hash = await sessionClient.writeContract({
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI as any,
@@ -196,8 +196,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             sessionStorage.setItem('lobbyName', lobbyName);
         }
     }, [currentRoomId, lobbyName]);
+    // FIXED: Only auto-set myPlayerId from wallet if we're NOT in test mode
+    // Test mode sets myPlayerId to a mock address; we shouldn't override it
     useEffect(() => {
-        if (address) setGameState(prev => ({ ...prev, myPlayerId: address }));
+        if (!address) return;
+
+        setGameState(prev => {
+            // If myPlayerId is already set and matches a player, don't override (test mode)
+            const existingPlayer = prev.myPlayerId
+                ? prev.players.find(p => p.address.toLowerCase() === prev.myPlayerId?.toLowerCase())
+                : null;
+
+            if (existingPlayer) {
+                // myPlayerId already matches a player - don't override (test mode is active)
+                return prev;
+            }
+
+            // No player found for current myPlayerId - use wallet address
+            return { ...prev, myPlayerId: address };
+        });
     }, [address]);
 
     const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -218,41 +235,41 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const checkWinCondition = useCallback((players: Player[], contractPhase: GamePhase): 'MAFIA' | 'MANIAC' | 'TOWN' | null => {
         // Don't check in early phases
         if (contractPhase < GamePhase.DAY) return null;
-        
+
         const alivePlayers = players.filter(p => p.isAlive);
         if (alivePlayers.length === 0) return 'TOWN'; // Draw technically, but contract handles this
-        
+
         let aliveMafia = 0;
         let aliveManiac = 0;
         let aliveTown = 0;
         let unknownRoles = 0;
-        
+
         for (const player of alivePlayers) {
             if (player.role === Role.MAFIA) aliveMafia++;
             else if (player.role === Role.MANIAC) aliveManiac++;
             else if (player.role === Role.UNKNOWN) unknownRoles++;
             else aliveTown++; // CIVILIAN, DOCTOR, DETECTIVE
         }
-        
+
         // Can't determine winner if we don't know all roles
         if (unknownRoles > 0) return null;
-        
+
         // Win conditions:
         // MAFIA wins: mafia >= town AND maniac is dead
         if (aliveMafia > 0 && aliveMafia >= aliveTown && aliveManiac === 0) {
             return 'MAFIA';
         }
-        
+
         // MANIAC wins: only maniac alive, or maniac + 1 town and no mafia
         if (aliveManiac > 0 && aliveMafia === 0 && aliveTown <= 1) {
             return 'MANIAC';
         }
-        
+
         // TOWN wins: no mafia AND no maniac
         if (aliveMafia === 0 && aliveManiac === 0) {
             return 'TOWN';
         }
-        
+
         return null; // Game continues
     }, []);
 
@@ -318,7 +335,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Check win condition on frontend (contract doesn't know roles)
                 const winner = checkWinCondition(formattedPlayers, phase);
                 const finalPhase = winner ? GamePhase.ENDED : phase;
-                
+
                 if (winner && phase !== GamePhase.ENDED) {
                     console.log('[Win Condition] Game over!', { winner, alivePlayers: formattedPlayers.filter(p => p.isAlive).length });
                 }
@@ -565,7 +582,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const revealNightActionOnChain = async (action: number, target: string, salt: string) => {
         if (!currentRoomId) return;
-        
+
         // DEBUG: Log what we're sending to contract
         console.log('[Reveal TX]', {
             roomId: Number(currentRoomId),
@@ -574,7 +591,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             salt,
             saltLength: salt.length
         });
-        
+
         try {
             const hash = await sendGameTransaction('revealNightAction', [currentRoomId, action, target, salt]);
             addLog("Night action revealed!", "success");
