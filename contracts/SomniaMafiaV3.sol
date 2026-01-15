@@ -674,13 +674,13 @@ contract MafiaPortalV3 {
     }
 
     /**
-     * @notice Finalize night - supports MULTIPLE kills (mafia + maniac)
-     * @dev Collects all KILL actions, applies single HEAL, kills remaining victims
+     * @notice Finalize night - classic mafia rules (majority vote for kill)
+     * @dev Counts KILL votes per target, kills only if majority agrees
      */
     function _finalizeNight(uint256 roomId) internal {
         GameRoom storage room = rooms[roomId];
         
-        // FIX: If no one committed, just skip night (no free pass for mafia)
+        // If no one committed, just skip night
         if (room.committedCount == 0) {
             emit NightFinalized(roomId, address(0), address(0));
             _resetNightState(roomId);
@@ -690,11 +690,13 @@ contract MafiaPortalV3 {
             return;
         }
         
-        // Collect all victims and healed target
-        address[] memory victims = new address[](room.aliveCount);
-        uint8 victimCount = 0;
+        // Count votes for each target and find healed player
+        address[] memory targets = new address[](room.aliveCount);
+        uint8[] memory votes = new uint8[](room.aliveCount);
+        uint8 targetCount = 0;
+        uint8 totalKillVotes = 0;
         address healed = address(0);
-        bool healedSet = false;  // FIX: first HEAL wins
+        bool healedSet = false;
         
         Player[] storage players = roomPlayers[roomId];
         for (uint8 i = 0; i < players.length; i++) {
@@ -703,36 +705,49 @@ contract MafiaPortalV3 {
             
             if (action == NightActionType.KILL) {
                 address target = revealedTargets[roomId][p];
-                // Check if not already in victims array (no duplicates)
-                bool isDuplicate = false;
-                for (uint8 j = 0; j < victimCount; j++) {
-                    if (victims[j] == target) {
-                        isDuplicate = true;
+                if (target == address(0)) continue;
+                
+                totalKillVotes++;
+                
+                // Find or add target
+                bool found = false;
+                for (uint8 j = 0; j < targetCount; j++) {
+                    if (targets[j] == target) {
+                        votes[j]++;
+                        found = true;
                         break;
                     }
                 }
-                if (!isDuplicate && target != address(0)) {
-                    victims[victimCount] = target;
-                    victimCount++;
+                if (!found) {
+                    targets[targetCount] = target;
+                    votes[targetCount] = 1;
+                    targetCount++;
                 }
             }
-            // FIX: First HEAL wins (deterministic behavior)
+            // First HEAL wins
             if (action == NightActionType.HEAL && !healedSet) {
                 healed = revealedTargets[roomId][p];
                 healedSet = true;
             }
         }
-
-        // Emit event with first victim and healed (for compatibility)
-        emit NightFinalized(roomId, victimCount > 0 ? victims[0] : address(0), healed);
-
-        // Kill all victims except the healed one
-        for (uint8 i = 0; i < victimCount; i++) {
-            address victim = victims[i];
-            if (victim != healed) {
-                _killPlayer(roomId, victim);
-                emit PlayerEliminated(roomId, victim, "Killed at night");
+        
+        // Find target with majority votes (> 50% of total KILL votes)
+        address victim = address(0);
+        uint8 majorityThreshold = (totalKillVotes / 2) + 1; // strict majority
+        
+        for (uint8 i = 0; i < targetCount; i++) {
+            if (votes[i] >= majorityThreshold) {
+                victim = targets[i];
+                break;
             }
+        }
+
+        emit NightFinalized(roomId, victim, healed);
+
+        // Kill victim only if majority agreed AND not healed
+        if (victim != address(0) && victim != healed) {
+            _killPlayer(roomId, victim);
+            emit PlayerEliminated(roomId, victim, "Killed at night");
         }
 
         _resetNightState(roomId);

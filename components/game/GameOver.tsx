@@ -13,7 +13,6 @@ import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye } from 'luci
 
 const RoleIcons: Record<Role, React.ReactNode> = {
     [Role.MAFIA]: <Skull className="w-5 h-5 text-red-500" />,
-    [Role.MANIAC]: <Skull className="w-5 h-5 text-purple-500" />,
     [Role.DOCTOR]: <Shield className="w-5 h-5 text-green-500" />,
     [Role.DETECTIVE]: <Search className="w-5 h-5 text-blue-500" />,
     [Role.CIVILIAN]: <Users className="w-5 h-5 text-amber-500" />,
@@ -22,7 +21,6 @@ const RoleIcons: Record<Role, React.ReactNode> = {
 
 const RoleColors: Record<Role, string> = {
     [Role.MAFIA]: 'text-red-400',
-    [Role.MANIAC]: 'text-purple-400',
     [Role.DOCTOR]: 'text-green-400',
     [Role.DETECTIVE]: 'text-blue-400',
     [Role.CIVILIAN]: 'text-amber-400',
@@ -31,14 +29,13 @@ const RoleColors: Record<Role, string> = {
 
 const RoleBgColors: Record<Role, string> = {
     [Role.MAFIA]: 'bg-red-900/50',
-    [Role.MANIAC]: 'bg-purple-900/50',
     [Role.DOCTOR]: 'bg-green-900/50',
     [Role.DETECTIVE]: 'bg-blue-900/50',
     [Role.CIVILIAN]: 'bg-amber-900/50',
     [Role.UNKNOWN]: 'bg-gray-900/50'
 };
 
-type Winner = 'MAFIA' | 'MANIAC' | 'TOWN' | 'DRAW';
+type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = () => {
     const { gameState, myPlayer, currentRoomId, setGameState } = useGameContext();
@@ -130,29 +127,24 @@ export const GameOver: React.FC = () => {
         const alivePlayers = gameState.players.filter(p => p.isAlive);
         
         let aliveMafia = 0;
-        let aliveManiac = 0;
         let aliveTown = 0; // civilian + doctor + detective
         
         for (const player of alivePlayers) {
             const role = roles.get(player.address.toLowerCase()) || player.role;
             if (role === Role.MAFIA) aliveMafia++;
-            else if (role === Role.MANIAC) aliveManiac++;
             else if (role !== Role.UNKNOWN) aliveTown++;
         }
         
         // Условия победы:
-        // MANIAC wins: только маньяк жив (или маньяк + 1 город и нет мафии)
-        // MAFIA wins: мафия >= город И маньяк мёртв
-        // TOWN wins: мафия = 0 И маньяк = 0
+        // MAFIA wins: мафия >= город
+        // TOWN wins: мафия = 0
         // DRAW: никто не выжил
         
         if (alivePlayers.length === 0) {
             setWinner('DRAW');
-        } else if (aliveManiac > 0 && aliveMafia === 0 && aliveTown <= 1) {
-            setWinner('MANIAC');
-        } else if (aliveMafia > 0 && aliveMafia >= aliveTown && aliveManiac === 0) {
+        } else if (aliveMafia > 0 && aliveMafia >= aliveTown) {
             setWinner('MAFIA');
-        } else if (aliveMafia === 0 && aliveManiac === 0) {
+        } else if (aliveMafia === 0) {
             setWinner('TOWN');
         } else {
             // Игра должна продолжаться, но раз мы в GameOver - значит что-то пошло не так
@@ -169,7 +161,6 @@ export const GameOver: React.FC = () => {
     
     const didIWin = 
         (winner === 'MAFIA' && myRole === Role.MAFIA) ||
-        (winner === 'MANIAC' && myRole === Role.MANIAC) ||
         (winner === 'TOWN' && (myRole === Role.CIVILIAN || myRole === Role.DOCTOR || myRole === Role.DETECTIVE));
 
     const winnerConfig = {
@@ -179,13 +170,6 @@ export const GameOver: React.FC = () => {
             color: 'text-red-400',
             bg: 'from-red-950/50 to-red-900/30 border-red-500/30',
             trophy: 'text-red-500'
-        },
-        'MANIAC': { 
-            title: 'Maniac Wins!', 
-            description: 'The lone killer stands victorious...', 
-            color: 'text-purple-400',
-            bg: 'from-purple-950/50 to-purple-900/30 border-purple-500/30',
-            trophy: 'text-purple-500'
         },
         'TOWN': { 
             title: 'Town Wins!', 
