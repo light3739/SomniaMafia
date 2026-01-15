@@ -3,19 +3,9 @@ import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent } 
 import { createWalletClient, http, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry } from '../types';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../contracts/config';
+import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
-import { loadSession, hasValidSession, createNewSession, markSessionRegistered } from '../services/sessionKeyService';
-
-// Somnia testnet chain config
-const somniaChain = {
-    id: 50312,
-    name: 'Somnia Testnet',
-    nativeCurrency: { name: 'STT', symbol: 'STT', decimals: 18 },
-    rpcUrls: {
-        default: { http: ['https://dream-rpc.somnia.network'] },
-    },
-} as const;
+import { loadSession, createNewSession, markSessionRegistered } from '../services/sessionKeyService';
 
 import shotSound from '../assets/mafia_shot.wav';
 
@@ -312,7 +302,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
                 });
 
-// V4: Player struct has flags instead of separate bools
+                // V4: Player struct has flags instead of separate bools
                 const formattedPlayers: Player[] = data.map((p: any) => {
                     const flags = Number(p.flags);
                     const isActive = (flags & FLAG_ACTIVE) !== 0;
@@ -621,7 +611,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     // --- V4: MAFIA CONSENSUS KILL FUNCTIONS ---
-    
+
     const commitMafiaTargetOnChain = async (targetHash: string) => {
         if (!currentRoomId) return;
         try {

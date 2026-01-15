@@ -6,7 +6,7 @@ import { usePublicClient, useAccount } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { hexToString } from '../../services/cryptoUtils';
-import { Role, Player } from '../../types';
+import { Role, Player, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
 import { Moon, Skull, Shield, Search, Eye, Check, Clock, User, Lock, AlertCircle, Users } from 'lucide-react';
 
@@ -257,73 +257,78 @@ export const NightPhase: React.FC = () => {
     }, [currentRoomId, address, NIGHT_COMMIT_KEY]);
 
     // Commit action - V4: Mafia uses commitMafiaTarget, others use commitNightAction
+    // Optimistic UI: обновляем state сразу, rollback при ошибке
     const handleCommit = async () => {
         if (!selectedTarget || nightState.hasCommitted) return;
 
         // Check if we're actually in NIGHT phase
-        if (gameState.phase !== 5) { // 5 = NIGHT
-            addLog(`Cannot commit: game is in phase ${gameState.phase}, not NIGHT (5)`, "danger");
+        if (gameState.phase !== GamePhase.NIGHT) {
+            addLog(`Cannot commit: not in NIGHT phase`, "danger");
             console.error('[Night] Wrong phase for commit:', gameState.phase);
             return;
         }
 
-        setIsProcessing(true);
+        // Сохраняем для rollback
+        const committedTarget = selectedTarget;
+
+        // Генерируем соль заранее
+        const salt = ShuffleService.generateSalt();
+        let hash: string;
+
         try {
-            // Генерируем соль
-            const salt = ShuffleService.generateSalt();
-
-            let hash: string;
-            
             if (myRole === Role.MAFIA) {
-                // V4: Mafia uses commitMafiaTarget with hash = keccak256(abi.encode(target, salt))
-                hash = ShuffleService.createMafiaTargetHash(selectedTarget, salt);
-                
-                console.log('[Mafia Commit]', {
-                    target: selectedTarget,
-                    salt: salt,
-                    hash: hash
-                });
+                hash = ShuffleService.createMafiaTargetHash(committedTarget, salt);
+            } else {
+                hash = ShuffleService.createCommitHash(roleConfig.action, committedTarget, salt);
+            }
+        } catch (e: any) {
+            addLog("Failed to create commit hash", "danger");
+            return;
+        }
 
+        // Optimistic: обновляем UI сразу
+        setNightState(prev => ({
+            ...prev,
+            commitHash: hash,
+            salt: salt,
+            hasCommitted: true,
+            committedTarget: committedTarget
+        }));
+        setIsProcessing(true);
+
+        try {
+            console.log(`[${myRole === Role.MAFIA ? 'Mafia' : 'Night'} Commit]`, {
+                target: committedTarget,
+                salt: salt,
+                hash: hash
+            });
+
+            if (myRole === Role.MAFIA) {
                 await commitMafiaTargetOnChain(hash);
             } else {
-                // Doctor/Detective use commitNightAction with hash = keccak256(abi.encode(action, target, salt))
-                hash = ShuffleService.createCommitHash(
-                    roleConfig.action,
-                    selectedTarget,
-                    salt
-                );
-
-                console.log('[Night Commit]', {
-                    action: roleConfig.action,
-                    target: selectedTarget,
-                    salt: salt,
-                    hash: hash
-                });
-
                 await commitNightActionOnChain(hash);
             }
 
-            // Только после успешного commit сохраняем данные
+            // Сохраняем в localStorage только после успеха
             localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
                 salt,
                 commitHash: hash,
-                committedTarget: selectedTarget,
+                committedTarget: committedTarget,
                 action: roleConfig.action
-            }));
-
-            // Сохраняем локально для reveal
-            setNightState(prev => ({
-                ...prev,
-                commitHash: hash,
-                salt: salt,
-                hasCommitted: true,
-                committedTarget: selectedTarget
             }));
 
             addLog("Night action committed!", "success");
         } catch (e: any) {
+            // Rollback при ошибке
+            setNightState(prev => ({
+                ...prev,
+                commitHash: null,
+                salt: null,
+                hasCommitted: false,
+                committedTarget: null
+            }));
             console.error("Commit failed:", e);
-            addLog(e.message || "Commit failed", "danger");
+            addLog(e.shortMessage || e.message || "Commit failed", "danger");
         } finally {
             setIsProcessing(false);
         }
@@ -339,7 +344,7 @@ export const NightPhase: React.FC = () => {
                 p => p.address.toLowerCase() === targetAddress.toLowerCase()
             );
             if (targetIndex < 0) return null;
-            
+
             // Get deck from contract (single call)
             const deck = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
@@ -347,7 +352,7 @@ export const NightPhase: React.FC = () => {
                 functionName: 'getDeck',
                 args: [currentRoomId],
             }) as string[];
-            
+
             if (targetIndex >= deck.length) return null;
 
             // Collect all keys
@@ -387,13 +392,22 @@ export const NightPhase: React.FC = () => {
     }, [publicClient, currentRoomId, gameState.players, address]);
 
     // Reveal action - V4: Mafia uses revealMafiaTarget, others use revealNightAction
+    // Optimistic UI: обновляем state сразу, rollback при ошибке
     const handleReveal = async () => {
         if (!nightState.committedTarget || !nightState.salt || nightState.hasRevealed) return;
 
+        // Сохраняем для rollback
+        const previousHasRevealed = nightState.hasRevealed;
+
+        // Optimistic: обновляем UI сразу
+        setNightState(prev => ({
+            ...prev,
+            hasRevealed: true
+        }));
         setIsProcessing(true);
+
         try {
             if (myRole === Role.MAFIA) {
-                // V4: Mafia uses revealMafiaTarget(target, salt)
                 console.log('[Mafia Reveal]', {
                     target: nightState.committedTarget,
                     salt: nightState.salt,
@@ -405,7 +419,6 @@ export const NightPhase: React.FC = () => {
                     nightState.salt
                 );
             } else {
-                // Doctor/Detective use revealNightAction(action, target, salt)
                 console.log('[Night Reveal]', {
                     action: roleConfig.action,
                     target: nightState.committedTarget,
@@ -437,14 +450,18 @@ export const NightPhase: React.FC = () => {
 
             setNightState(prev => ({
                 ...prev,
-                hasRevealed: true,
                 investigationResult
             }));
-            setSelectedTarget(null); // Clear selection after reveal
+            setSelectedTarget(null);
             addLog("Night action revealed!", "success");
         } catch (e: any) {
+            // Rollback при ошибке
+            setNightState(prev => ({
+                ...prev,
+                hasRevealed: previousHasRevealed
+            }));
             console.error("Reveal failed:", e);
-            addLog(e.message || "Reveal failed", "danger");
+            addLog(e.shortMessage || e.message || "Reveal failed", "danger");
         } finally {
             setIsProcessing(false);
         }
