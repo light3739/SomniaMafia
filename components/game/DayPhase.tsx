@@ -104,15 +104,27 @@ export const DayPhase: React.FC = () => {
         }
     };
 
-    // Проголосовать
+    // Проголосовать (Optimistic UI - мгновенное обновление с rollback при ошибке)
     const handleVote = async () => {
         if (!selectedTarget) return;
 
+        // Сохраняем предыдущее состояние для rollback
+        const previousVote = voteState.myVote;
+        const previousHasVoted = voteState.hasVoted;
+        const votedTarget = selectedTarget;
+
+        // Optimistic: обновляем UI сразу
+        setVoteState(prev => ({ ...prev, hasVoted: true, myVote: votedTarget }));
+        setSelectedTarget(null);
         setIsProcessing(true);
+
         try {
-            await voteOnChain(selectedTarget);
-            setVoteState(prev => ({ ...prev, hasVoted: true, myVote: selectedTarget }));
-            setSelectedTarget(null);
+            await voteOnChain(votedTarget);
+            // Успех - UI уже обновлён
+        } catch (e: any) {
+            // Rollback при ошибке
+            setVoteState(prev => ({ ...prev, hasVoted: previousHasVoted, myVote: previousVote }));
+            addLog(e.shortMessage || "Vote failed, please try again", "danger");
         } finally {
             setIsProcessing(false);
         }

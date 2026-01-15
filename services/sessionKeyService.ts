@@ -8,16 +8,7 @@
 
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { createWalletClient, http, type Account, type WalletClient } from 'viem';
-
-// Somnia testnet chain config
-const somniaChain = {
-  id: 50312,
-  name: 'Somnia Testnet',
-  nativeCurrency: { name: 'STT', symbol: 'STT', decimals: 18 },
-  rpcUrls: {
-    default: { http: ['https://dream-rpc.somnia.network'] },
-  },
-} as const;
+import { somniaChain } from '../contracts/config';
 
 interface StoredSession {
   privateKey: `0x${string}`;
@@ -56,16 +47,16 @@ export function storeSession(session: StoredSession): void {
 export function loadSession(): StoredSession | null {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (!stored) return null;
-  
+
   try {
     const session = JSON.parse(stored) as StoredSession;
-    
+
     // Check if expired
     if (Date.now() > session.expiresAt) {
       clearSession();
       return null;
     }
-    
+
     return session;
   } catch {
     return null;
@@ -85,7 +76,7 @@ export function clearSession(): void {
 export function hasValidSession(roomId: number, mainWallet: string): boolean {
   const session = loadSession();
   if (!session) return false;
-  
+
   return (
     session.roomId === roomId &&
     session.mainWallet.toLowerCase() === mainWallet.toLowerCase() &&
@@ -100,9 +91,9 @@ export function hasValidSession(roomId: number, mainWallet: string): boolean {
 export function createSessionWalletClient(): WalletClient | null {
   const session = loadSession();
   if (!session || !session.registeredOnChain) return null;
-  
+
   const account = privateKeyToAccount(session.privateKey);
-  
+
   return createWalletClient({
     account,
     chain: somniaChain,
@@ -116,22 +107,22 @@ export function createSessionWalletClient(): WalletClient | null {
 export function getSessionAccount(): Account | null {
   const session = loadSession();
   if (!session) return null;
-  
+
   return privateKeyToAccount(session.privateKey);
 }
 
 /**
  * Get session info for display
  */
-export function getSessionInfo(): { 
-  address: string; 
-  expiresAt: Date; 
+export function getSessionInfo(): {
+  address: string;
+  expiresAt: Date;
   roomId: number;
   isRegistered: boolean;
 } | null {
   const session = loadSession();
   if (!session) return null;
-  
+
   return {
     address: session.address,
     expiresAt: new Date(session.expiresAt),
@@ -160,7 +151,7 @@ export function createNewSession(
   durationMs: number = 4 * 60 * 60 * 1000 // 4 hours default
 ): { sessionAddress: `0x${string}`; privateKey: `0x${string}` } {
   const { privateKey, address } = generateSessionKey();
-  
+
   const session: StoredSession = {
     privateKey,
     address,
@@ -169,9 +160,9 @@ export function createNewSession(
     expiresAt: Date.now() + durationMs,
     registeredOnChain: false,
   };
-  
+
   storeSession(session);
-  
+
   return { sessionAddress: address, privateKey };
 }
 
