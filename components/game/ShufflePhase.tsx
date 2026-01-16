@@ -128,16 +128,21 @@ export const ShufflePhase: React.FC = () => {
             setShuffleState(prev => {
                 // Keep local 'revealed' state to prevent flickering back to 'commit'
                 if (prev.hasRevealed) {
-                    return { ...prev, currentShufflerIndex: currentIndex, deck };
+                    // STICKY MAX: Never allow index to go backwards if we've already revealed
+                    const safeIndex = Math.max(prev.currentShufflerIndex, currentIndex);
+                    return { ...prev, currentShufflerIndex: safeIndex, deck };
                 }
                 // Keep local 'committed' state
                 if (prev.hasCommitted && !prev.hasRevealed) {
                     return { ...prev, currentShufflerIndex: currentIndex, deck };
                 }
 
+                // STICKY MAX check for general case as well (optional but safer)
+                const safeIndex = prev.hasRevealed ? Math.max(prev.currentShufflerIndex, currentIndex) : currentIndex;
+
                 return {
                     ...prev,
-                    currentShufflerIndex: currentIndex,
+                    currentShufflerIndex: safeIndex,
                     deck: deck,
                     isMyTurn: isMyTurnFromContract
                 };
