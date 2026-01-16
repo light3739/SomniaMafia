@@ -219,6 +219,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
     }, [address]);
 
+    // Safety valve: Сброс зависшего спиннера через 60 секунд
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (isTxPending) {
+            timer = setTimeout(() => {
+                console.warn("Transaction timeout - resetting UI state");
+                setIsTxPending(false);
+                addLog("Transaction taking too long. UI unlocked.", "warning");
+            }, 60000); // 60 секунд таймаут
+        }
+        return () => clearTimeout(timer);
+    }, [isTxPending]);
+
     const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
         const now = new Date();
         const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
@@ -330,10 +343,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 // Check win condition on frontend (contract doesn't know roles)
                 const winner = checkWinCondition(formattedPlayers, phase);
-                const finalPhase = winner ? GamePhase.ENDED : phase;
+
+                // ВАЖНО: Верим контракту. Переходим в ENDED только если контракт сказал ENDED,
+                // ЛИБО если мы на 100% уверены в победе (но лучше верить контракту).
+                let finalPhase = phase;
 
                 if (winner && phase !== GamePhase.ENDED) {
-                    console.log('[Win Condition] Game over!', { winner, alivePlayers: formattedPlayers.filter(p => p.isAlive).length });
+                    console.log('[Win Condition Calculated Local]', winner);
+                    finalPhase = GamePhase.ENDED;
                 }
 
                 return {
@@ -341,7 +358,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     players: formattedPlayers,
                     phase: finalPhase,
                     dayCount,
-                    winner: winner || prev.winner
+                    winner: winner || prev.winner // Сохраняем победителя
                 };
             });
         } catch (e) {
@@ -362,7 +379,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const interval = setInterval(() => {
             refreshPlayersList(currentRoomId);
-        }, 2000); // Каждые 2 секунды
+        }, 5000); // Каждые 5 секунд
 
         return () => clearInterval(interval);
     }, [currentRoomId, publicClient, refreshPlayersList]);
