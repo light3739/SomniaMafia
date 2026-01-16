@@ -163,6 +163,12 @@ export const RoleReveal: React.FC = () => {
     const checkIfShared = useCallback(async () => {
         if (!publicClient || !currentRoomId || !address) return;
 
+        // Don't overwrite optimistic UI during active transactions
+        if (isProcessing || isTxPending) {
+            console.log('[RoleReveal] Skipping sync: transaction in progress');
+            return;
+        }
+
         try {
             const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys] = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
@@ -179,7 +185,7 @@ export const RoleReveal: React.FC = () => {
         } catch (e) {
             console.error("Failed to check flags:", e);
         }
-    }, [publicClient, currentRoomId, address]);
+    }, [publicClient, currentRoomId, address, isProcessing, isTxPending]);
 
     // Check flags on mount and periodically
     useEffect(() => {
