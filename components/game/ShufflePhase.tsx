@@ -5,7 +5,7 @@ import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { usePublicClient } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
-import { Loader2, Check, Clock, Shuffle } from 'lucide-react';
+import { Loader2, Check, Clock, Shuffle, AlertCircle } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 interface ShuffleState {
@@ -19,16 +19,16 @@ interface ShuffleState {
 }
 
 export const ShufflePhase: React.FC = () => {
-    const { 
-        gameState, 
-        currentRoomId, 
-        myPlayer, 
+    const {
+        gameState,
+        currentRoomId,
+        myPlayer,
         commitDeckOnChain,
         revealDeckOnChain,
         addLog,
-        isTxPending 
+        isTxPending
     } = useGameContext();
-    
+
     const publicClient = usePublicClient();
     const [shuffleState, setShuffleState] = useState<ShuffleState>({
         currentShufflerIndex: 0,
@@ -115,68 +115,68 @@ export const ShufflePhase: React.FC = () => {
     // Обработка моего хода - фаза COMMIT
     const handleMyTurn = async () => {
         if (!currentRoomId || !myPlayer || isProcessing) return;
-        
+
         setIsProcessing(true);
         try {
             const shuffleService = getShuffleService();
-            
+
             // Генерируем ключи если ещё нет
             shuffleService.generateKeys();
-            
+
             let newDeck: string[];
-            
+
             if (shuffleState.deck.length === 0) {
                 // Первый игрок (хост) — генерирует начальную колоду
                 addLog("Generating initial deck...", "info");
                 const initialDeck = ShuffleService.generateInitialDeck(gameState.players.length);
-                
+
                 // Перемешиваем
                 const shuffled = shuffleService.shuffleArray(initialDeck);
-                
+
                 // Шифруем
                 newDeck = shuffleService.encryptDeck(shuffled);
                 addLog("Deck created and encrypted!", "success");
             } else {
                 // Последующие игроки — перемешивают и перешифровывают
                 addLog("Shuffling and re-encrypting deck...", "info");
-                
+
                 // Перемешиваем существующую колоду
                 const shuffled = shuffleService.shuffleArray(shuffleState.deck);
-                
+
                 // Шифруем каждую карту своим ключом (поверх существующего шифрования)
                 newDeck = shuffleService.encryptDeck(shuffled);
                 addLog("Deck re-shuffled and encrypted!", "success");
             }
-            
+
             // Генерируем соль для commit-reveal
             const salt = ShuffleService.generateSalt();
-            
+
             // Вычисляем хеш колоды
             const deckHash = ShuffleService.createDeckCommitHash(newDeck, salt);
-            
+
             // Отправляем commit в контракт
             addLog("Committing deck hash...", "info");
             await commitDeckOnChain(deckHash);
-            
+
             // Сохраняем deck и salt для reveal в localStorage
             localStorage.setItem(SHUFFLE_COMMIT_KEY, JSON.stringify({
                 deck: newDeck,
                 salt: salt,
                 hasCommitted: true
             }));
-            
+
             // Сохраняем deck и salt для reveal
             setPendingDeck(newDeck);
             setPendingSalt(salt);
-            
+
             setShuffleState(prev => ({
                 ...prev,
                 hasCommitted: true,
                 isMyTurn: false
             }));
-            
+
             addLog("Commit successful! Click Reveal to complete.", "success");
-            
+
         } catch (e: any) {
             console.error("Commit failed:", e);
             addLog(e.message || "Commit failed", "danger");
@@ -188,26 +188,26 @@ export const ShufflePhase: React.FC = () => {
     // Обработка reveal фазы
     const handleReveal = async () => {
         if (!currentRoomId || !pendingDeck || !pendingSalt || isProcessing) return;
-        
+
         setIsProcessing(true);
         try {
             addLog("Revealing deck...", "info");
             await revealDeckOnChain(pendingDeck, pendingSalt);
-            
+
             // Очищаем localStorage после успешного reveal
             localStorage.removeItem(SHUFFLE_COMMIT_KEY);
-            
+
             // Очищаем pending данные
             setPendingDeck(null);
             setPendingSalt(null);
-            
+
             setShuffleState(prev => ({
                 ...prev,
                 hasRevealed: true
             }));
-            
+
             addLog("Deck revealed successfully!", "success");
-            
+
         } catch (e: any) {
             console.error("Reveal failed:", e);
             addLog(e.message || "Reveal failed", "danger");
@@ -245,6 +245,16 @@ export const ShufflePhase: React.FC = () => {
                     </p>
                 </div>
 
+                {/* LocalStorage Disclaimer */}
+                <div className="mb-6 p-3 rounded-xl bg-amber-900/20 border border-amber-500/30 flex gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                    <p className="text-[10px] text-amber-200/70 leading-relaxed">
+                        <span className="font-bold text-amber-500 block mb-0.5 uppercase tracking-wider">Storage Warning</span>
+                        Do not clear browser cache or close the tab during this phase.
+                        Your encryption keys are stored locally. Losing them will block the game.
+                    </p>
+                </div>
+
                 {/* Progress Bar */}
                 <div className="mb-8">
                     <div className="flex justify-between text-xs text-white/40 mb-2">
@@ -276,10 +286,10 @@ export const ShufflePhase: React.FC = () => {
                                 transition={{ delay: index * 0.1 }}
                                 className={`
                                     flex items-center justify-between p-3 rounded-xl border transition-all
-                                    ${isCurrentTurn 
-                                        ? 'bg-[#916A47]/20 border-[#916A47]/50' 
-                                        : isDone 
-                                            ? 'bg-green-900/20 border-green-500/30' 
+                                    ${isCurrentTurn
+                                        ? 'bg-[#916A47]/20 border-[#916A47]/50'
+                                        : isDone
+                                            ? 'bg-green-900/20 border-green-500/30'
                                             : 'bg-white/5 border-white/10'
                                     }
                                 `}
@@ -287,10 +297,10 @@ export const ShufflePhase: React.FC = () => {
                                 <div className="flex items-center gap-3">
                                     <div className={`
                                         w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-                                        ${isCurrentTurn 
-                                            ? 'bg-[#916A47] text-black' 
-                                            : isDone 
-                                                ? 'bg-green-600 text-white' 
+                                        ${isCurrentTurn
+                                            ? 'bg-[#916A47] text-black'
+                                            : isDone
+                                                ? 'bg-green-600 text-white'
                                                 : 'bg-white/10 text-white/40'
                                         }
                                     `}>

@@ -34,6 +34,7 @@ interface GameContextType {
 
     // Reveal (V3: batch share keys)
     shareKeysToAllOnChain: (recipients: string[], encryptedKeys: string[]) => Promise<void>;
+    commitRoleOnChain: (role: number, salt: string) => Promise<void>;
     confirmRoleOnChain: () => Promise<void>;
 
     // Day/Voting (V3: auto-finalize on last vote)
@@ -143,9 +144,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Используем session key - без попапа!
                 console.log(`[Session TX] ${functionName} via session key`);
                 try {
-                    // Fixed gas limit to prevent overspending on session key balance
-                    // Most game actions need 100-200k gas, 300k is safe buffer
-                    const gasLimit = 300_000n;
+                    // Most game actions need 100-300k gas, 3,000,000 is safe buffer for heavier Shuffle/Reveal actions
+                    const gasLimit = 3_000_000n;
                     console.log(`[Session TX] Using gas limit: ${gasLimit}`);
 
                     const hash = await sessionClient.writeContract({
@@ -356,7 +356,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const interval = setInterval(() => {
             refreshPlayersList(currentRoomId);
-        }, 5000); // Каждые 5 секунд
+        }, 2000); // Каждые 2 секунды
 
         return () => clearInterval(interval);
     }, [currentRoomId, publicClient, refreshPlayersList]);
@@ -521,6 +521,37 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
+        }
+    };
+
+    const commitRoleOnChain = async (role: number, salt: string) => {
+        if (!currentRoomId) return;
+
+        // Если соль уже есть в localStorage, значит мы уже успешно коммитили
+        const existingSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+        if (existingSalt) {
+            console.log("Role already committed locally, skipping transaction.");
+            return; // Просто выходим, считаем что успех
+        }
+
+        setIsTxPending(true);
+        try {
+            // Импортируем ShuffleService через getShuffleService не получится для статик методов
+            const { ShuffleService } = await import('../services/shuffleService');
+            const hash = ShuffleService.createRoleCommitHash(role, salt);
+
+            const txHash = await sendGameTransaction('commitRole', [currentRoomId, hash]);
+            addLog("Role committed securely on-chain.", "info");
+            await publicClient?.waitForTransactionReceipt({ hash: txHash });
+
+            // ВАЖНО: Сохраняем соль в localStorage, иначе в конце игры нас убьют!
+            localStorage.setItem(`role_salt_${currentRoomId}_${address}`, salt);
+
+            setIsTxPending(false);
+        } catch (e: any) {
+            addLog(e.shortMessage || "Role commit failed", "danger");
+            setIsTxPending(false);
+            throw e;
         }
     };
 
@@ -1037,7 +1068,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             gameState, setGameState, isTxPending, currentRoomId,
             createLobbyOnChain, joinLobbyOnChain,
             startGameOnChain, commitDeckOnChain, revealDeckOnChain,
-            shareKeysToAllOnChain, confirmRoleOnChain,
+            shareKeysToAllOnChain, commitRoleOnChain, confirmRoleOnChain,
             startVotingOnChain, voteOnChain,
             commitNightActionOnChain, revealNightActionOnChain,
             commitMafiaTargetOnChain, revealMafiaTargetOnChain,

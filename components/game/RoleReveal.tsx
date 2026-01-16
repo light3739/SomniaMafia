@@ -55,17 +55,18 @@ const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: 
 };
 
 export const RoleReveal: React.FC = () => {
-    const { 
-        gameState, 
-        currentRoomId, 
+    const {
+        gameState,
+        currentRoomId,
         myPlayer,
         shareKeysToAllOnChain,
+        commitRoleOnChain,
         confirmRoleOnChain,
         addLog,
         isTxPending,
         setGameState
     } = useGameContext();
-    
+
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const [revealState, setRevealState] = useState<RevealState>({
@@ -136,7 +137,7 @@ export const RoleReveal: React.FC = () => {
             }) as [string[], string[]];
 
             const keys = new Map<string, string>();
-            
+
             // Собираем все ключи от всех отправителей
             for (let i = 0; i < senders.length; i++) {
                 if (keyBytes[i] && keyBytes[i] !== '0x') {
@@ -160,7 +161,7 @@ export const RoleReveal: React.FC = () => {
     // Check if we already shared keys (from contract)
     const checkIfShared = useCallback(async () => {
         if (!publicClient || !currentRoomId || !address) return;
-        
+
         try {
             const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys] = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
@@ -168,7 +169,7 @@ export const RoleReveal: React.FC = () => {
                 functionName: 'getPlayerFlags',
                 args: [currentRoomId, address],
             }) as [boolean, boolean, boolean, boolean, boolean, boolean];
-            
+
             setRevealState(prev => ({
                 ...prev,
                 hasSharedKeys,
@@ -198,7 +199,7 @@ export const RoleReveal: React.FC = () => {
             // V3: Собираем всех получателей и ключи в массивы
             const recipients: string[] = [];
             const encryptedKeys: string[] = [];
-            
+
             for (const player of gameState.players) {
                 if (player.address.toLowerCase() === myPlayer.address.toLowerCase()) continue;
                 recipients.push(player.address);
@@ -226,7 +227,7 @@ export const RoleReveal: React.FC = () => {
         try {
             // Собираем ключи
             const keys = await collectKeys();
-            
+
             if (!keys || keys.size < gameState.players.length - 1) {
                 addLog(`Waiting for keys: ${keys?.size || 0}/${gameState.players.length - 1}`, "warning");
                 setIsProcessing(false);
@@ -254,7 +255,7 @@ export const RoleReveal: React.FC = () => {
             if (role === Role.MAFIA) {
                 teammates = await decryptAllCardsForTeammates(keys, shuffleService, Role.MAFIA);
                 if (teammates.length > 0) {
-                    const names = teammates.map(addr => 
+                    const names = teammates.map(addr =>
                         gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase())?.name || addr.slice(0, 8)
                     );
                     addLog(`Your fellow mafia: ${names.join(', ')}`, "info");
@@ -271,7 +272,7 @@ export const RoleReveal: React.FC = () => {
             // Обновляем gameState с моей ролью
             setGameState(prev => ({
                 ...prev,
-                players: prev.players.map(p => 
+                players: prev.players.map(p =>
                     p.address.toLowerCase() === myPlayer?.address.toLowerCase()
                         ? { ...p, role }
                         : p
@@ -289,30 +290,30 @@ export const RoleReveal: React.FC = () => {
 
     // Расшифровать все карты чтобы найти союзников по роли
     const decryptAllCardsForTeammates = async (
-        keys: Map<string, string>, 
+        keys: Map<string, string>,
         shuffleService: ShuffleService,
         targetRole: Role
     ): Promise<string[]> => {
         const teammates: string[] = [];
-        
+
         for (let i = 0; i < revealState.deck.length; i++) {
             // Пропускаем свою карту
             if (i === revealState.myCardIndex) continue;
-            
+
             try {
                 let encryptedCard = revealState.deck[i];
-                
+
                 // Расшифровываем своим ключом
                 encryptedCard = shuffleService.decrypt(encryptedCard);
-                
+
                 // Расшифровываем ключами других игроков
                 for (const [_, key] of keys) {
                     const decryptionKey = hexToString(key);
                     encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
                 }
-                
+
                 const cardRole = ShuffleService.roleNumberToRole(encryptedCard);
-                
+
                 if (cardRole === targetRole) {
                     // Находим игрока по индексу
                     const player = gameState.players[i];
@@ -324,18 +325,43 @@ export const RoleReveal: React.FC = () => {
                 console.warn(`Failed to decrypt card ${i}:`, e);
             }
         }
-        
+
         return teammates;
     };
 
-    // Подтвердить роль
+    // Подтвердить роль (с предварительным коммитом)
     const handleConfirmRole = async () => {
+        // Проверка, что роль расшифрована
+        if (revealState.myRole === null) return;
+
+        // Маппинг ролей (String -> Number), так как контракт ждет uint8
+        // NONE=0, MAFIA=1, DOCTOR=2, DETECTIVE=3, CITIZEN=4
+        const roleMap: Record<string, number> = {
+            [Role.MAFIA]: 1,
+            [Role.DOCTOR]: 2,
+            [Role.DETECTIVE]: 3,
+            [Role.CIVILIAN]: 4,
+            [Role.UNKNOWN]: 0
+        };
+
+        const roleNum = roleMap[revealState.myRole] || 4; // Fallback to Citizen
+
         setIsProcessing(true);
         try {
+            // 1. Генерируем соль
+            const salt = ShuffleService.generateSalt();
+
+            // 2. Отправляем Commit в блокчейн
+            // (Функция сама сохранит salt в localStorage)
+            await commitRoleOnChain(roleNum, salt);
+
+            // 3. Подтверждаем готовность (Confirm)
             await confirmRoleOnChain();
+
             setRevealState(prev => ({ ...prev, hasConfirmed: true }));
         } catch (e: any) {
-            addLog(e.message || "Failed to confirm", "danger");
+            console.error(e);
+            // Лог уже добавится в контексте
         } finally {
             setIsProcessing(false);
         }
@@ -415,14 +441,14 @@ export const RoleReveal: React.FC = () => {
                                         'Share My Decryption Key'
                                     )}
                                 </Button>
-                                
+
                                 <Button
                                     onClick={decryptMyRole}
                                     isLoading={isProcessing}
                                     disabled={isProcessing || keysCollected < keysNeeded}
                                     className="w-full"
                                 >
-                                    {keysCollected < keysNeeded 
+                                    {keysCollected < keysNeeded
                                         ? `Waiting for ${keysNeeded - keysCollected} more keys...`
                                         : 'Decrypt My Role'
                                     }
@@ -436,15 +462,15 @@ export const RoleReveal: React.FC = () => {
                                     {gameState.players.map(player => {
                                         const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
                                         const hasKey = revealState.collectedKeys.has(player.address.toLowerCase());
-                                        
+
                                         return (
                                             <div
                                                 key={player.address}
                                                 className={`
                                                     px-2 py-1 rounded-full text-xs flex items-center gap-1
-                                                    ${isMe 
-                                                        ? 'bg-[#916A47]/30 text-[#916A47]' 
-                                                        : hasKey 
+                                                    ${isMe
+                                                        ? 'bg-[#916A47]/30 text-[#916A47]'
+                                                        : hasKey
                                                             ? 'bg-green-900/30 text-green-400'
                                                             : 'bg-white/5 text-white/30'
                                                     }
@@ -516,7 +542,7 @@ export const RoleReveal: React.FC = () => {
                                             {revealState.teammates.map(addr => {
                                                 const player = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
                                                 return (
-                                                    <span 
+                                                    <span
                                                         key={addr}
                                                         className="px-3 py-1 bg-red-500/20 border border-red-500/40 rounded-full text-red-300 text-sm"
                                                     >
