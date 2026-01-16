@@ -95,8 +95,18 @@ export const ShufflePhase: React.FC = () => {
                 args: [currentRoomId],
             }) as string[];
 
-            // V3.1: Use named property instead of index
-            const currentIndex = Number(roomData.currentShufflerIndex);
+            // ROBUST PARSING: Handle both Array and Object return types from viem
+            let currentIndex = 0;
+            if (Array.isArray(roomData)) {
+                // Struct is returned as array: [id, host, name, phase, maxPlayers, playersCount, aliveCount, dayCount, currentShufflerIndex, ...]
+                // currentShufflerIndex is at index 8
+                currentIndex = Number(roomData[8]);
+            } else if (roomData && typeof roomData === 'object') {
+                currentIndex = Number(roomData.currentShufflerIndex);
+            }
+
+            // Fallback if NaN
+            if (isNaN(currentIndex)) currentIndex = 0;
             const currentShuffler = gameState.players[currentIndex];
             const isMyTurnFromContract = currentShuffler?.address.toLowerCase() === myPlayer?.address.toLowerCase();
 
