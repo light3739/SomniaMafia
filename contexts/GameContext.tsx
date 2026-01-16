@@ -145,14 +145,20 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Используем session key - без попапа!
                 console.log(`[Session TX] ${functionName} via session key`);
                 try {
-                    // Dynamic gas limit based on function type
-                    let gasLimit = 500_000n; // Standard for simple actions (vote, commit)
+                    // === FIX: ДИНАМИЧЕСКИЕ ЛИМИТЫ ГАЗА ===
+                    let gasLimit = 1_000_000n; // Базовый лимит повышаем до 1М
 
-                    if (functionName === 'revealDeck' || functionName === 'shareKeysToAll') {
-                        gasLimit = 5_000_000n; // High buffer for heavy shuffle/reveal actions
+                    // Для тяжелых функций даем 20 миллионов газа (в тестовой сети это бесплатно)
+                    if (
+                        functionName === 'revealDeck' ||
+                        functionName === 'commitDeck' ||
+                        functionName === 'shareKeysToAll' ||
+                        functionName === 'createAndJoin' ||
+                        functionName === 'joinRoom'
+                    ) {
+                        gasLimit = 20_000_000n; // Максимально безопасный запас
+                        console.log(`[Session TX] ⛽ High Gas Limit set: ${gasLimit}`);
                     }
-
-                    console.log(`[Session TX] Using dynamic gas limit: ${gasLimit} for ${functionName}`);
 
                     const hash = await sessionClient.writeContract({
                         address: MAFIA_CONTRACT_ADDRESS,
@@ -173,11 +179,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Fallback на main wallet (с попапом)
         console.log(`[Main Wallet TX] ${functionName} - requires signature`);
+
+        // Определяем газ и для обычного кошелька
+        let manualGas = undefined;
+        if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom'].includes(functionName)) {
+            manualGas = 20_000_000n;
+        }
+
         return writeContractAsync({
             address: MAFIA_CONTRACT_ADDRESS,
             abi: MAFIA_ABI,
             functionName,
             args,
+            gas: manualGas,
         });
     }, [getSessionWalletClient, writeContractAsync]);
 

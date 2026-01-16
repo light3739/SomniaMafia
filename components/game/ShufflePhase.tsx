@@ -85,6 +85,7 @@ export const ShufflePhase: React.FC = () => {
         if (!publicClient || !currentRoomId) return;
 
         try {
+            // 1. Получаем состояние комнаты (легкий запрос)
             const roomData = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
@@ -92,99 +93,86 @@ export const ShufflePhase: React.FC = () => {
                 args: [currentRoomId],
             }) as any;
 
-            const deck = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'getDeck',
-                args: [currentRoomId],
-            }) as string[];
-
-            // DEBUG: Log raw data to debug index alignment (0 vs 1)
-            // HMR FORCE UPDATE 1
-            console.log('[Shuffle Raw] RoomData:', roomData);
-
-            // ROBUST PARSING
+            // Парсим индексы
             let currentIndex = 0;
+            let revealedCount = 0;
             let deadline = 0;
+
             if (Array.isArray(roomData)) {
-                currentIndex = Number(roomData[8]); // index 8 is currentShufflerIndex
-                deadline = Number(roomData[10]);    // index 10 is phaseDeadline
+                currentIndex = Number(roomData[8]);
+                deadline = Number(roomData[10]);
+                revealedCount = Number(roomData[14]);
             } else if (roomData && typeof roomData === 'object') {
                 currentIndex = Number(roomData.currentShufflerIndex);
                 deadline = Number(roomData.phaseDeadline);
+                revealedCount = Number(roomData.revealedCount);
             }
+
             if (isNaN(currentIndex)) currentIndex = 0;
 
-            // Check if it is my turn
-            // Note: Use gameState.players to map index to address
+            // 2. ЧИТАЕМ КОЛОДУ ЧЕРЕЗ СОБЫТИЯ (EVENTS), А НЕ ЧЕРЕЗ getDeck
+            // Это решает проблему с зависанием чтения огромного массива
+            let deck: string[] = [];
+
+            if (currentIndex > 0 || revealedCount > 0) {
+                try {
+                    // Ищем все события DeckRevealed для этой комнаты
+                    const logs = await publicClient.getContractEvents({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        eventName: 'DeckRevealed',
+                        args: { roomId: currentRoomId } as any,
+                        fromBlock: 'earliest'
+                    });
+
+                    // Если события есть, берем колоду из самого последнего
+                    if (logs && logs.length > 0) {
+                        const lastLog = logs[logs.length - 1];
+                        // @ts-ignore
+                        deck = (lastLog.args as any).deck as string[];
+                        console.log(`[Event Sync] Loaded deck with ${deck.length} cards from logs`);
+                    }
+                } catch (err) {
+                    console.error("Failed to read events:", err);
+                }
+            }
+
+            // Fallback: Если событий не нашли (или RPC глючит), пробуем прямой метод, но он может упасть
+            if (deck.length === 0 && (currentIndex > 0 || revealedCount > 0)) {
+                try {
+                    deck = await publicClient.readContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'getDeck',
+                        args: [currentRoomId],
+                    }) as string[];
+                    console.log(`[Direct Sync] Loaded deck with ${deck.length} cards`);
+                } catch (e) {
+                    console.warn("Direct getDeck failed, waiting for events...");
+                }
+            }
+
+            // Логика определения хода
             const currentShuffler = gameState.players[currentIndex];
             let isMyTurnFromContract = false;
-
             if (currentShuffler && myPlayer) {
                 isMyTurnFromContract = currentShuffler.address.toLowerCase() === myPlayer.address.toLowerCase();
             }
 
-            // CRITICAL FIX: If contract index is stuck (e.g. at 0), we CALCULATE the real index
-            // by checking who has already revealed.
-            let realIndex = currentIndex;
-
-            // Optimization: Only check if we suspect lag (e.g. deck is empty but index > 0, OR index is 0 but we know P1 revealed)
-            // But since contract is broken, we MUST check.
-            try {
-                // We check players starting from currentIndex up to end
-                // We can't check everyone due to RPC limits, but let's check next 3 players
-                for (let i = currentIndex; i < gameState.players.length; i++) {
-                    const p = gameState.players[i];
-                    if (!p) continue;
-
-                    const commitData = await publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MAFIA_ABI,
-                        functionName: 'deckCommits',
-                        args: [currentRoomId, p.address],
-                    }) as any; // [hash, revealed]
-
-                    // If this player HAS revealed, then the turn belongs to the NEXT player
-                    // In array return: [0] is hash, [1] is revealed boolean
-                    const isRevealed = Array.isArray(commitData) ? commitData[1] : commitData.revealed;
-
-                    if (isRevealed) {
-                        console.log(`[Shuffle Fix] Player ${i} (${p.name}) has revealed. Moving index forward.`);
-                        realIndex = i + 1;
-                    } else {
-                        // This player has NOT revealed. So it is TRULY their turn.
-                        realIndex = i;
-                        break;
-                    }
-                }
-            } catch (err) {
-                console.warn("[Shuffle Fix] Failed to calculate real index", err);
-            }
-
-            console.log(`[Shuffle Fix] Contract Index: ${currentIndex}, Real Index: ${realIndex}`);
-            currentIndex = realIndex;
-
-            // CRITICAL FIX: If I am Player > 0, but the deck is empty, I cannot start yet.
-            // RPC hasn't synced the previous player's reveal.
+            // Если я не первый игрок, но колоды нет — блокируем ход
             if (isMyTurnFromContract && currentIndex > 0 && deck.length === 0) {
-                console.warn("My turn, but deck is empty. Waiting for sync...");
-                isMyTurnFromContract = false; // Block UI until deck arrives
+                console.warn("My turn, but deck not synced yet.");
+                isMyTurnFromContract = false;
             }
 
             setShuffleState(prev => {
-                // Keep local 'revealed' state to prevent flickering back to 'commit'
-                if (prev.hasRevealed) {
-                    // STICKY MAX: Never allow index to go backwards if we've already revealed
-                    const safeIndex = Math.max(prev.currentShufflerIndex, currentIndex);
-                    return { ...prev, currentShufflerIndex: safeIndex, deck };
-                }
-                // Keep local 'committed' state
-                if (prev.hasCommitted && !prev.hasRevealed) {
-                    return { ...prev, currentShufflerIndex: currentIndex, deck };
-                }
+                // STICKY MAX: Never allow index to go backwards
+                const safeIndex = Math.max(prev.currentShufflerIndex, currentIndex);
 
-                // STICKY MAX check for general case as well (optional but safer)
-                const safeIndex = prev.hasRevealed ? Math.max(prev.currentShufflerIndex, currentIndex) : currentIndex;
+                // If we already revealed locally, don't let RPC overwrite it with stale 'revealed=false'
+                if (prev.hasRevealed) {
+                    return { ...prev, currentShufflerIndex: safeIndex, deck: deck.length > 0 ? deck : prev.deck };
+                }
 
                 return {
                     ...prev,
@@ -195,7 +183,7 @@ export const ShufflePhase: React.FC = () => {
                 };
             });
         } catch (error) {
-            console.error("Error fetching shuffle data:", error);
+            console.error("Shuffle sync error:", error);
         }
     }, [publicClient, currentRoomId, gameState.players, myPlayer]);
 
@@ -215,7 +203,7 @@ export const ShufflePhase: React.FC = () => {
             addLog(`Timeout kick tx sent: ${hash.substring(0, 10)}...`, 'info');
         } catch (err) {
             console.error("Kick failed", err);
-            addLog("Failed to kick player", 'error');
+            addLog("Failed to kick player", 'danger');
         } finally {
             setIsProcessing(false);
         }
@@ -338,8 +326,7 @@ export const ShufflePhase: React.FC = () => {
                     {/* Timeout Kick Button */}
                     {Date.now() / 1000 > shuffleState.phaseDeadline && shuffleState.phaseDeadline > 0 && (
                         <Button
-                            variant="destructive"
-                            size="sm"
+                            variant="secondary"
                             onClick={handleTimeoutKick}
                             disabled={isProcessing}
                             className="animate-pulse"
@@ -349,7 +336,7 @@ export const ShufflePhase: React.FC = () => {
                         </Button>
                     )}
 
-                    <Button variant="ghost" size="icon" onClick={forceSync} disabled={isSyncing}>
+                    <Button variant="ghost" onClick={forceSync} disabled={isSyncing}>
                         <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
                     </Button>
                 </div>     <div className="text-center mb-8">
