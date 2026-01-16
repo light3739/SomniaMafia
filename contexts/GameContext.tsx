@@ -298,18 +298,41 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [roomId],
             }) as any;
 
-            // V3 GameRoom: {id, host, phase, maxPlayers, playersCount, aliveCount, dayCount, currentShufflerIndex, lastActionTimestamp, confirmedCount, votedCount, committedCount, revealedCount}
-            const phase = Number(roomData.phase) as GamePhase;
-            const dayCount = Number(roomData.dayCount);
+            // ROBUST PARSING: Handle Array vs Object return
+            let phase: GamePhase;
+            let dayCount: number;
+            let aliveCount: number;
+            let committedCount: number;
+            let revealedCount: number;
+
+            if (Array.isArray(roomData)) {
+                // [id, host, roomName, phase, maxPlayers, playersCount, aliveCount, dayCount, currentShufflerIndex, ...]
+                // phase is index 3
+                // aliveCount is index 6
+                // dayCount is index 7
+                // committedCount is index 13
+                // revealedCount is index 14
+                phase = Number(roomData[3]) as GamePhase;
+                aliveCount = Number(roomData[6]);
+                dayCount = Number(roomData[7]);
+                committedCount = Number(roomData[13]);
+                revealedCount = Number(roomData[14]);
+            } else {
+                phase = Number(roomData.phase) as GamePhase;
+                dayCount = Number(roomData.dayCount);
+                aliveCount = Number(roomData.aliveCount);
+                committedCount = Number(roomData.committedCount);
+                revealedCount = Number(roomData.revealedCount);
+            }
 
             // DEBUG: Log current phase from contract
             console.log('[Phase Sync]', {
                 contractPhase: phase,
                 phaseName: GamePhase[phase],
                 dayCount,
-                aliveCount: Number(roomData.aliveCount),
-                committedCount: Number(roomData.committedCount),
-                revealedCount: Number(roomData.revealedCount)
+                aliveCount,
+                committedCount,
+                revealedCount
             });
 
             setGameState(prev => {
