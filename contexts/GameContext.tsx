@@ -145,9 +145,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Используем session key - без попапа!
                 console.log(`[Session TX] ${functionName} via session key`);
                 try {
-                    // Most game actions need 100-300k gas, 3,000,000 is safe buffer for heavier Shuffle/Reveal actions
-                    const gasLimit = 3_000_000n;
-                    console.log(`[Session TX] Using gas limit: ${gasLimit}`);
+                    // Dynamic gas limit based on function type
+                    let gasLimit = 500_000n; // Standard for simple actions (vote, commit)
+
+                    if (functionName === 'revealDeck' || functionName === 'shareKeysToAll') {
+                        gasLimit = 5_000_000n; // High buffer for heavy shuffle/reveal actions
+                    }
+
+                    console.log(`[Session TX] Using dynamic gas limit: ${gasLimit} for ${functionName}`);
 
                     const hash = await sessionClient.writeContract({
                         address: MAFIA_CONTRACT_ADDRESS,
@@ -396,7 +401,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     pubKeyHex,      // bytes publicKey
                     sessionAddress  // address sessionAddress
                 ],
-                value: parseEther('0.02'), // Деньги для бота (0.02 ETH according to V4)
+                value: parseEther('0.05'), // Деньги для бота (0.02 ETH according to V4)
             });
 
             addLog(`Creating room "${lobbyName}"...`, "info");
