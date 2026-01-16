@@ -98,14 +98,27 @@ export const ShufflePhase: React.FC = () => {
             // V3.1: Use named property instead of index
             const currentIndex = Number(roomData.currentShufflerIndex);
             const currentShuffler = gameState.players[currentIndex];
-            const isMyTurn = currentShuffler?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+            const isMyTurnFromContract = currentShuffler?.address.toLowerCase() === myPlayer?.address.toLowerCase();
 
-            setShuffleState(prev => ({
-                ...prev,
-                currentShufflerIndex: currentIndex,
-                deck: deck,
-                isMyTurn: isMyTurn && !prev.hasCommitted
-            }));
+            setShuffleState(prev => {
+                // If we've already committed, don't change isMyTurn - we're waiting for reveal
+                // The UI logic uses hasCommitted/hasRevealed to show the correct button
+                if (prev.hasCommitted && !prev.hasRevealed) {
+                    return {
+                        ...prev,
+                        currentShufflerIndex: currentIndex,
+                        deck: deck,
+                        // Keep isMyTurn unchanged - UI will show Reveal button based on hasCommitted
+                    };
+                }
+
+                return {
+                    ...prev,
+                    currentShufflerIndex: currentIndex,
+                    deck: deck,
+                    isMyTurn: isMyTurnFromContract && !prev.hasCommitted
+                };
+            });
         } catch (e) {
             console.error("Failed to fetch shuffle data:", e);
         }
@@ -177,8 +190,8 @@ export const ShufflePhase: React.FC = () => {
 
             setShuffleState(prev => ({
                 ...prev,
-                hasCommitted: true,
-                isMyTurn: false
+                hasCommitted: true
+                // Don't reset isMyTurn - it's still our turn to reveal!
             }));
 
             addLog("Commit successful! Click Reveal to complete.", "success");

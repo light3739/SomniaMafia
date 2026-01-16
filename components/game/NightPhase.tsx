@@ -102,6 +102,12 @@ export const NightPhase: React.FC = () => {
     const syncWithContract = useCallback(async () => {
         if (!publicClient || !currentRoomId || !address) return;
 
+        // Don't overwrite optimistic UI during active transactions
+        if (isProcessing || isTxPending) {
+            console.log('[NightPhase] Skipping sync: transaction in progress');
+            return;
+        }
+
         try {
             // V4: getPlayerFlags now returns 7 values (added hasClaimedMafia)
             const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys, hasClaimedMafia] = await publicClient.readContract({
@@ -130,7 +136,7 @@ export const NightPhase: React.FC = () => {
         } catch (e) {
             console.error("Failed to sync night state:", e);
         }
-    }, [publicClient, currentRoomId, address]);
+    }, [publicClient, currentRoomId, address, isProcessing, isTxPending]);
 
     // Sync on mount and periodically
     useEffect(() => {
