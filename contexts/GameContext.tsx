@@ -324,20 +324,26 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // V4: Player struct has flags instead of separate bools
                 const formattedPlayers: Player[] = data.map((p: any) => {
                     const flags = Number(p.flags);
-                    const isActive = (flags & FLAG_ACTIVE) !== 0;
-                    const hasConfirmedRole = (flags & FLAG_CONFIRMED_ROLE) !== 0;
-                    // V4 adds FLAG_CLAIMED_MAFIA (128) - tracked but not used in frontend yet
+
+                    // Битовые маски из контракта (см. SomniaMafiaV4.sol):
+                    // FLAG_CONFIRMED_ROLE = 1, FLAG_ACTIVE = 2, FLAG_HAS_VOTED = 4,
+                    // FLAG_HAS_COMMITTED = 8, FLAG_HAS_REVEALED = 16, FLAG_HAS_SHARED_KEYS = 32,
+                    // FLAG_DECK_COMMITTED = 64, FLAG_CLAIMED_MAFIA = 128
 
                     return {
                         id: p.wallet,
                         name: p.nickname,
                         address: p.wallet,
                         role: existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN,
-                        isAlive: isActive,
-                        hasConfirmedRole,
+                        isAlive: (flags & FLAG_ACTIVE) !== 0,
+                        hasConfirmedRole: (flags & FLAG_CONFIRMED_ROLE) !== 0,
+                        hasDeckCommitted: (flags & 64) !== 0,
+                        hasVoted: (flags & 4) !== 0,           // Voting phase
+                        hasNightCommitted: (flags & 8) !== 0,  // Night phase commit
+                        hasNightRevealed: (flags & 16) !== 0,  // Night phase reveal
                         avatarUrl: `https://picsum.photos/seed/${p.wallet}/200`,
                         votesReceived: 0,
-                        status: isActive ? 'connected' : 'slashed'
+                        status: (flags & FLAG_ACTIVE) !== 0 ? 'connected' : 'slashed'
                     };
                 });
 

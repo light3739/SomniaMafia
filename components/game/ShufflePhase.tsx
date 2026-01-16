@@ -41,6 +41,39 @@ export const ShufflePhase: React.FC = () => {
     });
     const [isProcessing, setIsProcessing] = useState(false);
 
+    // Состояние для pending deck и salt (для reveal фазы)
+    const [pendingDeck, setPendingDeck] = useState<string[] | null>(null);
+    const [pendingSalt, setPendingSalt] = useState<string | null>(null);
+
+    // LocalStorage key для persistence
+    const SHUFFLE_COMMIT_KEY = `mafia_shuffle_commit_${currentRoomId}_${myPlayer?.address}`;
+
+    // Автоматическое переключение на Reveal, если блокчейн говорит, что мы уже закоммитили
+    useEffect(() => {
+        if (myPlayer?.hasDeckCommitted && !shuffleState.hasCommitted) {
+            console.log("Recovering state: Deck already committed on-chain");
+
+            // Пытаемся восстановить данные из localStorage (они там должны быть!)
+            const saved = localStorage.getItem(SHUFFLE_COMMIT_KEY);
+
+            if (saved) {
+                try {
+                    const { deck, salt } = JSON.parse(saved);
+                    setPendingDeck(deck);
+                    setPendingSalt(salt);
+                } catch (e) {
+                    console.error("Failed to recover pending deck", e);
+                }
+            }
+
+            setShuffleState(prev => ({
+                ...prev,
+                hasCommitted: true, // Форсируем переключение UI
+                isMyTurn: true      // Это всё еще мой ход, но теперь фаза Reveal
+            }));
+        }
+    }, [myPlayer?.hasDeckCommitted, currentRoomId, myPlayer?.address, shuffleState.hasCommitted, SHUFFLE_COMMIT_KEY]);
+
     // Получить данные из контракта
     const fetchShuffleData = useCallback(async () => {
         if (!publicClient || !currentRoomId) return;
@@ -84,33 +117,6 @@ export const ShufflePhase: React.FC = () => {
         const interval = setInterval(fetchShuffleData, 3000);
         return () => clearInterval(interval);
     }, [fetchShuffleData]);
-
-    // Состояние для pending deck и salt (для reveal фазы)
-    const [pendingDeck, setPendingDeck] = useState<string[] | null>(null);
-    const [pendingSalt, setPendingSalt] = useState<`0x${string}` | null>(null);
-
-    // LocalStorage key для persistence
-    const SHUFFLE_COMMIT_KEY = `mafia_shuffle_commit_${currentRoomId}_${myPlayer?.address}`;
-
-    // Загружаем данные из localStorage при монтировании
-    useEffect(() => {
-        if (!currentRoomId || !myPlayer?.address) return;
-
-        const saved = localStorage.getItem(SHUFFLE_COMMIT_KEY);
-        if (saved) {
-            try {
-                const { deck, salt, hasCommitted } = JSON.parse(saved);
-                if (deck && salt) {
-                    setPendingDeck(deck);
-                    setPendingSalt(salt);
-                    setShuffleState(prev => ({ ...prev, hasCommitted: true }));
-                    addLog("Restored pending shuffle from previous session", "info");
-                }
-            } catch (e) {
-                console.error("Failed to load shuffle commit data:", e);
-            }
-        }
-    }, [currentRoomId, myPlayer?.address, SHUFFLE_COMMIT_KEY, addLog]);
 
     // Обработка моего хода - фаза COMMIT
     const handleMyTurn = async () => {

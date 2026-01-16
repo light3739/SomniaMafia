@@ -38,6 +38,20 @@ export const DayPhase: React.FC = () => {
     const isVotingPhase = gameState.phase === GamePhase.VOTING;
     const isDayPhase = gameState.phase === GamePhase.DAY;
 
+    // Восстановление состояния из блокчейна после рефреша
+    useEffect(() => {
+        // Если блокчейн говорит, что мы проголосовали, а локально мы "не в курсе"
+        if (myPlayer?.hasVoted && !voteState.hasVoted) {
+            console.log("Recovering vote state: Already voted on-chain");
+            setVoteState(prev => ({
+                ...prev,
+                hasVoted: true,
+                // Мы не знаем за кого голосовали (контракт не отдает это просто так),
+                // но знаем ЧТО голосовали - UI заблокирует кнопку
+            }));
+        }
+    }, [myPlayer?.hasVoted, voteState.hasVoted]);
+
     // Первый игрок (хост) может управлять фазами
     const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
 

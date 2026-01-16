@@ -6,24 +6,20 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
 /**
- * @title MafiaPortal V4 - Production Ready
- * @notice Security fixes while preserving all game features:
- * - Session keys (fixed)
- * - Encrypted deck sharing
- * - Commit-reveal night actions
- * - Auto-finalize mechanics
- * - Timeout enforcement
+ * @title MafiaPortal V4 - FINAL PRODUCTION
+ * @notice Features:
+ * - Named Rooms
+ * - Atomic Transactions (Create+Join, Commit+Confirm)
+ * - Session keys with auto-funding
+ * - Secure Commit-Reveal for Roles & Actions
  */
 contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
-    // ============ ROLES ============
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
-    // ============ ENUMS ============
     enum GamePhase { LOBBY, SHUFFLING, REVEAL, DAY, VOTING, NIGHT, ENDED }
     enum NightActionType { NONE, KILL, HEAL, CHECK }
     enum Role { NONE, MAFIA, DOCTOR, DETECTIVE, CITIZEN }
 
-    // ============ STRUCTS ============
     struct Player {
         address wallet;
         string nickname;
@@ -34,6 +30,7 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
     struct GameRoom {
         uint64 id;
         address host;
+        string name; // <--- ДОБАВЛЕНО ИМЯ КОМНАТЫ
         GamePhase phase;
         uint8 maxPlayers;
         uint8 playersCount;
@@ -43,7 +40,6 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         uint32 lastActionTimestamp;
         uint32 phaseDeadline;
         
-        // Auto-finalize counters
         uint8 confirmedCount;
         uint8 votedCount;
         uint8 committedCount;
@@ -88,48 +84,37 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
     mapping(uint256 => mapping(address => bool)) public isPlayerInRoom;
     mapping(uint256 => mapping(address => uint8)) public playerIndex;
     
-    // Commit-reveal for decks
     mapping(uint256 => mapping(address => DeckCommit)) public deckCommits;
     mapping(uint256 => string[]) public revealedDeck;
-    
-    // 3D mapping for encrypted keys
     mapping(uint256 => mapping(address => mapping(address => bytes))) public playerDeckKeys;
     
-    // Voting
     mapping(uint256 => mapping(address => address)) public votes;
     mapping(uint256 => mapping(address => uint8)) public voteCounts;
 
-    // Night
     mapping(uint256 => mapping(address => NightCommit)) public nightCommits;
     mapping(uint256 => mapping(address => NightActionType)) public revealedActions;
     mapping(uint256 => mapping(address => address)) public revealedTargets;
 
-    // Roles
     mapping(uint256 => mapping(address => Role)) public playerRoles;
     mapping(uint256 => mapping(address => bytes32)) public roleCommits;
     
-    // Mafia Chat & Consensus Kill
     mapping(uint256 => MafiaMessage[]) public mafiaChat;
     mapping(uint256 => mapping(address => MafiaTargetCommit)) public mafiaTargetCommits;
     mapping(uint256 => uint8) public mafiaCommittedCount;
     mapping(uint256 => uint8) public mafiaRevealedCount;
     mapping(uint256 => address) public mafiaConsensusTarget;
 
-    // Session Keys (FIXED)
     mapping(address => SessionKey) public sessionKeys;
     mapping(address => address) public sessionToMain;
     mapping(address => bool) public isRegisteredSession;
 
     uint256 public nextRoomId = 1;
     
-    // Timeouts
     uint32 public constant TURN_TIMEOUT = 2 minutes;
     uint32 public constant PHASE_TIMEOUT = 5 minutes;
     uint32 public constant SESSION_DURATION = 4 hours;
-    uint32 public constant COMMIT_PHASE_DURATION = 3 minutes;
-    uint32 public constant MAX_ARRAY_SIZE = 50; // Gas limit protection
+    uint32 public constant MAX_ARRAY_SIZE = 50; 
     
-    // Player flags
     uint32 constant FLAG_CONFIRMED_ROLE = 1;
     uint32 constant FLAG_ACTIVE = 2;
     uint32 constant FLAG_HAS_VOTED = 4;
@@ -137,10 +122,10 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
     uint32 constant FLAG_HAS_REVEALED = 16;
     uint32 constant FLAG_HAS_SHARED_KEYS = 32;
     uint32 constant FLAG_DECK_COMMITTED = 64;
-    uint32 constant FLAG_CLAIMED_MAFIA = 128; // Used mafia functions - must be MAFIA at reveal
+    uint32 constant FLAG_CLAIMED_MAFIA = 128; 
 
     // ============ EVENTS ============
-    event RoomCreated(uint256 indexed roomId, address host, uint256 maxPlayers);
+    event RoomCreated(uint256 indexed roomId, address host, string name, uint256 maxPlayers); // <--- Добавлено name
     event PlayerJoined(uint256 indexed roomId, address player, string nickname, address sessionKey);
     event GameStarted(uint256 indexed roomId);
     event DeckCommitted(uint256 indexed roomId, address player, bytes32 commitHash);
@@ -166,17 +151,14 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
     event EmergencyPause(address indexed admin);
     event EmergencyUnpause(address indexed admin);
     
-    // Role & Mafia Events
     event RoleCommitted(uint256 indexed roomId, address player, bytes32 commitHash);
     event RoleRevealed(uint256 indexed roomId, address player, Role role);
     event MafiaMessageSent(uint256 indexed roomId, address sender, bytes encryptedMessage);
     event MafiaTargetCommitted(uint256 indexed roomId, address player, bytes32 commitHash);
     event MafiaTargetRevealed(uint256 indexed roomId, address player, address target);
-    event AllMafiaCommitted(uint256 indexed roomId);
     event MafiaConsensusReached(uint256 indexed roomId, address target, bool success);
     event MafiaCheaterPunished(uint256 indexed roomId, address cheater, Role actualRole);
 
-    // ============ ERRORS ============
     error NotParticipant();
     error NotYourTurn();
     error WrongPhase();
@@ -197,14 +179,11 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
     error InvalidSessionKey();
     error InvalidArrayLength();
     error PhaseDeadlinePassed();
-    error CommitDeadlinePassed();
     error SessionAlreadyRegistered();
     error InvalidSessionAddress();
     error ArrayTooLarge();
     error NicknameTooLong();
     error PublicKeyTooLong();
-    
-    // Role & Mafia Errors
     error RoleAlreadyCommitted();
     error RoleAlreadyRevealed();
     error InvalidRoleReveal();
@@ -214,16 +193,14 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
     error InvalidMafiaTargetReveal();
     error MafiaNotReady();
     error NotEnoughPlayers();
-    
-    // Auto-end game errors
     error NotAllRolesRevealed();
     error WinConditionNotMet();
     error RoleNotCommitted();
     error NotCommitted();
     error InvalidPlayerCount();
     error SaltTooLong();
+    error RoomNameTooLong(); // <--- NEW
 
-    // ============ MODIFIERS ============
     modifier onlyActiveParticipant(uint256 roomId) {
         address player = _resolvePlayer(roomId);
         if (!isPlayerInRoom[roomId][player]) revert NotParticipant();
@@ -238,27 +215,17 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         _;
     }
 
-    // ============ CONSTRUCTOR ============
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
     }
 
-    // ============ EMERGENCY CONTROLS ============
-    function pause() external onlyRole(ADMIN_ROLE) {
-        _pause();
-        emit EmergencyPause(msg.sender);
-    }
+    function pause() external onlyRole(ADMIN_ROLE) { _pause(); emit EmergencyPause(msg.sender); }
+    function unpause() external onlyRole(ADMIN_ROLE) { _unpause(); emit EmergencyUnpause(msg.sender); }
 
-    function unpause() external onlyRole(ADMIN_ROLE) {
-        _unpause();
-        emit EmergencyUnpause(msg.sender);
-    }
-
-    // ============ SESSION KEY LOGIC (FIXED) ============
+    // ============ SESSION KEY LOGIC ============
     function _resolvePlayer(uint256 roomId) internal view returns (address) {
         address potentialMain = sessionToMain[msg.sender];
-        
         if (potentialMain != address(0)) {
             SessionKey storage session = sessionKeys[potentialMain];
             if (!session.isActive) revert InvalidSessionKey();
@@ -266,17 +233,14 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
             if (session.roomId != roomId) revert SessionNotForThisRoom();
             return potentialMain;
         }
-        
         return msg.sender;
     }
 
     function _registerSessionKey(address mainWallet, address sessionAddress, uint256 roomId) internal {
-        // FIX: Validate session address
         if (sessionAddress == address(0)) revert InvalidSessionAddress();
         if (isRegisteredSession[sessionAddress]) revert SessionAlreadyRegistered();
         if (sessionToMain[sessionAddress] != address(0)) revert SessionAlreadyRegistered();
         
-        // Revoke old session if exists
         if (sessionKeys[mainWallet].isActive) {
             address oldSession = sessionKeys[mainWallet].sessionAddress;
             delete sessionToMain[oldSession];
@@ -284,14 +248,12 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         }
 
         uint32 expiresAt = uint32(block.timestamp + SESSION_DURATION);
-        
         sessionKeys[mainWallet] = SessionKey({
             sessionAddress: sessionAddress,
             expiresAt: expiresAt,
             roomId: uint64(roomId),
             isActive: true
         });
-        
         sessionToMain[sessionAddress] = mainWallet;
         isRegisteredSession[sessionAddress] = true;
         
@@ -308,7 +270,6 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         }
     }
 
-    // ============ FLAG HELPERS ============
     function _hasFlag(uint256 roomId, address wallet, uint32 flag) internal view returns (bool) {
         uint8 idx = playerIndex[roomId][wallet];
         return (roomPlayers[roomId][idx].flags & flag) != 0;
@@ -324,16 +285,29 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         roomPlayers[roomId][idx].flags &= ~flag;
     }
 
-    // ============ LOBBY ============
-    function createRoom(uint8 maxPlayers) external whenNotPaused returns (uint256) {
-        // Validate player count (min 4 for proper mafia game, max 20 for gas limits)
+    // ============ ATOMIC CREATE AND JOIN (LOBBY) ============
+    
+    /**
+     * @notice Create room AND Join immediately (Atomic)
+     * @dev Saves gas and improves UX
+     */
+    function createAndJoin(
+        string calldata roomName,
+        uint8 maxPlayers,
+        string calldata nickname,
+        bytes calldata publicKey,
+        address sessionAddress
+    ) external payable nonReentrant whenNotPaused returns (uint256) {
+        // 1. Create Room
         if (maxPlayers < 4 || maxPlayers > 20) revert InvalidPlayerCount();
+        if (bytes(roomName).length > 32) revert RoomNameTooLong();
         
         uint256 roomId = nextRoomId++;
         
         rooms[roomId] = GameRoom({
             id: uint64(roomId),
             host: msg.sender,
+            name: roomName,
             phase: GamePhase.LOBBY,
             maxPlayers: maxPlayers,
             playersCount: 0,
@@ -349,26 +323,52 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
             keysSharedCount: 0
         });
         
-        emit RoomCreated(roomId, msg.sender, maxPlayers);
+        emit RoomCreated(roomId, msg.sender, roomName, maxPlayers);
+
+        // 2. Join Room
+        if (bytes(nickname).length > 128) revert NicknameTooLong();
+        if (publicKey.length > 1024) revert PublicKeyTooLong();
+
+        roomPlayers[roomId].push(Player({
+            wallet: msg.sender,
+            nickname: nickname,
+            publicKey: publicKey,
+            flags: FLAG_ACTIVE
+        }));
+        
+        isPlayerInRoom[roomId][msg.sender] = true;
+        playerIndex[roomId][msg.sender] = 0;
+        rooms[roomId].playersCount = 1;
+        rooms[roomId].aliveCount = 1;
+
+        if (sessionAddress != address(0)) {
+            _registerSessionKey(msg.sender, sessionAddress, roomId);
+            // Fund session key
+            if (msg.value > 0) {
+                (bool sent, ) = payable(sessionAddress).call{value: msg.value}("");
+                require(sent, "Failed to fund session");
+            }
+        }
+
+        emit PlayerJoined(roomId, msg.sender, nickname, sessionAddress);
         return roomId;
     }
 
+    // Legacy Join (for other players)
     function joinRoom(
         uint256 roomId, 
         string calldata nickname, 
         bytes calldata publicKey,
         address sessionAddress
-    ) external nonReentrant whenNotPaused {
+    ) external payable nonReentrant whenNotPaused {
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.LOBBY) revert WrongPhase();
         if (room.playersCount >= room.maxPlayers) revert RoomFull();
         if (isPlayerInRoom[roomId][msg.sender]) revert AlreadyJoined();
 
-        // FIX: Limit nickname length to prevent gas griefing
-        if (bytes(nickname).length > 32) revert NicknameTooLong();
-        if (publicKey.length > 128) revert PublicKeyTooLong();
+        if (bytes(nickname).length > 128) revert NicknameTooLong();
+        if (publicKey.length > 1024) revert PublicKeyTooLong();
 
-        // Add player
         uint8 idx = uint8(roomPlayers[roomId].length);
         roomPlayers[roomId].push(Player({
             wallet: msg.sender,
@@ -382,24 +382,21 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         room.playersCount++;
         room.aliveCount++;
 
-        // Register session key if provided
         if (sessionAddress != address(0)) {
             _registerSessionKey(msg.sender, sessionAddress, roomId);
+            if (msg.value > 0) {
+                (bool sent, ) = payable(sessionAddress).call{value: msg.value}("");
+                require(sent, "Failed to fund session");
+            }
         }
 
         emit PlayerJoined(roomId, msg.sender, nickname, sessionAddress);
     }
 
-    // ============ SHUFFLING (FIXED WITH COMMIT-REVEAL) ============
-    /**
-     * @notice Start the game - any participant can call when enough players joined
-     * @dev Decentralized - no host required, minimum 4 players for proper mafia game
-     */
+    // ============ GAME FLOW ============
+
     function startGame(uint256 roomId) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        whenNotPaused 
+        external nonReentrant onlyActiveParticipant(roomId) whenNotPaused 
     {
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.LOBBY) revert WrongPhase();
@@ -414,18 +411,12 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
     }
 
     function commitDeck(uint256 roomId, bytes32 deckHash) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId)
-        beforeDeadline(roomId)
-        whenNotPaused
+        external nonReentrant onlyActiveParticipant(roomId) beforeDeadline(roomId) whenNotPaused
     {
         address player = _resolvePlayer(roomId);
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.SHUFFLING) revert WrongPhase();
         if (roomPlayers[roomId][room.currentShufflerIndex].wallet != player) revert NotYourTurn();
-        
-        // FIX: Prevent double commit
         if (_hasFlag(roomId, player, FLAG_DECK_COMMITTED)) revert AlreadyCommitted();
         
         deckCommits[roomId][player].commitHash = deckHash;
@@ -436,21 +427,15 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
     }
 
     function revealDeck(uint256 roomId, string[] calldata deck, string calldata salt) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId)
-        beforeDeadline(roomId)
-        whenNotPaused
+        external nonReentrant onlyActiveParticipant(roomId) beforeDeadline(roomId) whenNotPaused
     {
         address player = _resolvePlayer(roomId);
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.SHUFFLING) revert WrongPhase();
         
-        // Verify commit (use abi.encode for dynamic arrays)
         bytes32 calculatedHash = keccak256(abi.encode(deck, salt));
         if (calculatedHash != deckCommits[roomId][player].commitHash) revert InvalidReveal();
         
-        // FIX: Validate deck size with gas limit
         if (deck.length > MAX_ARRAY_SIZE) revert ArrayTooLarge();
         if (revealedDeck[roomId].length == 0 && deck.length < room.playersCount) revert InvalidDeckSize();
         if (revealedDeck[roomId].length != 0 && deck.length != revealedDeck[roomId].length) revert InvalidDeckSize();
@@ -477,7 +462,6 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         room.confirmedCount = 0;
         room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
         
-        // Reset flags for all alive players
         Player[] storage players = roomPlayers[roomId];
         for (uint8 i = 0; i < players.length; i++) {
             if ((players[i].flags & FLAG_ACTIVE) != 0) {
@@ -488,17 +472,12 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
 
     function _findNextActive(uint256 roomId, uint8 startIndex) internal view returns (uint8) {
         Player[] storage players = roomPlayers[roomId];
-        uint8 len = uint8(players.length);
-        
-        for (uint8 i = startIndex; i < len; i++) {
-            if ((players[i].flags & FLAG_ACTIVE) != 0) {
-                return i;
-            }
+        for (uint8 i = startIndex; i < players.length; i++) {
+            if ((players[i].flags & FLAG_ACTIVE) != 0) return i;
         }
-        return len;
+        return uint8(players.length);
     }
 
-        // ============ REVEAL - BATCH SHARE KEYS ============
     function shareKeysToAll(
         uint256 roomId, 
         address[] calldata recipients, 
@@ -510,52 +489,75 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         if (room.phase != GamePhase.REVEAL) revert WrongPhase();
         if (recipients.length != encryptedKeys.length) revert InvalidArrayLength();
         if (recipients.length > MAX_ARRAY_SIZE) revert ArrayTooLarge();
-        // Check player hasn't already shared
         if (_hasFlag(roomId, player, FLAG_HAS_SHARED_KEYS)) revert AlreadySharedKeys();
         
-        // Store all keys in one tx
         for (uint256 i = 0; i < recipients.length; i++) {
             address to = recipients[i];
             if (!isPlayerInRoom[roomId][to]) revert NotParticipant();
-            if (to == player) revert InvalidSessionAddress(); // Can't share with self
+            if (to == player) revert InvalidSessionAddress();
             playerDeckKeys[roomId][player][to] = encryptedKeys[i];
         }
         
-        // Mark player as having shared
         _setFlag(roomId, player, FLAG_HAS_SHARED_KEYS);
         room.keysSharedCount++;
-        
         emit KeysSharedToAll(roomId, player);
+        if (room.keysSharedCount == room.aliveCount) emit AllKeysShared(roomId);
+    }
+
+    // ============ ATOMIC ROLE COMMIT & CONFIRM (NEW) ============
+    
+    /**
+     * @notice Commit Role AND Confirm in one transaction
+     * @dev Saves gas for the player
+     */
+    function commitAndConfirmRole(uint256 roomId, bytes32 roleHash) 
+        external nonReentrant onlyActiveParticipant(roomId) beforeDeadline(roomId) whenNotPaused 
+    {
+        address player = _resolvePlayer(roomId);
+        GameRoom storage room = rooms[roomId];
         
-        // Check if all alive players have shared
-        if (room.keysSharedCount == room.aliveCount) {
-            emit AllKeysShared(roomId);
+        if (room.phase != GamePhase.REVEAL) revert WrongPhase();
+        if (roleCommits[roomId][player] != bytes32(0)) revert RoleAlreadyCommitted();
+        if (_hasFlag(roomId, player, FLAG_CONFIRMED_ROLE)) revert AlreadyRevealed();
+
+        // 1. Commit
+        roleCommits[roomId][player] = roleHash;
+        emit RoleCommitted(roomId, player, roleHash);
+
+        // 2. Confirm
+        _setFlag(roomId, player, FLAG_CONFIRMED_ROLE);
+        room.confirmedCount++;
+        emit RoleConfirmed(roomId, player);
+
+        // Check Auto-Finalize
+        if (room.confirmedCount == room.aliveCount) {
+            _transitionToDay(roomId);
+            emit AllRolesConfirmed(roomId);
         }
     }
 
-    /**
-     * @notice Confirm role after decrypting - with AUTO-FINALIZE
-     */
+    // Standalone functions (legacy)
+    function commitRole(uint256 roomId, bytes32 roleHash) 
+        external nonReentrant onlyActiveParticipant(roomId) whenNotPaused 
+    {
+        address player = _resolvePlayer(roomId);
+        if (rooms[roomId].phase != GamePhase.REVEAL) revert WrongPhase();
+        if (roleCommits[roomId][player] != bytes32(0)) revert RoleAlreadyCommitted();
+        roleCommits[roomId][player] = roleHash;
+        emit RoleCommitted(roomId, player, roleHash);
+    }
+
     function confirmRole(uint256 roomId) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        beforeDeadline(roomId) 
-        whenNotPaused
+        external nonReentrant onlyActiveParticipant(roomId) beforeDeadline(roomId) whenNotPaused
     {
         address player = _resolvePlayer(roomId);
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.REVEAL) revert WrongPhase();
-        
-        // Check not already confirmed
         if (_hasFlag(roomId, player, FLAG_CONFIRMED_ROLE)) revert AlreadyRevealed();
         
         _setFlag(roomId, player, FLAG_CONFIRMED_ROLE);
         room.confirmedCount++;
-        
         emit RoleConfirmed(roomId, player);
-        
-        // AUTO-FINALIZE: Check if all confirmed
         if (room.confirmedCount == room.aliveCount) {
             _transitionToDay(roomId);
             emit AllRolesConfirmed(roomId);
@@ -571,40 +573,25 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         emit DayStarted(roomId, room.dayCount);
     }
 
-    // ============ DAY & VOTING - AUTO-FINALIZE ============
     function startVoting(uint256 roomId) external nonReentrant onlyActiveParticipant(roomId) whenNotPaused {
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.DAY) revert WrongPhase();
-        
         room.phase = GamePhase.VOTING;
         room.votedCount = 0;
         room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
         
-        // Reset vote flags AND voteCounts for all ALIVE players only
         Player[] storage players = roomPlayers[roomId];
         for (uint8 i = 0; i < players.length; i++) {
             address p = players[i].wallet;
             players[i].flags &= ~FLAG_HAS_VOTED;
             votes[roomId][p] = address(0);
-            
-            // Only reset voteCounts for alive players
-            if ((players[i].flags & FLAG_ACTIVE) != 0) {
-                voteCounts[roomId][p] = 0;
-            }
+            if ((players[i].flags & FLAG_ACTIVE) != 0) voteCounts[roomId][p] = 0;
         }
-        
         emit VotingStarted(roomId);
     }
 
-    /**
-     * @notice Cast vote - with AUTO-FINALIZE when all voted
-     */
     function vote(uint256 roomId, address target) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        beforeDeadline(roomId) 
-        whenNotPaused
+        external nonReentrant onlyActiveParticipant(roomId) beforeDeadline(roomId) whenNotPaused
     {
         address player = _resolvePlayer(roomId);
         GameRoom storage room = rooms[roomId];
@@ -613,33 +600,23 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         if (!_hasFlag(roomId, target, FLAG_ACTIVE)) revert PlayerInactive();
         
         bool alreadyVoted = _hasFlag(roomId, player, FLAG_HAS_VOTED);
-        
-        // Handle vote change
         address oldTarget = votes[roomId][player];
-        if (oldTarget != address(0) && voteCounts[roomId][oldTarget] > 0) {
-            voteCounts[roomId][oldTarget]--;
-        }
+        if (oldTarget != address(0) && voteCounts[roomId][oldTarget] > 0) voteCounts[roomId][oldTarget]--;
 
         votes[roomId][player] = target;
         voteCounts[roomId][target]++;
         
-        // Mark as voted (first vote)
         if (!alreadyVoted) {
             _setFlag(roomId, player, FLAG_HAS_VOTED);
             room.votedCount++;
         }
-        
         emit VoteCast(roomId, player, target);
         
-        // AUTO-FINALIZE: Check if all alive players voted
-        if (room.votedCount == room.aliveCount) {
-            _finalizeVoting(roomId);
-        }
+        if (room.votedCount == room.aliveCount) _finalizeVoting(roomId);
     }
 
     function _finalizeVoting(uint256 roomId) internal {
         GameRoom storage room = rooms[roomId];
-        
         address victim = address(0);
         uint8 maxVotes = 0;
         
@@ -648,27 +625,20 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
             if ((players[i].flags & FLAG_ACTIVE) != 0) {
                 address p = players[i].wallet;
                 uint8 v = voteCounts[roomId][p];
-                if (v > maxVotes) {
-                    maxVotes = v;
-                    victim = p;
-                }
+                if (v > maxVotes) { maxVotes = v; victim = p; }
             }
         }
 
-        // Quorum: > 50%
         if (maxVotes > room.aliveCount / 2 && victim != address(0)) {
             _killPlayer(roomId, victim);
             emit PlayerEliminated(roomId, victim, "Voted out");
             emit VotingFinalized(roomId, victim, maxVotes);
         } else {
-            emit VotingFinalized(roomId, address(0), 0); // No elimination
+            emit VotingFinalized(roomId, address(0), 0);
         }
 
         _resetVotingState(roomId);
-
-        if (!_checkWinCondition(roomId)) {
-            _transitionToNight(roomId);
-        }
+        if (!_checkWinCondition(roomId)) _transitionToNight(roomId);
     }
 
     function _transitionToNight(uint256 roomId) internal {
@@ -678,7 +648,6 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         room.revealedCount = 0;
         room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
         
-        // Reset night flags for all players
         Player[] storage players = roomPlayers[roomId];
         for (uint8 i = 0; i < players.length; i++) {
             address p = players[i].wallet;
@@ -686,56 +655,30 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
             delete nightCommits[roomId][p];
             delete revealedActions[roomId][p];
             delete revealedTargets[roomId][p];
-            // Reset mafia target commits
             delete mafiaTargetCommits[roomId][p];
         }
         
-        // Reset mafia consensus state
         mafiaCommittedCount[roomId] = 0;
         mafiaRevealedCount[roomId] = 0;
         mafiaConsensusTarget[roomId] = address(0);
-        
         emit NightStarted(roomId);
     }
 
-    // ============ NIGHT - SIMPLIFIED FLOW ============
-    /**
-     * @notice End night phase - anyone can call when ready
-     * @dev Mafia must have reached consensus, special roles must have revealed
-     */
     function endNight(uint256 roomId) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        whenNotPaused 
+        external nonReentrant onlyActiveParticipant(roomId) whenNotPaused 
     {
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.NIGHT) revert WrongPhase();
         
-        // Mafia must have finished (all who committed must reveal)
         uint8 mafiaCommitted = mafiaCommittedCount[roomId];
-        if (mafiaCommitted > 0 && mafiaRevealedCount[roomId] < mafiaCommitted) {
-            revert MafiaNotReady();
-        }
-        
-        // All who committed must have revealed
-        if (room.revealedCount < room.committedCount) {
-            revert InvalidReveal();
-        }
+        if (mafiaCommitted > 0 && mafiaRevealedCount[roomId] < mafiaCommitted) revert MafiaNotReady();
+        if (room.revealedCount < room.committedCount) revert InvalidReveal();
         
         _finalizeNight(roomId);
     }
 
-    /**
-     * @notice Commit night action - for Doctor/Detective only
-     * @dev Mafia uses voting instead of commit-reveal
-     */
     function commitNightAction(uint256 roomId, bytes32 hash) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        beforeDeadline(roomId)
-        whenNotPaused
+        external nonReentrant onlyActiveParticipant(roomId) beforeDeadline(roomId) whenNotPaused
     {
         address player = _resolvePlayer(roomId);
         GameRoom storage room = rooms[roomId];
@@ -747,17 +690,11 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
             revealed: false,
             commitTime: uint32(block.timestamp)
         });
-        
         _setFlag(roomId, player, FLAG_HAS_COMMITTED);
         room.committedCount++;
-        
         emit NightActionCommitted(roomId, player, hash);
     }
 
-    /**
-     * @notice Reveal night action - for Doctor/Detective only (Mafia uses voting)
-     * @dev Mafia should NOT use this - they use startMafiaVote + voteInMafia
-     */
     function revealNightAction(
         uint256 roomId, 
         NightActionType action, 
@@ -768,14 +705,9 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         GameRoom storage room = rooms[roomId];
         if (room.phase != GamePhase.NIGHT) revert WrongPhase();
         if (_hasFlag(roomId, player, FLAG_HAS_REVEALED)) revert AlreadyRevealed();
-        
-        // Mafia uses voting, not commit-reveal
         if (action == NightActionType.KILL) revert Unauthorized();
-        
-        // Must have committed first
         if (!_hasFlag(roomId, player, FLAG_HAS_COMMITTED)) revert NotCommitted();
         
-        // Validate target is alive
         if (action != NightActionType.NONE && target != address(0)) {
             if (!isPlayerInRoom[roomId][target]) revert NotParticipant();
             if (!_hasFlag(roomId, target, FLAG_ACTIVE)) revert PlayerInactive();
@@ -787,53 +719,110 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         nightCommits[roomId][player].revealed = true;
         revealedActions[roomId][player] = action;
         revealedTargets[roomId][player] = target;
-        
         _setFlag(roomId, player, FLAG_HAS_REVEALED);
         room.revealedCount++;
-
         emit NightActionRevealed(roomId, player, action, target);
         
-        // AUTO-FINALIZE: when all who committed have revealed
-        if (room.revealedCount == room.committedCount && room.committedCount > 0) {
-            _finalizeNight(roomId);
-        }
+        if (room.revealedCount == room.committedCount && room.committedCount > 0) _finalizeNight(roomId);
     }
 
-    /**
-     * @notice Finalize night - consensus-based mafia kill
-     * @dev Mafia kill comes from mafiaConsensusTarget, Doctor/Detective use commit-reveal
-     */
-    function _finalizeNight(uint256 roomId) internal {
-        // Get mafia's target from consensus (all must agree)
-        address mafiaTarget = mafiaConsensusTarget[roomId];
+    function sendMafiaMessage(uint256 roomId, bytes calldata encryptedMessage) 
+        external nonReentrant onlyActiveParticipant(roomId) whenNotPaused 
+    {
+        address player = _resolvePlayer(roomId);
+        if (rooms[roomId].phase != GamePhase.NIGHT) revert WrongPhase();
+        if (roleCommits[roomId][player] == bytes32(0)) revert RoleNotCommitted();
+        if (encryptedMessage.length > 1024) revert ArrayTooLarge();
         
-        // Find healed player from Doctor's commit-reveal
+        _setFlag(roomId, player, FLAG_CLAIMED_MAFIA);
+        mafiaChat[roomId].push(MafiaMessage({
+            encryptedMessage: encryptedMessage,
+            timestamp: uint32(block.timestamp),
+            sender: player
+        }));
+        emit MafiaMessageSent(roomId, player, encryptedMessage);
+    }
+
+    function commitMafiaTarget(uint256 roomId, bytes32 targetHash) 
+        external nonReentrant onlyActiveParticipant(roomId) beforeDeadline(roomId) whenNotPaused 
+    {
+        address player = _resolvePlayer(roomId);
+        if (rooms[roomId].phase != GamePhase.NIGHT) revert WrongPhase();
+        if (roleCommits[roomId][player] == bytes32(0)) revert RoleNotCommitted();
+        if (mafiaTargetCommits[roomId][player].commitHash != bytes32(0)) revert MafiaTargetAlreadyCommitted();
+        
+        _setFlag(roomId, player, FLAG_CLAIMED_MAFIA);
+        mafiaTargetCommits[roomId][player].commitHash = targetHash;
+        mafiaCommittedCount[roomId]++;
+        emit MafiaTargetCommitted(roomId, player, targetHash);
+    }
+
+    function revealMafiaTarget(uint256 roomId, address target, string calldata salt) 
+        external nonReentrant onlyActiveParticipant(roomId) beforeDeadline(roomId) whenNotPaused 
+    {
+        address player = _resolvePlayer(roomId);
+        if (rooms[roomId].phase != GamePhase.NIGHT) revert WrongPhase();
+        if (roleCommits[roomId][player] == bytes32(0)) revert RoleNotCommitted();
+        if (mafiaTargetCommits[roomId][player].revealed) revert MafiaTargetAlreadyRevealed();
+        
+        _setFlag(roomId, player, FLAG_CLAIMED_MAFIA);
+        if (target != address(0)) {
+            if (!isPlayerInRoom[roomId][target]) revert NotParticipant();
+            if (!_hasFlag(roomId, target, FLAG_ACTIVE)) revert PlayerInactive();
+        }
+        
+        bytes32 calculatedHash = keccak256(abi.encode(target, salt));
+        if (calculatedHash != mafiaTargetCommits[roomId][player].commitHash) revert InvalidMafiaTargetReveal();
+        
+        mafiaTargetCommits[roomId][player].target = target;
+        mafiaTargetCommits[roomId][player].revealed = true;
+        mafiaRevealedCount[roomId]++;
+        emit MafiaTargetRevealed(roomId, player, target);
+        
+        if (mafiaRevealedCount[roomId] == mafiaCommittedCount[roomId]) _checkMafiaConsensus(roomId);
+    }
+
+    function _checkMafiaConsensus(uint256 roomId) internal {
+        if (mafiaCommittedCount[roomId] == 0) return;
+        address firstTarget = address(0);
+        bool firstSet = false;
+        bool consensus = true;
+        
+        Player[] storage players = roomPlayers[roomId];
+        for (uint8 i = 0; i < players.length; i++) {
+            address p = players[i].wallet;
+            if (mafiaTargetCommits[roomId][p].revealed && (players[i].flags & FLAG_ACTIVE) != 0) {
+                address target = mafiaTargetCommits[roomId][p].target;
+                if (!firstSet) { firstTarget = target; firstSet = true; }
+                else if (target != firstTarget) { consensus = false; break; }
+            }
+        }
+        address consensusTarget = (consensus && firstTarget != address(0)) ? firstTarget : address(0);
+        mafiaConsensusTarget[roomId] = consensusTarget;
+        emit MafiaConsensusReached(roomId, consensusTarget, consensus && firstTarget != address(0));
+    }
+
+    function _finalizeNight(uint256 roomId) internal {
+        address mafiaTarget = mafiaConsensusTarget[roomId];
         address healed = address(0);
         Player[] storage players = roomPlayers[roomId];
         for (uint8 i = 0; i < players.length; i++) {
             address p = players[i].wallet;
             if (revealedActions[roomId][p] == NightActionType.HEAL) {
                 healed = revealedTargets[roomId][p];
-                break; // First HEAL wins
+                break;
             }
         }
 
         emit NightFinalized(roomId, mafiaTarget, healed);
-
-        // Kill mafia's target if not healed (and consensus was reached)
         if (mafiaTarget != address(0) && mafiaTarget != healed) {
             _killPlayer(roomId, mafiaTarget);
             emit PlayerEliminated(roomId, mafiaTarget, "Killed at night");
         }
-
         _resetNightState(roomId);
-
-        if (!_checkWinCondition(roomId)) {
-            _transitionToDay(roomId);
-        }
+        if (!_checkWinCondition(roomId)) _transitionToDay(roomId);
     }
 
-    // ============ HELPERS ============
     function _killPlayer(uint256 roomId, address victim) internal {
         if (!_hasFlag(roomId, victim, FLAG_ACTIVE)) return;
         _clearFlag(roomId, victim, FLAG_ACTIVE);
@@ -864,94 +853,51 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         rooms[roomId].revealedCount = 0;
     }
 
-    function _checkWinCondition(uint256 roomId) internal returns (bool ended) {
+    function _checkWinCondition(uint256 roomId) internal returns (bool) {
         GameRoom storage room = rooms[roomId];
-        
         if (room.aliveCount <= 1) {
             _endGame(roomId, room.aliveCount == 0 ? "Draw" : "Last player standing");
             return true;
         }
-        
-        // Проверяем win condition если все раскрыли роли
         if (_allRolesRevealed(roomId)) {
             (bool mafiaWins, bool townWins) = _calculateWinCondition(roomId);
-            if (mafiaWins) {
-                _endGame(roomId, "Mafia wins");
-                return true;
-            } else if (townWins) {
-                _endGame(roomId, "Town wins");
-                return true;
-            }
+            if (mafiaWins) { _endGame(roomId, "Mafia wins"); return true; }
+            else if (townWins) { _endGame(roomId, "Town wins"); return true; }
         }
-        
         return false;
     }
-    
-    /**
-     * @notice Автоматически завершить игру когда условие выполнено
-     * @dev Вызывается любым игроком после того как все раскрыли роли
-     */
-    function endGameAutomatically(uint256 roomId) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        whenNotPaused 
-    {
+
+    function endGameAutomatically(uint256 roomId) external nonReentrant onlyActiveParticipant(roomId) whenNotPaused {
         GameRoom storage room = rooms[roomId];
         if (room.phase == GamePhase.LOBBY || room.phase == GamePhase.ENDED) revert WrongPhase();
         if (!_allRolesRevealed(roomId)) revert NotAllRolesRevealed();
         
         (bool mafiaWins, bool townWins) = _calculateWinCondition(roomId);
-        
-        if (mafiaWins) {
-            _endGame(roomId, "Mafia wins");
-        } else if (townWins) {
-            _endGame(roomId, "Town wins");
-        } else {
-            revert WinConditionNotMet();
-        }
+        if (mafiaWins) _endGame(roomId, "Mafia wins");
+        else if (townWins) _endGame(roomId, "Town wins");
+        else revert WinConditionNotMet();
     }
 
-    /**
-     * @notice Проверить, что все живые игроки раскрыли роли
-     */
     function _allRolesRevealed(uint256 roomId) internal view returns (bool) {
         Player[] storage players = roomPlayers[roomId];
         for (uint8 i = 0; i < players.length; i++) {
-            address p = players[i].wallet;
-            if ((players[i].flags & FLAG_ACTIVE) != 0) {
-                if (playerRoles[roomId][p] == Role.NONE) {
-                    return false;
-                }
-            }
+            if ((players[i].flags & FLAG_ACTIVE) != 0 && playerRoles[roomId][players[i].wallet] == Role.NONE) return false;
         }
         return true;
     }
 
-    /**
-     * @notice Рассчитать win condition на основе раскрытых ролей
-     * @return mafiaWins true если мафия >= город
-     * @return townWins true если мафия = 0 и город > 0
-     */
     function _calculateWinCondition(uint256 roomId) internal view returns (bool mafiaWins, bool townWins) {
         uint8 mafiaCount = 0;
         uint8 townCount = 0;
-        
         Player[] storage players = roomPlayers[roomId];
         for (uint8 i = 0; i < players.length; i++) {
-            address p = players[i].wallet;
             if ((players[i].flags & FLAG_ACTIVE) != 0) {
-                Role role = playerRoles[roomId][p];
-                if (role == Role.MAFIA) {
-                    mafiaCount++;
-                } else if (role == Role.DOCTOR || role == Role.DETECTIVE || role == Role.CITIZEN) {
-                    townCount++;
-                }
+                Role role = playerRoles[roomId][players[i].wallet];
+                if (role == Role.MAFIA) mafiaCount++;
+                else if (role != Role.NONE) townCount++;
             }
         }
-        
-        mafiaWins = (mafiaCount > 0 && mafiaCount >= townCount);
-        townWins = (mafiaCount == 0 && townCount > 0);
+        return (mafiaCount > 0 && mafiaCount >= townCount, mafiaCount == 0 && townCount > 0);
     }
 
     function _endGame(uint256 roomId, string memory reason) internal {
@@ -960,37 +906,8 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         emit GameEnded(roomId, reason);
     }
 
-    // ============ ROLE COMMIT-REVEAL ============
-    
-    /**
-     * @notice Commit хеш роли (после расшифровки)
-     * @dev roleHash = keccak256(abi.encode(role, salt))
-     */
-    function commitRole(uint256 roomId, bytes32 roleHash) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        whenNotPaused 
-    {
-        address player = _resolvePlayer(roomId);
-        GameRoom storage room = rooms[roomId];
-        if (room.phase != GamePhase.REVEAL) revert WrongPhase();
-        if (roleCommits[roomId][player] != bytes32(0)) revert RoleAlreadyCommitted();
-        
-        roleCommits[roomId][player] = roleHash;
-        emit RoleCommitted(roomId, player, roleHash);
-    }
-
-    /**
-     * @notice Reveal role (for verification at game end)
-     * @dev Uses abi.encode for safety
-     * @dev PUNISHMENT: If FLAG_CLAIMED_MAFIA is set but role != MAFIA -> player eliminated
-     */
     function revealRole(uint256 roomId, Role role, string calldata salt) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        whenNotPaused 
+        external nonReentrant onlyActiveParticipant(roomId) whenNotPaused 
     {
         address player = _resolvePlayer(roomId);
         if (playerRoles[roomId][player] != Role.NONE) revert RoleAlreadyRevealed();
@@ -1003,7 +920,6 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         playerRoles[roomId][player] = role;
         emit RoleRevealed(roomId, player, role);
         
-        // PUNISHMENT: If claimed mafia but role is not MAFIA → eliminate player
         if (_hasFlag(roomId, player, FLAG_CLAIMED_MAFIA) && role != Role.MAFIA) {
             _killPlayer(roomId, player);
             emit MafiaCheaterPunished(roomId, player, role);
@@ -1011,233 +927,20 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         }
     }
 
-    // ============ MAFIA CHAT & CONSENSUS KILL ============
-    
-    /**
-     * @notice Отправить сообщение в чат мафии (только мафия)
-     * @dev Сообщение зашифровано общим ключом мафии
-     * @dev ВНИМАНИЕ: Использование этой функции устанавливает FLAG_CLAIMED_MAFIA
-     *      Если при revealRole роль != MAFIA, игрок выбывает!
-     */
-    function sendMafiaMessage(uint256 roomId, bytes calldata encryptedMessage) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        whenNotPaused 
-    {
-        address player = _resolvePlayer(roomId);
+    // ============ TIMEOUT ============
+    function forcePhaseTimeout(uint256 roomId) external nonReentrant onlyActiveParticipant(roomId) whenNotPaused {
         GameRoom storage room = rooms[roomId];
-        if (room.phase != GamePhase.NIGHT) revert WrongPhase();
-        if (roleCommits[roomId][player] == bytes32(0)) revert RoleNotCommitted();
-        if (encryptedMessage.length > 1024) revert ArrayTooLarge();
-        
-        // Mark as claimed mafia - will be verified at revealRole
-        _setFlag(roomId, player, FLAG_CLAIMED_MAFIA);
-        
-        mafiaChat[roomId].push(MafiaMessage({
-            encryptedMessage: encryptedMessage,
-            timestamp: uint32(block.timestamp),
-            sender: player
-        }));
-        
-        emit MafiaMessageSent(roomId, player, encryptedMessage);
-    }
-
-    /**
-     * @notice Commit цели убийства (тайное голосование)
-     * @dev targetHash = keccak256(abi.encode(target, salt))
-     * @dev ВНИМАНИЕ: Использование этой функции устанавливает FLAG_CLAIMED_MAFIA
-     *      Если при revealRole роль != MAFIA, игрок выбывает!
-     */
-    function commitMafiaTarget(uint256 roomId, bytes32 targetHash) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        beforeDeadline(roomId)
-        whenNotPaused 
-    {
-        address player = _resolvePlayer(roomId);
-        GameRoom storage room = rooms[roomId];
-        if (room.phase != GamePhase.NIGHT) revert WrongPhase();
-        if (roleCommits[roomId][player] == bytes32(0)) revert RoleNotCommitted();
-        if (mafiaTargetCommits[roomId][player].commitHash != bytes32(0)) revert MafiaTargetAlreadyCommitted();
-        
-        // Mark as claimed mafia - will be verified at revealRole
-        _setFlag(roomId, player, FLAG_CLAIMED_MAFIA);
-        
-        mafiaTargetCommits[roomId][player].commitHash = targetHash;
-        mafiaCommittedCount[roomId]++;
-        
-        emit MafiaTargetCommitted(roomId, player, targetHash);
-    }
-
-    /**
-     * @notice Reveal цели убийства
-     * @dev Все мафиози должны выбрать одну цель для успешного убийства
-     * @dev ВНИМАНИЕ: Устанавливает FLAG_CLAIMED_MAFIA - верификация при revealRole
-     */
-    function revealMafiaTarget(uint256 roomId, address target, string calldata salt) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        beforeDeadline(roomId)
-        whenNotPaused 
-    {
-        address player = _resolvePlayer(roomId);
-        GameRoom storage room = rooms[roomId];
-        if (room.phase != GamePhase.NIGHT) revert WrongPhase();
-        if (roleCommits[roomId][player] == bytes32(0)) revert RoleNotCommitted();
-        if (mafiaTargetCommits[roomId][player].revealed) revert MafiaTargetAlreadyRevealed();
-        
-        // Mark as claimed mafia (may already be set from commit)
-        _setFlag(roomId, player, FLAG_CLAIMED_MAFIA);
-        
-        // Validate target
-        if (target != address(0)) {
-            if (!isPlayerInRoom[roomId][target]) revert NotParticipant();
-            if (!_hasFlag(roomId, target, FLAG_ACTIVE)) revert PlayerInactive();
-        }
-        
-        bytes32 calculatedHash = keccak256(abi.encode(target, salt));
-        if (calculatedHash != mafiaTargetCommits[roomId][player].commitHash) revert InvalidMafiaTargetReveal();
-        
-        mafiaTargetCommits[roomId][player].target = target;
-        mafiaTargetCommits[roomId][player].revealed = true;
-        mafiaRevealedCount[roomId]++;
-        
-        emit MafiaTargetRevealed(roomId, player, target);
-        
-        // Проверяем консенсус когда все кто закоммитил - раскрыли
-        if (mafiaRevealedCount[roomId] == mafiaCommittedCount[roomId]) {
-            _checkMafiaConsensus(roomId);
-        }
-    }
-
-    /**
-     * @notice Проверить консенсус мафии (внутренний)
-     * @dev Убийство только если ВСЕ кто закоммитил выбрали одну цель
-     */
-    function _checkMafiaConsensus(uint256 roomId) internal {
-        uint8 mafiaCommitted = mafiaCommittedCount[roomId];
-        if (mafiaCommitted == 0) return;
-        
-        // Собираем все цели от тех кто reveal'нул
-        address firstTarget = address(0);
-        bool firstSet = false;
-        bool consensus = true;
-        
-        Player[] storage players = roomPlayers[roomId];
-        for (uint8 i = 0; i < players.length; i++) {
-            address p = players[i].wallet;
-            // Проверяем только тех кто reveal'нул mafia target
-            if (mafiaTargetCommits[roomId][p].revealed && (players[i].flags & FLAG_ACTIVE) != 0) {
-                address target = mafiaTargetCommits[roomId][p].target;
-                
-                if (!firstSet) {
-                    firstTarget = target;
-                    firstSet = true;
-                } else if (target != firstTarget) {
-                    consensus = false;
-                    break;
-                }
-            }
-        }
-        
-        // Консенсус = все выбрали одну цель (не address(0))
-        address consensusTarget = (consensus && firstTarget != address(0)) ? firstTarget : address(0);
-        mafiaConsensusTarget[roomId] = consensusTarget;
-        
-        emit MafiaConsensusReached(roomId, consensusTarget, consensus && firstTarget != address(0));
-    }
-    
-    /**
-     * @notice Подсчет игроков, которые закоммитили mafia target (участвуют в убийстве)
-     * @dev Используется для проверки готовности ночи
-     */
-    function getAliveMafiaCount(uint256 roomId) public view returns (uint8) {
-        // Возвращаем количество игроков, которые закоммитили mafia target
-        // Это те, кто участвует в голосовании за убийство
-        return mafiaCommittedCount[roomId];
-    }
-    
-    /**
-     * @notice Подсчет реально раскрытых мафиози (после revealRole)
-     * @dev Используется для win condition
-     */
-    function getRevealedMafiaCount(uint256 roomId) public view returns (uint8) {
-        uint8 count = 0;
-        Player[] storage players = roomPlayers[roomId];
-        for (uint8 i = 0; i < players.length; i++) {
-            address p = players[i].wallet;
-            if (playerRoles[roomId][p] == Role.MAFIA && (players[i].flags & FLAG_ACTIVE) != 0) {
-                count++;
-            }
-        }
-        return count;
-    }
-    
-    /**
-     * @notice Получить сообщения чата мафии
-     */
-    function getMafiaChat(uint256 roomId) external view returns (MafiaMessage[] memory) {
-        return mafiaChat[roomId];
-    }
-    
-    /**
-     * @notice Получить статус консенсуса мафии
-     */
-    function getMafiaConsensus(uint256 roomId) external view returns (
-        uint8 committed, 
-        uint8 revealed, 
-        address consensusTarget
-    ) {
-        return (
-            mafiaCommittedCount[roomId],
-            mafiaRevealedCount[roomId],
-            mafiaConsensusTarget[roomId]
-        );
-    }
-
-    // ============ TIMEOUT ENFORCEMENT ============
-    /**
-     * @notice Force phase transition when deadline passed
-     * @dev Decentralized - any participant can call after deadline has passed
-     */
-    function forcePhaseTimeout(uint256 roomId) 
-        external 
-        nonReentrant
-        onlyActiveParticipant(roomId) 
-        whenNotPaused 
-    {
-        GameRoom storage room = rooms[roomId];
-        
-        if (room.phaseDeadline == 0) revert TimeNotExpired();
-        if (block.timestamp <= room.phaseDeadline) revert TimeNotExpired();
-        if (room.phase == GamePhase.LOBBY || room.phase == GamePhase.ENDED) revert WrongPhase();
+        if (room.phaseDeadline == 0 || block.timestamp <= room.phaseDeadline) revert TimeNotExpired();
         
         emit PhaseTimeout(roomId, room.phase);
-        
-        if (room.phase == GamePhase.SHUFFLING) {
-            _kickCurrentShuffler(roomId);
-        } 
+        if (room.phase == GamePhase.SHUFFLING) _kickCurrentShuffler(roomId);
         else if (room.phase == GamePhase.REVEAL) {
             _kickUnconfirmedPlayers(roomId);
-            if (room.aliveCount >= 2) {
-                _transitionToDay(roomId);
-            } else {
-                _endGame(roomId, "Too few players remaining");
-            }
+            if (room.aliveCount >= 2) _transitionToDay(roomId); else _endGame(roomId, "Too few players remaining");
         }
-        else if (room.phase == GamePhase.VOTING) {
-            // Finalize with current votes
-            _finalizeVoting(roomId);
-        }
-        else if (room.phase == GamePhase.NIGHT) {
-            // Force finalize night (mafia vote + doctor/detective reveals)
-            _finalizeNight(roomId);
-        }
+        else if (room.phase == GamePhase.VOTING) _finalizeVoting(roomId);
+        else if (room.phase == GamePhase.NIGHT) _finalizeNight(roomId);
         else if (room.phase == GamePhase.DAY) {
-            // Auto-start voting
             room.phase = GamePhase.VOTING;
             room.votedCount = 0;
             room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
@@ -1247,37 +950,28 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
 
     function _kickCurrentShuffler(uint256 roomId) internal {
         GameRoom storage room = rooms[roomId];
-        
         if (room.currentShufflerIndex < roomPlayers[roomId].length) {
             address stalledPlayer = roomPlayers[roomId][room.currentShufflerIndex].wallet;
             _killPlayer(roomId, stalledPlayer);
             emit PlayerKicked(roomId, stalledPlayer, "Timeout during shuffle");
         }
         
-        // Find next active
         uint8 nextIndex = _findNextActive(roomId, room.currentShufflerIndex + 1);
         room.currentShufflerIndex = nextIndex;
         room.lastActionTimestamp = uint32(block.timestamp);
         room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
         
         if (nextIndex >= roomPlayers[roomId].length) {
-            if (room.aliveCount >= 2) {
-                _transitionToReveal(roomId);
-            } else {
-                _endGame(roomId, "Too few players remaining");
-            }
+            if (room.aliveCount >= 2) _transitionToReveal(roomId); else _endGame(roomId, "Too few players remaining");
         }
     }
 
     function _kickUnconfirmedPlayers(uint256 roomId) internal {
         Player[] storage players = roomPlayers[roomId];
-        
         for (uint8 i = 0; i < players.length; i++) {
             if ((players[i].flags & FLAG_ACTIVE) != 0) {
-                // Kick if didn't share keys OR didn't confirm role
                 bool shared = (players[i].flags & FLAG_HAS_SHARED_KEYS) != 0;
                 bool confirmed = (players[i].flags & FLAG_CONFIRMED_ROLE) != 0;
-                
                 if (!shared || !confirmed) {
                     _killPlayer(roomId, players[i].wallet);
                     emit PlayerKicked(roomId, players[i].wallet, "Timeout during reveal");
@@ -1286,53 +980,27 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         }
     }
 
-    // ============ VIEW FUNCTIONS ============
-    
-    function getPlayers(uint256 roomId) external view returns (Player[] memory) {
-        return roomPlayers[roomId];
+    // ============ ADMIN ============
+    function withdrawFees() external onlyRole(ADMIN_ROLE) {
+        payable(msg.sender).transfer(address(this).balance);
     }
+
+    // ============ VIEW ============
+    function getPlayers(uint256 roomId) external view returns (Player[] memory) { return roomPlayers[roomId]; }
+    function getDeck(uint256 roomId) external view returns (string[] memory) { return revealedDeck[roomId]; }
+    function getRoom(uint256 roomId) external view returns (GameRoom memory) { return rooms[roomId]; }
+    function getKeyFromTo(uint256 roomId, address from, address to) external view returns (bytes memory) { return playerDeckKeys[roomId][from][to]; }
     
-    function getDeck(uint256 roomId) external view returns (string[] memory) {
-        return revealedDeck[roomId];
-    }
-    
-    function getRoom(uint256 roomId) external view returns (GameRoom memory) {
-        return rooms[roomId];
-    }
-    
-    /**
-     * @notice Get decryption key that `from` shared for `to`
-     */
-    function getKeyFromTo(uint256 roomId, address from, address to) external view returns (bytes memory) {
-        return playerDeckKeys[roomId][from][to];
-    }
-    
-    /**
-     * @notice Get all decryption keys shared TO me (by all other players)
-     * @dev Returns arrays of senders and their keys
-     */
     function getAllKeysForMe(uint256 roomId) external view returns (address[] memory senders, bytes[] memory keys) {
-        address player = sessionToMain[msg.sender];
-        if (player == address(0)) {
-            player = msg.sender;
-        }
-        
+        address player = sessionToMain[msg.sender] != address(0) ? sessionToMain[msg.sender] : msg.sender;
         Player[] storage players = roomPlayers[roomId];
         uint8 count = 0;
-        
-        // Count how many keys we have
         for (uint8 i = 0; i < players.length; i++) {
-            address sender = players[i].wallet;
-            if (sender != player && playerDeckKeys[roomId][sender][player].length > 0) {
-                count++;
-            }
+            if (players[i].wallet != player && playerDeckKeys[roomId][players[i].wallet][player].length > 0) count++;
         }
-        
-        // Build arrays
         senders = new address[](count);
         keys = new bytes[](count);
         uint8 idx = 0;
-        
         for (uint8 i = 0; i < players.length; i++) {
             address sender = players[i].wallet;
             if (sender != player && playerDeckKeys[roomId][sender][player].length > 0) {
@@ -1341,33 +1009,32 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
                 idx++;
             }
         }
-        
-        return (senders, keys);
     }
 
     function getPlayerFlags(uint256 roomId, address player) external view returns (
-        bool isActive,
-        bool hasConfirmedRole,
-        bool hasVoted,
-        bool hasCommitted,
-        bool hasRevealed,
-        bool hasSharedKeys,
-        bool hasClaimedMafia
+        bool isActive, bool hasConfirmedRole, bool hasVoted, bool hasCommitted, bool hasRevealed, bool hasSharedKeys, bool hasClaimedMafia
     ) {
         uint8 idx = playerIndex[roomId][player];
         uint32 flags = roomPlayers[roomId][idx].flags;
         return (
-            (flags & FLAG_ACTIVE) != 0,
-            (flags & FLAG_CONFIRMED_ROLE) != 0,
-            (flags & FLAG_HAS_VOTED) != 0,
-            (flags & FLAG_HAS_COMMITTED) != 0,
-            (flags & FLAG_HAS_REVEALED) != 0,
-            (flags & FLAG_HAS_SHARED_KEYS) != 0,
+            (flags & FLAG_ACTIVE) != 0, (flags & FLAG_CONFIRMED_ROLE) != 0, (flags & FLAG_HAS_VOTED) != 0,
+            (flags & FLAG_HAS_COMMITTED) != 0, (flags & FLAG_HAS_REVEALED) != 0, (flags & FLAG_HAS_SHARED_KEYS) != 0,
             (flags & FLAG_CLAIMED_MAFIA) != 0
         );
     }
-
-    function getPhaseDeadline(uint256 roomId) external view returns (uint32) {
-        return rooms[roomId].phaseDeadline;
+    
+    function getPhaseDeadline(uint256 roomId) external view returns (uint32) { return rooms[roomId].phaseDeadline; }
+    function getAliveMafiaCount(uint256 roomId) public view returns (uint8) { return mafiaCommittedCount[roomId]; }
+    function getRevealedMafiaCount(uint256 roomId) public view returns (uint8) { 
+        uint8 count = 0;
+        for(uint8 i=0; i<roomPlayers[roomId].length; i++) {
+            address p = roomPlayers[roomId][i].wallet;
+            if(playerRoles[roomId][p] == Role.MAFIA && (roomPlayers[roomId][i].flags & FLAG_ACTIVE) != 0) count++;
+        }
+        return count;
+    }
+    function getMafiaChat(uint256 roomId) external view returns (MafiaMessage[] memory) { return mafiaChat[roomId]; }
+    function getMafiaConsensus(uint256 roomId) external view returns (uint8 committed, uint8 revealed, address consensusTarget) {
+        return (mafiaCommittedCount[roomId], mafiaRevealedCount[roomId], mafiaConsensusTarget[roomId]);
     }
 }

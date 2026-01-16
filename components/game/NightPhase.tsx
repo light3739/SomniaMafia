@@ -256,6 +256,46 @@ export const NightPhase: React.FC = () => {
         }
     }, [currentRoomId, address, NIGHT_COMMIT_KEY]);
 
+    // Восстановление состояния из блокчейна после рефреша (используя флаги из GameContext)
+    useEffect(() => {
+        // Если контракт говорит "Ты уже сделал Commit", но локально мы не знаем
+        if (myPlayer?.hasNightCommitted && !nightState.hasCommitted) {
+            console.log("Recovering Night State: Commit detected on-chain");
+
+            // Пытаемся достать соль и цель из localStorage
+            const saved = localStorage.getItem(NIGHT_COMMIT_KEY);
+
+            if (saved) {
+                try {
+                    const { salt, commitHash, committedTarget } = JSON.parse(saved);
+                    setNightState(prev => ({
+                        ...prev,
+                        hasCommitted: true,
+                        salt,
+                        commitHash,
+                        committedTarget
+                    }));
+                } catch (e) {
+                    console.error("Failed to restore night data", e);
+                    // LocalStorage пуст/битый, но коммит есть в блокчейне
+                    // Показываем что ход сделан, но Reveal невозможен
+                    setNightState(prev => ({ ...prev, hasCommitted: true }));
+                    addLog("Warning: Action committed on-chain but local data lost. Reveal may fail.", "warning");
+                }
+            } else {
+                // Если в localStorage пусто - проблема, reveal не получится
+                setNightState(prev => ({ ...prev, hasCommitted: true }));
+                addLog("Warning: Action committed on-chain but local data lost.", "warning");
+            }
+        }
+
+        // Если уже и Reveal сделал
+        if (myPlayer?.hasNightRevealed && !nightState.hasRevealed) {
+            console.log("Recovering Night State: Reveal detected on-chain");
+            setNightState(prev => ({ ...prev, hasCommitted: true, hasRevealed: true }));
+        }
+    }, [myPlayer?.hasNightCommitted, myPlayer?.hasNightRevealed, nightState.hasCommitted, nightState.hasRevealed, NIGHT_COMMIT_KEY, addLog]);
+
     // Commit action - V4: Mafia uses commitMafiaTarget, others use commitNightAction
     // Optimistic UI: обновляем state сразу, rollback при ошибке
     const handleCommit = async () => {
