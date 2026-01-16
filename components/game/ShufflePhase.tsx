@@ -248,7 +248,15 @@ export const ShufflePhase: React.FC = () => {
     // Текущий шаффлер
     const currentShuffler = gameState.players[shuffleState.currentShufflerIndex];
     const totalPlayers = gameState.players.length;
-    const progress = Math.min((shuffleState.currentShufflerIndex / totalPlayers) * 100, 100);
+
+    // Optimistic progress: if I am the current shuffler (according to state) but I have revealed,
+    // then visually we are actually at index + 1.
+    const isMeCurrent = currentShuffler?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+    const effectiveIndex = (isMeCurrent && shuffleState.hasRevealed)
+        ? shuffleState.currentShufflerIndex + 1
+        : shuffleState.currentShufflerIndex;
+
+    const progress = Math.min((effectiveIndex / totalPlayers) * 100, 100);
 
     return (
         <div className="w-full h-full flex flex-col items-center justify-center p-8">
@@ -303,9 +311,23 @@ export const ShufflePhase: React.FC = () => {
                 {/* Player List */}
                 <div className="space-y-2 mb-8 max-h-[200px] overflow-y-auto">
                     {gameState.players.map((player, index) => {
-                        const isCurrentTurn = index === shuffleState.currentShufflerIndex;
-                        const isDone = index < shuffleState.currentShufflerIndex;
                         const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
+
+                        // Optimistic Logic:
+                        // If it's me and I have revealed, I am DONE, even if contract index lags.
+                        // If it's me and I am done, the "current turn" is effectively the next player.
+
+                        let isDone = index < shuffleState.currentShufflerIndex;
+                        let isCurrentTurn = index === shuffleState.currentShufflerIndex;
+
+                        if (isMe && shuffleState.hasRevealed) {
+                            isDone = true;
+                            isCurrentTurn = false;
+                        }
+
+                        // If the index points to me (0) but I am done, then for the viewer, 
+                        // the "visual" current turn should probably be the next player (1).
+                        // But we don't know for sure if player 1 is ready, so we just unmark me.
 
                         return (
                             <motion.div
@@ -420,7 +442,9 @@ export const ShufflePhase: React.FC = () => {
                         >
                             <div className="flex items-center justify-center gap-2 text-white/50 mb-2">
                                 <Loader2 className="w-5 h-5 animate-spin" />
-                                <span>Waiting for {currentShuffler?.name || 'player'}...</span>
+                                <span>Waiting for {(isMeCurrent && shuffleState.hasRevealed
+                                    ? (gameState.players[shuffleState.currentShufflerIndex + 1]?.name || 'next player')
+                                    : currentShuffler?.name) || 'player'}...</span>
                             </div>
                             <p className="text-white/30 text-xs">
                                 The deck is being shuffled and encrypted
