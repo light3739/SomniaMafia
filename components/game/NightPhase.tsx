@@ -145,7 +145,7 @@ export const NightPhase: React.FC = () => {
     const canAct = roleConfig.action !== NightActionType.NONE;
 
     // Get selected player name (from side card selection)
-    const selectedPlayer = gameState.players.find(p => p.address === selectedTarget);
+    const selectedPlayer = gameState.players.find(p => p.address.toLowerCase() === selectedTarget?.toLowerCase());
 
     // Storage key for night commit data
     const NIGHT_COMMIT_KEY = `mafia_night_commit_${currentRoomId}_${address}`;

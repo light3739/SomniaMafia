@@ -22,7 +22,7 @@ export class ShuffleService {
         const e = this.generateCoprime(PRIME - 1n);
         // Вычисляем ключ дешифрования (модульный обратный)
         const d = this.modInverse(e, PRIME - 1n);
-        
+
         this.keys = { encryptionKey: e, decryptionKey: d };
         return this.keys;
     }
@@ -140,30 +140,30 @@ export class ShuffleService {
     // Возвращает числовые ID: 1=MAFIA, 2=DOCTOR, 3=DETECTIVE, 4+=CIVILIAN
     public static generateInitialDeck(playerCount: number): string[] {
         const deck: number[] = [];
-        
+
         // Определяем количество мафии (примерно 1/4 игроков, минимум 1)
         const mafiaCount = Math.max(1, Math.floor(playerCount / 4));
-        
+
         // Добавляем мафию
         for (let i = 0; i < mafiaCount; i++) {
             deck.push(1); // MAFIA = 1
         }
-        
+
         // Добавляем доктора (если >= 4 игроков)
         if (playerCount >= 4) {
             deck.push(2); // DOCTOR = 2
         }
-        
+
         // Добавляем детектива (если >= 5 игроков)
         if (playerCount >= 5) {
             deck.push(3); // DETECTIVE = 3
         }
-        
+
         // Остальные — мирные жители
         while (deck.length < playerCount) {
             deck.push(4); // CIVILIAN = 4
         }
-        
+
         return deck.map(n => n.toString());
     }
 
@@ -174,7 +174,7 @@ export class ShuffleService {
             case 1: return Role.MAFIA;
             case 2: return Role.DOCTOR;
             case 3: return Role.DETECTIVE;
-            case 4: 
+            case 4:
             default: return Role.CIVILIAN;
         }
     }
@@ -182,8 +182,8 @@ export class ShuffleService {
     // Создать хэш для commit-reveal (для ночных действий Doctor/Detective)
     // V4: Использует keccak256(abi.encode(...)) вместо encodePacked
     public static createCommitHash(
-        action: number, 
-        target: string, 
+        action: number,
+        target: string,
         salt: string
     ): `0x${string}` {
         return keccak256(
@@ -194,10 +194,21 @@ export class ShuffleService {
         );
     }
 
+    // Создать хэш для фиксации роли (Role Commit)
+    // keccak256(abi.encode(role, salt))
+    public static createRoleCommitHash(role: number, salt: string): `0x${string}` {
+        return keccak256(
+            encodeAbiParameters(
+                parseAbiParameters('uint8, string'),
+                [role, salt]
+            )
+        );
+    }
+
     // V4: Создать хэш для mafia target commit-reveal
     // keccak256(abi.encode(target, salt))
     public static createMafiaTargetHash(
-        target: string, 
+        target: string,
         salt: string
     ): `0x${string}` {
         return keccak256(
@@ -210,7 +221,7 @@ export class ShuffleService {
 
     // Создать хэш для deck commit-reveal (V4)
     public static createDeckCommitHash(
-        deck: string[], 
+        deck: string[],
         salt: string
     ): `0x${string}` {
         return keccak256(

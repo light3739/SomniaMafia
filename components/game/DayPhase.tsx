@@ -64,6 +64,12 @@ export const DayPhase: React.FC = () => {
                 counts.set(player.address.toLowerCase(), Number(count));
             }
 
+            // Если мы в процессе отправки голоса - не затираем Optimistic UI старыми данными с чейна
+            if (isProcessing || isTxPending) {
+                console.log('[DayPhase] Skipping vote sync: transaction in progress');
+                return;
+            }
+
             // Проверить мой голос
             if (myPlayer) {
                 const myVote = await publicClient.readContract({
@@ -73,11 +79,13 @@ export const DayPhase: React.FC = () => {
                     args: [currentRoomId, myPlayer.address],
                 }) as string;
 
+                const hasVoted = myVote !== '0x0000000000000000000000000000000000000000';
+
                 setVoteState(prev => ({
                     ...prev,
                     voteCounts: counts,
-                    myVote: myVote !== '0x0000000000000000000000000000000000000000' ? myVote : null,
-                    hasVoted: myVote !== '0x0000000000000000000000000000000000000000'
+                    myVote: hasVoted ? myVote : null,
+                    hasVoted: hasVoted
                 }));
             }
         } catch (e) {
@@ -202,7 +210,7 @@ export const DayPhase: React.FC = () => {
                                     {selectedTarget ? (
                                         <>
                                             <Vote className="w-5 h-5 mr-2" />
-                                            Vote for {gameState.players.find(p => p.address === selectedTarget)?.name}
+                                            Vote for {gameState.players.find(p => p.address.toLowerCase() === selectedTarget.toLowerCase())?.name}
                                         </>
                                     ) : voteState.hasVoted ? (
                                         <>
