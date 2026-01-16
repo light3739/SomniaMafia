@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
-import { usePublicClient } from 'wagmi';
+import { usePublicClient, useWriteContract } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { Loader2, Check, Clock, Shuffle, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -16,6 +16,7 @@ interface ShuffleState {
     hasRevealed: boolean;
     pendingDeck: string[] | null;
     pendingSalt: string | null;
+    phaseDeadline: number; // For timeout handling
 }
 
 export const ShufflePhase: React.FC = () => {
@@ -38,7 +39,8 @@ export const ShufflePhase: React.FC = () => {
         hasCommitted: false,
         hasRevealed: false,
         pendingDeck: null,
-        pendingSalt: null
+        pendingSalt: null,
+        phaseDeadline: 0
     });
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -98,14 +100,18 @@ export const ShufflePhase: React.FC = () => {
             }) as string[];
 
             // DEBUG: Log raw data to debug index alignment (0 vs 1)
+            // HMR FORCE UPDATE 1
             console.log('[Shuffle Raw] RoomData:', roomData);
 
             // ROBUST PARSING
             let currentIndex = 0;
+            let deadline = 0;
             if (Array.isArray(roomData)) {
                 currentIndex = Number(roomData[8]); // index 8 is currentShufflerIndex
+                deadline = Number(roomData[10]);    // index 10 is phaseDeadline
             } else if (roomData && typeof roomData === 'object') {
                 currentIndex = Number(roomData.currentShufflerIndex);
+                deadline = Number(roomData.phaseDeadline);
             }
             if (isNaN(currentIndex)) currentIndex = 0;
 
@@ -117,6 +123,46 @@ export const ShufflePhase: React.FC = () => {
             if (currentShuffler && myPlayer) {
                 isMyTurnFromContract = currentShuffler.address.toLowerCase() === myPlayer.address.toLowerCase();
             }
+
+            // CRITICAL FIX: If contract index is stuck (e.g. at 0), we CALCULATE the real index
+            // by checking who has already revealed.
+            let realIndex = currentIndex;
+
+            // Optimization: Only check if we suspect lag (e.g. deck is empty but index > 0, OR index is 0 but we know P1 revealed)
+            // But since contract is broken, we MUST check.
+            try {
+                // We check players starting from currentIndex up to end
+                // We can't check everyone due to RPC limits, but let's check next 3 players
+                for (let i = currentIndex; i < gameState.players.length; i++) {
+                    const p = gameState.players[i];
+                    if (!p) continue;
+
+                    const commitData = await publicClient.readContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'deckCommits',
+                        args: [currentRoomId, p.address],
+                    }) as any; // [hash, revealed]
+
+                    // If this player HAS revealed, then the turn belongs to the NEXT player
+                    // In array return: [0] is hash, [1] is revealed boolean
+                    const isRevealed = Array.isArray(commitData) ? commitData[1] : commitData.revealed;
+
+                    if (isRevealed) {
+                        console.log(`[Shuffle Fix] Player ${i} (${p.name}) has revealed. Moving index forward.`);
+                        realIndex = i + 1;
+                    } else {
+                        // This player has NOT revealed. So it is TRULY their turn.
+                        realIndex = i;
+                        break;
+                    }
+                }
+            } catch (err) {
+                console.warn("[Shuffle Fix] Failed to calculate real index", err);
+            }
+
+            console.log(`[Shuffle Fix] Contract Index: ${currentIndex}, Real Index: ${realIndex}`);
+            currentIndex = realIndex;
 
             // CRITICAL FIX: If I am Player > 0, but the deck is empty, I cannot start yet.
             // RPC hasn't synced the previous player's reveal.
@@ -144,13 +190,36 @@ export const ShufflePhase: React.FC = () => {
                     ...prev,
                     currentShufflerIndex: safeIndex,
                     deck: deck,
-                    isMyTurn: isMyTurnFromContract
+                    isMyTurn: isMyTurnFromContract,
+                    phaseDeadline: deadline
                 };
             });
-        } catch (e) {
-            console.error("Failed to fetch shuffle data:", e);
+        } catch (error) {
+            console.error("Error fetching shuffle data:", error);
         }
     }, [publicClient, currentRoomId, gameState.players, myPlayer]);
+
+    // Handle Timeout Kick
+    const { writeContractAsync } = useWriteContract();
+
+    const handleTimeoutKick = async () => {
+        if (!currentRoomId) return;
+        setIsProcessing(true);
+        try {
+            const hash = await writeContractAsync({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'forcePhaseTimeout',
+                args: [currentRoomId],
+            });
+            addLog(`Timeout kick tx sent: ${hash.substring(0, 10)}...`, 'info');
+        } catch (err) {
+            console.error("Kick failed", err);
+            addLog("Failed to kick player", 'error');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
     // Polling
     useEffect(() => {
@@ -260,15 +329,30 @@ export const ShufflePhase: React.FC = () => {
                 className="max-w-lg w-full bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl relative"
             >
                 {/* Sync Button */}
-                <button
-                    onClick={forceSync}
-                    className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-colors"
-                    title="Force Sync"
-                >
-                    <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                </button>
+                <div className="flex items-center gap-4">
+                    {/* Timeline display */}
+                    <div className="text-sm text-gray-400">
+                        Player {shuffleState.currentShufflerIndex + 1} of {gameState.players.length}
+                    </div>
 
-                <div className="text-center mb-8">
+                    {/* Timeout Kick Button */}
+                    {Date.now() / 1000 > shuffleState.phaseDeadline && shuffleState.phaseDeadline > 0 && (
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleTimeoutKick}
+                            disabled={isProcessing}
+                            className="animate-pulse"
+                        >
+                            <Clock className="w-4 h-4 mr-2" />
+                            Kick Timeout
+                        </Button>
+                    )}
+
+                    <Button variant="ghost" size="icon" onClick={forceSync} disabled={isSyncing}>
+                        <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                    </Button>
+                </div>     <div className="text-center mb-8">
                     <h2 className="text-2xl font-['Playfair_Display'] text-white mb-2">
                         Shuffling Deck
                     </h2>
