@@ -179,8 +179,9 @@ export const RoleReveal: React.FC = () => {
 
             setRevealState(prev => ({
                 ...prev,
-                hasSharedKeys,
-                hasConfirmed: hasConfirmedRole
+                // Sticky true: if we know we shared/confirmed locally, keep it true even if RPC lags
+                hasSharedKeys: prev.hasSharedKeys || hasSharedKeys,
+                hasConfirmed: prev.hasConfirmed || hasConfirmedRole
             }));
         } catch (e) {
             console.error("Failed to check flags:", e);

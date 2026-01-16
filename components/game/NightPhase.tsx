@@ -127,10 +127,12 @@ export const NightPhase: React.FC = () => {
 
             setNightState(prev => ({
                 ...prev,
-                hasCommitted,
-                hasRevealed,
-                mafiaCommitted: Number(mafiaCommitted),
-                mafiaRevealed: Number(mafiaRevealed),
+                // Sticky true: prevent regression if RPC lags
+                hasCommitted: prev.hasCommitted || hasCommitted,
+                hasRevealed: prev.hasRevealed || hasRevealed,
+                // Sticky max for progress counters
+                mafiaCommitted: Math.max(prev.mafiaCommitted, Number(mafiaCommitted)),
+                mafiaRevealed: Math.max(prev.mafiaRevealed, Number(mafiaRevealed)),
                 mafiaConsensusTarget: consensusTarget === '0x0000000000000000000000000000000000000000' ? null : consensusTarget
             }));
         } catch (e) {
