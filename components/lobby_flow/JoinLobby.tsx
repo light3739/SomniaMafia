@@ -38,13 +38,16 @@ export const JoinLobby: React.FC = () => {
                         args: [i],
                     }) as any;
 
-                    // roomData[2] это фаза (0 = LOBBY)
-                    if (roomData[2] === 0) {
+                    // roomData[2] is now the Name (string) in V4
+                    // roomData[3] is the Phase (uint8, 0 = LOBBY)
+                    const phase = Number(roomData[3]);
+                    if (phase === 0) {
                         roomList.push({
                             id: Number(roomData[0]),
                             host: roomData[1],
-                            players: Number(roomData[4]),
-                            max: Number(roomData[3])
+                            name: roomData[2],
+                            players: Number(roomData[5]), // index 5 is players for V4
+                            max: Number(roomData[4])    // index 4 is maxPlayers for V4
                         });
                     }
                 }
@@ -59,9 +62,9 @@ export const JoinLobby: React.FC = () => {
         fetchRooms();
     }, [publicClient]);
 
-    const handleJoin = async (roomId: number) => {
-        await joinLobbyOnChain(roomId);
-        setLobbyName(`Room #${roomId}`);
+    const handleJoin = async (room: any) => {
+        await joinLobbyOnChain(room.id);
+        setLobbyName(room.name || `Room #${room.id}`);
         navigate('/lobby');
     };
 
@@ -86,13 +89,13 @@ export const JoinLobby: React.FC = () => {
                         <motion.button
                             key={room.id}
                             whileHover={{ scale: 1.02, backgroundColor: "rgba(145, 106, 71, 0.2)" }}
-                            onClick={() => handleJoin(room.id)}
+                            onClick={() => handleJoin(room)}
                             disabled={isTxPending}
                             className="w-full p-5 bg-[#19130D]/80 backdrop-blur-sm border border-white/10 rounded-[15px] flex items-center justify-between group transition-all"
                         >
                             <div className="flex flex-col items-start gap-1">
-                                <span className="text-white text-lg font-medium">Room #{room.id}</span>
-                                <span className="text-white/40 text-[10px] font-mono uppercase">{room.host.slice(0, 10)}...</span>
+                                <span className="text-white text-lg font-medium">{room.name || `Room #${room.id}`}</span>
+                                <span className="text-white/40 text-[10px] font-mono uppercase">By {room.host.slice(0, 10)}...</span>
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="text-right">

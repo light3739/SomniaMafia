@@ -62,6 +62,7 @@ export const RoleReveal: React.FC = () => {
         shareKeysToAllOnChain,
         commitRoleOnChain,
         confirmRoleOnChain,
+        commitAndConfirmRoleOnChain,
         addLog,
         isTxPending,
         setGameState
@@ -351,17 +352,12 @@ export const RoleReveal: React.FC = () => {
             // 1. Генерируем соль
             const salt = ShuffleService.generateSalt();
 
-            // 2. Отправляем Commit в блокчейн
-            // (Функция сама сохранит salt в localStorage)
-            await commitRoleOnChain(roleNum, salt);
-
-            // 3. Подтверждаем готовность (Confirm)
-            await confirmRoleOnChain();
+            // 2. ВЫЗЫВАЕМ НОВУЮ АТОМАРНУЮ ФУНКЦИЮ (Commit + Confirm за одну транзакцию)
+            await commitAndConfirmRoleOnChain(roleNum, salt);
 
             setRevealState(prev => ({ ...prev, hasConfirmed: true }));
         } catch (e: any) {
             console.error(e);
-            // Лог уже добавится в контексте
         } finally {
             setIsProcessing(false);
         }

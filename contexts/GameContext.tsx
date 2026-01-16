@@ -36,6 +36,7 @@ interface GameContextType {
     shareKeysToAllOnChain: (recipients: string[], encryptedKeys: string[]) => Promise<void>;
     commitRoleOnChain: (role: number, salt: string) => Promise<void>;
     confirmRoleOnChain: () => Promise<void>;
+    commitAndConfirmRoleOnChain: (role: number, salt: string) => Promise<void>;
 
     // Day/Voting (V3: auto-finalize on last vote)
     startVotingOnChain: () => Promise<void>;
@@ -364,58 +365,57 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // --- LOBBY ACTIONS (V3: createRoom only, then joinRoom with session) ---
 
     const createLobbyOnChain = async () => {
-        if (!playerName || !address) return alert("Enter name and connect wallet!");
+        if (!playerName || !address || !lobbyName || !publicClient) return alert("Enter details and connect wallet!");
         setIsTxPending(true);
         try {
-            // 1. Create room (host only sets max players)
-            const createHash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'createRoom',
-                args: [16], // uint8 maxPlayers
-            });
-            addLog("Creating room...", "warning");
-            await publicClient?.waitForTransactionReceipt({ hash: createHash });
-            const nextId = await publicClient?.readContract({
+            // 1. Предсказываем ID комнаты (читаем nextRoomId)
+            const nextId = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'nextRoomId',
             }) as bigint;
-            const newRoomId = nextId - 1n;
+            const newRoomId = Number(nextId);
 
-            // 2. Generate crypto keys
+            // 2. Генерируем ключи
             const keyPair = await generateKeyPair();
             setKeys(keyPair);
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
-            // 3. Generate session key
-            const { sessionAddress } = createNewSession(address, Number(newRoomId));
+            // 3. Сессия
+            const { sessionAddress } = createNewSession(address, newRoomId);
 
-            // 4. Join room with session key + fund it (V3: all in one tx)
-            const joinHash = await writeContractAsync({
+            // 4. АТОМАРНАЯ ТРАНЗАКЦИЯ (Create + Join + Fund)
+            const hash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
-                functionName: 'joinRoom',
-                args: [newRoomId, playerName, pubKeyHex, sessionAddress],
-                value: parseEther('0.05'), // Fund session key (enough for ~30-50 txs)
+                functionName: 'createAndJoin', // <--- НОВАЯ ФУНКЦИЯ
+                args: [
+                    lobbyName,      // string roomName
+                    16,             // uint8 maxPlayers
+                    playerName,     // string nickname
+                    pubKeyHex,      // bytes publicKey
+                    sessionAddress  // address sessionAddress
+                ],
+                value: parseEther('0.02'), // Деньги для бота (0.02 ETH according to V4)
             });
-            await publicClient?.waitForTransactionReceipt({ hash: joinHash });
 
-            // 5. Mark session as registered
+            addLog(`Creating room "${lobbyName}"...`, "info");
+            await publicClient?.waitForTransactionReceipt({ hash });
+
             markSessionRegistered();
-
-            setCurrentRoomId(newRoomId);
-            await refreshPlayersList(newRoomId);
-            addLog(`Room #${newRoomId} created with auto-sign enabled!`, "success");
+            setCurrentRoomId(BigInt(newRoomId));
+            await refreshPlayersList(BigInt(newRoomId));
+            addLog("Lobby created successfully!", "success");
             setIsTxPending(false);
         } catch (e: any) {
+            console.error(e);
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
     };
 
     const joinLobbyOnChain = async (roomId: number) => {
-        if (!playerName || !address) return alert("Enter name and connect wallet!");
+        if (!playerName || !address || !publicClient) return alert("Enter name and connect wallet!");
         setIsTxPending(true);
         try {
             // 1. Generate crypto keys
@@ -567,6 +567,42 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
+        }
+    };
+
+    const commitAndConfirmRoleOnChain = async (role: number, salt: string) => {
+        if (!currentRoomId) return;
+
+        // Защита от дурака (если уже есть соль, значит уже отправляли)
+        const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+        if (savedSalt) {
+            console.log("Role already committed locally.");
+            return;
+        }
+
+        setIsTxPending(true);
+        try {
+            // Импорт сервиса для хеширования
+            const { ShuffleService } = await import('../services/shuffleService');
+            const hash = ShuffleService.createRoleCommitHash(role, salt);
+
+            // АТОМАРНАЯ ТРАНЗАКЦИЯ (Commit + Confirm)
+            const txHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, hash]);
+
+            addLog("Role committed & confirmed on-chain!", "success");
+            await publicClient?.waitForTransactionReceipt({ hash: txHash });
+
+            // Сохраняем соль
+            localStorage.setItem(`role_salt_${currentRoomId}_${address}`, salt);
+
+            // Обновляем список, чтобы UI увидел галочку
+            await refreshPlayersList(currentRoomId);
+
+            setIsTxPending(false);
+        } catch (e: any) {
+            addLog(e.shortMessage || "Confirmation failed", "danger");
+            setIsTxPending(false);
+            throw e;
         }
     };
 
@@ -1069,6 +1105,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             createLobbyOnChain, joinLobbyOnChain,
             startGameOnChain, commitDeckOnChain, revealDeckOnChain,
             shareKeysToAllOnChain, commitRoleOnChain, confirmRoleOnChain,
+            commitAndConfirmRoleOnChain,
             startVotingOnChain, voteOnChain,
             commitNightActionOnChain, revealNightActionOnChain,
             commitMafiaTargetOnChain, revealMafiaTargetOnChain,
