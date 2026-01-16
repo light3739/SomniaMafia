@@ -5,7 +5,7 @@ import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { usePublicClient } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
-import { Loader2, Check, Clock, Shuffle, AlertCircle } from 'lucide-react';
+import { Loader2, Check, Clock, Shuffle, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 interface ShuffleState {
@@ -26,7 +26,8 @@ export const ShufflePhase: React.FC = () => {
         commitDeckOnChain,
         revealDeckOnChain,
         addLog,
-        isTxPending
+        isTxPending,
+        refreshPlayersList
     } = useGameContext();
 
     const publicClient = usePublicClient();
@@ -40,46 +41,48 @@ export const ShufflePhase: React.FC = () => {
         pendingSalt: null
     });
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     // Состояние для pending deck и salt (для reveal фазы)
     const [pendingDeck, setPendingDeck] = useState<string[] | null>(null);
     const [pendingSalt, setPendingSalt] = useState<string | null>(null);
 
-    // LocalStorage key для persistence
     const SHUFFLE_COMMIT_KEY = `mafia_shuffle_commit_${currentRoomId}_${myPlayer?.address}`;
 
-    // Автоматическое переключение на Reveal, если блокчейн говорит, что мы уже закоммитили
+    // Restore state from local storage on mount
     useEffect(() => {
-        if (myPlayer?.hasDeckCommitted && !shuffleState.hasCommitted) {
-            console.log("Recovering state: Deck already committed on-chain");
-
-            // Пытаемся восстановить данные из localStorage (они там должны быть!)
-            const saved = localStorage.getItem(SHUFFLE_COMMIT_KEY);
-
-            if (saved) {
-                try {
-                    const { deck, salt } = JSON.parse(saved);
+        const saved = localStorage.getItem(SHUFFLE_COMMIT_KEY);
+        if (saved) {
+            try {
+                const { deck, salt, hasCommitted } = JSON.parse(saved);
+                if (deck && salt) {
                     setPendingDeck(deck);
                     setPendingSalt(salt);
-                } catch (e) {
-                    console.error("Failed to recover pending deck", e);
+                    setShuffleState(prev => ({ ...prev, hasCommitted: true, isMyTurn: true }));
                 }
+            } catch (e) {
+                console.error("Failed to recover pending deck", e);
             }
-
-            setShuffleState(prev => ({
-                ...prev,
-                hasCommitted: true, // Форсируем переключение UI
-                isMyTurn: true      // Это всё еще мой ход, но теперь фаза Reveal
-            }));
         }
-    }, [myPlayer?.hasDeckCommitted, currentRoomId, myPlayer?.address, shuffleState.hasCommitted, SHUFFLE_COMMIT_KEY]);
+    }, [SHUFFLE_COMMIT_KEY]);
 
-    // Получить данные из контракта
+    // Force Sync Function
+    const forceSync = async () => {
+        if (!currentRoomId) return;
+        setIsSyncing(true);
+        try {
+            await fetchShuffleData();
+            await refreshPlayersList(currentRoomId);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    // Fetch data from contract
     const fetchShuffleData = useCallback(async () => {
         if (!publicClient || !currentRoomId) return;
 
         try {
-            // Получаем данные комнаты через getRoom (возвращает именованную структуру)
             const roomData = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
@@ -87,7 +90,6 @@ export const ShufflePhase: React.FC = () => {
                 args: [currentRoomId],
             }) as any;
 
-            // Получаем текущую колоду
             const deck = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
@@ -95,48 +97,49 @@ export const ShufflePhase: React.FC = () => {
                 args: [currentRoomId],
             }) as string[];
 
-            // ROBUST PARSING: Handle both Array and Object return types from viem
+            // DEBUG: Log raw data to debug index alignment (0 vs 1)
+            console.log('[Shuffle Raw] RoomData:', roomData);
+
+            // ROBUST PARSING
             let currentIndex = 0;
             if (Array.isArray(roomData)) {
-                // Struct is returned as array: [id, host, name, phase, maxPlayers, playersCount, aliveCount, dayCount, currentShufflerIndex, ...]
-                // currentShufflerIndex is at index 8
-                currentIndex = Number(roomData[8]);
+                currentIndex = Number(roomData[8]); // index 8 is currentShufflerIndex
             } else if (roomData && typeof roomData === 'object') {
                 currentIndex = Number(roomData.currentShufflerIndex);
             }
-
-            // Fallback if NaN
             if (isNaN(currentIndex)) currentIndex = 0;
+
+            // Check if it is my turn
+            // Note: Use gameState.players to map index to address
             const currentShuffler = gameState.players[currentIndex];
-            const isMyTurnFromContract = currentShuffler?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+            let isMyTurnFromContract = false;
+
+            if (currentShuffler && myPlayer) {
+                isMyTurnFromContract = currentShuffler.address.toLowerCase() === myPlayer.address.toLowerCase();
+            }
+
+            // CRITICAL FIX: If I am Player > 0, but the deck is empty, I cannot start yet.
+            // RPC hasn't synced the previous player's reveal.
+            if (isMyTurnFromContract && currentIndex > 0 && deck.length === 0) {
+                console.warn("My turn, but deck is empty. Waiting for sync...");
+                isMyTurnFromContract = false; // Block UI until deck arrives
+            }
 
             setShuffleState(prev => {
-                // If we've already revealed, preserve all our state - just update progress info
+                // Keep local 'revealed' state to prevent flickering back to 'commit'
                 if (prev.hasRevealed) {
-                    return {
-                        ...prev,
-                        currentShufflerIndex: currentIndex,
-                        deck: deck,
-                        // Keep hasCommitted, hasRevealed, isMyTurn unchanged
-                    };
+                    return { ...prev, currentShufflerIndex: currentIndex, deck };
                 }
-
-                // If we've committed but not revealed, preserve state for Reveal button
+                // Keep local 'committed' state
                 if (prev.hasCommitted && !prev.hasRevealed) {
-                    return {
-                        ...prev,
-                        currentShufflerIndex: currentIndex,
-                        deck: deck,
-                        // Keep isMyTurn unchanged - UI will show Reveal button
-                    };
+                    return { ...prev, currentShufflerIndex: currentIndex, deck };
                 }
 
-                // Otherwise, sync with contract
                 return {
                     ...prev,
                     currentShufflerIndex: currentIndex,
                     deck: deck,
-                    isMyTurn: isMyTurnFromContract && !prev.hasCommitted
+                    isMyTurn: isMyTurnFromContract
                 };
             });
         } catch (e) {
@@ -144,74 +147,61 @@ export const ShufflePhase: React.FC = () => {
         }
     }, [publicClient, currentRoomId, gameState.players, myPlayer]);
 
-    // Polling для обновления состояния
+    // Polling
     useEffect(() => {
         fetchShuffleData();
         const interval = setInterval(fetchShuffleData, 3000);
         return () => clearInterval(interval);
     }, [fetchShuffleData]);
 
-    // Обработка моего хода - фаза COMMIT
     const handleMyTurn = async () => {
         if (!currentRoomId || !myPlayer || isProcessing) return;
 
         setIsProcessing(true);
         try {
             const shuffleService = getShuffleService();
-
-            // Генерируем ключи если ещё нет
-            shuffleService.generateKeys();
+            shuffleService.generateKeys(); // Generate my E/D keys
 
             let newDeck: string[];
 
-            if (shuffleState.deck.length === 0) {
-                // Первый игрок (хост) — генерирует начальную колоду
+            if (shuffleState.currentShufflerIndex === 0) {
+                // I am the host (first player) - Generate fresh deck
+                if (shuffleState.deck.length > 0) {
+                    console.warn("Host sees existing deck, resetting...");
+                }
                 addLog("Generating initial deck...", "info");
                 const initialDeck = ShuffleService.generateInitialDeck(gameState.players.length);
-
-                // Перемешиваем
                 const shuffled = shuffleService.shuffleArray(initialDeck);
-
-                // Шифруем
                 newDeck = shuffleService.encryptDeck(shuffled);
-                addLog("Deck created and encrypted!", "success");
             } else {
-                // Последующие игроки — перемешивают и перешифровывают
+                // I am a subsequent player - Shuffle existing deck
+                if (shuffleState.deck.length === 0) {
+                    throw new Error("Deck is empty! Sync error.");
+                }
                 addLog("Shuffling and re-encrypting deck...", "info");
-
-                // Перемешиваем существующую колоду
                 const shuffled = shuffleService.shuffleArray(shuffleState.deck);
-
-                // Шифруем каждую карту своим ключом (поверх существующего шифрования)
                 newDeck = shuffleService.encryptDeck(shuffled);
-                addLog("Deck re-shuffled and encrypted!", "success");
             }
 
-            // Генерируем соль для commit-reveal
             const salt = ShuffleService.generateSalt();
-
-            // Вычисляем хеш колоды
             const deckHash = ShuffleService.createDeckCommitHash(newDeck, salt);
 
-            // Отправляем commit в контракт
             addLog("Committing deck hash...", "info");
             await commitDeckOnChain(deckHash);
 
-            // Сохраняем deck и salt для reveal в localStorage
             localStorage.setItem(SHUFFLE_COMMIT_KEY, JSON.stringify({
                 deck: newDeck,
                 salt: salt,
                 hasCommitted: true
             }));
 
-            // Сохраняем deck и salt для reveal
             setPendingDeck(newDeck);
             setPendingSalt(salt);
 
             setShuffleState(prev => ({
                 ...prev,
-                hasCommitted: true
-                // Don't reset isMyTurn - it's still our turn to reveal!
+                hasCommitted: true,
+                isMyTurn: true
             }));
 
             addLog("Commit successful! Click Reveal to complete.", "success");
@@ -224,7 +214,6 @@ export const ShufflePhase: React.FC = () => {
         }
     };
 
-    // Обработка reveal фазы
     const handleReveal = async () => {
         if (!currentRoomId || !pendingDeck || !pendingSalt || isProcessing) return;
 
@@ -233,19 +222,18 @@ export const ShufflePhase: React.FC = () => {
             addLog("Revealing deck...", "info");
             await revealDeckOnChain(pendingDeck, pendingSalt);
 
-            // Очищаем localStorage после успешного reveal
             localStorage.removeItem(SHUFFLE_COMMIT_KEY);
-
-            // Очищаем pending данные
             setPendingDeck(null);
             setPendingSalt(null);
 
             setShuffleState(prev => ({
                 ...prev,
-                hasRevealed: true
+                hasRevealed: true,
+                currentShufflerIndex: prev.currentShufflerIndex + 1
             }));
 
             addLog("Deck revealed successfully!", "success");
+            setTimeout(fetchShuffleData, 1000); // Trigger immediate update
 
         } catch (e: any) {
             console.error("Reveal failed:", e);
@@ -255,50 +243,32 @@ export const ShufflePhase: React.FC = () => {
         }
     };
 
-    // Текущий шаффлер
     const currentShuffler = gameState.players[shuffleState.currentShufflerIndex];
     const totalPlayers = gameState.players.length;
-
-    // Optimistic progress: if I am the current shuffler (according to state) but I have revealed,
-    // then visually we are actually at index + 1.
-    const isMeCurrent = currentShuffler?.address.toLowerCase() === myPlayer?.address.toLowerCase();
-    const effectiveIndex = (isMeCurrent && shuffleState.hasRevealed)
-        ? shuffleState.currentShufflerIndex + 1
-        : shuffleState.currentShufflerIndex;
-
-    const progress = Math.min((effectiveIndex / totalPlayers) * 100, 100);
+    const progress = Math.min((shuffleState.currentShufflerIndex / totalPlayers) * 100, 100);
 
     return (
         <div className="w-full h-full flex flex-col items-center justify-center p-8">
             <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="max-w-lg w-full bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl"
+                className="max-w-lg w-full bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl relative"
             >
-                {/* Header */}
+                {/* Sync Button */}
+                <button
+                    onClick={forceSync}
+                    className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+                    title="Force Sync"
+                >
+                    <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                </button>
+
                 <div className="text-center mb-8">
-                    <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                        className="inline-block mb-4"
-                    >
-                        <Shuffle className="w-12 h-12 text-[#916A47]" />
-                    </motion.div>
                     <h2 className="text-2xl font-['Playfair_Display'] text-white mb-2">
                         Shuffling Deck
                     </h2>
                     <p className="text-white/50 text-sm">
-                        Each player encrypts and shuffles the role cards
-                    </p>
-                </div>
-
-                {/* LocalStorage Disclaimer */}
-                <div className="mb-6 p-3 rounded-xl bg-amber-900/20 border border-amber-500/30 flex gap-3">
-                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
-                    <p className="text-[10px] text-amber-200/70 leading-relaxed">
-                        <span className="font-bold text-amber-500 block mb-0.5 uppercase tracking-wider">Storage Warning</span>
-                        Do not clear browser cache or close the tab during this phase.
-                        Your encryption keys are stored locally. Losing them will block the game.
+                        {shuffleState.deck.length} cards in deck • Player {shuffleState.currentShufflerIndex + 1}'s turn
                     </p>
                 </div>
 
@@ -318,26 +288,16 @@ export const ShufflePhase: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Player List */}
-                <div className="space-y-2 mb-8 max-h-[200px] overflow-y-auto">
+                <div className="space-y-2 mb-8 max-h-[200px] overflow-y-auto custom-scrollbar">
                     {gameState.players.map((player, index) => {
                         const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
 
-                        // Optimistic Logic:
-                        // If it's me and I have revealed, I am DONE, even if contract index lags.
-                        // If it's me and I am done, the "current turn" is effectively the next player.
-
+                        // Logic: A player is "Done" if their index is less than current shuffler
+                        // OR if it's me and I've revealed locally
                         let isDone = index < shuffleState.currentShufflerIndex;
-                        let isCurrentTurn = index === shuffleState.currentShufflerIndex;
+                        if (isMe && shuffleState.hasRevealed) isDone = true;
 
-                        if (isMe && shuffleState.hasRevealed) {
-                            isDone = true;
-                            isCurrentTurn = false;
-                        }
-
-                        // If the index points to me (0) but I am done, then for the viewer, 
-                        // the "visual" current turn should probably be the next player (1).
-                        // But we don't know for sure if player 1 is ready, so we just unmark me.
+                        const isCurrentTurn = index === shuffleState.currentShufflerIndex && !isDone;
 
                         return (
                             <motion.div
@@ -358,12 +318,7 @@ export const ShufflePhase: React.FC = () => {
                                 <div className="flex items-center gap-3">
                                     <div className={`
                                         w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-                                        ${isCurrentTurn
-                                            ? 'bg-[#916A47] text-black'
-                                            : isDone
-                                                ? 'bg-green-600 text-white'
-                                                : 'bg-white/10 text-white/40'
-                                        }
+                                        ${isCurrentTurn ? 'bg-[#916A47] text-black' : isDone ? 'bg-green-600 text-white' : 'bg-white/10 text-white/40'}
                                     `}>
                                         {isDone ? <Check className="w-4 h-4" /> : index + 1}
                                     </div>
@@ -376,7 +331,7 @@ export const ShufflePhase: React.FC = () => {
                                     {isCurrentTurn && (
                                         <span className="text-[#916A47] flex items-center gap-1">
                                             <Clock className="w-3 h-3" />
-                                            Shuffling...
+                                            Turn
                                         </span>
                                     )}
                                     {!isDone && !isCurrentTurn && <span className="text-white/30">Waiting</span>}
@@ -386,7 +341,6 @@ export const ShufflePhase: React.FC = () => {
                     })}
                 </div>
 
-                {/* Action Button */}
                 <AnimatePresence mode="wait">
                     {shuffleState.isMyTurn && !shuffleState.hasCommitted ? (
                         <motion.div
@@ -403,9 +357,6 @@ export const ShufflePhase: React.FC = () => {
                             >
                                 {isProcessing ? 'Encrypting...' : 'Shuffle & Encrypt Deck'}
                             </Button>
-                            <p className="text-center text-white/40 text-xs mt-3">
-                                Your turn! Click to shuffle and encrypt the deck.
-                            </p>
                         </motion.div>
                     ) : shuffleState.hasCommitted && !shuffleState.hasRevealed ? (
                         <motion.div
@@ -422,44 +373,27 @@ export const ShufflePhase: React.FC = () => {
                             >
                                 {isProcessing ? 'Revealing...' : 'Reveal Deck'}
                             </Button>
-                            <p className="text-center text-white/40 text-xs mt-3">
-                                Commit successful! Click to reveal the deck.
-                            </p>
                         </motion.div>
                     ) : shuffleState.hasRevealed ? (
-                        <motion.div
-                            key="submitted"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            className="text-center py-4"
-                        >
+                        <div className="text-center py-4">
                             <div className="flex items-center justify-center gap-2 text-green-400 mb-2">
                                 <Check className="w-5 h-5" />
-                                <span className="font-medium">Your shuffle submitted!</span>
+                                <span className="font-medium">Shuffle Complete!</span>
                             </div>
-                            <p className="text-white/40 text-sm">
-                                Waiting for other players...
-                            </p>
-                        </motion.div>
+                            <p className="text-white/40 text-sm">Waiting for others...</p>
+                        </div>
                     ) : (
-                        <motion.div
-                            key="waiting"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            className="text-center py-4"
-                        >
+                        <div className="text-center py-4">
                             <div className="flex items-center justify-center gap-2 text-white/50 mb-2">
                                 <Loader2 className="w-5 h-5 animate-spin" />
-                                <span>Waiting for {(isMeCurrent && shuffleState.hasRevealed
-                                    ? (gameState.players[shuffleState.currentShufflerIndex + 1]?.name || 'next player')
-                                    : currentShuffler?.name) || 'player'}...</span>
+                                <span>Waiting for {currentShuffler?.name || 'player'}...</span>
                             </div>
-                            <p className="text-white/30 text-xs">
-                                The deck is being shuffled and encrypted
-                            </p>
-                        </motion.div>
+                            {shuffleState.currentShufflerIndex > 0 && shuffleState.deck.length === 0 && (
+                                <p className="text-amber-500/50 text-xs mt-1">
+                                    Syncing deck from previous player...
+                                </p>
+                            )}
+                        </div>
                     )}
                 </AnimatePresence>
             </motion.div>
