@@ -95,12 +95,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             const account = privateKeyToAccount(session.privateKey);
+            console.log(`[Session Debug] Client created for ${account.address}`);
             return createWalletClient({
                 account,
                 chain: somniaChain,
                 transport: http(),
             });
-        } catch {
+        } catch (err) {
+            console.error("[Session Debug] Failed to create client:", err);
             return null;
         }
     }, []);
@@ -136,7 +138,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             roomId !== null &&
             session.roomId === Number(roomId);
 
-        console.log(`[TX Debug] canUseSession: ${canUseSession}`);
+        console.log(`[TX Debug] Final canUseSession for ${functionName}: ${canUseSession}`);
+        if (!canUseSession) {
+            console.log(`[TX Debug] Session blocked because:`, {
+                param: useSessionKeyParam,
+                hasSession: !!session,
+                registered: session?.registeredOnChain,
+                expired: session ? Date.now() >= session.expiresAt : 'N/A',
+                roomMatch: session && roomId !== null ? session.roomId === Number(roomId) : 'N/A',
+                expectedRoom: roomId !== null ? Number(roomId) : 'null',
+                storedRoom: session?.roomId
+            });
+        }
 
         if (canUseSession) {
             const sessionClient = getSessionWalletClient();

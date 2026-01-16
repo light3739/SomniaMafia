@@ -216,6 +216,8 @@ export const ShufflePhase: React.FC = () => {
         return () => clearInterval(interval);
     }, [fetchShuffleData]);
 
+
+
     const handleMyTurn = async () => {
         if (!currentRoomId || !myPlayer || isProcessing) return;
 
@@ -308,6 +310,39 @@ export const ShufflePhase: React.FC = () => {
     const currentShuffler = gameState.players[shuffleState.currentShufflerIndex];
     const totalPlayers = gameState.players.length;
     const progress = Math.min((shuffleState.currentShufflerIndex / totalPlayers) * 100, 100);
+
+    // AUTOMATION: Trigger handleMyTurn automatically if it's my turn
+    useEffect(() => {
+        const canExecuteAuto =
+            shuffleState.isMyTurn &&
+            !shuffleState.hasCommitted &&
+            !isProcessing &&
+            !isTxPending &&
+            !shuffleState.hasRevealed &&
+            gameState.players.length > 0;
+
+        if (canExecuteAuto) {
+            console.log("[Shuffle Auto] Detected my turn. Starting automatic shuffle/reveal...");
+            handleMyTurn();
+        }
+    }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, gameState.players.length, handleMyTurn]);
+
+    // AUTO-REVEAL: Trigger handleReveal if we have committed but not revealed
+    useEffect(() => {
+        const canAutoReveal =
+            shuffleState.isMyTurn &&
+            shuffleState.hasCommitted &&
+            !shuffleState.hasRevealed &&
+            !isProcessing &&
+            !isTxPending &&
+            pendingDeck &&
+            pendingSalt;
+
+        if (canAutoReveal) {
+            console.log("[Shuffle Auto] Detected commit complete. Starting automatic reveal...");
+            handleReveal();
+        }
+    }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, pendingDeck, pendingSalt, handleReveal]);
 
     return (
         <div className="w-full h-full flex flex-col items-center justify-center p-8">
