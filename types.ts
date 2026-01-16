@@ -39,7 +39,13 @@ export interface Player {
   avatarUrl: string;
   votesReceived: number;
   status: ConnectionStatus; // Для UI (connected/offline)
-  hasConfirmedRole: boolean; // Новое поле
+
+  // СИНХРОНИЗАЦИЯ С БЛОКЧЕЙНОМ (флаги из контракта)
+  hasConfirmedRole: boolean;   // Reveal Phase (FLAG_CONFIRMED_ROLE = 1)
+  hasDeckCommitted: boolean;   // Shuffle Phase (FLAG_DECK_COMMITTED = 64)
+  hasVoted: boolean;           // Voting Phase (FLAG_HAS_VOTED = 4)
+  hasNightCommitted: boolean;  // Night Phase (FLAG_HAS_COMMITTED = 8)
+  hasNightRevealed: boolean;   // Night Phase (FLAG_HAS_REVEALED = 16)
 }
 
 export interface LogEntry {
