@@ -1,6 +1,6 @@
 import MafiaABI from './MafiaPortal.json';
 
-export const MAFIA_CONTRACT_ADDRESS = "0xa1c287ba3289ccc074a4826f5ca0eaf713c446bd";
+export const MAFIA_CONTRACT_ADDRESS = "0x08b225818fd058f6f7a918a5bf90269faa47ff55";
 export const MAFIA_ABI = MafiaABI.abi;
 
 // Somnia testnet chain config - centralized here to avoid duplication
