@@ -298,6 +298,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [roomId],
             }) as any;
 
+            // DEBUG: Log entire raw structure to debug alignment
+            console.log('[Phase Sync] Raw RoomData:', roomData);
+
             // ROBUST PARSING: Handle Array vs Object return
             let phase: GamePhase;
             let dayCount: number;
