@@ -447,6 +447,7 @@ contract MafiaPortalV4 is ReentrancyGuard, Pausable, AccessControl {
         room.currentShufflerIndex = nextIndex;
         room.lastActionTimestamp = uint32(block.timestamp);
         room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
+        room.revealedCount++;
 
         emit DeckRevealed(roomId, player, deck);
 
