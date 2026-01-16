@@ -98,8 +98,9 @@ export const DayPhase: React.FC = () => {
                 setVoteState(prev => ({
                     ...prev,
                     voteCounts: counts,
-                    myVote: hasVoted ? myVote : null,
-                    hasVoted: hasVoted
+                    // Sticky true: keep local vote if chain lags
+                    myVote: (hasVoted ? myVote : null) || prev.myVote,
+                    hasVoted: prev.hasVoted || hasVoted
                 }));
             }
         } catch (e) {

@@ -101,17 +101,27 @@ export const ShufflePhase: React.FC = () => {
             const isMyTurnFromContract = currentShuffler?.address.toLowerCase() === myPlayer?.address.toLowerCase();
 
             setShuffleState(prev => {
-                // If we've already committed, don't change isMyTurn - we're waiting for reveal
-                // The UI logic uses hasCommitted/hasRevealed to show the correct button
+                // If we've already revealed, preserve all our state - just update progress info
+                if (prev.hasRevealed) {
+                    return {
+                        ...prev,
+                        currentShufflerIndex: currentIndex,
+                        deck: deck,
+                        // Keep hasCommitted, hasRevealed, isMyTurn unchanged
+                    };
+                }
+
+                // If we've committed but not revealed, preserve state for Reveal button
                 if (prev.hasCommitted && !prev.hasRevealed) {
                     return {
                         ...prev,
                         currentShufflerIndex: currentIndex,
                         deck: deck,
-                        // Keep isMyTurn unchanged - UI will show Reveal button based on hasCommitted
+                        // Keep isMyTurn unchanged - UI will show Reveal button
                     };
                 }
 
+                // Otherwise, sync with contract
                 return {
                     ...prev,
                     currentShufflerIndex: currentIndex,
