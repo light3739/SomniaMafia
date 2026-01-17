@@ -739,8 +739,7 @@ export const NightPhase: React.FC = () => {
                                     variant="outline-gold"
                                     className="w-full h-[50px]"
                                 >
-                                    <Eye className="w-5 h-5 mr-2" />
-                                    Reveal Action
+                                    {isProcessing ? 'Revealing...' : 'Reveal Action'}
                                 </Button>
                                 <p className="text-center text-white/30 text-xs mt-2">
                                     Step 2: Reveal your action to execute it
@@ -788,7 +787,30 @@ export const NightPhase: React.FC = () => {
                         )}
                     </AnimatePresence>
                 </div>
+
+                {/* AUTOMATION: Night Reveal Hands-Free */}
+                <NightRevealAuto
+                    nightState={nightState}
+                    isProcessing={isProcessing}
+                    isTxPending={isTxPending}
+                    handleReveal={handleReveal}
+                />
             </motion.div>
         </div>
     );
+};
+const NightRevealAuto: React.FC<{
+    nightState: NightState,
+    isProcessing: boolean,
+    isTxPending: boolean,
+    handleReveal: () => Promise<void>
+}> = ({ nightState, isProcessing, isTxPending, handleReveal }) => {
+    useEffect(() => {
+        if (nightState.hasCommitted && !nightState.hasRevealed && !isProcessing && !isTxPending && nightState.salt) {
+            console.log("[Night Auto] Detected commit. Reconfirming reveal...");
+            handleReveal();
+        }
+    }, [nightState.hasCommitted, nightState.hasRevealed, nightState.salt, isProcessing, isTxPending, handleReveal]);
+
+    return null;
 };

@@ -440,6 +440,8 @@ export const RoleReveal: React.FC = () => {
                                         <span className="flex items-center gap-2">
                                             <Check className="w-4 h-4" /> Keys Shared
                                         </span>
+                                    ) : isProcessing ? (
+                                        'Auto-sharing keys...'
                                     ) : (
                                         'Share My Decryption Key'
                                     )}
@@ -451,10 +453,17 @@ export const RoleReveal: React.FC = () => {
                                     disabled={isProcessing || keysCollected < keysNeeded}
                                     className="w-full"
                                 >
-                                    {keysCollected < keysNeeded
-                                        ? `Waiting for ${keysNeeded - keysCollected} more keys...`
-                                        : 'Decrypt My Role'
-                                    }
+                                    {revealState.isRevealed ? (
+                                        <span className="flex items-center gap-2">
+                                            <Check className="w-4 h-4" /> Decrypted
+                                        </span>
+                                    ) : keysCollected < keysNeeded ? (
+                                        `Waiting for ${keysNeeded - keysCollected} more keys...`
+                                    ) : isProcessing ? (
+                                        'Auto-decrypting role...'
+                                    ) : (
+                                        'Decrypt My Role'
+                                    )}
                                 </Button>
                             </div>
 
@@ -578,7 +587,7 @@ export const RoleReveal: React.FC = () => {
                                         disabled={isProcessing || isTxPending}
                                         className="w-full"
                                     >
-                                        I Understand My Role
+                                        {isProcessing ? 'Auto-confirming role...' : 'I Understand My Role'}
                                     </Button>
                                 ) : (
                                     <div className="flex items-center justify-center gap-2 text-green-400 py-4">
@@ -595,7 +604,66 @@ export const RoleReveal: React.FC = () => {
                         </motion.div>
                     )}
                 </AnimatePresence>
-            </motion.div>
-        </div>
+                {/* AUTOMATION: Role Reveal Hands-Free Flow */}
+                <RoleRevealAuto
+                    revealState={revealState}
+                    isProcessing={isProcessing}
+                    isTxPending={isTxPending}
+                    gameState={gameState}
+                    myPlayer={myPlayer}
+                    shareMyKey={shareMyKey}
+                    decryptMyRole={decryptMyRole}
+                    handleConfirmRole={handleConfirmRole}
+                />
+            </motion.div >
+        </div >
     );
+};
+
+// Help automation component to avoid dependency issues and keep main component clean
+const RoleRevealAuto: React.FC<{
+    revealState: RevealState,
+    isProcessing: boolean,
+    isTxPending: boolean,
+    gameState: any,
+    myPlayer: any,
+    shareMyKey: () => Promise<void>,
+    decryptMyRole: () => Promise<void>,
+    handleConfirmRole: () => Promise<void>
+}> = ({ revealState, isProcessing, isTxPending, gameState, myPlayer, shareMyKey, decryptMyRole, handleConfirmRole }) => {
+
+    // 1. Auto-share keys
+    useEffect(() => {
+        if (!revealState.hasSharedKeys && !isProcessing && !isTxPending && myPlayer) {
+            console.log("[RoleReveal Auto] Sharing my decryption keys...");
+            shareMyKey();
+        }
+    }, [revealState.hasSharedKeys, isProcessing, isTxPending, myPlayer, shareMyKey]);
+
+    // 2. Auto-decrypt role when all keys are present
+    useEffect(() => {
+        const keysNeeded = gameState.players.length - 1;
+        const canAutoDecrypt =
+            !revealState.isRevealed &&
+            !isProcessing &&
+            !isTxPending &&
+            revealState.deck.length > 0 &&
+            revealState.collectedKeys.size >= keysNeeded &&
+            gameState.players.length > 0;
+
+        if (canAutoDecrypt) {
+            console.log("[RoleReveal Auto] All keys collected. Decrypting role...");
+            decryptMyRole();
+        }
+    }, [revealState.isRevealed, revealState.collectedKeys.size, revealState.deck.length, gameState.players.length, isProcessing, isTxPending, decryptMyRole]);
+
+    // 3. Auto-confirm role once revealed
+    useEffect(() => {
+        if (revealState.isRevealed && !revealState.hasConfirmed && !isProcessing && !isTxPending && revealState.myRole) {
+            console.log("[RoleReveal Auto] Role revealed. Auto-confirming...");
+            handleConfirmRole();
+        }
+    }, [revealState.isRevealed, revealState.hasConfirmed, revealState.myRole, isProcessing, isTxPending, handleConfirmRole]);
+
+    return null;
 };
