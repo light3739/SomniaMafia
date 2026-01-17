@@ -151,62 +151,75 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
         }
 
-        if (canUseSession) {
-            const sessionClient = getSessionWalletClient();
-            console.log(`[TX Debug] sessionClient exists: ${!!sessionClient}, address: ${sessionClient?.account?.address}`);
-            if (sessionClient) {
-                // Используем session key - без попапа!
-                console.log(`[Session TX] ${functionName} via session key`);
-                try {
-                    // === FIX: ДИНАМИЧЕСКИЕ ЛИМИТЫ ГАЗА ===
-                    let gasLimit = 1_000_000n; // Базовый лимит повышаем до 1М
+        // Determine which account to use for gas estimation
+        // If session is valid, use session account, otherwise use main wallet address
+        const sessionClient = getSessionWalletClient();
+        const accountToUse = canUseSession && sessionClient ? sessionClient.account : address;
 
-                    // Для тяжелых функций даем 20 миллионов газа (в тестовой сети это бесплатно)
-                    if (
-                        functionName === 'revealDeck' ||
-                        functionName === 'commitDeck' ||
-                        functionName === 'shareKeysToAll' ||
-                        functionName === 'createAndJoin' ||
-                        functionName === 'joinRoom'
-                    ) {
-                        gasLimit = 20_000_000n; // Максимально безопасный запас
-                        console.log(`[Session TX] ⛽ High Gas Limit set: ${gasLimit}`);
-                    }
+        if (!accountToUse || !publicClient) {
+            console.error("[Gas Estimation] Missing account or publicClient.");
+            throw new Error("Cannot estimate gas: account or publicClient missing.");
+        }
 
-                    const hash = await sessionClient.writeContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MAFIA_ABI as any,
-                        functionName,
-                        args,
-                        gas: gasLimit,
-                    });
-                    console.log(`[Session TX] Success! Hash: ${hash}`);
-                    return hash;
-                } catch (err: any) {
-                    console.error('[Session TX] Failed:', err.message || err);
-                    // Если session key не работает - fallback на main wallet
-                    console.log('[Session TX] Falling back to main wallet...');
-                }
+        // === АВТОМАТИЧЕСКИЙ РАСЧЕТ ГАЗА ===
+        let calculatedGas = 1_000_000n; // Fallback на случай сбоя оценки
+
+        try {
+            console.log(`[Gas] Estimating for ${functionName}...`);
+
+            // 1. Спрашиваем у ноды, сколько нужно газа
+            const gasEstimate = await publicClient.estimateContractGas({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: functionName,
+                args: args,
+                account: accountToUse,
+            });
+
+            // 2. Добавляем буфер безопасности +50% (x1.5)
+            // Для сложных операций типа Shuffle/Reveal это критично
+            calculatedGas = (gasEstimate * 150n) / 100n;
+
+            console.log(`[Gas] Estimated for ${functionName}: ${gasEstimate}, With Buffer: ${calculatedGas}`);
+        } catch (e) {
+            console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
+            // Если оценка упала, используем высокий лимит для тяжелых функций
+            if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom'].includes(functionName)) {
+                calculatedGas = 20_000_000n;
+            } else {
+                calculatedGas = 2_000_000n;
             }
         }
 
-        // Fallback на main wallet (с попапом)
-        console.log(`[Main Wallet TX] ${functionName} - requires signature`);
-
-        // Определяем газ и для обычного кошелька
-        let manualGas = undefined;
-        if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom'].includes(functionName)) {
-            manualGas = 20_000_000n;
+        // === ОТПРАВКА ТРАНЗАКЦИИ ===
+        if (canUseSession && sessionClient) {
+            console.log(`[Session TX] Sending ${functionName} with gas ${calculatedGas}...`);
+            try {
+                const hash = await sessionClient.writeContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI as any,
+                    functionName,
+                    args,
+                    gas: calculatedGas,
+                });
+                console.log(`[Session TX] Success! Hash: ${hash}`);
+                return hash;
+            } catch (err: any) {
+                console.error('[Session TX] Failed:', err.message || err);
+                throw err;
+            }
+        } else {
+            // Fallback на основной кошелек (MetaMask)
+            console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas}`);
+            return writeContractAsync({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName,
+                args,
+                gas: calculatedGas,
+            });
         }
-
-        return writeContractAsync({
-            address: MAFIA_CONTRACT_ADDRESS,
-            abi: MAFIA_ABI,
-            functionName,
-            args,
-            gas: manualGas,
-        });
-    }, [getSessionWalletClient, writeContractAsync]);
+    }, [getSessionWalletClient, writeContractAsync, publicClient, address]);
 
     const [gameState, setGameState] = useState<GameState>({
         phase: GamePhase.LOBBY,
@@ -465,11 +478,28 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 3. Сессия
             const { sessionAddress } = createNewSession(address, newRoomId);
 
-            // 4. АТОМАРНАЯ ТРАНЗАКЦИЯ (Create + Join + Fund)
+            // 4. Оценка газа с буфером
+            let gasLimit = 5_000_000n;
+            try {
+                const gasEstimate = await publicClient.estimateContractGas({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'createAndJoin',
+                    args: [lobbyName, 16, playerName, pubKeyHex, sessionAddress],
+                    account: address,
+                    value: parseEther('0.05'),
+                });
+                gasLimit = (gasEstimate * 150n) / 100n;
+                console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
+            } catch (e) {
+                console.warn('[Gas] createAndJoin estimation failed, using fallback', e);
+            }
+
+            // 5. АТОМАРНАЯ ТРАНЗАКЦИЯ (Create + Join + Fund)
             const hash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
-                functionName: 'createAndJoin', // <--- НОВАЯ ФУНКЦИЯ
+                functionName: 'createAndJoin',
                 args: [
                     lobbyName,      // string roomName
                     16,             // uint8 maxPlayers
@@ -477,7 +507,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     pubKeyHex,      // bytes publicKey
                     sessionAddress  // address sessionAddress
                 ],
-                value: parseEther('0.05'), // Деньги для бота (0.02 ETH according to V4)
+                value: parseEther('0.05'),
+                gas: gasLimit,
             });
 
             addLog(`Creating room "${lobbyName}"...`, "info");
@@ -507,18 +538,36 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 2. Generate session key
             const { sessionAddress } = createNewSession(address, roomId);
 
-            // 3. Join room with session key + fund it (V3: all in one tx)
+            // 3. Оценка газа с буфером
+            let gasLimit = 5_000_000n;
+            try {
+                const gasEstimate = await publicClient.estimateContractGas({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'joinRoom',
+                    args: [BigInt(roomId), playerName, pubKeyHex, sessionAddress],
+                    account: address,
+                    value: parseEther('0.05'),
+                });
+                gasLimit = (gasEstimate * 150n) / 100n;
+                console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
+            } catch (e) {
+                console.warn('[Gas] joinRoom estimation failed, using fallback', e);
+            }
+
+            // 4. Join room with session key + fund it
             const hash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), playerName, pubKeyHex, sessionAddress],
-                value: parseEther('0.05'), // Fund session key (enough for ~30-50 txs)
+                value: parseEther('0.05'),
+                gas: gasLimit,
             });
             addLog("Joining with auto-sign...", "info");
             await publicClient?.waitForTransactionReceipt({ hash });
 
-            // 4. Mark session as registered
+            // 5. Mark session as registered
             markSessionRegistered();
 
             setCurrentRoomId(BigInt(roomId));
@@ -534,15 +583,31 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // --- SHUFFLE PHASE ---
 
     const startGameOnChain = async () => {
-        if (!currentRoomId) return;
+        if (!currentRoomId || !publicClient || !address) return;
         setIsTxPending(true);
         try {
-            // V3: function is 'startGame' not 'startShuffle'
+            // Оценка газа с буфером
+            let gasLimit = 2_000_000n;
+            try {
+                const gasEstimate = await publicClient.estimateContractGas({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'startGame',
+                    args: [currentRoomId],
+                    account: address,
+                });
+                gasLimit = (gasEstimate * 150n) / 100n;
+                console.log(`[Gas] startGame estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
+            } catch (e) {
+                console.warn('[Gas] startGame estimation failed, using fallback', e);
+            }
+
             const hash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'startGame',
                 args: [currentRoomId],
+                gas: gasLimit,
             });
             addLog("Starting game...", "phase");
             await publicClient?.waitForTransactionReceipt({ hash });

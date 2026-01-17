@@ -466,7 +466,7 @@ export const ShufflePhase: React.FC = () => {
                                 disabled={isProcessing || isTxPending}
                                 className="w-full h-14 text-lg"
                             >
-                                {isProcessing ? 'Encrypting...' : 'Shuffle & Encrypt Deck'}
+                                {isProcessing ? 'Auto-encrypting...' : 'Shuffle & Encrypt Deck'}
                             </Button>
                         </motion.div>
                     ) : shuffleState.hasCommitted && !shuffleState.hasRevealed ? (
@@ -482,7 +482,7 @@ export const ShufflePhase: React.FC = () => {
                                 disabled={isProcessing || isTxPending}
                                 className="w-full h-14 text-lg"
                             >
-                                {isProcessing ? 'Revealing...' : 'Reveal Deck'}
+                                {isProcessing ? 'Auto-revealing...' : 'Reveal Deck'}
                             </Button>
                         </motion.div>
                     ) : shuffleState.hasRevealed ? (
@@ -507,7 +507,7 @@ export const ShufflePhase: React.FC = () => {
                         </div>
                     )}
                 </AnimatePresence>
-            </motion.div>
-        </div>
+            </motion.div >
+        </div >
     );
 };
