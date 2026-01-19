@@ -45,7 +45,7 @@ export const PhaseIndicator: React.FC<PhaseIndicatorProps> = ({ phase, dayCount 
                     animate={{ opacity: 1, scale: 1, rotate: 0 }}
                     transition={{ duration: 0.5 }}
                 >
-                    {React.cloneElement(config.icon as React.ReactElement, { className: "w-8 h-8 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" })}
+                    {React.cloneElement(config.icon as React.ReactElement<any>, { className: "w-8 h-8 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" })}
                 </motion.div>
             </div>
 

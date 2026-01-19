@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Camera, Upload } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import lobbyBg from '../../assets/lobby_background.png';
@@ -9,7 +9,7 @@ import { Input } from '../ui/Input';
 
 export const SetupProfile: React.FC = () => {
     const { playerName, setPlayerName, avatarUrl, setAvatarUrl } = useGameContext();
-    const navigate = useNavigate();
+    const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -80,14 +80,14 @@ export const SetupProfile: React.FC = () => {
                 {/* Actions */}
                 <div className="w-full flex flex-col gap-4">
                     <Button
-                        onClick={() => navigate('/create')}
+                        onClick={() => router.push('/create')}
                         disabled={!playerName.trim()}
                         className="w-full h-[60px] text-xl"
                     >
                         Create Game
                     </Button>
                     <Button
-                        onClick={() => navigate('/join')}
+                        onClick={() => router.push('/join')}
                         disabled={!playerName.trim()}
                         variant="outline-gold"
                         className="w-full h-[60px] text-xl"

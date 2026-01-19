@@ -11,10 +11,10 @@ type ChatMode = 'none' | 'suggest';
 
 interface MafiaChatProps {
     myName: string;
-    teammates: string[]; // Addresses of fellow mafia
+    teammates: `0x${string}`[]; // Addresses of fellow mafia
     players: Player[];
-    selectedTarget: string | null;
-    onSuggestTarget: (targetAddress: string) => void;
+    selectedTarget: `0x${string}` | null;
+    onSuggestTarget: (targetAddress: `0x${string}`) => void;
     // Context props
     messages: MafiaChatMessage[];
     onSendMessage: (content: MafiaChatMessage['content']) => Promise<void>;
@@ -30,7 +30,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
     onSendMessage
 }) => {
     const [mode, setMode] = useState<ChatMode>('none');
-    const [lastSuggestion, setLastSuggestion] = useState<string | null>(null);
+    const [lastSuggestion, setLastSuggestion] = useState<`0x${string}` | null>(null);
     const chatRef = useRef<HTMLDivElement>(null);
     const [isSending, setIsSending] = useState(false);
 
@@ -63,7 +63,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
     };
 
     // Handle clicking a player while in suggest mode
-    const handlePlayerSelect = (targetAddress: string) => {
+    const handlePlayerSelect = (targetAddress: `0x${string}`) => {
         if (mode !== 'suggest') return;
 
         const targetPlayer = players.find(p => p.address.toLowerCase() === targetAddress.toLowerCase());

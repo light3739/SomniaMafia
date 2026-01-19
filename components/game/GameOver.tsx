@@ -1,7 +1,7 @@
 // components/game/GameOver.tsx
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
@@ -41,7 +41,7 @@ export const GameOver: React.FC = () => {
     const { gameState, myPlayer, currentRoomId, setGameState } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
-    const navigate = useNavigate();
+    const router = useRouter();
     const [revealedRoles, setRevealedRoles] = useState<Map<string, Role>>(new Map());
     const [isRevealing, setIsRevealing] = useState(false);
     const [winner, setWinner] = useState<Winner>('DRAW');
@@ -49,7 +49,7 @@ export const GameOver: React.FC = () => {
     // Расшифровать все роли в конце игры
     const revealAllRoles = useCallback(async () => {
         if (!publicClient || !currentRoomId || isRevealing) return;
-        
+
         setIsRevealing(true);
         try {
             // Получаем колоду одним вызовом
@@ -59,7 +59,7 @@ export const GameOver: React.FC = () => {
                 functionName: 'getDeck',
                 args: [currentRoomId],
             }) as string[];
-            
+
             // Собираем ключи от всех игроков
             const keys = new Map<string, string>();
             for (const player of gameState.players) {
@@ -69,40 +69,40 @@ export const GameOver: React.FC = () => {
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI,
                         functionName: 'playerDeckKeys',
-                        args: [currentRoomId, player.address, address],
+                        args: [currentRoomId, player.address, address as `0x${string}`],
                     }) as `0x${string}`;
                     if (key && key !== '0x') {
                         keys.set(player.address, key);
                     }
                 } catch { }
             }
-            
+
             const shuffleService = getShuffleService();
             const roles = new Map<string, Role>();
-            
+
             // Расшифровываем все карты
             for (let i = 0; i < deck.length && i < gameState.players.length; i++) {
                 try {
                     let encryptedCard = deck[i];
-                    
+
                     // Расшифровываем своим ключом
                     encryptedCard = shuffleService.decrypt(encryptedCard);
-                    
+
                     // Расшифровываем ключами других
                     for (const [_, key] of keys) {
                         const decryptionKey = hexToString(key);
                         encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
                     }
-                    
+
                     const role = ShuffleService.roleNumberToRole(encryptedCard);
                     roles.set(gameState.players[i].address.toLowerCase(), role);
                 } catch (e) {
                     console.warn(`Failed to decrypt card ${i}:`, e);
                 }
             }
-            
+
             setRevealedRoles(roles);
-            
+
             // Обновляем gameState с раскрытыми ролями
             setGameState(prev => ({
                 ...prev,
@@ -111,10 +111,10 @@ export const GameOver: React.FC = () => {
                     role: roles.get(p.address.toLowerCase()) || p.role
                 }))
             }));
-            
+
             // Определяем победителя
             determineWinner(roles);
-            
+
         } catch (e) {
             console.error("Failed to reveal roles:", e);
         } finally {
@@ -125,21 +125,21 @@ export const GameOver: React.FC = () => {
     // Определяем победителя на основе раскрытых ролей
     const determineWinner = (roles: Map<string, Role>) => {
         const alivePlayers = gameState.players.filter(p => p.isAlive);
-        
+
         let aliveMafia = 0;
         let aliveTown = 0; // civilian + doctor + detective
-        
+
         for (const player of alivePlayers) {
             const role = roles.get(player.address.toLowerCase()) || player.role;
             if (role === Role.MAFIA) aliveMafia++;
             else if (role !== Role.UNKNOWN) aliveTown++;
         }
-        
+
         // Условия победы:
         // MAFIA wins: мафия >= город
         // TOWN wins: мафия = 0
         // DRAW: никто не выжил
-        
+
         if (alivePlayers.length === 0) {
             setWinner('DRAW');
         } else if (aliveMafia > 0 && aliveMafia >= aliveTown) {
@@ -158,29 +158,29 @@ export const GameOver: React.FC = () => {
     }, [revealAllRoles]);
 
     const myRole = revealedRoles.get(myPlayer?.address.toLowerCase() || '') || myPlayer?.role || Role.UNKNOWN;
-    
-    const didIWin = 
+
+    const didIWin =
         (winner === 'MAFIA' && myRole === Role.MAFIA) ||
         (winner === 'TOWN' && (myRole === Role.CIVILIAN || myRole === Role.DOCTOR || myRole === Role.DETECTIVE));
 
     const winnerConfig = {
-        'MAFIA': { 
-            title: 'Mafia Wins!', 
-            description: 'The mafia has taken control of the town...', 
+        'MAFIA': {
+            title: 'Mafia Wins!',
+            description: 'The mafia has taken control of the town...',
             color: 'text-red-400',
             bg: 'from-red-950/50 to-red-900/30 border-red-500/30',
             trophy: 'text-red-500'
         },
-        'TOWN': { 
-            title: 'Town Wins!', 
-            description: 'Justice prevails! All evil has been eliminated.', 
+        'TOWN': {
+            title: 'Town Wins!',
+            description: 'Justice prevails! All evil has been eliminated.',
             color: 'text-amber-400',
             bg: 'from-amber-950/50 to-amber-900/30 border-amber-500/30',
             trophy: 'text-amber-500'
         },
-        'DRAW': { 
-            title: 'Draw!', 
-            description: 'No one survived...', 
+        'DRAW': {
+            title: 'Draw!',
+            description: 'No one survived...',
             color: 'text-gray-400',
             bg: 'from-gray-950/50 to-gray-900/30 border-gray-500/30',
             trophy: 'text-gray-500'
@@ -191,12 +191,12 @@ export const GameOver: React.FC = () => {
 
     const handlePlayAgain = () => {
         sessionStorage.removeItem('currentRoomId');
-        navigate('/setup');
+        router.push('/setup');
     };
 
     const handleHome = () => {
         sessionStorage.removeItem('currentRoomId');
-        navigate('/');
+        router.push('/');
     };
 
     return (
@@ -248,8 +248,8 @@ export const GameOver: React.FC = () => {
                         transition={{ delay: 1 }}
                         className={`
                             mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full
-                            ${didIWin 
-                                ? 'bg-green-900/30 text-green-400 border border-green-500/30' 
+                            ${didIWin
+                                ? 'bg-green-900/30 text-green-400 border border-green-500/30'
                                 : 'bg-gray-900/30 text-gray-400 border border-gray-500/30'
                             }
                         `}
@@ -281,7 +281,7 @@ export const GameOver: React.FC = () => {
                         <h3 className="text-white/50 text-sm uppercase tracking-wider">All Roles Revealed</h3>
                         {isRevealing && <span className="text-xs text-white/30">(decrypting...)</span>}
                     </div>
-                    
+
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {gameState.players.map((player, index) => {
                             const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
@@ -297,9 +297,9 @@ export const GameOver: React.FC = () => {
                                     transition={{ delay: 1.4 + index * 0.1 }}
                                     className={`
                                         p-3 rounded-xl border
-                                        ${isDead 
-                                            ? 'bg-gray-900/50 border-gray-800 opacity-60' 
-                                            : isMe 
+                                        ${isDead
+                                            ? 'bg-gray-900/50 border-gray-800 opacity-60'
+                                            : isMe
                                                 ? 'bg-[#916A47]/20 border-[#916A47]/40'
                                                 : 'bg-white/5 border-white/10'
                                         }

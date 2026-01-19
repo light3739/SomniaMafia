@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
@@ -15,8 +17,9 @@ import { SessionKeyBanner } from './SessionKeyBanner';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { GamePhase, Role } from '../../types';
-import dayBg from '../../assets/game_background_light.png';
-import nightBg from '../../assets/game_background.png';
+
+const dayBg = "/assets/game_background_light.png";
+const nightBg = "/assets/game_background.png";
 
 // Coordinates for 14 players, clockwise starting from Top-Left
 const PLAYER_POSITIONS = [
@@ -47,7 +50,7 @@ const BASE_WIDTH = 1488;
 const BASE_HEIGHT = 1024;
 
 export const GameLayout: React.FC = () => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain } = useGameContext();
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK } = useGameContext();
     const players = gameState.players || [];
 
     // Handle window resize for scaling
@@ -300,15 +303,7 @@ export const GameLayout: React.FC = () => {
 
                 {/* Right: Phase & Role */}
                 <div className="pointer-events-auto flex items-center gap-4">
-                    {/* Stall/Kick Button - V4 safety mechanism */}
-                    <Button
-                        onClick={() => kickStalledPlayerOnChain()}
-                        variant="secondary"
-                        className="text-[10px] h-8 px-2 font-bold bg-red-900/20 text-red-500 border border-red-500/30 hover:bg-red-900/40"
-                        title="Force game to advance if someone is AFK"
-                    >
-                        Kick AFK
-                    </Button>
+
 
                     <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />
 

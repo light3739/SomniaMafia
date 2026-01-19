@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 
 interface BackButtonProps {
     to?: string; // If not provided, goes back in history
@@ -9,13 +9,13 @@ interface BackButtonProps {
 }
 
 export const BackButton: React.FC<BackButtonProps> = ({ to, label = "Back", className = "" }) => {
-    const navigate = useNavigate();
+    const router = useRouter();
 
     const handleClick = () => {
         if (to) {
-            navigate(to);
+            router.push(to);
         } else {
-            navigate(-1);
+            router.back();
         }
     };
 

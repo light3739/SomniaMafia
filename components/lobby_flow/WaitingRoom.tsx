@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { useSessionKey } from '../../hooks/useSessionKey';
@@ -20,25 +20,25 @@ export const WaitingRoom: React.FC = () => {
     } = useGameContext();
 
     const roomIdNumber = currentRoomId ? Number(currentRoomId) : null;
-    const { 
+    const {
         hasSession,
-        error: sessionError 
+        error: sessionError
     } = useSessionKey(roomIdNumber);
 
-    const navigate = useNavigate();
+    const router = useRouter();
 
     // 1. Авто-переход при смене фазы в блокчейне
     useEffect(() => {
         if (gameState.phase === GamePhase.SHUFFLING || gameState.phase === GamePhase.REVEAL) {
-            navigate('/game');
+            router.push('/game');
         }
-    }, [gameState.phase, navigate]);
+    }, [gameState.phase, router]);
 
     // 2. V4: Any participant can start the game (HOST_ROLE removed)
     // We still show who created the room (first player), but anyone can start
     const isRoomCreator = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
     const isParticipant = gameState.players.some(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
-    
+
     // V4: Min 4 players for proper mafia game
     const minPlayers = 4;
     const canStartGame = isParticipant && gameState.players.length >= minPlayers;
@@ -142,11 +142,10 @@ export const WaitingRoom: React.FC = () => {
                 >
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                hasSession 
-                                    ? 'bg-green-500/20 border border-green-500/40' 
-                                    : 'bg-yellow-500/20 border border-yellow-500/40'
-                            }`}>
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasSession
+                                ? 'bg-green-500/20 border border-green-500/40'
+                                : 'bg-yellow-500/20 border border-yellow-500/40'
+                                }`}>
                                 {hasSession ? (
                                     <Check className="w-5 h-5 text-green-400" />
                                 ) : (
@@ -158,14 +157,14 @@ export const WaitingRoom: React.FC = () => {
                                     {hasSession ? 'Auto-Sign Active ✓' : 'Checking Session...'}
                                 </h3>
                                 <p className="text-[11px] text-white/40">
-                                    {hasSession 
-                                        ? 'All game actions signed automatically • Gas funded' 
+                                    {hasSession
+                                        ? 'All game actions signed automatically • Gas funded'
                                         : 'Session registered when you joined the room'}
                                 </p>
                             </div>
                         </div>
                     </div>
-                    
+
                     {sessionError && (
                         <p className="mt-2 text-xs text-red-400">{sessionError}</p>
                     )}
