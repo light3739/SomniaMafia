@@ -1,0 +1,26 @@
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+	modified:   components/game/DayPhase.tsx
+	modified:   components/game/MafiaChat.tsx
+	modified:   components/game/MockGameLayout.tsx
+	modified:   components/game/NightPhase.tsx
+
+Unmerged paths:
+  (use "git restore --staged <file>..." to unstage)
+  (use "git add/rm <file>..." as appropriate to mark resolution)
+	deleted by us:   App.tsx
+	both modified:   components/game/GameLayout.tsx
+	both modified:   components/game/PlayerSpot.tsx
+	both modified:   components/ui/BackgroundMusic.tsx
+	both modified:   contexts/GameContext.tsx
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	assets/
+	components/game/MorningAnnouncement.tsx
+	components/ui/SoundEffects.tsx
+	git_status.txt
+

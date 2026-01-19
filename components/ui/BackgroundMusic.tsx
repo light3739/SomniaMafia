@@ -3,8 +3,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Volume2, VolumeX, Square, Play } from 'lucide-react';
-import mainMusic from '../../assets/Main_Music.mp3';
-
 export const BackgroundMusic: React.FC = () => {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -89,7 +87,7 @@ export const BackgroundMusic: React.FC = () => {
 
     return (
         <div className="fixed bottom-6 right-6 z-[100] flex items-center gap-3">
-            <audio ref={audioRef} src={mainMusic} loop />
+            <audio ref={audioRef} src="/assets/Main_Music.mp3" loop />
 
             <div className="bg-black/60 backdrop-blur-xl border border-[#916A47]/40 rounded-full p-2 flex items-center gap-2 shadow-2xl group transition-all hover:bg-black/80 hover:pr-4">
 
