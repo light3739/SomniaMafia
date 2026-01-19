@@ -25,12 +25,12 @@ interface NightState {
     commitHash: string | null;
     salt: string | null;
     investigationResult: Role | null; // Detective's investigation result
-    teammates: string[]; // Fellow mafia members (addresses)
-    committedTarget: string | null; // Store the committed target
+    teammates: `0x${string}`[]; // Fellow mafia members (addresses)
+    committedTarget: `0x${string}` | null; // Store the committed target
     // V4: Mafia consensus state
     mafiaCommitted: number;
     mafiaRevealed: number;
-    mafiaConsensusTarget: string | null;
+    mafiaConsensusTarget: `0x${string}` | null;
 }
 
 const RoleActions: Record<Role, { action: NightActionType; label: string; icon: React.ReactNode; color: string }> = {
@@ -116,7 +116,7 @@ export const NightPhase: React.FC = () => {
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'getPlayerFlags',
-                args: [currentRoomId, address],
+                args: [currentRoomId, address as `0x${string}`],
             }) as [boolean, boolean, boolean, boolean, boolean, boolean, boolean];
 
             // V4: Get mafia consensus status
@@ -135,7 +135,7 @@ export const NightPhase: React.FC = () => {
                 // Sticky max for progress counters
                 mafiaCommitted: Math.max(prev.mafiaCommitted, Number(mafiaCommitted)),
                 mafiaRevealed: Math.max(prev.mafiaRevealed, Number(mafiaRevealed)),
-                mafiaConsensusTarget: consensusTarget === '0x0000000000000000000000000000000000000000' ? null : consensusTarget
+                mafiaConsensusTarget: consensusTarget === '0x0000000000000000000000000000000000000000' ? null : consensusTarget as `0x${string}`
             }));
         } catch (e) {
             console.error("Failed to sync night state:", e);
@@ -180,7 +180,7 @@ export const NightPhase: React.FC = () => {
                 abi: MAFIA_ABI,
                 functionName: 'getAllKeysForMe',
                 args: [currentRoomId],
-                account: address,
+                account: address as `0x${string}`,
             }) as [string[], string[]];
 
             const keys = new Map<string, string>();
@@ -228,7 +228,7 @@ export const NightPhase: React.FC = () => {
             }
 
             if (teammates.length > 0) {
-                setNightState(prev => ({ ...prev, teammates }));
+                setNightState(prev => ({ ...prev, teammates: teammates as `0x${string}`[] }));
                 const names = teammates.map(addr =>
                     gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase())?.name || addr.slice(0, 8)
                 );
@@ -414,7 +414,7 @@ export const NightPhase: React.FC = () => {
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI,
                         functionName: 'playerDeckKeys',
-                        args: [currentRoomId, player.address, address],
+                        args: [currentRoomId, player.address, address as `0x${string}`],
                     }) as `0x${string}`;
                     if (key && key !== '0x') {
                         keys.set(player.address, key);
@@ -465,7 +465,7 @@ export const NightPhase: React.FC = () => {
                 });
 
                 await revealMafiaTargetOnChain(
-                    nightState.committedTarget,
+                    nightState.committedTarget as `0x${string}`,
                     nightState.salt
                 );
             } else {
@@ -478,7 +478,7 @@ export const NightPhase: React.FC = () => {
 
                 await revealNightActionOnChain(
                     roleConfig.action,
-                    nightState.committedTarget,
+                    nightState.committedTarget as `0x${string}`,
                     nightState.salt
                 );
             }

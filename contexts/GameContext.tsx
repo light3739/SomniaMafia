@@ -1,3 +1,5 @@
+"use client";
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
 import { createWalletClient, http, parseEther } from 'viem';
@@ -6,8 +8,9 @@ import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
 import { loadSession, createNewSession, markSessionRegistered } from '../services/sessionKeyService';
+import { generateEndGameProof } from '../services/zkProof';
 
-import shotSound from '../assets/mafia_shot.wav';
+const shotSound = "/assets/mafia_shot.wav";
 
 interface GameContextType {
     playerName: string;
@@ -20,8 +23,8 @@ interface GameContextType {
     setGameState: React.Dispatch<React.SetStateAction<GameState>>;
     isTxPending: boolean;
     currentRoomId: bigint | null;
-    selectedTarget: string | null;
-    setSelectedTarget: (target: string | null) => void;
+    selectedTarget: `0x${string}` | null;
+    setSelectedTarget: (target: `0x${string}` | null) => void;
 
     // Lobby
     createLobbyOnChain: () => Promise<void>;
@@ -40,27 +43,30 @@ interface GameContextType {
 
     // Day/Voting (V3: auto-finalize on last vote)
     startVotingOnChain: () => Promise<void>;
-    voteOnChain: (targetAddress: string) => Promise<void>;
+    voteOnChain: (targetAddress: `0x${string}`) => Promise<void>;
 
     // Night (V4: Mafia uses consensus, Doctor/Detective use commit-reveal)
     commitNightActionOnChain: (hash: string) => Promise<void>;
-    revealNightActionOnChain: (action: number, target: string, salt: string) => Promise<void>;
-    // Mafia consensus kill (V4)
-    commitMafiaTargetOnChain: (targetHash: string) => Promise<void>;
-    revealMafiaTargetOnChain: (target: string, salt: string) => Promise<void>;
-    endNightOnChain: () => Promise<void>;
-    endGameAutomaticallyOnChain: () => Promise<void>;
-    // Game End (reveal role on-chain and try to end)
+    revealNightActionOnChain: (action: number, target: `0x${string}`, salt: string) => Promise<void>;
+
     revealRoleOnChain: (role: number, salt: string) => Promise<void>;
     tryEndGame: () => Promise<void>;
+    claimVictory: () => Promise<void>;
+    sendMafiaMessageOnChain: (content: MafiaChatMessage['content']) => Promise<void>;
+    // Mafia consensus kill (V4)
+    commitMafiaTargetOnChain: (targetHash: string) => Promise<void>;
+    revealMafiaTargetOnChain: (target: `0x${string}`, salt: string) => Promise<void>;
+    endNightOnChain: () => Promise<void>;
+    endGameAutomaticallyOnChain: () => Promise<void>;
+    endGameZK: () => Promise<void>;
+
     // Utility
     kickStalledPlayerOnChain: () => Promise<void>;
     refreshPlayersList: (roomId: bigint) => Promise<void>;
     // Mafia Chat
-    sendMafiaMessageOnChain: (content: MafiaChatMessage['content']) => Promise<void>;
 
     addLog: (message: string, type?: LogEntry['type']) => void;
-    handlePlayerAction: (targetId: string) => void;
+    handlePlayerAction: (targetId: `0x${string}`) => void;
     myPlayer: Player | undefined;
     getActionLabel: () => string;
     canActOnPlayer: (target: Player) => boolean;
@@ -70,14 +76,28 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     // Session
-    const [playerName, setPlayerName] = useState(localStorage.getItem('playerName') || '');
+    const [playerName, setPlayerName] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('playerName') || '';
+        }
+        return '';
+    });
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-    const [lobbyName, setLobbyName] = useState(sessionStorage.getItem('lobbyName') || '');
-    const [currentRoomId, setCurrentRoomId] = useState<bigint | null>(
-        sessionStorage.getItem('currentRoomId') ? BigInt(sessionStorage.getItem('currentRoomId')!) : null
-    );
+    const [lobbyName, setLobbyName] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return sessionStorage.getItem('lobbyName') || '';
+        }
+        return '';
+    });
+    const [currentRoomId, setCurrentRoomId] = useState<bigint | null>(() => {
+        if (typeof window !== 'undefined') {
+            const stored = sessionStorage.getItem('currentRoomId');
+            return stored ? BigInt(stored) : null;
+        }
+        return null;
+    });
     const [keys, setKeys] = useState<CryptoKeyPair | null>(null);
-    const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+    const [selectedTarget, setSelectedTarget] = useState<`0x${string}` | null>(null);
 
     // Ref для currentRoomId чтобы избежать проблем с замыканием в callbacks
     const currentRoomIdRef = useRef<bigint | null>(currentRoomId);
@@ -178,8 +198,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const gasEstimate = await publicClient.estimateContractGas({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
-                functionName: functionName,
-                args: args,
+                functionName: functionName as any,
+                args: args as any,
                 account: accountToUse,
             });
 
@@ -205,8 +225,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const hash = await sessionClient.writeContract({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI as any,
-                    functionName,
-                    args,
+                    functionName: functionName as any,
+                    args: args as any,
                     gas: calculatedGas,
                 });
                 console.log(`[Session TX] Success! Hash: ${hash}`);
@@ -221,8 +241,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
-                functionName,
-                args,
+                functionName: functionName as any,
+                args: args as any,
                 gas: calculatedGas,
             });
         }
@@ -530,7 +550,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
-                    args: [lobbyName, 16, playerName, pubKeyHex, sessionAddress],
+                    args: [lobbyName, 16, playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
                     value: parseEther('0.05'),
                 });
@@ -549,8 +569,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     lobbyName,      // string roomName
                     16,             // uint8 maxPlayers
                     playerName,     // string nickname
-                    pubKeyHex,      // bytes publicKey
-                    sessionAddress  // address sessionAddress
+                    pubKeyHex as `0x${string}`,      // bytes publicKey
+                    sessionAddress as `0x${string}`  // address sessionAddress
                 ],
                 value: parseEther('0.05'),
                 gas: gasLimit,
@@ -590,7 +610,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'joinRoom',
-                    args: [BigInt(roomId), playerName, pubKeyHex, sessionAddress],
+                    args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
                     value: parseEther('0.05'),
                 });
@@ -605,7 +625,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
-                args: [BigInt(roomId), playerName, pubKeyHex, sessionAddress],
+                args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                 value: parseEther('0.05'),
                 gas: gasLimit,
             });
@@ -782,6 +802,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             addLog("Role committed & confirmed on-chain!", "success");
             await publicClient?.waitForTransactionReceipt({ hash: txHash });
+
+            // SYNC WITH SERVER-SIDE DB (for automated win-checking)
+            try {
+                await fetch('/api/game/reveal-secret', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId: currentRoomId.toString(),
+                        address,
+                        role,
+                        salt
+                    })
+                });
+                console.log("[Status] Secret synced with server DB.");
+            } catch (err) {
+                console.warn("[Warning] Failed to sync secret with server DB. Auto-win might be delayed.", err);
+            }
 
             // Сохраняем соль
             localStorage.setItem(`role_salt_${currentRoomId}_${address}`, salt);
@@ -1038,14 +1075,153 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await publicClient?.waitForTransactionReceipt({ hash });
         } catch (e: any) {
             // Ignore "already revealed" errors
-            if (e.message?.includes('RoleAlreadyRevealed')) {
-                console.log("Role already revealed on-chain, continuing...");
-                return;
-            }
+            if (e.message.includes("RoleAlreadyRevealed")) return;
             addLog(e.shortMessage || e.message, "danger");
             throw e;
         }
     };
+
+    // Manual triggers for victory claim (reveals role + checks win condition)
+    const claimVictory = async () => {
+        if (!currentRoomId || !myPlayer) return;
+
+        try {
+            // 1. Reveal my role
+            // Get salt from storage
+            const salt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+            if (salt) {
+                // Ignore errors if already revealed
+                try {
+                    // Convert Role string to number for contract
+                    // Role { NONE=0, MAFIA=1, DOCTOR=2, DETECTIVE=3, CITIZEN=4 }
+                    let roleNum = 0;
+                    switch (myPlayer.role) {
+                        case Role.MAFIA: roleNum = 1; break;
+                        case Role.DOCTOR: roleNum = 2; break;
+                        case Role.DETECTIVE: roleNum = 3; break;
+                        case Role.CIVILIAN: roleNum = 4; break;
+                    }
+
+                    await revealRoleOnChain(roleNum, salt);
+                } catch (e: any) {
+                    if (!e.message.includes("RoleAlreadyRevealed")) {
+                        console.warn("Reveal role failed during claim:", e);
+                        // Continue anyway to try ending game
+                    }
+                }
+            } else {
+                addLog("Cannot claim victory: Role salt not found!", "danger");
+                return;
+            }
+
+            // 2. Try to end game
+            // This might fail if other players haven't revealed yet, which is expected
+            try {
+                await endGameAutomaticallyOnChain();
+            } catch (e: any) {
+                if (e.message.includes("NotAllRolesRevealed")) {
+                    addLog("Victory claimed! Waiting for other survivors to claim...", "info");
+                } else {
+                    addLog(e.shortMessage || e.message, "danger");
+                }
+            }
+        } catch (e) {
+            console.error("Claim victory failed:", e);
+            addLog("Failed to claim victory.", "danger");
+        }
+    };
+
+    // V4: ZK End Game (Client generates proof of win)
+    const endGameZK = async () => {
+        if (!currentRoomId || !gameState.players) return;
+
+        // Calculate State for Proof
+        // NOTE: In production with hidden roles, this logic would run on a trusted server
+        // or using private inputs. Here we simulate it on client for the prototype.
+        const active = gameState.players.filter(p => p.isAlive);
+        let mafiaCount = 0;
+        let townCount = 0;
+        active.forEach(p => {
+            if (p.role === Role.MAFIA) mafiaCount++;
+            else townCount++;
+        });
+
+        console.log(`[ZK Attempt] Room: ${currentRoomId}, Mafia: ${mafiaCount}, Town: ${townCount}`);
+
+        try {
+            addLog("Generating ZK Proof...", "info");
+            const proof = await generateEndGameProof(currentRoomId, mafiaCount, townCount);
+
+            const hash = await sendGameTransaction('endGameZK', [
+                currentRoomId,
+                proof.a,
+                proof.b,
+                proof.c,
+                proof.inputs
+            ]);
+
+            addLog("ZK Win Proof submitted!", "info");
+            await publicClient?.waitForTransactionReceipt({ hash });
+            addLog("Game ended via ZK!", "phase");
+            await refreshPlayersList(currentRoomId);
+        } catch (e: any) {
+            console.error("[ZK] Failed:", e);
+            addLog("ZK Proof failed: " + (e.shortMessage || e.message), "danger");
+        }
+    };
+
+    /**
+     * TRIGGER AUTO WIN: A silent background check that pings the server
+     * to see if a win condition has been met (since server knows all roles).
+     */
+    const triggerAutoWinCheck = async () => {
+        const roomId = currentRoomIdRef.current;
+        if (!roomId || !publicClient) return;
+
+        try {
+            console.log(`[AutoWin] Checking for victory in Room #${roomId}...`);
+            const response = await fetch('/api/game/check-win', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roomId: roomId.toString() })
+            });
+
+            if (!response.ok) return;
+
+            const data = await response.json();
+            if (data.winDetected) {
+                const { proof, publicSignals } = data;
+
+                // Transformation for Solidity Groth16 Verifier
+                const formattedProof = {
+                    a: [BigInt(proof.pi_a[0]), BigInt(proof.pi_a[1])],
+                    b: [
+                        [BigInt(proof.pi_b[0][1]), BigInt(proof.pi_b[0][0])],
+                        [BigInt(proof.pi_b[1][1]), BigInt(proof.pi_b[1][0])],
+                    ],
+                    c: [BigInt(proof.pi_c[0]), BigInt(proof.pi_c[1])],
+                    inputs: publicSignals.map((s: string) => BigInt(s)) as [bigint, bigint, bigint, bigint]
+                };
+
+                addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");
+
+                const hash = await sendGameTransaction('endGameZK', [
+                    roomId,
+                    formattedProof.a,
+                    formattedProof.b,
+                    formattedProof.c,
+                    formattedProof.inputs
+                ]);
+
+                await publicClient.waitForTransactionReceipt({ hash });
+                addLog("Game ended automatically via Server ZK!", "phase");
+                await refreshPlayersList(roomId);
+            }
+        } catch (e) {
+            console.warn("[AutoWin] Silent check failed:", e);
+        }
+    };
+
 
     // Try to end the game by first revealing our role on-chain, then calling endGameAutomatically
     const tryEndGame = useCallback(async () => {
@@ -1119,6 +1295,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         }
     }, [currentRoomId, address, gameState.players, revealRoleOnChain, endGameAutomaticallyOnChain, addLog, setGameState]);
+
+
 
     // Set ref for auto-trigger useEffect 
     useEffect(() => {
@@ -1279,6 +1457,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const player = logs[0].args.player;
                 addLog(`${player.slice(0, 6)}... confirmed role`, "info");
                 refreshPlayersList(roomId);
+                // Trigger auto-win check because this might be the last reveal needed
+                triggerAutoWinCheck();
             }
         }
     });
@@ -1316,7 +1496,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useWatchContractEvent({
         address: MAFIA_CONTRACT_ADDRESS,
         abi: MAFIA_ABI,
-        eventName: 'DeckSubmitted',
+        eventName: 'DeckCommitted',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
@@ -1378,6 +1558,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     addLog("No one was eliminated - no majority reached.", "warning");
                 }
                 refreshPlayersList(roomId);
+                // Trigger auto-win check because an elimination might end the game
+                triggerAutoWinCheck();
             }
         }
     });
@@ -1403,6 +1585,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     addLog("The night passes peacefully...", "info");
                 }
                 refreshPlayersList(roomId);
+                // Trigger auto-win check because a night kill might end the game
+                triggerAutoWinCheck();
             }
         }
     });
@@ -1450,7 +1634,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
     // Helper для UI - works for both VOTING and NIGHT phases
-    const handlePlayerAction = (targetId: string) => {
+    const handlePlayerAction = (targetId: `0x${string}`) => {
         if (gameState.phase === GamePhase.VOTING || gameState.phase === GamePhase.NIGHT) {
             setSelectedTarget(prev => prev === targetId ? null : targetId);
         } else {
@@ -1465,6 +1649,47 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const myPlayerByWallet = gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase());
     // Приоритет: myPlayerId (тестовый режим) > адрес кошелька
     const myPlayer = myPlayerById || myPlayerByWallet;
+
+    // AUTO-END GAME CHECKER (Safe Hybrid Approach)
+    useEffect(() => {
+        if (!currentRoomId || !myPlayer || !myPlayer.isAlive) return;
+
+        const checkAndClaim = async () => {
+            // 1. MAFIA LOGIC (Automatic but Conservative)
+            // We only auto-claim if we are mathematically certain of victory.
+            // Since we might not know teammates (hidden roles), we count conservatively.
+            if (myPlayer.role === Role.MAFIA) {
+                const alivePlayers = gameState.players.filter(p => p.isAlive);
+                let knownMafia = 0;
+                let potentialTown = 0;
+
+                alivePlayers.forEach(p => {
+                    // We know OUR role is Mafia.
+                    // Others are UNKNOWN (potential Town) unless revealed.
+                    if (p.role === Role.MAFIA) knownMafia++;
+                    else potentialTown++;
+                });
+
+                // If Known Mafia >= Potential Town, we have won (or tied for win).
+                // In this case, revealing is safe because the game is effectively over.
+                if (knownMafia > 0 && knownMafia >= knownMafia + potentialTown - knownMafia) { // Simplifies to knownMafia >= potentialTown
+                    if (knownMafia >= potentialTown) {
+                        await claimVictory();
+                    }
+                }
+            }
+
+            // 2. TOWN LOGIC (Manual Only)
+            // Town players cannot know for sure if they won (dead roles are hidden).
+            // Auto-revealing risks doxxing innocent players.
+            // Town must use the manual "Claim Victory" button.
+        };
+
+        const timer = setTimeout(checkAndClaim, 3000);
+        return () => clearTimeout(timer);
+    }, [gameState.phase, gameState.players, currentRoomId, myPlayer]);
+
+
 
     const getActionLabel = () => {
         if (gameState.phase === GamePhase.VOTING) return "VOTE";
@@ -1508,7 +1733,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             commitNightActionOnChain, revealNightActionOnChain,
             commitMafiaTargetOnChain, revealMafiaTargetOnChain,
             endNightOnChain, endGameAutomaticallyOnChain,
-            revealRoleOnChain, tryEndGame,
+            revealRoleOnChain, tryEndGame, claimVictory, endGameZK,
             sendMafiaMessageOnChain,
             kickStalledPlayerOnChain, refreshPlayersList,
             addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,

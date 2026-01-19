@@ -33,7 +33,7 @@ export type ConnectionStatus = 'connected' | 'syncing' | 'offline' | 'slashed';
 export interface Player {
   id: string;
   name: string;
-  address: string; // Wallet address
+  address: `0x${string}`; // Wallet address
   role: Role; // In a real app, this is hidden for others!
   isAlive: boolean; // Это будет мапиться на isActive из контракта
   avatarUrl: string;

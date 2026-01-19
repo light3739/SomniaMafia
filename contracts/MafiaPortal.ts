@@ -1,3 +1,4 @@
+export const MafiaABI = 
 {
   "_format": "hh3-artifact-1",
   "contractName": "MafiaPortal",
@@ -2788,4 +2789,4 @@
   "immutableReferences": {},
   "inputSourceName": "project/contracts/MafiaPortal.sol",
   "buildInfoId": "solc-0_8_28-f49eeb12775bd390ed0059496ed138f50f1ad706"
-}
+} as const;

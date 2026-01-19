@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import lobbyBg from '../../assets/lobby_background.png';
@@ -9,7 +9,7 @@ import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 
 export const JoinLobby: React.FC = () => {
     const { setLobbyName, joinLobbyOnChain, isTxPending } = useGameContext();
-    const navigate = useNavigate();
+    const router = useRouter();
     const publicClient = usePublicClient();
     const [rooms, setRooms] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -65,7 +65,7 @@ export const JoinLobby: React.FC = () => {
     const handleJoin = async (room: any) => {
         await joinLobbyOnChain(room.id);
         setLobbyName(room.name || `Room #${room.id}`);
-        navigate('/lobby');
+        router.push('/waiting');
     };
 
     return (

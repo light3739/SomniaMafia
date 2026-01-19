@@ -170,12 +170,12 @@ export const RoleReveal: React.FC = () => {
         }
 
         try {
-            const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys] = await publicClient.readContract({
+            const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys, hasClaimedMafia] = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'getPlayerFlags',
-                args: [currentRoomId, address],
-            }) as [boolean, boolean, boolean, boolean, boolean, boolean];
+                args: [currentRoomId, address as `0x${string}`],
+            }) as [boolean, boolean, boolean, boolean, boolean, boolean, boolean];
 
             setRevealState(prev => ({
                 ...prev,

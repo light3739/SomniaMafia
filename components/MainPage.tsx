@@ -2,8 +2,8 @@ import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
-import somniaLogo from '../assets/somniayeal.png';
-import mafiaBg from '../assets/mafia1.jpg';
+const somniaLogo = "/assets/somniayeal.png";
+const mafiaBg = "/assets/mafia1.jpg";
 
 interface MainPageProps {
     onStart: () => void;

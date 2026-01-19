@@ -41,18 +41,18 @@ const NightAnnouncementWrapper = () => {
 // === TEST WRAPPERS FOR NIGHT PHASE WITH SPECIFIC ROLES ===
 
 // Generate mock players for testing
-const generateMockPlayers = (myRole: Role, myAddress: string): Player[] => {
+const generateMockPlayers = (myRole: Role, myAddress: `0x${string}`): Player[] => {
     return [
         { id: '1', name: 'You (Test)', role: myRole, isAlive: true, address: myAddress, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '2', name: 'Alice', role: Role.CIVILIAN, isAlive: true, address: '0x2222222222222222', avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '3', name: 'Bob', role: Role.CIVILIAN, isAlive: true, address: '0x3333333333333333', avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '4', name: 'Charlie', role: Role.MAFIA, isAlive: true, address: '0x4444444444444444', avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '5', name: 'Diana', role: Role.DOCTOR, isAlive: true, address: '0x5555555555555555', avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '6', name: 'Eve', role: Role.DETECTIVE, isAlive: true, address: '0x6666666666666666', avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '2', name: 'Alice', role: Role.CIVILIAN, isAlive: true, address: '0x2222222222222222222222222222222222222222' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '3', name: 'Bob', role: Role.CIVILIAN, isAlive: true, address: '0x3333333333333333333333333333333333333333' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '4', name: 'Charlie', role: Role.MAFIA, isAlive: true, address: '0x4444444444444444444444444444444444444444' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '5', name: 'Diana', role: Role.DOCTOR, isAlive: true, address: '0x5555555555555555555555555555555555555555' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '6', name: 'Eve', role: Role.DETECTIVE, isAlive: true, address: '0x6666666666666666666666666666666666666666' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
     ];
 };
 
-const TEST_ADDRESS = '0x1111111111111111';
+const TEST_ADDRESS: `0x${string}` = '0x1111111111111111111111111111111111111111';
 
 // Wrapper that sets up GameLayout for Night phase with a specific role
 const NightPhaseTestWrapper: React.FC<{ testRole: Role }> = ({ testRole }) => {
@@ -163,15 +163,15 @@ const mockPlayer = {
     role: 'Mafia',
     isAlive: true,
     avatarUrl: 'https://placehold.co/80x80',
-    address: '0x1234567890abcdef',
+    address: '0x1234567890123456789012345678901234567890' as `0x${string}`,
     votesReceived: 0,
     status: 'connected'
 };
 
 const mockPlayers = [
-    { id: '1', name: 'Player 1', role: 'Villager', isAlive: true, address: '0x1111...1111', avatarUrl: '', votesReceived: 0, status: 'connected' },
-    { id: '2', name: 'Player 2', role: 'Mafia', isAlive: true, address: '0x2222...2222', avatarUrl: '', votesReceived: 0, status: 'connected' },
-    { id: '3', name: 'Player 3', role: 'Doctor', isAlive: false, address: '0x3333...3333', avatarUrl: '', votesReceived: 0, status: 'offline' },
+    { id: '1', name: 'Player 1', role: 'Villager', isAlive: true, address: '0x1111111111111111111111111111111111111111' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected' },
+    { id: '2', name: 'Player 2', role: 'Mafia', isAlive: true, address: '0x2222222222222222222222222222222222222222' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected' },
+    { id: '3', name: 'Player 3', role: 'Doctor', isAlive: false, address: '0x3333333333333333333333333333333333333333' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'offline' },
 ];
 
 const mockLogs = [

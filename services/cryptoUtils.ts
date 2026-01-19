@@ -13,11 +13,11 @@ export const generateKeyPair = async () => {
     );
 };
 
-export const exportPublicKey = async (key: CryptoKey): Promise<string> => {
+export const exportPublicKey = async (key: CryptoKey): Promise<`0x${string}`> => {
     const exported = await window.crypto.subtle.exportKey("spki", key);
     // Convert to hex string for Solidity bytes
     const bytes = new Uint8Array(exported);
-    return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    return ('0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`;
 };
 
 // Also export as Base64 for storage/display if needed
@@ -28,7 +28,7 @@ export const exportPublicKeyBase64 = async (key: CryptoKey): Promise<string> => 
 
 export const importPublicKey = async (pem: string): Promise<CryptoKey> => {
     let binaryDer: Uint8Array<ArrayBuffer>;
-    
+
     // Handle both hex (0x...) and base64 formats
     if (pem.startsWith('0x')) {
         // Hex format - convert to bytes
@@ -47,7 +47,7 @@ export const importPublicKey = async (pem: string): Promise<CryptoKey> => {
         }
         binaryDer = arr as Uint8Array<ArrayBuffer>;
     }
-    
+
     return await window.crypto.subtle.importKey(
         "spki",
         binaryDer,

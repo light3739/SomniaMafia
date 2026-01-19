@@ -73,9 +73,9 @@ export const DayPhase: React.FC = () => {
                     abi: MAFIA_ABI,
                     functionName: 'voteCounts',
                     args: [currentRoomId, player.address],
-                }) as bigint;
+                }) as number;
 
-                counts.set(player.address.toLowerCase(), Number(count));
+                counts.set(player.address.toLowerCase(), count);
             }
 
             // Если мы в процессе отправки голоса - не затираем Optimistic UI старыми данными с чейна

@@ -6,13 +6,13 @@ import { Player, Role, cardVariants } from '../types';
 interface PlayerCardProps {
   player: Player;
   isMe: boolean;
-  onAction: (playerId: string) => void;
+  onAction: (playerId: `0x${string}`) => void;
   canAct: boolean;
   actionLabel: string;
 }
 
 export const PlayerCard: React.FC<PlayerCardProps> = ({ player, isMe, onAction, canAct, actionLabel }) => {
-  
+
   const getRoleIcon = (role: Role) => {
     switch (role) {
       case Role.MAFIA: return <Crosshair className="w-4 h-4 text-red-500" />;
@@ -25,14 +25,14 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, isMe, onAction, 
   const getStatusIndicator = () => {
     if (!player.isAlive) return null; // Skull handles death
     switch (player.status) {
-        case 'connected': 
-            return <div className="flex items-center gap-1 text-[10px] text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20"><Wifi className="w-3 h-3" /> <span className="hidden md:inline">SYNC</span></div>;
-        case 'syncing': 
-            return <div className="flex items-center gap-1 text-[10px] text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20"><Wifi className="w-3 h-3 animate-pulse" /> SYNCING</div>;
-        case 'offline': 
-            return <div className="flex items-center gap-1 text-[10px] text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20"><WifiOff className="w-3 h-3" /> LOST</div>;
-        case 'slashed': 
-            return <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-500/20 px-1.5 py-0.5 rounded border border-red-500/40"><AlertTriangle className="w-3 h-3" /> SLASHED</div>;
+      case 'connected':
+        return <div className="flex items-center gap-1 text-[10px] text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20"><Wifi className="w-3 h-3" /> <span className="hidden md:inline">SYNC</span></div>;
+      case 'syncing':
+        return <div className="flex items-center gap-1 text-[10px] text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20"><Wifi className="w-3 h-3 animate-pulse" /> SYNCING</div>;
+      case 'offline':
+        return <div className="flex items-center gap-1 text-[10px] text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20"><WifiOff className="w-3 h-3" /> LOST</div>;
+      case 'slashed':
+        return <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-500/20 px-1.5 py-0.5 rounded border border-red-500/40"><AlertTriangle className="w-3 h-3" /> SLASHED</div>;
     }
   };
 
@@ -43,9 +43,9 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, isMe, onAction, 
     >
       {/* Selection Ring */}
       <div className={`absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl blur opacity-0 group-hover:opacity-75 transition duration-500 ${isMe ? 'opacity-50' : ''}`}></div>
-      
+
       <div className="relative bg-[#1a1a1a] border border-white/5 rounded-xl p-4 flex flex-col items-center gap-3 shadow-lg overflow-hidden min-h-[160px]">
-        
+
         {/* Status Badge */}
         {!player.isAlive && (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20 backdrop-blur-[1px]">
@@ -55,7 +55,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, isMe, onAction, 
 
         {/* Header: Status */}
         <div className="w-full flex justify-end">
-            {getStatusIndicator()}
+          {getStatusIndicator()}
         </div>
 
         {/* Avatar */}
@@ -87,7 +87,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, isMe, onAction, 
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => onAction(player.id)}
+            onClick={() => onAction(player.address)}
             className="mt-2 w-full py-1.5 px-3 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded border border-white/10 transition-colors uppercase tracking-widest z-20"
           >
             {actionLabel}

@@ -1,0 +1,137 @@
+import { NextResponse } from 'next/server';
+import { createPublicClient, http } from 'viem';
+import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
+import { ServerStore } from '@/services/serverStore';
+import path from 'path';
+import * as snarkjs from 'snarkjs';
+
+const publicClient = createPublicClient({
+    chain: somniaChain,
+    transport: http()
+});
+
+const FLAG_ACTIVE = 2; // From SomniaMafiaV4.sol
+
+export async function POST(request: Request) {
+    try {
+        const { roomId } = await request.json();
+
+        if (!roomId) {
+            return NextResponse.json({ error: 'Missing roomId' }, { status: 400 });
+        }
+
+        console.log(`[API/CheckWin] Checking Room #${roomId}`);
+
+        // 1. Get room data from blockchain
+        const roomData: any = await publicClient.readContract({
+            address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+            abi: MAFIA_ABI,
+            functionName: 'rooms',
+            args: [BigInt(roomId)],
+        });
+
+        // roomData[3] is phase. 6 = ENDED
+        const phase = Number(roomData[3]);
+        if (phase === 0 || phase === 6) {
+            return NextResponse.json({
+                winDetected: false,
+                phase,
+                message: 'Game not in active phase or already ended'
+            });
+        }
+
+        // 2. Get players from blockchain
+        const players: any = await publicClient.readContract({
+            address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+            abi: MAFIA_ABI,
+            functionName: 'getPlayers',
+            args: [BigInt(roomId)],
+        });
+
+        // 3. Match with server secrets
+        const secrets = await ServerStore.getRoomSecrets(roomId.toString());
+        if (!secrets) {
+            return NextResponse.json({
+                winDetected: false,
+                message: 'No secrets found for this room'
+            });
+        }
+
+        let mafiaCount = 0;
+        let townCount = 0;
+        let missingSecrets = 0;
+
+        for (const player of players) {
+            const addr = player.wallet.toLowerCase();
+            const flags = Number(player.flags);
+            const isAlive = (flags & FLAG_ACTIVE) !== 0;
+
+            if (isAlive) {
+                const secret = secrets[addr];
+                if (secret) {
+                    // Role Mapping: MAFIA = 1, DOCTOR = 2, DETECTIVE = 3, CIVILIAN = 4
+                    if (Number(secret.role) === 1) {
+                        mafiaCount++;
+                    } else {
+                        townCount++;
+                    }
+                } else {
+                    missingSecrets++;
+                }
+            }
+        }
+
+        console.log(`[API/CheckWin] Room #${roomId}: Mafia=${mafiaCount}, Town=${townCount}, Missing Secrets=${missingSecrets}`);
+
+        // 4. Check Win Condition
+        let result = null;
+
+        // We only declare a win if we have ALL secrets for ALIVE players
+        if (missingSecrets === 0) {
+            if (mafiaCount === 0) {
+                result = 'TOWN_WIN';
+            } else if (mafiaCount >= townCount) {
+                result = 'MAFIA_WIN';
+            }
+        }
+
+        if (result) {
+            // 5. Generate ZK Proof
+            console.log(`[API/CheckWin] ${result} detected! Generating ZK Proof in Node...`);
+
+            const wasmPath = path.join(process.cwd(), 'public', 'mafia_win.wasm');
+            const zkeyPath = path.join(process.cwd(), 'public', 'mafia_win_0001.zkey');
+
+            const { proof, publicSignals } = await (snarkjs as any).groth16.fullProve(
+                {
+                    roomId: roomId.toString(),
+                    mafiaCount: mafiaCount.toString(),
+                    townCount: townCount.toString()
+                },
+                wasmPath,
+                zkeyPath
+            );
+
+            return NextResponse.json({
+                winDetected: true,
+                result,
+                mafiaCount,
+                townCount,
+                proof,
+                publicSignals
+            });
+        }
+
+        return NextResponse.json({
+            winDetected: false,
+            mafiaCount,
+            townCount,
+            missingSecrets,
+            message: missingSecrets > 0 ? 'Waiting for some players to reveal secrets to server' : 'Game continues'
+        });
+
+    } catch (error: any) {
+        console.error('[API/CheckWin] Error:', error);
+        return NextResponse.json({ error: error.message || 'CheckWin failed' }, { status: 500 });
+    }
+}
