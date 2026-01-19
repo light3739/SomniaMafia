@@ -70,7 +70,8 @@ const NightPhaseTestWrapper: React.FC<{ testRole: Role }> = ({ testRole }) => {
                 { id: '1', timestamp: '12:00:00', message: 'Night falls...', type: 'phase' },
                 { id: '2', timestamp: '12:00:01', message: `You are a ${testRole}`, type: 'info' }
             ],
-            winner: null
+            winner: null,
+            mafiaMessages: []
         });
         // Small delay to ensure state is propagated
         setTimeout(() => setIsReady(true), 50);
@@ -115,7 +116,8 @@ const DayPhaseTestWrapper: React.FC = () => {
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Day 1 begins!', type: 'phase' }
             ],
-            winner: null
+            winner: null,
+            mafiaMessages: []
         });
         setTimeout(() => setIsReady(true), 50);
     }, [setGameState]);
@@ -141,7 +143,8 @@ const VotingPhaseTestWrapper: React.FC = () => {
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Voting has started!', type: 'phase' }
             ],
-            winner: null
+            winner: null,
+            mafiaMessages: []
         });
         setTimeout(() => setIsReady(true), 50);
     }, [setGameState]);

@@ -55,12 +55,25 @@ export interface LogEntry {
   type: 'info' | 'danger' | 'success' | 'phase' | 'warning';
 }
 
+export interface MafiaChatMessage {
+  id: string;
+  sender: string; // Address
+  playerName?: string; // Resolved name
+  content: {
+    type: 'suggest' | 'agree' | 'disagree' | 'text';
+    targetName?: string;
+    text?: string;
+  };
+  timestamp: number;
+}
+
 export interface GameState {
   phase: GamePhase;
   dayCount: number;
   players: Player[];
   myPlayerId: string | null;
   logs: LogEntry[];
+  mafiaMessages: MafiaChatMessage[];
   winner: 'MAFIA' | 'TOWN' | null;
 }
 

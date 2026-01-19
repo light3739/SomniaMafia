@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
 import { createWalletClient, http, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { GamePhase, GameState, Player, Role, LogEntry } from '../types';
+import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
 import { loadSession, createNewSession, markSessionRegistered } from '../services/sessionKeyService';
@@ -50,9 +50,14 @@ interface GameContextType {
     revealMafiaTargetOnChain: (target: string, salt: string) => Promise<void>;
     endNightOnChain: () => Promise<void>;
     endGameAutomaticallyOnChain: () => Promise<void>;
+    // Game End (reveal role on-chain and try to end)
+    revealRoleOnChain: (role: number, salt: string) => Promise<void>;
+    tryEndGame: () => Promise<void>;
     // Utility
     kickStalledPlayerOnChain: () => Promise<void>;
     refreshPlayersList: (roomId: bigint) => Promise<void>;
+    // Mafia Chat
+    sendMafiaMessageOnChain: (content: MafiaChatMessage['content']) => Promise<void>;
 
     addLog: (message: string, type?: LogEntry['type']) => void;
     handlePlayerAction: (targetId: string) => void;
@@ -137,6 +142,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             Date.now() < session.expiresAt &&
             roomId !== null &&
             session.roomId === Number(roomId);
+        // Mafia Chat doesn't require session key strictly but can use it if available
+
 
         console.log(`[TX Debug] Final canUseSession for ${functionName}: ${canUseSession}`);
         if (!canUseSession) {
@@ -227,6 +234,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         players: [],
         myPlayerId: null,
         logs: [],
+        mafiaMessages: [],
         winner: null
     });
 
@@ -455,6 +463,43 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         return () => clearInterval(interval);
     }, [currentRoomId, publicClient, refreshPlayersList]);
+
+
+
+
+    // Auto-check win condition after player list updates (after eliminations)
+    // This triggers tryEndGame when a win condition is locally detected
+    const tryEndGameRef = useRef<(() => Promise<void>) | null>(null);
+
+    useEffect(() => {
+        // Only check during gameplay phases
+        if (gameState.phase < GamePhase.DAY || gameState.phase === GamePhase.ENDED) return;
+
+        // Check if we have all roles known (can determine winner)
+        const alivePlayers = gameState.players.filter(p => p.isAlive);
+        const hasUnknownRoles = alivePlayers.some(p => p.role === Role.UNKNOWN);
+        if (hasUnknownRoles) return;
+
+        let aliveMafia = 0;
+        let aliveTown = 0;
+
+        for (const player of alivePlayers) {
+            if (player.role === Role.MAFIA) aliveMafia++;
+            else aliveTown++;
+        }
+
+        // Check win conditions
+        const mafiaWins = aliveMafia > 0 && aliveMafia >= aliveTown;
+        const townWins = aliveMafia === 0 && aliveTown > 0;
+
+        if (mafiaWins || townWins) {
+            console.log("[Auto Win Check] Win condition detected!", { mafiaWins, townWins });
+            // Use ref to avoid stale closure - tryEndGame will be set later
+            if (tryEndGameRef.current) {
+                tryEndGameRef.current();
+            }
+        }
+    }, [gameState.players, gameState.phase]);
 
     // --- LOBBY ACTIONS (V3: createRoom only, then joinRoom with session) ---
 
@@ -863,6 +908,114 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
+    // --- MAFIA CHAT (V4) ---
+
+    // Load chat messages from contract
+    const fetchMafiaChat = useCallback(async (roomId: bigint) => {
+        if (!publicClient) return;
+        try {
+            const messages = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'getMafiaChat',
+                args: [roomId]
+            }) as any[];
+
+            // Import helper locally to avoid closure issues if possible, or use from top level
+            // We need hexToString from services/cryptoUtils
+
+            const formattedMessages: MafiaChatMessage[] = messages.map((msg: any, index: number) => {
+                const hexContent = msg.encryptedMessage;
+                let content = { type: 'text' as const, text: '' };
+
+                try {
+                    // Try to decode hex -> string -> JSON
+                    // We need to make sure hexToString is available
+                    // Use simple hex to string if function not imported, but it is imported as hexToString
+                    let str = '';
+                    if (hexContent.startsWith('0x')) {
+                        const hex = hexContent.slice(2);
+                        for (let i = 0; i < hex.length; i += 2) {
+                            str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+                        }
+                    } else {
+                        str = hexContent;
+                    }
+
+                    // Try parsing JSON
+                    if (str.trim().startsWith('{')) {
+                        content = JSON.parse(str);
+                    } else {
+                        content = { type: 'text', text: str };
+                    }
+                } catch (e) {
+                    content = { type: 'text', text: hexContent };
+                }
+
+                // Resolve sender name
+                const senderPlayer = gameState.players.find(p => p.address.toLowerCase() === msg.sender.toLowerCase());
+                const playerName = senderPlayer?.name || msg.sender.slice(0, 6);
+
+                return {
+                    id: `${index}-${msg.timestamp}`,
+                    sender: msg.sender,
+                    playerName,
+                    content,
+                    timestamp: Number(msg.timestamp) * 1000
+                };
+            });
+
+            setGameState(prev => ({ ...prev, mafiaMessages: formattedMessages }));
+        } catch (e) {
+            console.error("Error fetching mafia chat:", e);
+        }
+    }, [publicClient, gameState.players]); // Removed hexToString dependency to avoid complex scope issues, inline implementation
+
+    const sendMafiaMessageOnChain = async (content: MafiaChatMessage['content']) => {
+        if (!currentRoomId) return;
+
+        // Encode content to JSON then Hex
+        const jsonStr = JSON.stringify(content);
+        // Inline stringToHex
+        let hexData = '0x' as `0x${string}`;
+        for (let i = 0; i < jsonStr.length; i++) {
+            hexData += jsonStr.charCodeAt(i).toString(16).padStart(2, '0');
+        }
+
+        try {
+            const hash = await sendGameTransaction('sendMafiaMessage', [currentRoomId, hexData]);
+            await publicClient?.waitForTransactionReceipt({ hash });
+            fetchMafiaChat(currentRoomId);
+        } catch (e: any) {
+            addLog(`Chat failed: ${e.shortMessage || e.message}`, "danger");
+            throw e;
+        }
+    };
+
+
+
+
+    // Polling for Mafia Chat
+    useEffect(() => {
+        if (!currentRoomId || !publicClient) return;
+
+        const CHECK_INTERVAL = 3000; // Check chat every 3s
+
+        const interval = setInterval(() => {
+            // Only fetch if we are mafia
+            const isMafia = gameState.myPlayerId ?
+                gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase())?.role === Role.MAFIA :
+                gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase())?.role === Role.MAFIA;
+
+            if (isMafia && gameState.phase >= GamePhase.DAY) {
+                fetchMafiaChat(currentRoomId);
+            }
+        }, CHECK_INTERVAL);
+
+        return () => clearInterval(interval);
+    }, [currentRoomId, publicClient, fetchMafiaChat, gameState.players, gameState.myPlayerId, address, gameState.phase]);
+
+
     const endGameAutomaticallyOnChain = async () => {
         if (!currentRoomId) return;
         try {
@@ -875,6 +1028,102 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             throw e;
         }
     };
+
+    // Reveal role on-chain (used at game end to allow contract to verify win condition)
+    const revealRoleOnChain = async (role: number, salt: string) => {
+        if (!currentRoomId) return;
+        try {
+            const hash = await sendGameTransaction('revealRole', [currentRoomId, role, salt]);
+            addLog("Role revealed on-chain!", "success");
+            await publicClient?.waitForTransactionReceipt({ hash });
+        } catch (e: any) {
+            // Ignore "already revealed" errors
+            if (e.message?.includes('RoleAlreadyRevealed')) {
+                console.log("Role already revealed on-chain, continuing...");
+                return;
+            }
+            addLog(e.shortMessage || e.message, "danger");
+            throw e;
+        }
+    };
+
+    // Try to end the game by first revealing our role on-chain, then calling endGameAutomatically
+    const tryEndGame = useCallback(async () => {
+        if (!currentRoomId || !address) return;
+
+        // Check if we have win condition locally
+        const alivePlayers = gameState.players.filter(p => p.isAlive);
+        let aliveMafia = 0;
+        let aliveTown = 0;
+        let unknownRoles = 0;
+
+        for (const player of alivePlayers) {
+            if (player.role === Role.MAFIA) aliveMafia++;
+            else if (player.role === Role.UNKNOWN) unknownRoles++;
+            else aliveTown++;
+        }
+
+        // Can't determine winner if we don't know all roles locally
+        if (unknownRoles > 0) {
+            console.log("[tryEndGame] Can't determine winner - unknown roles exist");
+            return;
+        }
+
+        // Check win conditions
+        const mafiaWins = aliveMafia > 0 && aliveMafia >= aliveTown;
+        const townWins = aliveMafia === 0 && aliveTown > 0;
+
+        if (!mafiaWins && !townWins) {
+            console.log("[tryEndGame] No win condition met yet");
+            return;
+        }
+
+        console.log("[tryEndGame] Win condition detected!", { mafiaWins, townWins, aliveMafia, aliveTown });
+
+        // Try to reveal our role on-chain (required for contract to verify)
+        const myRole = gameState.players.find(p => p.address.toLowerCase() === address.toLowerCase())?.role;
+        const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+
+        if (myRole && myRole !== Role.UNKNOWN && savedSalt) {
+            const roleMap: Record<string, number> = {
+                [Role.MAFIA]: 1,
+                [Role.DOCTOR]: 2,
+                [Role.DETECTIVE]: 3,
+                [Role.CIVILIAN]: 4,
+            };
+            const roleNum = roleMap[myRole] || 4;
+
+            try {
+                addLog("Revealing role for game end...", "info");
+                await revealRoleOnChain(roleNum, savedSalt);
+            } catch (e) {
+                console.error("[tryEndGame] Failed to reveal role:", e);
+                // Continue anyway - maybe role was already revealed
+            }
+        }
+
+        // Try to end the game on-chain
+        try {
+            await endGameAutomaticallyOnChain();
+            addLog("Game ended on-chain!", "phase");
+        } catch (e: any) {
+            console.error("[tryEndGame] Failed to end game on-chain:", e);
+            // If contract rejects, force frontend transition to ENDED
+            if (mafiaWins || townWins) {
+                addLog("Transitioning to Game Over...", "phase");
+                setGameState(prev => ({
+                    ...prev,
+                    phase: GamePhase.ENDED,
+                    winner: mafiaWins ? 'MAFIA' : 'TOWN'
+                }));
+            }
+        }
+    }, [currentRoomId, address, gameState.players, revealRoleOnChain, endGameAutomaticallyOnChain, addLog, setGameState]);
+
+    // Set ref for auto-trigger useEffect 
+    useEffect(() => {
+        tryEndGameRef.current = tryEndGame;
+    }, [tryEndGame]);
 
     // --- UTILITY ---
 
@@ -1182,20 +1431,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     });
 
+
+
     useWatchContractEvent({
         address: MAFIA_CONTRACT_ADDRESS,
         abi: MAFIA_ABI,
-        eventName: 'NightActionRevealed',
+        eventName: 'MafiaMessageSent',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
             if (!roomId) return;
 
             if (BigInt(logs[0].args.roomId) === roomId) {
-                const player = logs[0].args.player;
-                addLog(`${player.slice(0, 6)}... revealed action`, "success");
+                // Refresh chat when new message arrives
+                fetchMafiaChat(roomId);
             }
         }
     });
+
 
     // Helper для UI - works for both VOTING and NIGHT phases
     const handlePlayerAction = (targetId: string) => {
@@ -1256,6 +1508,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             commitNightActionOnChain, revealNightActionOnChain,
             commitMafiaTargetOnChain, revealMafiaTargetOnChain,
             endNightOnChain, endGameAutomaticallyOnChain,
+            revealRoleOnChain, tryEndGame,
+            sendMafiaMessageOnChain,
             kickStalledPlayerOnChain, refreshPlayersList,
             addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
             selectedTarget, setSelectedTarget
