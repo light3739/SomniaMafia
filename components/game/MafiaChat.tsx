@@ -4,16 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HelpCircle, Plus, Minus, Skull, MessageCircle } from 'lucide-react';
-import { Player } from '../../types';
-
-// Types for chat messages
-interface MafiaChatMessage {
-    id: string;
-    type: 'suggest' | 'agree' | 'disagree';
-    playerName: string; // Who sent the message
-    targetName?: string; // For suggest messages
-    timestamp: number;
-}
+import { Player, MafiaChatMessage } from '../../types';
 
 // Chat action mode
 type ChatMode = 'none' | 'suggest';
@@ -24,6 +15,9 @@ interface MafiaChatProps {
     players: Player[];
     selectedTarget: string | null;
     onSuggestTarget: (targetAddress: string) => void;
+    // Context props
+    messages: MafiaChatMessage[];
+    onSendMessage: (content: MafiaChatMessage['content']) => Promise<void>;
 }
 
 export const MafiaChat: React.FC<MafiaChatProps> = ({
@@ -31,12 +25,14 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
     teammates,
     players,
     selectedTarget,
-    onSuggestTarget
+    onSuggestTarget,
+    messages,
+    onSendMessage
 }) => {
-    const [messages, setMessages] = useState<MafiaChatMessage[]>([]);
     const [mode, setMode] = useState<ChatMode>('none');
     const [lastSuggestion, setLastSuggestion] = useState<string | null>(null);
     const chatRef = useRef<HTMLDivElement>(null);
+    const [isSending, setIsSending] = useState(false);
 
     // Auto-scroll to bottom when new messages arrive
     useEffect(() => {
@@ -45,13 +41,16 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
         }
     }, [messages]);
 
-    // Add a message to the chat
-    const addMessage = (message: Omit<MafiaChatMessage, 'id' | 'timestamp'>) => {
-        setMessages(prev => [...prev, {
-            ...message,
-            id: Math.random().toString(36).substr(2, 9),
-            timestamp: Date.now()
-        }]);
+    // Send message wrapper
+    const handleSendMessage = async (content: MafiaChatMessage['content']) => {
+        setIsSending(true);
+        try {
+            await onSendMessage(content);
+        } catch (e) {
+            console.error("Failed to send message:", e);
+        } finally {
+            setIsSending(false);
+        }
     };
 
     // Handle "?" button - enter suggest mode
@@ -71,13 +70,12 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
         if (!targetPlayer) return;
 
         // Add suggestion message
-        addMessage({
+        handleSendMessage({
             type: 'suggest',
-            playerName: myName,
-            targetName: targetPlayer.name
+            targetName: targetPlayer.name || targetPlayer.address.slice(0, 6)
         });
 
-        // Set as last suggestion for voting
+        // Set as last suggestion for voting (optimistic)
         setLastSuggestion(targetAddress);
 
         // Also set as selected target
@@ -90,22 +88,14 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
     // Handle "+" agree
     const handleAgree = () => {
         if (!lastSuggestion) return;
-
-        addMessage({
-            type: 'agree',
-            playerName: myName
-        });
-
+        handleSendMessage({ type: 'agree' });
         // Also select the suggested target
         onSuggestTarget(lastSuggestion);
     };
 
     // Handle "-" disagree
     const handleDisagree = () => {
-        addMessage({
-            type: 'disagree',
-            playerName: myName
-        });
+        handleSendMessage({ type: 'disagree' });
     };
 
     // When selectedTarget changes in suggest mode, treat it as a suggestion
@@ -117,13 +107,13 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
 
     // Render message content
     const renderMessage = (msg: MafiaChatMessage) => {
-        switch (msg.type) {
+        switch (msg.content.type) {
             case 'suggest':
                 return (
                     <span>
                         <span className="text-red-400 font-medium">{msg.playerName}</span>
                         <span className="text-white/50"> предлагает убить </span>
-                        <span className="text-red-300 font-bold">{msg.targetName}</span>
+                        <span className="text-red-300 font-bold">{msg.content.targetName}</span>
                     </span>
                 );
             case 'agree':
@@ -142,6 +132,15 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                         <Minus className="inline w-3 h-3 text-red-400" />
                     </span>
                 );
+            case 'text':
+                return (
+                    <span>
+                        <span className="text-white/70 font-medium">{msg.playerName}: </span>
+                        <span className="text-white/90">{msg.content.text}</span>
+                    </span>
+                );
+            default:
+                return <span className="text-white/50">Unknown message</span>;
         }
     };
 
@@ -156,6 +155,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                 <div className="flex items-center gap-2">
                     <MessageCircle className="w-4 h-4 text-red-400" />
                     <span className="text-red-400 text-sm font-medium">Mafia Chat</span>
+                    {isSending && <span className="text-xs text-white/30 animate-pulse">Sending...</span>}
                 </div>
 
                 {/* Action buttons */}
@@ -175,7 +175,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                     {/* Agree button */}
                     <button
                         onClick={handleAgree}
-                        disabled={!lastSuggestion}
+                        disabled={!lastSuggestion || isSending}
                         className={`p-2 rounded-lg transition-all ${lastSuggestion
                             ? 'bg-white/5 text-green-400 hover:bg-green-500/20'
                             : 'bg-white/5 text-white/20 cursor-not-allowed'
@@ -188,7 +188,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                     {/* Disagree button */}
                     <button
                         onClick={handleDisagree}
-                        disabled={!lastSuggestion}
+                        disabled={!lastSuggestion || isSending}
                         className={`p-2 rounded-lg transition-all ${lastSuggestion
                             ? 'bg-white/5 text-red-400 hover:bg-red-500/20'
                             : 'bg-white/5 text-white/20 cursor-not-allowed'
