@@ -400,7 +400,7 @@ export const RoleReveal: React.FC = () => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -20 }}
-                            className="bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl"
+                            className="bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl pointer-events-auto"
                         >
                             <div className="text-center mb-8">
                                 <Eye className="w-12 h-12 text-[#916A47] mx-auto mb-4" />
@@ -503,7 +503,7 @@ export const RoleReveal: React.FC = () => {
                             initial={{ opacity: 0, rotateY: 90 }}
                             animate={{ opacity: 1, rotateY: 0 }}
                             transition={{ type: "spring", duration: 0.8 }}
-                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-8 shadow-2xl`}
+                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-8 shadow-2xl pointer-events-auto`}
                         >
                             <div className="text-center">
                                 {/* Role Icon */}
