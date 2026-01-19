@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
 import { createWalletClient, http, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -257,6 +257,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         mafiaMessages: [],
         winner: null
     });
+
+    // Ищем myPlayer: если myPlayerId установлен (тестовый режим), используем его, иначе - адрес кошелька
+    const myPlayerById = gameState.myPlayerId
+        ? gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase())
+        : null;
+    const myPlayerByWallet = gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase());
+    // Приоритет: myPlayerId (тестовый режим) > адрес кошелька
+    const myPlayer = myPlayerById || myPlayerByWallet;
 
     // Effects
     useEffect(() => { localStorage.setItem('playerName', playerName); }, [playerName]);
@@ -523,7 +531,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // --- LOBBY ACTIONS (V3: createRoom only, then joinRoom with session) ---
 
-    const createLobbyOnChain = async () => {
+    const createLobbyOnChain = useCallback(async () => {
         if (!playerName || !address || !lobbyName || !publicClient) return alert("Enter details and connect wallet!");
         setIsTxPending(true);
         try {
@@ -589,9 +597,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    };
+    }, [playerName, address, lobbyName, publicClient, writeContractAsync, addLog, refreshPlayersList]);
 
-    const joinLobbyOnChain = async (roomId: number) => {
+    const joinLobbyOnChain = useCallback(async (roomId: number) => {
         if (!playerName || !address || !publicClient) return alert("Enter name and connect wallet!");
         setIsTxPending(true);
         try {
@@ -643,11 +651,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    };
+    }, [playerName, address, publicClient, writeContractAsync, addLog, refreshPlayersList]);
 
     // --- SHUFFLE PHASE ---
 
-    const startGameOnChain = async () => {
+    const startGameOnChain = useCallback(async () => {
         if (!currentRoomId || !publicClient || !address) return;
         setIsTxPending(true);
         try {
@@ -682,24 +690,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    };
+    }, [currentRoomId, publicClient, address, addLog, refreshPlayersList, writeContractAsync]);
 
     // V4: Deck commit-reveal
-    const commitDeckOnChain = async (deckHash: string) => {
+    const commitDeckOnChain = useCallback(async (deckHash: string) => {
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('commitDeck', [currentRoomId, deckHash]);
-            addLog("Deck committed!", "success");
+            addLog("Deck hash committed!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
+            await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
-    const revealDeckOnChain = async (deck: string[], salt: string) => {
+    const revealDeckOnChain = useCallback(async (deck: string[], salt: string) => {
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
@@ -712,11 +721,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
     // --- REVEAL PHASE (V3: batch share keys) ---
 
-    const shareKeysToAllOnChain = async (recipients: string[], encryptedKeys: string[]) => {
+    const shareKeysToAllOnChain = useCallback(async (recipients: string[], encryptedKeys: string[]) => {
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
@@ -733,9 +742,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient]);
 
-    const commitRoleOnChain = async (role: number, salt: string) => {
+    const commitRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
 
         // Если соль уже есть в localStorage, значит мы уже успешно коммитили
@@ -752,21 +761,39 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const hash = ShuffleService.createRoleCommitHash(role, salt);
 
             const txHash = await sendGameTransaction('commitRole', [currentRoomId, hash]);
-            addLog("Role committed securely on-chain.", "info");
+            addLog("Role committed!", "success");
             await publicClient?.waitForTransactionReceipt({ hash: txHash });
+
+            // SYNC WITH SERVER-SIDE DB (for automated win-checking)
+            try {
+                await fetch('/api/game/reveal-secret', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId: currentRoomId.toString(),
+                        address,
+                        role,
+                        salt
+                    })
+                });
+                console.log("[Status] Secret synced with server DB.");
+            } catch (err) {
+                console.warn("[Warning] Failed to sync secret with server DB. Auto-win might be delayed.", err);
+            }
 
             // ВАЖНО: Сохраняем соль в localStorage, иначе в конце игры нас убьют!
             localStorage.setItem(`role_salt_${currentRoomId}_${address}`, salt);
 
+            await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || "Role commit failed", "danger");
             setIsTxPending(false);
             throw e;
         }
-    };
+    }, [currentRoomId, address, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
-    const confirmRoleOnChain = async () => {
+    const confirmRoleOnChain = useCallback(async () => {
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
@@ -779,9 +806,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
-    const commitAndConfirmRoleOnChain = async (role: number, salt: string) => {
+    const commitAndConfirmRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
 
         // Защита от дурака (если уже есть соль, значит уже отправляли)
@@ -803,24 +830,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog("Role committed & confirmed on-chain!", "success");
             await publicClient?.waitForTransactionReceipt({ hash: txHash });
 
-            // SYNC WITH SERVER-SIDE DB (for automated win-checking)
-            try {
-                await fetch('/api/game/reveal-secret', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        roomId: currentRoomId.toString(),
-                        address,
-                        role,
-                        salt
-                    })
-                });
-                console.log("[Status] Secret synced with server DB.");
-            } catch (err) {
-                console.warn("[Warning] Failed to sync secret with server DB. Auto-win might be delayed.", err);
-            }
-
-            // Сохраняем соль
+            // ВАЖНО: Сохраняем соль в localStorage, иначе в конце игры нас убьют!
             localStorage.setItem(`role_salt_${currentRoomId}_${address}`, salt);
 
             // Обновляем список, чтобы UI увидел галочку
@@ -832,16 +842,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             throw e;
         }
-    };
+    }, [currentRoomId, address, publicClient, sendGameTransaction, addLog, refreshPlayersList]);
 
     // --- DAY & VOTING ---
 
-    const startVotingOnChain = async () => {
+    const startVotingOnChain = useCallback(async () => {
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('startVoting', [currentRoomId]);
-            addLog("Voting started!", "phase");
+            addLog("Voting phase started!", "phase");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
@@ -849,38 +859,45 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
-    const voteOnChain = async (targetAddress: string) => {
+    const voteOnChain = useCallback(async (targetAddress: string) => {
         if (!currentRoomId) return;
+        setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('vote', [currentRoomId, targetAddress]);
             addLog(`Voted for ${targetAddress.slice(0, 6)}...`, "warning");
             await publicClient?.waitForTransactionReceipt({ hash });
             // V3: auto-finalize when all voted - just refresh
             await refreshPlayersList(currentRoomId);
+            setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
+            setIsTxPending(false);
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
     // V3: finalizeVoting removed - auto-triggers on last vote
 
     // --- NIGHT PHASE (V3: auto-finalize) ---
 
-    const commitNightActionOnChain = async (hash: string) => {
+    const commitNightActionOnChain = useCallback(async (hash: string) => {
         if (!currentRoomId) return;
+        setIsTxPending(true);
         try {
             const txHash = await sendGameTransaction('commitNightAction', [currentRoomId, hash as `0x${string}`]);
             addLog("Night action committed!", "info");
             await publicClient?.waitForTransactionReceipt({ hash: txHash });
+            await refreshPlayersList(currentRoomId);
+            setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
+            setIsTxPending(false);
             throw e; // Re-throw so caller knows it failed
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
-    const revealNightActionOnChain = async (action: number, target: string, salt: string) => {
+    const revealNightActionOnChain = useCallback(async (action: number, target: string, salt: string) => {
         if (!currentRoomId) return;
 
         // DEBUG: Log what we're sending to contract
@@ -903,47 +920,56 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             throw e; // Re-throw so caller knows it failed
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
     // --- V4: MAFIA CONSENSUS KILL FUNCTIONS ---
 
-    const commitMafiaTargetOnChain = async (targetHash: string) => {
+    const commitMafiaTargetOnChain = useCallback(async (targetHash: string) => {
         if (!currentRoomId) return;
+        setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('commitMafiaTarget', [currentRoomId, targetHash as `0x${string}`]);
             addLog("Mafia target committed!", "info");
             await publicClient?.waitForTransactionReceipt({ hash });
+            await refreshPlayersList(currentRoomId);
+            setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
+            setIsTxPending(false);
             throw e;
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
-    const revealMafiaTargetOnChain = async (target: string, salt: string) => {
+    const revealMafiaTargetOnChain = useCallback(async (target: string, salt: string) => {
         if (!currentRoomId) return;
+        setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('revealMafiaTarget', [currentRoomId, target, salt]);
             addLog("Mafia target revealed!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
+            setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
+            setIsTxPending(false);
             throw e;
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
-    const endNightOnChain = async () => {
+    const endNightOnChain = useCallback(async () => {
         if (!currentRoomId) return;
+        setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('endNight', [currentRoomId]);
             addLog("Night ended!", "phase");
             await publicClient?.waitForTransactionReceipt({ hash });
-            await refreshPlayersList(currentRoomId);
+            setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
+            setIsTxPending(false);
             throw e;
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
     // --- MAFIA CHAT (V4) ---
 
@@ -1006,7 +1032,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.error("Error fetching mafia chat:", e);
         }
-    }, [publicClient, gameState.players]); // Removed hexToString dependency to avoid complex scope issues, inline implementation
+    }, [publicClient, gameState.players, setGameState]); // Removed hexToString dependency to avoid complex scope issues, inline implementation
 
     const sendMafiaMessageOnChain = async (content: MafiaChatMessage['content']) => {
         if (!currentRoomId) return;
@@ -1053,7 +1079,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [currentRoomId, publicClient, fetchMafiaChat, gameState.players, gameState.myPlayerId, address, gameState.phase]);
 
 
-    const endGameAutomaticallyOnChain = async () => {
+    const endGameAutomaticallyOnChain = useCallback(async () => {
         if (!currentRoomId) return;
         try {
             const hash = await sendGameTransaction('endGameAutomatically', [currentRoomId]);
@@ -1064,10 +1090,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             throw e;
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
     // Reveal role on-chain (used at game end to allow contract to verify win condition)
-    const revealRoleOnChain = async (role: number, salt: string) => {
+    const revealRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
         try {
             const hash = await sendGameTransaction('revealRole', [currentRoomId, role, salt]);
@@ -1079,34 +1105,33 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             throw e;
         }
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient]);
+
+    // Helper to convert Role enum to number for contract
+    const getRoleNumber = (role: Role): number => {
+        switch (role) {
+            case Role.MAFIA: return 1;
+            case Role.DOCTOR: return 2;
+            case Role.DETECTIVE: return 3;
+            case Role.CIVILIAN: return 4;
+            default: return 0; // NONE or UNKNOWN
+        }
     };
 
     // Manual triggers for victory claim (reveals role + checks win condition)
-    const claimVictory = async () => {
+    const claimVictory = useCallback(async () => {
         if (!currentRoomId || !myPlayer) return;
 
         try {
-            // 1. Reveal my role
-            // Get salt from storage
             const salt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
             if (salt) {
-                // Ignore errors if already revealed
                 try {
-                    // Convert Role string to number for contract
-                    // Role { NONE=0, MAFIA=1, DOCTOR=2, DETECTIVE=3, CITIZEN=4 }
-                    let roleNum = 0;
-                    switch (myPlayer.role) {
-                        case Role.MAFIA: roleNum = 1; break;
-                        case Role.DOCTOR: roleNum = 2; break;
-                        case Role.DETECTIVE: roleNum = 3; break;
-                        case Role.CIVILIAN: roleNum = 4; break;
-                    }
-
+                    const roleNum = getRoleNumber(myPlayer.role);
+                    addLog("Revealing role for victory claim...", "info");
                     await revealRoleOnChain(roleNum, salt);
                 } catch (e: any) {
                     if (!e.message.includes("RoleAlreadyRevealed")) {
                         console.warn("Reveal role failed during claim:", e);
-                        // Continue anyway to try ending game
                     }
                 }
             } else {
@@ -1114,10 +1139,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 return;
             }
 
-            // 2. Try to end game
-            // This might fail if other players haven't revealed yet, which is expected
             try {
                 await endGameAutomaticallyOnChain();
+                await refreshPlayersList(currentRoomId);
             } catch (e: any) {
                 if (e.message.includes("NotAllRolesRevealed")) {
                     addLog("Victory claimed! Waiting for other survivors to claim...", "info");
@@ -1129,46 +1153,47 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error("Claim victory failed:", e);
             addLog("Failed to claim victory.", "danger");
         }
-    };
+    }, [currentRoomId, myPlayer, address, revealRoleOnChain, endGameAutomaticallyOnChain, refreshPlayersList, addLog]);
 
     // V4: ZK End Game (Client generates proof of win)
-    const endGameZK = async () => {
-        if (!currentRoomId || !gameState.players) return;
-
-        // Calculate State for Proof
-        // NOTE: In production with hidden roles, this logic would run on a trusted server
-        // or using private inputs. Here we simulate it on client for the prototype.
-        const active = gameState.players.filter(p => p.isAlive);
-        let mafiaCount = 0;
-        let townCount = 0;
-        active.forEach(p => {
-            if (p.role === Role.MAFIA) mafiaCount++;
-            else townCount++;
-        });
-
-        console.log(`[ZK Attempt] Room: ${currentRoomId}, Mafia: ${mafiaCount}, Town: ${townCount}`);
+    const endGameZK = useCallback(async () => {
+        if (!currentRoomId) return;
+        setIsTxPending(true);
+        addLog("Generating ZK Proof of Victory...", "info");
 
         try {
-            addLog("Generating ZK Proof...", "info");
-            const proof = await generateEndGameProof(currentRoomId, mafiaCount, townCount);
+            // 1. Calculate counts
+            let mCount = 0;
+            let tCount = 0;
+            gameState.players.forEach(p => {
+                if (p.isAlive) {
+                    if (p.role === Role.MAFIA) mCount++;
+                    else tCount++;
+                }
+            });
 
+            // 2. Generate Proof via Service (calls our API)
+            const zkData = await generateEndGameProof(currentRoomId, mCount, tCount);
+
+            // 3. Send Transaction
             const hash = await sendGameTransaction('endGameZK', [
                 currentRoomId,
-                proof.a,
-                proof.b,
-                proof.c,
-                proof.inputs
+                zkData.a,
+                zkData.b,
+                zkData.c,
+                zkData.inputs
             ]);
 
-            addLog("ZK Win Proof submitted!", "info");
+            addLog("Game ended via Server ZK!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
-            addLog("Game ended via ZK!", "phase");
             await refreshPlayersList(currentRoomId);
+            setIsTxPending(false);
         } catch (e: any) {
             console.error("[ZK] Failed:", e);
-            addLog("ZK Proof failed: " + (e.shortMessage || e.message), "danger");
+            addLog("ZK Validation failed on server. Try manual claim?", "danger");
+            setIsTxPending(false);
         }
-    };
+    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
     /**
      * TRIGGER AUTO WIN: A silent background check that pings the server
@@ -1306,17 +1331,20 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // --- UTILITY ---
 
     // V4: forcePhaseTimeout - kicks stalled player and advances phase
-    const kickStalledPlayerOnChain = async () => {
+    const kickStalledPlayerOnChain = useCallback(async () => {
         if (!currentRoomId) return;
+        setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
             addLog("Force timeout initiated...", "danger");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
+            setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
+            setIsTxPending(false);
         }
-    };
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
     // --- EVENTS (используем ref чтобы избежать проблем с замыканием) ---
 
@@ -1634,21 +1662,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
     // Helper для UI - works for both VOTING and NIGHT phases
-    const handlePlayerAction = (targetId: `0x${string}`) => {
+    const handlePlayerAction = useCallback((targetId: `0x${string}`) => {
         if (gameState.phase === GamePhase.VOTING || gameState.phase === GamePhase.NIGHT) {
             setSelectedTarget(prev => prev === targetId ? null : targetId);
         } else {
             console.log("Cannot select player in this phase");
         }
-    };
+    }, [gameState.phase]);
 
-    // Ищем myPlayer: если myPlayerId установлен (тестовый режим), используем его, иначе - адрес кошелька
-    const myPlayerById = gameState.myPlayerId
-        ? gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase())
-        : null;
-    const myPlayerByWallet = gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase());
-    // Приоритет: myPlayerId (тестовый режим) > адрес кошелька
-    const myPlayer = myPlayerById || myPlayerByWallet;
+
 
     // AUTO-END GAME CHECKER (Safe Hybrid Approach)
     useEffect(() => {
@@ -1721,24 +1743,38 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
     };
 
+    const contextValue = useMemo(() => ({
+        playerName, setPlayerName, avatarUrl, setAvatarUrl, lobbyName, setLobbyName,
+        gameState, setGameState, isTxPending, currentRoomId,
+        createLobbyOnChain, joinLobbyOnChain,
+        startGameOnChain, commitDeckOnChain, revealDeckOnChain,
+        shareKeysToAllOnChain, commitRoleOnChain, confirmRoleOnChain,
+        commitAndConfirmRoleOnChain,
+        startVotingOnChain, voteOnChain,
+        commitNightActionOnChain, revealNightActionOnChain,
+        commitMafiaTargetOnChain, revealMafiaTargetOnChain,
+        endNightOnChain, endGameAutomaticallyOnChain,
+        revealRoleOnChain, tryEndGame, claimVictory, endGameZK,
+        sendMafiaMessageOnChain,
+        kickStalledPlayerOnChain, refreshPlayersList,
+        addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
+        selectedTarget, setSelectedTarget
+    }), [
+        playerName, avatarUrl, lobbyName, gameState, isTxPending, currentRoomId,
+        createLobbyOnChain, joinLobbyOnChain, startGameOnChain,
+        commitDeckOnChain, revealDeckOnChain, shareKeysToAllOnChain,
+        commitRoleOnChain, confirmRoleOnChain, commitAndConfirmRoleOnChain,
+        startVotingOnChain, voteOnChain, commitNightActionOnChain,
+        revealNightActionOnChain, commitMafiaTargetOnChain, revealMafiaTargetOnChain,
+        endNightOnChain, endGameAutomaticallyOnChain, revealRoleOnChain,
+        tryEndGame, claimVictory, endGameZK, sendMafiaMessageOnChain,
+        kickStalledPlayerOnChain, refreshPlayersList, addLog,
+        handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
+        selectedTarget
+    ]);
+
     return (
-        <GameContext.Provider value={{
-            playerName, setPlayerName, avatarUrl, setAvatarUrl, lobbyName, setLobbyName,
-            gameState, setGameState, isTxPending, currentRoomId,
-            createLobbyOnChain, joinLobbyOnChain,
-            startGameOnChain, commitDeckOnChain, revealDeckOnChain,
-            shareKeysToAllOnChain, commitRoleOnChain, confirmRoleOnChain,
-            commitAndConfirmRoleOnChain,
-            startVotingOnChain, voteOnChain,
-            commitNightActionOnChain, revealNightActionOnChain,
-            commitMafiaTargetOnChain, revealMafiaTargetOnChain,
-            endNightOnChain, endGameAutomaticallyOnChain,
-            revealRoleOnChain, tryEndGame, claimVictory, endGameZK,
-            sendMafiaMessageOnChain,
-            kickStalledPlayerOnChain, refreshPlayersList,
-            addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
-            selectedTarget, setSelectedTarget
-        }}>
+        <GameContext.Provider value={contextValue}>
             {children}
         </GameContext.Provider>
     );

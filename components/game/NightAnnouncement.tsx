@@ -7,7 +7,7 @@ interface NightAnnouncementProps {
     onComplete: () => void;
 }
 
-export const NightAnnouncement: React.FC<NightAnnouncementProps> = ({ show, onComplete }) => {
+export const NightAnnouncement = React.memo(({ show, onComplete }: NightAnnouncementProps) => {
     useEffect(() => {
         if (show) {
             const timer = setTimeout(() => {
@@ -100,4 +100,4 @@ export const NightAnnouncement: React.FC<NightAnnouncementProps> = ({ show, onCo
             )}
         </AnimatePresence>
     );
-};
+});

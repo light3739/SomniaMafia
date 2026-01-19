@@ -232,7 +232,7 @@ export const GameLayout: React.FC = () => {
                             <PlayerSpot
                                 player={player}
                                 isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
-                                onClick={() => handlePlayerAction(player.address)}
+                                onAction={handlePlayerAction}
                                 canAct={canActOnPlayer(player)}
                                 isSelected={selectedTarget?.toLowerCase() === player.address.toLowerCase()}
                                 isNight={isNightPhase}

@@ -22,10 +22,10 @@ interface SessionKeyBannerProps {
 const MIN_SESSION_BALANCE = parseEther('0.01');
 const FUND_AMOUNT = parseEther('0.02'); // 0.02 STT
 
-export const SessionKeyBanner: React.FC<SessionKeyBannerProps> = ({ 
-  roomId, 
-  className = '' 
-}) => {
+export const SessionKeyBanner = React.memo(({
+  roomId,
+  className = ''
+}: SessionKeyBannerProps) => {
   const {
     hasSession,
     sessionAddress,
@@ -38,18 +38,18 @@ export const SessionKeyBanner: React.FC<SessionKeyBannerProps> = ({
 
   const publicClient = usePublicClient();
   const { sendTransactionAsync, isPending: isFunding } = useSendTransaction();
-  
+
   const [sessionBalance, setSessionBalance] = useState<bigint>(0n);
   const [isLowBalance, setIsLowBalance] = useState(false);
 
   // Fetch session key balance
   useEffect(() => {
     if (!sessionAddress || !publicClient) return;
-    
+
     const fetchBalance = async () => {
       try {
-        const balance = await publicClient.getBalance({ 
-          address: sessionAddress as `0x${string}` 
+        const balance = await publicClient.getBalance({
+          address: sessionAddress as `0x${string}`
         });
         setSessionBalance(balance);
         setIsLowBalance(balance < MIN_SESSION_BALANCE);
@@ -65,7 +65,7 @@ export const SessionKeyBanner: React.FC<SessionKeyBannerProps> = ({
 
   const handleFundSession = async () => {
     if (!sessionAddress) return;
-    
+
     try {
       await sendTransactionAsync({
         to: sessionAddress as `0x${string}`,
@@ -80,10 +80,10 @@ export const SessionKeyBanner: React.FC<SessionKeyBannerProps> = ({
     if (!date) return '';
     const ms = date.getTime() - Date.now();
     if (ms <= 0) return 'Expired';
-    
+
     const hours = Math.floor(ms / (1000 * 60 * 60));
     const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes}m left`;
     }
@@ -104,24 +104,22 @@ export const SessionKeyBanner: React.FC<SessionKeyBannerProps> = ({
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`rounded-lg border p-3 ${className} ${
-          hasSession 
-            ? isLowBalance 
+        className={`rounded-lg border p-3 ${className} ${hasSession
+            ? isLowBalance
               ? 'bg-orange-500/10 border-orange-500/30'
-              : 'bg-green-500/10 border-green-500/30' 
+              : 'bg-green-500/10 border-green-500/30'
             : 'bg-yellow-500/10 border-yellow-500/30'
-        }`}
+          }`}
       >
         <div className="flex items-center justify-between gap-4">
           {/* Left side - Status */}
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-full ${
-              hasSession 
-                ? isLowBalance 
-                  ? 'bg-orange-500/20' 
-                  : 'bg-green-500/20' 
+            <div className={`p-2 rounded-full ${hasSession
+                ? isLowBalance
+                  ? 'bg-orange-500/20'
+                  : 'bg-green-500/20'
                 : 'bg-yellow-500/20'
-            }`}>
+              }`}>
               {hasSession ? (
                 isLowBalance ? (
                   <Fuel className="w-4 h-4 text-orange-400" />
@@ -132,13 +130,12 @@ export const SessionKeyBanner: React.FC<SessionKeyBannerProps> = ({
                 <Key className="w-4 h-4 text-yellow-400" />
               )}
             </div>
-            
+
             <div>
               {hasSession ? (
                 <>
-                  <p className={`text-sm font-medium ${
-                    isLowBalance ? 'text-orange-400' : 'text-green-400'
-                  }`}>
+                  <p className={`text-sm font-medium ${isLowBalance ? 'text-orange-400' : 'text-green-400'
+                    }`}>
                     {isLowBalance ? 'Low Gas Balance' : 'Session Key Active'}
                   </p>
                   <div className="flex items-center gap-2 text-xs text-white/60">
@@ -260,4 +257,4 @@ export const SessionKeyBanner: React.FC<SessionKeyBannerProps> = ({
       </motion.div>
     </AnimatePresence>
   );
-};
+});

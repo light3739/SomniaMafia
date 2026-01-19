@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { Player, Role } from '../../types';
 import { Shield, Crosshair, Eye, Skull } from 'lucide-react';
 
 interface PlayerSpotProps {
     player: Player;
-    onClick: () => void;
+    onAction?: (address: `0x${string}`) => void;
     isMe: boolean;
     canAct: boolean;
     isSelected?: boolean;
@@ -13,7 +13,7 @@ interface PlayerSpotProps {
     myRole?: Role; // Role of the current player (for night selection colors)
 }
 
-export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, canAct, isSelected, isNight = false, myRole }) => {
+export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAct, isSelected, isNight = false, myRole }) => {
 
     // Determine selection color based on role during night
     const getSelectionClasses = () => {
@@ -56,7 +56,7 @@ export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, c
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: player.isAlive ? 1 : 0.5, scale: 1 }}
             whileHover={player.isAlive && canAct ? { scale: 1.05, y: -5 } : {}}
-            onClick={() => (player.isAlive && canAct ? onClick() : null)}
+            onClick={() => (player.isAlive && canAct && onAction ? onAction(player.address as `0x${string}`) : null)}
             className={`
                 relative flex flex-row items-center gap-4 p-4 rounded-xl transition-all duration-300
                 w-[250px] h-[130px]
@@ -120,4 +120,6 @@ export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, onClick, isMe, c
 
         </motion.div>
     );
-};
+});
+
+PlayerSpot.displayName = 'PlayerSpot';

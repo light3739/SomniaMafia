@@ -66,7 +66,7 @@ const RoleActions: Record<Role, { action: NightActionType; label: string; icon: 
     }
 };
 
-export const NightPhase: React.FC = () => {
+export const NightPhase: React.FC = React.memo(() => {
     const {
         gameState,
         myPlayer,
@@ -414,7 +414,7 @@ export const NightPhase: React.FC = () => {
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI,
                         functionName: 'playerDeckKeys',
-                        args: [currentRoomId, player.address, address as `0x${string}`],
+                        args: [BigInt(currentRoomId), player.address as `0x${string}`, address as `0x${string}`],
                     }) as `0x${string}`;
                     if (key && key !== '0x') {
                         keys.set(player.address, key);
@@ -804,7 +804,7 @@ export const NightPhase: React.FC = () => {
             </motion.div>
         </div>
     );
-};
+});
 const NightRevealAuto: React.FC<{
     nightState: NightState,
     isProcessing: boolean,
