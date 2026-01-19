@@ -79,7 +79,8 @@ export const NightPhase: React.FC = () => {
         isTxPending,
         selectedTarget,
         setSelectedTarget,
-        currentRoomId
+        currentRoomId,
+        sendMafiaMessageOnChain
     } = useGameContext();
 
     const [nightState, setNightState] = useState<NightState>({
@@ -664,6 +665,8 @@ export const NightPhase: React.FC = () => {
                         players={gameState.players}
                         selectedTarget={selectedTarget}
                         onSuggestTarget={(addr) => setSelectedTarget(addr)}
+                        messages={gameState.mafiaMessages || []}
+                        onSendMessage={sendMafiaMessageOnChain}
                     />
                 )}
 
