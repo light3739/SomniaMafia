@@ -1,20 +1,21 @@
+"use client";
+
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { usePathname } from 'next/navigation';
 import { Volume2, VolumeX } from 'lucide-react';
-import mainMusic from '../../assets/Main_Music.mp3';
 
 export const BackgroundMusic: React.FC = () => {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [volume, setVolume] = useState(0.15); // Default 15% volume
     const [isMuted, setIsMuted] = useState(false);
-    const location = useLocation();
+    const pathname = usePathname();
 
     // Routes where music should play (Menu/Lobby flow)
-    const ALLOWED_ROUTES = ['/', '/setup', '/create', '/join', '/lobby'];
+    const ALLOWED_ROUTES = ['/', '/setup', '/create', '/join', '/waiting', '/lobby'];
 
     // Check if we should be playing based on current route
-    const shouldPlay = ALLOWED_ROUTES.includes(location.pathname);
+    const shouldPlay = ALLOWED_ROUTES.includes(pathname);
 
     useEffect(() => {
         if (audioRef.current) {
@@ -26,7 +27,7 @@ export const BackgroundMusic: React.FC = () => {
         const audio = audioRef.current;
         if (!audio) return;
 
-        console.log(`[Music] Route: ${location.pathname}, Should Play: ${shouldPlay}`);
+        console.log(`[Music] Route: ${pathname}, Should Play: ${shouldPlay}`);
 
         const attemptPlay = () => {
             const playPromise = audio.play();
@@ -47,7 +48,7 @@ export const BackgroundMusic: React.FC = () => {
             audio.pause();
             setIsPlaying(false);
         }
-    }, [shouldPlay]);
+    }, [shouldPlay, pathname]);
 
     // Add a global click listener to unlock audio context if needed
     useEffect(() => {
@@ -72,7 +73,7 @@ export const BackgroundMusic: React.FC = () => {
         <div className="fixed bottom-4 right-4 z-[60] bg-black/40 backdrop-blur-md border border-white/10 rounded-full p-2 flex items-center gap-2 group transition-all hover:bg-black/60 hover:pr-4">
             <audio
                 ref={audioRef}
-                src={mainMusic}
+                src="/assets/Main_Music.mp3"
                 loop
                 crossOrigin="anonymous"
             />
