@@ -6,7 +6,7 @@ interface GameControlsProps {
   phase: GamePhase;
   myRole: Role | null;
   dayCount: number;
-  onNextPhase: () => void; // Dev tool / Admin simulation
+  onNextPhase: () => void; 
 }
 
 export const GameControls: React.FC<GameControlsProps> = ({ phase, myRole, dayCount, onNextPhase }) => {
