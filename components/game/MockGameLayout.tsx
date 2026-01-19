@@ -9,7 +9,7 @@ import { GamePhase, Role } from '../../types';
 import { Button } from '../ui/Button';
 
 export const MockGameLayout: React.FC = () => {
-    const { gameState, setGameState, setIsTestMode } = useGameContext();
+    const { gameState, setGameState, setIsTestMode, endGameZK } = useGameContext();
     const hasInitialized = useRef(false);
 
     useEffect(() => {
@@ -92,6 +92,13 @@ export const MockGameLayout: React.FC = () => {
                         variant="secondary"
                     >
                         End
+                    </Button>
+                    <Button
+                        onClick={() => endGameZK()}
+                        className="text-xs px-2 py-1 bg-purple-900/50 hover:bg-purple-800"
+                        variant="secondary"
+                    >
+                        End via ZK
                     </Button>
                 </div>
             </div>
