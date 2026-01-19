@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HelpCircle, Plus, Minus, Skull, MessageCircle } from 'lucide-react';
 import { Player, MafiaChatMessage } from '../../types';
+import { useSoundEffects } from '../ui/SoundEffects';
 
 // Chat action mode
 type ChatMode = 'none' | 'suggest';
@@ -33,6 +34,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
     const [lastSuggestion, setLastSuggestion] = useState<`0x${string}` | null>(null);
     const chatRef = useRef<HTMLDivElement>(null);
     const [isSending, setIsSending] = useState(false);
+    const { playProposeSound, playApproveSound, playRejectSound } = useSoundEffects();
 
     // Auto-scroll to bottom when new messages arrive
     useEffect(() => {
@@ -58,6 +60,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
         if (mode === 'suggest') {
             setMode('none');
         } else {
+            playProposeSound();
             setMode('suggest');
         }
     };
@@ -88,6 +91,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
     // Handle "+" agree
     const handleAgree = () => {
         if (!lastSuggestion) return;
+        playApproveSound();
         handleSendMessage({ type: 'agree' });
         // Also select the suggested target
         onSuggestTarget(lastSuggestion);
@@ -95,6 +99,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
 
     // Handle "-" disagree
     const handleDisagree = () => {
+        playRejectSound();
         handleSendMessage({ type: 'disagree' });
     };
 
@@ -163,6 +168,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                     {/* Suggest button */}
                     <button
                         onClick={handleSuggestMode}
+                        data-custom-sound
                         className={`p-2 rounded-lg transition-all ${mode === 'suggest'
                             ? 'bg-yellow-500/30 text-yellow-300 ring-2 ring-yellow-500/50'
                             : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
@@ -176,6 +182,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                     <button
                         onClick={handleAgree}
                         disabled={!lastSuggestion || isSending}
+                        data-custom-sound
                         className={`p-2 rounded-lg transition-all ${lastSuggestion
                             ? 'bg-white/5 text-green-400 hover:bg-green-500/20'
                             : 'bg-white/5 text-white/20 cursor-not-allowed'
@@ -189,6 +196,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                     <button
                         onClick={handleDisagree}
                         disabled={!lastSuggestion || isSending}
+                        data-custom-sound
                         className={`p-2 rounded-lg transition-all ${lastSuggestion
                             ? 'bg-white/5 text-red-400 hover:bg-red-500/20'
                             : 'bg-white/5 text-white/20 cursor-not-allowed'

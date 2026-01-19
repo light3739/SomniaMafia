@@ -1,5 +1,6 @@
 // components/game/DayPhase.tsx
 import React, { useEffect, useState, useCallback } from 'react';
+import { useSoundEffects } from '../ui/SoundEffects';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient } from 'wagmi';
@@ -26,6 +27,7 @@ export const DayPhase: React.FC = React.memo(() => {
         selectedTarget,
         setSelectedTarget,
     } = useGameContext();
+    const { playVoteSound } = useSoundEffects();
 
     const publicClient = usePublicClient();
     const [voteState, setVoteState] = useState<VoteState>({
@@ -130,6 +132,7 @@ export const DayPhase: React.FC = React.memo(() => {
     // Проголосовать (Optimistic UI - мгновенное обновление с rollback при ошибке)
     const handleVote = async () => {
         if (!selectedTarget) return;
+        playVoteSound();
 
         // Сохраняем предыдущее состояние для rollback
         const previousVote = voteState.myVote;
@@ -217,6 +220,7 @@ export const DayPhase: React.FC = React.memo(() => {
                                 {/* Vote button */}
                                 <Button
                                     onClick={handleVote}
+                                    data-custom-sound
                                     isLoading={isProcessing || isTxPending}
                                     disabled={!selectedTarget || isProcessing || isTxPending}
                                     variant={selectedTarget ? 'primary' : 'outline-gold'}

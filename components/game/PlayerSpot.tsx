@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { Player, Role } from '../../types';
 import { Shield, Crosshair, Eye, Skull } from 'lucide-react';
+import { useSoundEffects } from '../ui/SoundEffects';
 
 interface PlayerSpotProps {
     player: Player;
@@ -14,6 +15,7 @@ interface PlayerSpotProps {
 }
 
 export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAct, isSelected, isNight = false, myRole }) => {
+    const { playClickSound } = useSoundEffects();
 
     // Determine selection color based on role during night
     const getSelectionClasses = () => {
@@ -56,7 +58,12 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: player.isAlive ? 1 : 0.5, scale: 1 }}
             whileHover={player.isAlive && canAct ? { scale: 1.05, y: -5 } : {}}
-            onClick={() => (player.isAlive && canAct && onAction ? onAction(player.address as `0x${string}`) : null)}
+            onClick={() => {
+                if (player.isAlive && canAct && onAction) {
+                    playClickSound();
+                    onAction(player.address as `0x${string}`);
+                }
+            }}
             className={`
                 relative flex flex-row items-center gap-4 p-4 rounded-xl transition-all duration-300
                 w-[250px] h-[130px]

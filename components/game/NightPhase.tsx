@@ -1,5 +1,5 @@
 // components/game/NightPhase.tsx
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
@@ -9,6 +9,7 @@ import { hexToString } from '../../services/cryptoUtils';
 import { Role, Player, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
 import { MafiaChat } from './MafiaChat';
+import { useSoundEffects } from '../ui/SoundEffects';
 import { Moon, Skull, Shield, Search, Eye, Check, Clock, User, Lock, AlertCircle, Users } from 'lucide-react';
 
 // Night action types matching contract enum
@@ -82,6 +83,7 @@ export const NightPhase: React.FC = React.memo(() => {
         currentRoomId,
         sendMafiaMessageOnChain
     } = useGameContext();
+    const { playKillSound, playProtectSound, playInvestigateSound } = useSoundEffects();
 
     const [nightState, setNightState] = useState<NightState>({
         hasCommitted: false,
@@ -100,18 +102,18 @@ export const NightPhase: React.FC = React.memo(() => {
     const publicClient = usePublicClient();
     const { address } = useAccount();
 
+    // Protection against concurrent calls
+    const commitStartedRef = useRef(false);
+    const revealStartedRef = useRef(false);
+
     // Sync with contract flags (hasCommitted, hasRevealed) + mafia consensus
     const syncWithContract = useCallback(async () => {
         if (!publicClient || !currentRoomId || !address) return;
 
-        // Don't overwrite optimistic UI during active transactions
-        if (isProcessing || isTxPending) {
-            console.log('[NightPhase] Skipping sync: transaction in progress');
-            return;
-        }
+        // Skip if active transaction is local. But for mock mode, we might want to skip less.
+        if (isProcessing || isTxPending) return;
 
         try {
-            // V4: getPlayerFlags now returns 7 values (added hasClaimedMafia)
             const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys, hasClaimedMafia] = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
@@ -119,7 +121,6 @@ export const NightPhase: React.FC = React.memo(() => {
                 args: [currentRoomId, address as `0x${string}`],
             }) as [boolean, boolean, boolean, boolean, boolean, boolean, boolean];
 
-            // V4: Get mafia consensus status
             const [mafiaCommitted, mafiaRevealed, consensusTarget] = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
@@ -129,10 +130,8 @@ export const NightPhase: React.FC = React.memo(() => {
 
             setNightState(prev => ({
                 ...prev,
-                // Sticky true: prevent regression if RPC lags
                 hasCommitted: prev.hasCommitted || hasCommitted,
                 hasRevealed: prev.hasRevealed || hasRevealed,
-                // Sticky max for progress counters
                 mafiaCommitted: Math.max(prev.mafiaCommitted, Number(mafiaCommitted)),
                 mafiaRevealed: Math.max(prev.mafiaRevealed, Number(mafiaRevealed)),
                 mafiaConsensusTarget: consensusTarget === '0x0000000000000000000000000000000000000000' ? null : consensusTarget as `0x${string}`
@@ -306,10 +305,14 @@ export const NightPhase: React.FC = React.memo(() => {
         }
     }, [myPlayer?.hasNightCommitted, myPlayer?.hasNightRevealed, nightState.hasCommitted, nightState.hasRevealed, NIGHT_COMMIT_KEY, addLog]);
 
-    // Commit action - V4: Mafia uses commitMafiaTarget, others use commitNightAction
-    // Optimistic UI: обновляем state сразу, rollback при ошибке
-    const handleCommit = async () => {
-        if (!selectedTarget || nightState.hasCommitted) return;
+    const handleCommit = useCallback(async () => {
+        if (!selectedTarget || nightState.hasCommitted || commitStartedRef.current) return;
+        commitStartedRef.current = true;
+
+        // Play specific sound based on role
+        if (myRole === Role.MAFIA) playKillSound();
+        else if (myRole === Role.DOCTOR) playProtectSound();
+        else if (myRole === Role.DETECTIVE) playInvestigateSound();
 
         // Check if we're actually in NIGHT phase
         if (gameState.phase !== GamePhase.NIGHT) {
@@ -364,7 +367,9 @@ export const NightPhase: React.FC = React.memo(() => {
                 salt,
                 commitHash: hash,
                 committedTarget: committedTarget,
-                action: roleConfig.action
+                action: roleConfig.action,
+                hasCommitted: true,
+                hasRevealed: false
             }));
 
             addLog("Night action committed!", "success");
@@ -381,8 +386,9 @@ export const NightPhase: React.FC = React.memo(() => {
             addLog(e.shortMessage || e.message || "Commit failed", "danger");
         } finally {
             setIsProcessing(false);
+            commitStartedRef.current = false;
         }
-    };
+    }, [selectedTarget, nightState.hasCommitted, myRole, gameState.phase, roleConfig.action, commitMafiaTargetOnChain, commitNightActionOnChain, NIGHT_COMMIT_KEY, addLog, playKillSound, playProtectSound, playInvestigateSound]);
 
     // Decrypt target's role (for Detective)
     const decryptTargetRole = useCallback(async (targetAddress: string): Promise<Role | null> => {
@@ -441,15 +447,12 @@ export const NightPhase: React.FC = React.memo(() => {
         }
     }, [publicClient, currentRoomId, gameState.players, address]);
 
-    // Reveal action - V4: Mafia uses revealMafiaTarget, others use revealNightAction
-    // Optimistic UI: обновляем state сразу, rollback при ошибке
-    const handleReveal = async () => {
-        if (!nightState.committedTarget || !nightState.salt || nightState.hasRevealed) return;
+    const handleReveal = useCallback(async () => {
+        if (!nightState.committedTarget || !nightState.salt || nightState.hasRevealed || revealStartedRef.current) return;
+        revealStartedRef.current = true;
 
-        // Сохраняем для rollback
         const previousHasRevealed = nightState.hasRevealed;
 
-        // Optimistic: обновляем UI сразу
         setNightState(prev => ({
             ...prev,
             hasRevealed: true
@@ -483,10 +486,8 @@ export const NightPhase: React.FC = React.memo(() => {
                 );
             }
 
-            // Clear localStorage after successful reveal
             localStorage.removeItem(NIGHT_COMMIT_KEY);
 
-            // If detective, decrypt target's role
             let investigationResult: Role | null = null;
             if (myRole === Role.DETECTIVE && roleConfig.action === NightActionType.CHECK) {
                 investigationResult = await decryptTargetRole(nightState.committedTarget || '');
@@ -500,12 +501,12 @@ export const NightPhase: React.FC = React.memo(() => {
 
             setNightState(prev => ({
                 ...prev,
+                hasRevealed: true,
                 investigationResult
             }));
             setSelectedTarget(null);
             addLog("Night action revealed!", "success");
         } catch (e: any) {
-            // Rollback при ошибке
             setNightState(prev => ({
                 ...prev,
                 hasRevealed: previousHasRevealed
@@ -514,8 +515,9 @@ export const NightPhase: React.FC = React.memo(() => {
             addLog(e.shortMessage || e.message || "Reveal failed", "danger");
         } finally {
             setIsProcessing(false);
+            revealStartedRef.current = false;
         }
-    };
+    }, [nightState.committedTarget, nightState.salt, nightState.hasRevealed, nightState.commitHash, myRole, roleConfig.action, revealMafiaTargetOnChain, revealNightActionOnChain, NIGHT_COMMIT_KEY, decryptTargetRole, gameState.players, addLog, setSelectedTarget]);
 
     // Civilians just wait - show blocked UI
     if (!canAct) {
@@ -713,6 +715,7 @@ export const NightPhase: React.FC = React.memo(() => {
                             >
                                 <Button
                                     onClick={handleCommit}
+                                    data-custom-sound
                                     isLoading={isProcessing || isTxPending}
                                     disabled={!selectedTarget || isProcessing || isTxPending}
                                     className="w-full h-[50px]"

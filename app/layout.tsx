@@ -1,6 +1,7 @@
 import { Providers } from "./providers";
 import "./globals.css";
 import { BackgroundMusic } from "@/components/ui/BackgroundMusic";
+import { SoundEffects } from "@/components/ui/SoundEffects";
 
 export const metadata = {
   title: "Somnia Mafia",
@@ -16,6 +17,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased bg-black text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden">
         <BackgroundMusic />
+        <SoundEffects />
         <Providers>{children}</Providers>
       </body>
     </html>

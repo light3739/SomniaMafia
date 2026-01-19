@@ -2,20 +2,19 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Volume2, VolumeX } from 'lucide-react';
+import { Volume2, VolumeX, Square, Play } from 'lucide-react';
+import mainMusic from '../../assets/Main_Music.mp3';
 
 export const BackgroundMusic: React.FC = () => {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
-    const [volume, setVolume] = useState(0.15); // Default 15% volume
+    const [volume, setVolume] = useState(0.10);
     const [isMuted, setIsMuted] = useState(false);
+    const [isStopped, setIsStopped] = useState(false);
     const pathname = usePathname();
 
     // Routes where music should play (Menu/Lobby flow)
-    const ALLOWED_ROUTES = ['/', '/setup', '/create', '/join', '/waiting', '/lobby'];
-
-    // Check if we should be playing based on current route
-    const shouldPlay = ALLOWED_ROUTES.includes(pathname);
+    const ALLOWED_ROUTES = ['/', '/setup', '/create', '/join', '/lobby', '/waiting'];
 
     useEffect(() => {
         if (audioRef.current) {
@@ -27,35 +26,41 @@ export const BackgroundMusic: React.FC = () => {
         const audio = audioRef.current;
         if (!audio) return;
 
-        console.log(`[Music] Route: ${pathname}, Should Play: ${shouldPlay}`);
-
-        const attemptPlay = () => {
-            const playPromise = audio.play();
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    console.log("[Music] Playing successfully");
-                    setIsPlaying(true);
-                }).catch(error => {
-                    console.warn("[Music] Autoplay blocked or failed:", error);
-                    setIsPlaying(false);
-                });
-            }
+        const updateState = () => setIsPlaying(!audio.paused);
+        audio.addEventListener('play', updateState);
+        audio.addEventListener('pause', updateState);
+        return () => {
+            audio.removeEventListener('play', updateState);
+            audio.removeEventListener('pause', updateState);
         };
+    }, []);
 
-        if (shouldPlay) {
-            attemptPlay();
+    useEffect(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+
+        const shouldPlayNow = ALLOWED_ROUTES.includes(pathname) && !isStopped;
+
+        if (shouldPlayNow) {
+            audio.play().then(() => {
+                setIsPlaying(true);
+            }).catch(() => {
+                // Autoplay blocked or failed
+                setIsPlaying(false);
+            });
         } else {
             audio.pause();
             setIsPlaying(false);
         }
-    }, [shouldPlay, pathname]);
+    }, [pathname, isStopped]);
 
-    // Add a global click listener to unlock audio context if needed
     useEffect(() => {
         const handleInteraction = () => {
-            if (shouldPlay && !isPlaying && audioRef.current && audioRef.current.paused) {
-                console.log("[Music] User interaction detected, attempting to play...");
-                audioRef.current.play().then(() => setIsPlaying(true)).catch(e => console.error(e));
+            const shouldPlayNow = ALLOWED_ROUTES.includes(pathname) && !isStopped;
+            if (shouldPlayNow && audioRef.current && audioRef.current.paused) {
+                audioRef.current.play()
+                    .then(() => setIsPlaying(true))
+                    .catch(e => console.error("Interaction play failed:", e));
             }
         };
 
@@ -65,40 +70,78 @@ export const BackgroundMusic: React.FC = () => {
             window.removeEventListener('click', handleInteraction);
             window.removeEventListener('keydown', handleInteraction);
         };
-    }, [shouldPlay, isPlaying]);
+    }, [pathname, isStopped]);
 
-    if (!shouldPlay) return null;
+    const handleStop = () => {
+        setIsStopped(true);
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+        }
+    };
+
+    const handlePlay = () => {
+        setIsStopped(false);
+        setIsMuted(false);
+    };
+
+    if (!ALLOWED_ROUTES.includes(pathname)) return null;
 
     return (
-        <div className="fixed bottom-4 right-4 z-[60] bg-black/40 backdrop-blur-md border border-white/10 rounded-full p-2 flex items-center gap-2 group transition-all hover:bg-black/60 hover:pr-4">
-            <audio
-                ref={audioRef}
-                src="/assets/Main_Music.mp3"
-                loop
-                crossOrigin="anonymous"
-            />
+        <div className="fixed bottom-6 right-6 z-[100] flex items-center gap-3">
+            <audio ref={audioRef} src={mainMusic} loop />
 
-            <button
-                onClick={() => setIsMuted(!isMuted)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white/70 transition-colors"
-            >
-                {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
-            </button>
+            <div className="bg-black/60 backdrop-blur-xl border border-[#916A47]/40 rounded-full p-2 flex items-center gap-2 shadow-2xl group transition-all hover:bg-black/80 hover:pr-4">
 
-            {/* Slider - hidden by default, shown on hover of the container */}
-            <div className="w-0 overflow-hidden group-hover:w-24 transition-all duration-300 flex items-center">
-                <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={isMuted ? 0 : volume}
-                    onChange={(e) => {
-                        setVolume(parseFloat(e.target.value));
-                        setIsMuted(false);
-                    }}
-                    className="w-20 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#916A47] [&::-webkit-slider-thumb]:rounded-full"
-                />
+                {/* Play/Stop Button */}
+                {isPlaying ? (
+                    <button
+                        onClick={handleStop}
+                        className="w-10 h-10 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors"
+                        title="Stop"
+                    >
+                        <Square size={16} fill="currentColor" />
+                    </button>
+                ) : (
+                    <button
+                        onClick={handlePlay}
+                        className="w-10 h-10 flex items-center justify-center rounded-full bg-[#916A47] text-white hover:scale-105 transition-transform"
+                        title="Play"
+                    >
+                        <Play size={18} fill="currentColor" />
+                    </button>
+                )}
+
+                {/* Mute Button */}
+                <button
+                    onClick={() => setIsMuted(!isMuted)}
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white/70"
+                >
+                    {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                </button>
+
+                <div className="w-0 overflow-hidden group-hover:w-28 transition-all duration-300 flex items-center pl-1">
+                    <input
+                        type="range"
+                        min="0" max="1" step="0.01"
+                        value={isMuted ? 0 : volume}
+                        onChange={(e) => {
+                            setVolume(parseFloat(e.target.value));
+                            setIsMuted(false);
+                        }}
+                        className="
+                            w-24 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer
+                            [&::-webkit-slider-thumb]:appearance-none
+                            [&::-webkit-slider-thumb]:w-5
+                            [&::-webkit-slider-thumb]:h-5
+                            [&::-webkit-slider-thumb]:bg-[#916A47]
+                            [&::-webkit-slider-thumb]:rounded-full
+                            [&::-webkit-slider-thumb]:border-2
+                            [&::-webkit-slider-thumb]:border-white/20
+                            [&::-webkit-slider-thumb]:shadow-lg
+                        "
+                    />
+                </div>
             </div>
         </div>
     );

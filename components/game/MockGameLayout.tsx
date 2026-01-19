@@ -9,8 +9,13 @@ import { GamePhase, Role } from '../../types';
 import { Button } from '../ui/Button';
 
 export const MockGameLayout: React.FC = () => {
-    const { gameState, setGameState } = useGameContext();
+    const { gameState, setGameState, setIsTestMode } = useGameContext();
     const hasInitialized = useRef(false);
+
+    useEffect(() => {
+        setIsTestMode(true);
+        return () => setIsTestMode(false);
+    }, [setIsTestMode]);
 
     // Загружаем моковые данные ТОЛЬКО один раз при первом монтировании
     useEffect(() => {
