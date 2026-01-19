@@ -13,9 +13,11 @@ import { NightPhase } from './NightPhase';
 import { GameOver } from './GameOver';
 import { VotingAnnouncement } from './VotingAnnouncement';
 import { NightAnnouncement } from './NightAnnouncement';
+import { MorningAnnouncement } from './MorningAnnouncement';
 import { SessionKeyBanner } from './SessionKeyBanner';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
+import { useSoundEffects } from '../ui/SoundEffects';
 import { GamePhase, Role } from '../../types';
 
 const dayBg = "/assets/game_background_light.png";
@@ -51,6 +53,7 @@ const BASE_HEIGHT = 1024;
 
 export const GameLayout: React.FC = () => {
     const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK } = useGameContext();
+    const { playNightTransition, playMorningTransition } = useSoundEffects();
     const players = gameState.players || [];
 
     // Handle window resize for scaling
@@ -58,27 +61,37 @@ export const GameLayout: React.FC = () => {
 
     // Voting announcement state
     const [showVotingAnnouncement, setShowVotingAnnouncement] = useState(false);
+    const [showMorningAnnouncement, setShowMorningAnnouncement] = useState(false);
     const [lastVotingDay, setLastVotingDay] = useState<number | null>(null);
 
     // Night announcement state
     const [showNightAnnouncement, setShowNightAnnouncement] = useState(false);
     const [lastNightDay, setLastNightDay] = useState<number | null>(null);
 
-    // Trigger Voting Announcement
+    // Trigger Voting/Morning Announcement (Morning Transition)
     useEffect(() => {
-        if (gameState.phase === GamePhase.VOTING && gameState.dayCount !== lastVotingDay) {
-            setShowVotingAnnouncement(true);
+        if ((gameState.phase === GamePhase.VOTING || gameState.phase === GamePhase.DAY) && gameState.dayCount !== lastVotingDay) {
+            // Only play if we are moving to a new day (not initial lobby)
+            if (gameState.dayCount > 0) {
+                playMorningTransition();
+                setShowMorningAnnouncement(true);
+            }
+            // Delay voting announcement if it's the voting phase so morning shows first
+            if (gameState.phase === GamePhase.VOTING) {
+                setTimeout(() => setShowVotingAnnouncement(true), 2000);
+            }
             setLastVotingDay(gameState.dayCount);
         }
-    }, [gameState.phase, gameState.dayCount, lastVotingDay]);
+    }, [gameState.phase, gameState.dayCount, lastVotingDay, playMorningTransition]);
 
-    // Trigger Night Announcement
+    // Trigger Night Announcement (Night Transition)
     useEffect(() => {
         if (gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDay) {
+            playNightTransition();
             setShowNightAnnouncement(true);
             setLastNightDay(gameState.dayCount);
         }
-    }, [gameState.phase, gameState.dayCount, lastNightDay]);
+    }, [gameState.phase, gameState.dayCount, lastNightDay, playNightTransition]);
 
     useEffect(() => {
         const handleResize = () => {
@@ -183,6 +196,12 @@ export const GameLayout: React.FC = () => {
             <NightAnnouncement
                 show={showNightAnnouncement}
                 onComplete={() => setShowNightAnnouncement(false)}
+            />
+
+            {/* Morning Announcement Overlay */}
+            <MorningAnnouncement
+                show={showMorningAnnouncement}
+                onComplete={() => setShowMorningAnnouncement(false)}
             />
 
             {/* 2. SCALABLE GAME CONTAINER */}
@@ -306,21 +325,7 @@ export const GameLayout: React.FC = () => {
 
                     <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />
 
-                    {myPlayer?.role && myPlayer.role !== Role.UNKNOWN && (
-                        <div className={`
-                            px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
-                            ${myPlayer.role === Role.MAFIA
-                                ? 'bg-red-900/50 text-red-400 border border-red-500/30'
-                                : myPlayer.role === Role.DOCTOR
-                                    ? 'bg-green-900/50 text-green-400 border border-green-500/30'
-                                    : myPlayer.role === Role.DETECTIVE
-                                        ? 'bg-blue-900/50 text-blue-400 border border-blue-500/30'
-                                        : 'bg-amber-900/50 text-amber-400 border border-amber-500/30'
-                            }
-                        `}>
-                            {myPlayer.role}
-                        </div>
-                    )}
+
                 </div>
             </div>
 

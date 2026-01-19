@@ -70,6 +70,8 @@ interface GameContextType {
     myPlayer: Player | undefined;
     getActionLabel: () => string;
     canActOnPlayer: (target: Player) => boolean;
+    setIsTestMode: (val: boolean) => void;
+    isTestMode: boolean;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -110,6 +112,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
     const [isTxPending, setIsTxPending] = useState(false);
+    const [isTestMode, setIsTestMode] = useState(false);
 
     // Функция для получения session wallet client (вызывается при каждой транзакции)
     const getSessionWalletClient = useCallback(() => {
@@ -166,16 +169,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
         console.log(`[TX Debug] Final canUseSession for ${functionName}: ${canUseSession}`);
-        if (!canUseSession) {
-            console.log(`[TX Debug] Session blocked because:`, {
-                param: useSessionKeyParam,
-                hasSession: !!session,
-                registered: session?.registeredOnChain,
-                expired: session ? Date.now() >= session.expiresAt : 'N/A',
-                roomMatch: session && roomId !== null ? session.roomId === Number(roomId) : 'N/A',
-                expectedRoom: roomId !== null ? Number(roomId) : 'null',
-                storedRoom: session?.roomId
-            });
+
+        // === TEST MODE SIMULATION ===
+        if (isTestMode && ['commitNightAction', 'revealNightAction', 'commitMafiaTarget', 'revealMafiaTarget', 'commitRole'].includes(functionName)) {
+            console.log(`[Test Mode] Simulating transaction for ${functionName}`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
+            return '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as `0x${string}`;
         }
 
         // Determine which account to use for gas estimation
@@ -246,7 +245,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 gas: calculatedGas,
             });
         }
-    }, [getSessionWalletClient, writeContractAsync, publicClient, address]);
+    }, [getSessionWalletClient, writeContractAsync, publicClient, address, isTestMode]);
 
     const [gameState, setGameState] = useState<GameState>({
         phase: GamePhase.LOBBY,
@@ -472,7 +471,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.error("Sync error:", e);
         }
-    }, [publicClient]);
+    }, [publicClient, checkWinCondition]);
 
     // Initial load
     useEffect(() => {
@@ -1758,7 +1757,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList,
         addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
-        selectedTarget, setSelectedTarget
+        selectedTarget, setSelectedTarget,
+        isTestMode, setIsTestMode
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, currentRoomId,
         createLobbyOnChain, joinLobbyOnChain, startGameOnChain,
@@ -1770,6 +1770,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         tryEndGame, claimVictory, endGameZK, sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList, addLog,
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
+        isTestMode, setIsTestMode,
         selectedTarget
     ]);
 
