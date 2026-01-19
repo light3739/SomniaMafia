@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
-import lobbyBg from '../../assets/lobby_background.png';
+const lobbyBg = "/assets/lobby_background.png";
 import { BackButton } from '../ui/BackButton';
 import { usePublicClient } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
