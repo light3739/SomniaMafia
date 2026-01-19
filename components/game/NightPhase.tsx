@@ -8,6 +8,7 @@ import { ShuffleService, getShuffleService } from '../../services/shuffleService
 import { hexToString } from '../../services/cryptoUtils';
 import { Role, Player, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
+import { MafiaChat } from './MafiaChat';
 import { Moon, Skull, Shield, Search, Eye, Check, Clock, User, Lock, AlertCircle, Users } from 'lucide-react';
 
 // Night action types matching contract enum
@@ -655,45 +656,47 @@ export const NightPhase: React.FC = () => {
                     </motion.div>
                 )}
 
-                {/* Selected Target Display */}
-                <div className="bg-black/40 backdrop-blur-xl rounded-2xl border border-white/10 p-6 mb-6">
-                    <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Selected Target</p>
-                    <p className="text-white/30 text-[10px] mb-3">Click on a player card on the sides to select</p>
+                {/* Mafia Chat - for coordination */}
+                {myRole === Role.MAFIA && (
+                    <MafiaChat
+                        myName={myPlayer?.name || 'You'}
+                        teammates={nightState.teammates}
+                        players={gameState.players}
+                        selectedTarget={selectedTarget}
+                        onSuggestTarget={(addr) => setSelectedTarget(addr)}
+                    />
+                )}
 
-                    {selectedTarget && selectedPlayer ? (
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            className={`p-4 rounded-xl border-2 ${myRole === Role.MAFIA ? 'bg-red-900/20 border-red-500/50' :
-                                myRole === Role.DOCTOR ? 'bg-green-900/20 border-green-500/50' :
-                                    'bg-blue-900/20 border-blue-500/50'
-                                }`}
-                        >
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${myRole === Role.MAFIA ? 'bg-red-500/30' :
-                                        myRole === Role.DOCTOR ? 'bg-green-500/30' :
-                                            'bg-blue-500/30'
-                                        }`}>
-                                        {roleConfig.icon}
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-white text-lg">{selectedPlayer.name}</p>
-                                        <p className="text-white/40 text-xs font-mono">
-                                            {selectedPlayer.address.slice(0, 6)}...{selectedPlayer.address.slice(-4)}
-                                        </p>
-                                    </div>
+                {/* Selected Target Display */}
+                {/* Selected Target Display - Only show when selected, no bulky placeholder */}
+                {selectedTarget && selectedPlayer && (
+                    <motion.div
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className={`p-4 rounded-xl border-2 mb-6 ${myRole === Role.MAFIA ? 'bg-red-900/20 border-red-500/50' :
+                            myRole === Role.DOCTOR ? 'bg-green-900/20 border-green-500/50' :
+                                'bg-blue-900/20 border-blue-500/50'
+                            }`}
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${myRole === Role.MAFIA ? 'bg-red-500/30' :
+                                    myRole === Role.DOCTOR ? 'bg-green-500/30' :
+                                        'bg-blue-500/30'
+                                    }`}>
+                                    {roleConfig.icon}
                                 </div>
-                                <span className={`${roleConfig.color} font-medium`}>{roleConfig.label}</span>
+                                <div>
+                                    <p className="font-bold text-white text-lg">{selectedPlayer.name}</p>
+                                    <p className="text-white/40 text-xs font-mono">
+                                        {selectedPlayer.address.slice(0, 6)}...{selectedPlayer.address.slice(-4)}
+                                    </p>
+                                </div>
                             </div>
-                        </motion.div>
-                    ) : (
-                        <div className="p-4 rounded-xl border border-dashed border-white/20 text-center">
-                            <p className="text-white/30">No target selected</p>
-                            <p className="text-white/20 text-xs mt-1">Click on a player card on the sides</p>
+                            <span className={`${roleConfig.color} font-medium`}>{roleConfig.label}</span>
                         </div>
-                    )}
-                </div>
+                    </motion.div>
+                )}
 
                 {/* Action Buttons */}
                 <div className="space-y-3">
