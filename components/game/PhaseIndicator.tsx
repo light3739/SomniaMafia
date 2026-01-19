@@ -8,7 +8,7 @@ interface PhaseIndicatorProps {
     dayCount: number;
 }
 
-export const PhaseIndicator: React.FC<PhaseIndicatorProps> = ({ phase, dayCount }) => {
+export const PhaseIndicator = React.memo(({ phase, dayCount }: PhaseIndicatorProps) => {
     const isNight = phase === GamePhase.NIGHT;
 
     const getConfig = () => {
@@ -63,4 +63,4 @@ export const PhaseIndicator: React.FC<PhaseIndicatorProps> = ({ phase, dayCount 
             </div>
         </div>
     );
-};
+});

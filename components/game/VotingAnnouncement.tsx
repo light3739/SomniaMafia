@@ -6,7 +6,7 @@ interface VotingAnnouncementProps {
     onComplete: () => void;
 }
 
-export const VotingAnnouncement: React.FC<VotingAnnouncementProps> = ({ show, onComplete }) => {
+export const VotingAnnouncement = React.memo(({ show, onComplete }: VotingAnnouncementProps) => {
     useEffect(() => {
         if (show) {
             const timer = setTimeout(() => {
@@ -65,4 +65,4 @@ export const VotingAnnouncement: React.FC<VotingAnnouncementProps> = ({ show, on
             )}
         </AnimatePresence>
     );
-};
+});

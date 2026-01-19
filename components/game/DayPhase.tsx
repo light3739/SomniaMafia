@@ -14,7 +14,7 @@ interface VoteState {
     hasVoted: boolean;
 }
 
-export const DayPhase: React.FC = () => {
+export const DayPhase: React.FC = React.memo(() => {
     const {
         gameState,
         currentRoomId,
@@ -72,10 +72,10 @@ export const DayPhase: React.FC = () => {
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'voteCounts',
-                    args: [currentRoomId, player.address],
-                }) as number;
+                    args: [BigInt(String(currentRoomId || 0)), player.address as `0x${string}`],
+                }) as unknown as bigint;
 
-                counts.set(player.address.toLowerCase(), count);
+                counts.set(player.address.toLowerCase(), Number(count));
             }
 
             // Если мы в процессе отправки голоса - не затираем Optimistic UI старыми данными с чейна
@@ -90,8 +90,8 @@ export const DayPhase: React.FC = () => {
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'votes',
-                    args: [currentRoomId, myPlayer.address],
-                }) as string;
+                    args: [BigInt(String(currentRoomId || 0)), myPlayer.address as `0x${string}`],
+                }) as `0x${string}`;
 
                 const hasVoted = myVote !== '0x0000000000000000000000000000000000000000';
 
@@ -258,4 +258,4 @@ export const DayPhase: React.FC = () => {
             </motion.div>
         </div>
     );
-};
+});

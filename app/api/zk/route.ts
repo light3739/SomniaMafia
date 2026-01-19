@@ -12,11 +12,20 @@ export async function POST(request: Request) {
         const wasmPath = path.join(process.cwd(), 'public', 'mafia_win.wasm');
         const zkeyPath = path.join(process.cwd(), 'public', 'mafia_win_0001.zkey');
 
-        const { proof, publicSignals } = await (snarkjs as any).groth16.fullProve(
+        // Add a timeout for ZK generation
+        const proofPromise = (snarkjs as any).groth16.fullProve(
             { roomId, mafiaCount, townCount },
             wasmPath,
             zkeyPath
         );
+
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('ZK Proof generation timed out')), 30000)
+        );
+
+        const { proof, publicSignals } = await Promise.race([proofPromise, timeoutPromise]) as any;
+
+        console.log(`[API/ZK] ZK Proof generated successfully for Room #${roomId}`);
 
         return NextResponse.json({ proof, publicSignals });
     } catch (error: any) {
