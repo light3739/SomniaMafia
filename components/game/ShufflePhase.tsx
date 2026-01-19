@@ -349,7 +349,7 @@ export const ShufflePhase: React.FC = () => {
             <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="max-w-lg w-full bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl relative"
+                className="w-[520px] max-w-[90vw] bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl relative pointer-events-auto"
             >
                 {/* Sync Button */}
                 <div className="flex items-center gap-4">
@@ -417,7 +417,7 @@ export const ShufflePhase: React.FC = () => {
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: index * 0.1 }}
                                 className={`
-                                    flex items-center justify-between p-3 rounded-xl border transition-all
+                                    flex items-center justify-between p-3 rounded-xl border transition-all h-14
                                     ${isCurrentTurn
                                         ? 'bg-[#916A47]/20 border-[#916A47]/50'
                                         : isDone

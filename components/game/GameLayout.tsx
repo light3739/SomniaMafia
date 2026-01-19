@@ -241,16 +241,8 @@ export const GameLayout: React.FC = () => {
 
 
                 {/* CENTER CONTENT (Day Phase, Vote, Logs etc) */}
+                {/* CENTER CONTENT (Day/Night/Voting) */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[500px] flex items-center justify-center z-10">
-                    {/* Overlay Phases (Shuffle, Reveal, GameOver) */}
-                    {isOverlayPhase && (
-                        <div className="absolute inset-0 z-30 flex items-center justify-center">
-                            <div> {/* Removed scale-150 to prevent oversized UI */}
-                                {renderPhaseContent()}
-                            </div>
-                        </div>
-                    )}
-
                     {/* Day/Voting Phase Content */}
                     {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) && (
                         <div className="w-full h-full">
@@ -283,6 +275,13 @@ export const GameLayout: React.FC = () => {
                         </div>
                     )}
                 </div>
+
+                {/* OVERLAYS (Shuffle, Reveal, GameOver) - Full Screen Container */}
+                {isOverlayPhase && (
+                    <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+                        {renderPhaseContent()}
+                    </div>
+                )}
 
             </div>
 

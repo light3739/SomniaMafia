@@ -8,6 +8,7 @@ import { JoinLobby } from './components/lobby_flow/JoinLobby';
 import { WaitingRoom } from './components/lobby_flow/WaitingRoom';
 import { GameLayout } from './components/game/GameLayout';
 import { MockGameLayout } from './components/game/MockGameLayout';
+import { BackgroundMusic } from './components/ui/BackgroundMusic';
 import { useGameContext } from './contexts/GameContext';
 
 const App: React.FC = () => {
@@ -17,6 +18,7 @@ const App: React.FC = () => {
     // We use the location as key for AnimatePresence to animate transitions between routes
     return (
         <div className="min-h-screen bg-black text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden">
+            <BackgroundMusic />
             <AnimatePresence mode='wait'>
                 <Routes location={location} key={location.pathname}>
                     <Route
