@@ -1233,7 +1233,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 zkData.b,
                 zkData.c,
                 zkData.inputs
-            ]);
+            ], false); // DISABLE SESSION KEY - use main wallet for heavy/critical TX
 
             const isTownWin = zkData.inputs[0] === 1n;
             const isMafiaWin = zkData.inputs[1] === 1n;
@@ -1333,7 +1333,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         formattedProof.b,
                         formattedProof.c,
                         formattedProof.inputs
-                    ]);
+                    ], false); // DISABLE SESSION KEY
 
                     await publicClient.waitForTransactionReceipt({ hash });
                     addLog("Game ended automatically via Server ZK!", "phase");
