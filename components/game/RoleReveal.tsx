@@ -638,9 +638,13 @@ const RoleRevealAuto: React.FC<{
     handleConfirmRole: () => Promise<void>
 }> = ({ revealState, isProcessing, isTxPending, gameState, myPlayer, shareMyKey, decryptMyRole, handleConfirmRole }) => {
 
-    // 1. Auto-share keys
+    const keysNeeded = gameState.players.length - 1;
+
+    // 1. Auto-share keys (first step)
     useEffect(() => {
-        if (!revealState.hasSharedKeys && !isProcessing && !isTxPending && myPlayer) {
+        const canShare = !revealState.hasSharedKeys && !isProcessing && !isTxPending && myPlayer;
+
+        if (canShare) {
             console.log("[RoleReveal Auto] Sharing my decryption keys...");
             shareMyKey();
         }
@@ -648,24 +652,52 @@ const RoleRevealAuto: React.FC<{
 
     // 2. Auto-decrypt role when all keys are present
     useEffect(() => {
-        const keysNeeded = gameState.players.length - 1;
         const canAutoDecrypt =
+            revealState.hasSharedKeys &&  // Must have shared first
             !revealState.isRevealed &&
             !isProcessing &&
             !isTxPending &&
             revealState.deck.length > 0 &&
             revealState.collectedKeys.size >= keysNeeded &&
-            gameState.players.length > 0;
+            keysNeeded > 0;  // Avoid division by zero
+
+        // Log state for debugging
+        console.log("[RoleReveal Auto] Decrypt check:", {
+            hasSharedKeys: revealState.hasSharedKeys,
+            isRevealed: revealState.isRevealed,
+            isProcessing,
+            isTxPending,
+            deckLength: revealState.deck.length,
+            collectedKeys: revealState.collectedKeys.size,
+            keysNeeded,
+            canAutoDecrypt
+        });
 
         if (canAutoDecrypt) {
             console.log("[RoleReveal Auto] All keys collected. Decrypting role...");
             decryptMyRole();
         }
-    }, [revealState.isRevealed, revealState.collectedKeys.size, revealState.deck.length, gameState.players.length, isProcessing, isTxPending, decryptMyRole]);
+    }, [revealState.hasSharedKeys, revealState.isRevealed, revealState.collectedKeys.size, revealState.deck.length, keysNeeded, isProcessing, isTxPending, decryptMyRole]);
 
     // 3. Auto-confirm role once revealed
     useEffect(() => {
-        if (revealState.isRevealed && !revealState.hasConfirmed && !isProcessing && !isTxPending && revealState.myRole) {
+        const canAutoConfirm =
+            revealState.isRevealed &&
+            !revealState.hasConfirmed &&
+            !isProcessing &&
+            !isTxPending &&
+            revealState.myRole !== null;
+
+        console.log("[RoleReveal Auto] Confirm check:", {
+            isRevealed: revealState.isRevealed,
+            hasConfirmed: revealState.hasConfirmed,
+            isProcessing,
+            isTxPending,
+            myRole: revealState.myRole,
+            canAutoConfirm
+        });
+
+        if (canAutoConfirm) {
             console.log("[RoleReveal Auto] Role revealed. Auto-confirming...");
             handleConfirmRole();
         }
