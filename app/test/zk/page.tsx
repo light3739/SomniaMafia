@@ -223,6 +223,7 @@ export default function ZKTestPage() {
                     zkData.c,
                     zkData.inputs
                 ],
+                gas: 3000000n // Force cap gas to avoid RPC estimation errors (68M bug)
             });
 
             addLog(`Transaction sent: ${hash}`);
