@@ -133,6 +133,68 @@ export default function ZKTestPage() {
         }
     };
 
+    const botsCommitRoles = async () => {
+        if (!roomId) return addLog("Enter Room ID first!");
+        addLog(`Bots syncing secrets for room #${roomId}...`);
+
+        for (let i = 0; i < bots.length; i++) {
+            const bot = bots[i];
+            if (parseFloat(bot.balance) < 0.0001) continue;
+
+            try {
+                const botClient = createWalletClient({
+                    account: privateKeyToAccount(bot.pk as `0x${string}`),
+                    chain: shannon,
+                    transport: http()
+                });
+
+                // Mock role & salt for testing
+                // In a real game we would actually decrypt the deck
+                const role = i === 0 ? 1 : 4; // First bot is Mafia, others are Civilian
+                const salt = `bot_salt_${bot.address.slice(0, 8)}`;
+
+                // 1. Commit on-chain (so game can advance to Day 1)
+                // We use commitAndConfirmRole if available or just commit + confirm
+                // For simplicity here, we'll just do commitRole
+                const { ShuffleService } = await import('@/services/shuffleService');
+                const roleHash = ShuffleService.createRoleCommitHash(role, salt);
+
+                addLog(`Bot ${bot.address.slice(0, 6)} committing role...`);
+                const tx1 = await botClient.writeContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MafiaABI.abi,
+                    functionName: 'commitRole',
+                    args: [BigInt(roomId), roleHash],
+                });
+                await publicClient?.waitForTransactionReceipt({ hash: tx1 });
+
+                addLog(`Bot ${bot.address.slice(0, 6)} confirming role...`);
+                const tx2 = await botClient.writeContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MafiaABI.abi,
+                    functionName: 'confirmRole',
+                    args: [BigInt(roomId)],
+                });
+                await publicClient?.waitForTransactionReceipt({ hash: tx2 });
+
+                // 2. Sync with Server (so ZK check works)
+                await fetch('/api/game/reveal-secret', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId: roomId.toString(),
+                        address: bot.address,
+                        role,
+                        salt
+                    })
+                });
+
+                addLog(`Bot ${bot.address.slice(0, 6)} fully synced!`);
+            } catch (e: any) {
+                addLog(`Bot Sync Error: ${e.message}`);
+            }
+        }
+    };
     const runZKTest = async () => {
         setStatus("Generating...");
         addLog(`Starting test for Room #${roomId}, Mafia: ${mafiaCount}, Town: ${townCount}`);
@@ -214,9 +276,12 @@ export default function ZKTestPage() {
                                                 </span>
                                             </div>
                                         ))}
-                                        <div className="flex gap-2">
-                                            <Button onClick={updateBotBalances} className="flex-1 bg-blue-900/30 text-[10px] h-8">Update Balances</Button>
-                                            <Button onClick={botsJoinRoom} className="flex-1 bg-purple-900/30 text-[10px] h-8">Join Bots</Button>
+                                        <div className="flex flex-col gap-2">
+                                            <div className="flex gap-2">
+                                                <Button onClick={updateBotBalances} className="flex-1 bg-blue-900/30 text-[10px] h-8">Update Balances</Button>
+                                                <Button onClick={botsJoinRoom} className="flex-1 bg-green-900/30 text-[10px] h-8">Join Bots</Button>
+                                            </div>
+                                            <Button onClick={botsCommitRoles} className="w-full bg-purple-900/40 text-[10px] h-8 border border-purple-500/50">Bots Reveal Roles (Commit & Sync)</Button>
                                         </div>
                                     </div>
                                 )}
