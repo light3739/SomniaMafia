@@ -166,8 +166,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             Date.now() < session.expiresAt &&
             roomId !== null &&
             session.roomId === Number(roomId);
-        // Mafia Chat doesn't require session key strictly but can use it if available
-
 
         console.log(`[TX Debug] Final canUseSession for ${functionName}: ${canUseSession}`);
 
@@ -179,9 +177,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         // Determine which account to use for gas estimation
-        // If session is valid, use session account, otherwise use main wallet address
         const sessionClient = getSessionWalletClient();
-        const accountToUse = canUseSession && sessionClient ? sessionClient.account : address;
+        const accountToUse = (canUseSession && sessionClient) ? sessionClient.account : address;
 
         if (!accountToUse || !publicClient) {
             console.error("[Gas Estimation] Missing account or publicClient.");
@@ -1218,8 +1215,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const data = await response.json();
             if (data.winDetected) {
-                // ... (pre-existing win logic)
                 const { proof, publicSignals } = data;
+                const proofRoomId = publicSignals[2];
+
+                if (proofRoomId !== roomId.toString()) {
+                    console.warn(`[AutoWin] Room ID mismatch: Frontend=${roomId}, Proof=${proofRoomId}`);
+                    return;
+                }
+
+                // BLOCK POLLING IMMEDIATELY
+                setIsTxPending(true);
 
                 const formattedProof = {
                     a: [BigInt(proof.pi_a[0]), BigInt(proof.pi_a[1])],
@@ -1233,17 +1238,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");
 
-                const hash = await sendGameTransaction('endGameZK', [
-                    roomId,
-                    formattedProof.a,
-                    formattedProof.b,
-                    formattedProof.c,
-                    formattedProof.inputs
-                ]);
+                try {
+                    const hash = await sendGameTransaction('endGameZK', [
+                        roomId,
+                        formattedProof.a,
+                        formattedProof.b,
+                        formattedProof.c,
+                        formattedProof.inputs
+                    ]);
 
-                await publicClient.waitForTransactionReceipt({ hash });
-                addLog("Game ended automatically via Server ZK!", "phase");
-                await refreshPlayersList(roomId);
+                    await publicClient.waitForTransactionReceipt({ hash });
+                    addLog("Game ended automatically via Server ZK!", "phase");
+                    await refreshPlayersList(roomId);
+                } finally {
+                    setIsTxPending(false);
+                }
             } else if (data.message && data.message !== 'Game continues') {
                 // Log diagnostic messages if they aren't just "Game continues"
                 console.log(`[AutoWinCheck] ${data.message} (${data.mafiaCount}M / ${data.townCount}T)`);
