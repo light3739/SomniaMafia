@@ -1209,10 +1209,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'endGameZK',
                     args: [
                         currentRoomId,
-                        zkData.a as readonly [bigint, bigint],
-                        zkData.b as readonly [readonly [bigint, bigint], readonly [bigint, bigint]],
-                        zkData.c as readonly [bigint, bigint],
-                        zkData.inputs as readonly [bigint, bigint, bigint, bigint, bigint]
+                        zkData.a as unknown as readonly [bigint, bigint],
+                        zkData.b as unknown as readonly [readonly [bigint, bigint], readonly [bigint, bigint]],
+                        zkData.c as unknown as readonly [bigint, bigint],
+                        zkData.inputs as unknown as readonly [bigint, bigint, bigint, bigint, bigint]
                     ],
                     account: address,
                 });
@@ -1311,10 +1311,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         functionName: 'endGameZK',
                         args: [
                             roomId,
-                            formattedProof.a as readonly [bigint, bigint],
-                            formattedProof.b as readonly [readonly [bigint, bigint], readonly [bigint, bigint]],
-                            formattedProof.c as readonly [bigint, bigint],
-                            formattedProof.inputs as readonly [bigint, bigint, bigint, bigint, bigint]
+                            formattedProof.a as unknown as readonly [bigint, bigint],
+                            formattedProof.b as unknown as readonly [readonly [bigint, bigint], readonly [bigint, bigint]],
+                            formattedProof.c as unknown as readonly [bigint, bigint],
+                            formattedProof.inputs as unknown as readonly [bigint, bigint, bigint, bigint, bigint]
                         ],
                         account: address,
                     });
