@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { generateEndGameProof } from '@/services/zkProof';
 import { useWriteContract, usePublicClient } from 'wagmi';
@@ -29,6 +29,19 @@ export default function ZKTestPage() {
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
 
+    // Load bots from localStorage on mount
+    useEffect(() => {
+        const savedBots = localStorage.getItem('zk_test_bots');
+        if (savedBots) {
+            try {
+                setBots(JSON.parse(savedBots));
+                addLog("Restored bot wallets from localStorage.");
+            } catch (e) {
+                console.error("Failed to parse saved bots", e);
+            }
+        }
+    }, []);
+
     const addLog = (msg: string) => {
         setLogs(prev => [`> ${new Date().toLocaleTimeString()}: ${msg}`, ...prev]);
     };
@@ -43,7 +56,8 @@ export default function ZKTestPage() {
             newBots.push({ address: account.address, pk, balance: "0" });
         }
         setBots(newBots);
-        addLog("3 Bot wallets generated! Send ~0.001 STT to each to allow them to join.");
+        localStorage.setItem('zk_test_bots', JSON.stringify(newBots));
+        addLog("3 Bot wallets generated and saved to localStorage!");
     };
 
     const updateBotBalances = async () => {
@@ -129,7 +143,9 @@ export default function ZKTestPage() {
                 parseInt(mafiaCount),
                 parseInt(townCount)
             );
-            addLog("Proof generated successfully!");
+            const isTownWin = zkData.inputs[0] === 1n;
+            const isMafiaWin = zkData.inputs[1] === 1n;
+            addLog(`Proof generated! Outcome: ${isTownWin ? "TOWN WINS" : isMafiaWin ? "MAFIA WINS" : "UNKNOWN"}`);
 
             setStatus("Sending TX...");
             addLog("Sending endGameZK transaction...");
@@ -152,7 +168,7 @@ export default function ZKTestPage() {
 
             if (publicClient) {
                 await publicClient.waitForTransactionReceipt({ hash });
-                addLog("Transaction confirmed! Game should be ENDED.");
+                addLog(`Success! Game ended on-chain. Result: ${isTownWin ? "Town Victory" : "Mafia Victory"}`);
                 setStatus("Success!");
             }
         } catch (e: any) {
@@ -265,8 +281,8 @@ export default function ZKTestPage() {
                         <div className="bg-white/5 px-6 py-3 flex justify-between items-center border-b border-white/5">
                             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Logs</span>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full ${status === 'Success!' ? 'bg-green-500/20 text-green-400' :
-                                    status === 'Failed' ? 'bg-red-500/20 text-red-400' :
-                                        'bg-blue-500/20 text-blue-400'
+                                status === 'Failed' ? 'bg-red-500/20 text-red-400' :
+                                    'bg-blue-500/20 text-blue-400'
                                 }`}>{status}</span>
                         </div>
                         <div className="flex-1 p-6 font-mono text-[11px] overflow-y-auto space-y-1 scrollbar-hide">
