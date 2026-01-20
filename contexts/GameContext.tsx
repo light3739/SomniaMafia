@@ -1224,7 +1224,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         [BigInt(proof.pi_b[1][1]), BigInt(proof.pi_b[1][0])],
                     ],
                     c: [BigInt(proof.pi_c[0]), BigInt(proof.pi_c[1])],
-                    inputs: publicSignals.map((s: string) => BigInt(s)) as [bigint, bigint, bigint, bigint]
+                    inputs: publicSignals.map((s: string) => BigInt(s)) as [bigint, bigint, bigint, bigint, bigint]
                 };
 
                 addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");

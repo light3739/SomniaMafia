@@ -9,8 +9,8 @@ export async function POST(request: Request) {
 
         console.log(`[ZK-API] Generating proof for Room #${roomId}`);
 
-        const wasmPath = path.join(process.cwd(), 'public', 'mafia_win.wasm');
-        const zkeyPath = path.join(process.cwd(), 'public', 'mafia_win_0001.zkey');
+        const wasmPath = path.join(process.cwd(), 'public', 'mafia_outcome.wasm');
+        const zkeyPath = path.join(process.cwd(), 'public', 'mafia_outcome_0001.zkey');
 
         // Add a timeout for ZK generation
         const proofPromise = (snarkjs as any).groth16.fullProve(
