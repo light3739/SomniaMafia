@@ -746,22 +746,33 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const commitRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
 
-        // Если соль уже есть в localStorage, значит мы уже успешно коммитили
         const existingSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+        let saltToUse = salt;
+        let shouldCommitOnChain = !existingSalt;
+
         if (existingSalt) {
-            console.log("Role already committed locally, skipping transaction.");
-            return; // Просто выходим, считаем что успех
+            saltToUse = existingSalt;
+            console.log("Role already committed locally, will attempt server sync.");
         }
 
         setIsTxPending(true);
         try {
-            // Импортируем ShuffleService через getShuffleService не получится для статик методов
-            const { ShuffleService } = await import('../services/shuffleService');
-            const hash = ShuffleService.createRoleCommitHash(role, salt);
-
-            const txHash = await sendGameTransaction('commitRole', [currentRoomId, hash]);
-            addLog("Role committed!", "success");
-            await publicClient?.waitForTransactionReceipt({ hash: txHash });
+            if (shouldCommitOnChain) {
+                try {
+                    const { ShuffleService } = await import('../services/shuffleService');
+                    const roleHash = ShuffleService.createRoleCommitHash(role, saltToUse);
+                    const txHash = await sendGameTransaction('commitRole', [currentRoomId, roleHash]);
+                    addLog("Role committed!", "success");
+                    await publicClient?.waitForTransactionReceipt({ hash: txHash });
+                    localStorage.setItem(`role_salt_${currentRoomId}_${address}`, saltToUse);
+                } catch (txErr: any) {
+                    if (txErr.message?.includes("AlreadyCommitted") || txErr.message?.includes("AlreadyConfirmed")) {
+                        console.log("Role already on-chain, proceeding to server sync.");
+                    } else {
+                        throw txErr;
+                    }
+                }
+            }
 
             // SYNC WITH SERVER-SIDE DB (for automated win-checking)
             try {
@@ -772,16 +783,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         roomId: currentRoomId.toString(),
                         address,
                         role,
-                        salt
+                        salt: saltToUse
                     })
                 });
                 console.log("[Status] Secret synced with server DB.");
             } catch (err) {
-                console.warn("[Warning] Failed to sync secret with server DB. Auto-win might be delayed.", err);
+                console.warn("[Warning] Failed to sync secret with server DB.", err);
             }
-
-            // ВАЖНО: Сохраняем соль в localStorage, иначе в конце игры нас убьют!
-            localStorage.setItem(`role_salt_${currentRoomId}_${address}`, salt);
 
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
@@ -810,31 +818,52 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const commitAndConfirmRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
 
-        // Защита от дурака (если уже есть соль, значит уже отправляли)
         const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+        let saltToUse = salt;
+        let shouldCommitOnChain = !savedSalt;
+
         if (savedSalt) {
-            console.log("Role already committed locally.");
-            return;
+            saltToUse = savedSalt;
+            console.log("Role already committed locally, will check server sync.");
         }
 
         setIsTxPending(true);
         try {
-            // Импорт сервиса для хеширования
-            const { ShuffleService } = await import('../services/shuffleService');
-            const hash = ShuffleService.createRoleCommitHash(role, salt);
+            if (shouldCommitOnChain) {
+                try {
+                    const { ShuffleService } = await import('../services/shuffleService');
+                    const roleHash = ShuffleService.createRoleCommitHash(role, saltToUse);
+                    const txHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
+                    addLog("Role committed & confirmed on-chain!", "success");
+                    await publicClient?.waitForTransactionReceipt({ hash: txHash });
+                    localStorage.setItem(`role_salt_${currentRoomId}_${address}`, saltToUse);
+                } catch (txErr: any) {
+                    if (txErr.message?.includes("AlreadyCommitted") || txErr.message?.includes("AlreadyConfirmed")) {
+                        console.log("Role already on-chain, proceeding to server sync.");
+                    } else {
+                        throw txErr;
+                    }
+                }
+            }
 
-            // АТОМАРНАЯ ТРАНЗАКЦИЯ (Commit + Confirm)
-            const txHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, hash]);
+            // SYNC WITH SERVER-SIDE DB
+            try {
+                await fetch('/api/game/reveal-secret', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId: currentRoomId.toString(),
+                        address,
+                        role,
+                        salt: saltToUse
+                    })
+                });
+                console.log("[Status] Secret synced with server DB.");
+            } catch (err) {
+                console.warn("[Warning] Failed to sync secret with server DB.", err);
+            }
 
-            addLog("Role committed & confirmed on-chain!", "success");
-            await publicClient?.waitForTransactionReceipt({ hash: txHash });
-
-            // ВАЖНО: Сохраняем соль в localStorage, иначе в конце игры нас убьют!
-            localStorage.setItem(`role_salt_${currentRoomId}_${address}`, salt);
-
-            // Обновляем список, чтобы UI увидел галочку
             await refreshPlayersList(currentRoomId);
-
             setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || "Confirmation failed", "danger");
