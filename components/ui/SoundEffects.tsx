@@ -41,7 +41,7 @@ const playSharpNoise = (ctx: AudioContext, t: number, params: { duration: number
 };
 
 // Вспомогательная функция для проигрывания MP3
-const playAudioFile = async (url: string, duration: number = 5, fadeIn: number = 0.05) => {
+const playAudioFile = async (url: string, duration: number = 5, fadeIn: number = 0.05, volume: number = 1.0) => {
     // В Vite/React активы из папки public доступны по прямому пути от корня
     const ctx = initCtx();
     if (!ctx) return;
@@ -69,8 +69,8 @@ const playAudioFile = async (url: string, duration: number = 5, fadeIn: number =
 
         // Быстрый Fade In/Out
         gainNode.gain.setValueAtTime(0, t);
-        gainNode.gain.linearRampToValueAtTime(1.0, t + fadeIn); // Громкость на максимум для MP3
-        gainNode.gain.setValueAtTime(1.0, t + finalDuration - fadeIn);
+        gainNode.gain.linearRampToValueAtTime(volume, t + fadeIn);
+        gainNode.gain.setValueAtTime(volume, t + finalDuration - fadeIn);
         gainNode.gain.linearRampToValueAtTime(0, t + finalDuration);
 
         source.connect(gainNode);
@@ -174,7 +174,7 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
 };
 
 export const useSoundEffects = () => {
-    return {
+    return React.useMemo(() => ({
         playClickSound: () => playSound('button'),
         playTypeSound: () => playSound('keyboard'),
         playVoteSound: () => playSound('vote'),
@@ -184,9 +184,9 @@ export const useSoundEffects = () => {
         playProposeSound: () => playSound('propose'),
         playApproveSound: () => playSound('approve'),
         playRejectSound: () => playSound('reject'),
-        playNightTransition: () => playAudioFile('/assets/night_sound.mp3', 5, 1),
-        playMorningTransition: () => playAudioFile('/assets/morning_sound.mp3', 5, 1),
-    };
+        playNightTransition: () => playAudioFile('/assets/night_sound.mp3', 5, 1, 0.3),
+        playMorningTransition: () => playAudioFile('/assets/morning_sound.mp3', 5, 1, 0.3),
+    }), []);
 };
 
 export const SoundEffects: React.FC = () => {

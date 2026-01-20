@@ -8,6 +8,17 @@ interface NightAnnouncementProps {
 }
 
 export const NightAnnouncement = React.memo(({ show, onComplete }: NightAnnouncementProps) => {
+    // Стабилизируем случайные значения для звезд, чтобы они не дергались при перерендере
+    const stars = React.useMemo(() => {
+        return [...Array(20)].map((_, i) => ({
+            id: i,
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+            duration: 1.5 + Math.random(),
+            delay: Math.random() * 2
+        }));
+    }, []);
+
     useEffect(() => {
         if (show) {
             const timer = setTimeout(() => {
@@ -75,22 +86,22 @@ export const NightAnnouncement = React.memo(({ show, onComplete }: NightAnnounce
 
                         {/* Stars effect */}
                         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                            {[...Array(20)].map((_, i) => (
+                            {stars.map((star) => (
                                 <motion.div
-                                    key={i}
+                                    key={star.id}
                                     className="absolute w-1 h-1 bg-white rounded-full"
                                     style={{
-                                        left: `${Math.random() * 100}%`,
-                                        top: `${Math.random() * 100}%`,
+                                        left: star.left,
+                                        top: star.top,
                                     }}
                                     animate={{
                                         opacity: [0, 1, 0],
                                         scale: [0.5, 1, 0.5]
                                     }}
                                     transition={{
-                                        duration: 1.5 + Math.random(),
+                                        duration: star.duration,
                                         repeat: Infinity,
-                                        delay: Math.random() * 2
+                                        delay: star.delay
                                     }}
                                 />
                             ))}

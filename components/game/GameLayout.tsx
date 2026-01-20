@@ -62,27 +62,52 @@ export const GameLayout: React.FC = () => {
     // Voting announcement state
     const [showVotingAnnouncement, setShowVotingAnnouncement] = useState(false);
     const [showMorningAnnouncement, setShowMorningAnnouncement] = useState(false);
+    const [lastMorningDay, setLastMorningDay] = useState<number | null>(null);
     const [lastVotingDay, setLastVotingDay] = useState<number | null>(null);
 
     // Night announcement state
     const [showNightAnnouncement, setShowNightAnnouncement] = useState(false);
     const [lastNightDay, setLastNightDay] = useState<number | null>(null);
+    const [lastPhase, setLastPhase] = useState<GamePhase | null>(null);
 
-    // Trigger Voting/Morning Announcement (Morning Transition)
+    // Trigger Morning Announcement (Day start)
     useEffect(() => {
-        if ((gameState.phase === GamePhase.VOTING || gameState.phase === GamePhase.DAY) && gameState.dayCount !== lastVotingDay) {
-            // Only play if we are moving to a new day (not initial lobby)
-            if (gameState.dayCount > 0) {
-                playMorningTransition();
-                setShowMorningAnnouncement(true);
-            }
-            // Delay voting announcement if it's the voting phase so morning shows first
-            if (gameState.phase === GamePhase.VOTING) {
-                setTimeout(() => setShowVotingAnnouncement(true), 2000);
-            }
-            setLastVotingDay(gameState.dayCount);
+        const isDayStart = gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING;
+        if (isDayStart && gameState.dayCount > 0 && gameState.dayCount !== lastMorningDay) {
+            playMorningTransition();
+            setShowMorningAnnouncement(true);
+            setLastMorningDay(gameState.dayCount);
         }
-    }, [gameState.phase, gameState.dayCount, lastVotingDay, playMorningTransition]);
+    }, [gameState.phase, gameState.dayCount, lastMorningDay, playMorningTransition]);
+
+    // Trigger Voting Announcement (Voting start)
+    useEffect(() => {
+        // Показываем анимацию если:
+        // 1. Мы перешли в фазу VOTING
+        // 2. И мы еще не показывали её для этого дня ИЛИ фаза только что изменилась с DAY на VOTING
+        const isVoting = gameState.phase === GamePhase.VOTING;
+        const phaseChangedToVoting = isVoting && lastPhase !== GamePhase.VOTING;
+        const newDayVoting = isVoting && gameState.dayCount !== lastVotingDay;
+
+        if (phaseChangedToVoting || newDayVoting) {
+            // Если мы переходим из DAY в VOTING, показываем сразу. 
+            // Если из NIGHT в VOTING (через рассвет), ждем завершения рассвета.
+            const isTransitionFromDay = lastPhase === GamePhase.DAY;
+            const delay = isTransitionFromDay ? 0 : (gameState.dayCount === lastMorningDay ? 2000 : 0);
+
+            const timer = setTimeout(() => {
+                setShowVotingAnnouncement(true);
+            }, delay);
+
+            setLastVotingDay(gameState.dayCount);
+            setLastPhase(gameState.phase);
+            return () => clearTimeout(timer);
+        }
+
+        if (gameState.phase !== lastPhase) {
+            setLastPhase(gameState.phase);
+        }
+    }, [gameState.phase, gameState.dayCount, lastVotingDay, lastMorningDay, lastPhase]);
 
     // Trigger Night Announcement (Night Transition)
     useEffect(() => {
@@ -186,22 +211,21 @@ export const GameLayout: React.FC = () => {
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#000_100%)]" />
             </div>
 
-            {/* Voting Announcement Overlay */}
-            <VotingAnnouncement
-                show={showVotingAnnouncement}
-                onComplete={() => setShowVotingAnnouncement(false)}
-            />
-
-            {/* Night Announcement Overlay */}
+            {/* Overlays in order of priority (lower in code = higher z-index) */}
+            {/* 1. Environment Transitions */}
             <NightAnnouncement
                 show={showNightAnnouncement}
                 onComplete={() => setShowNightAnnouncement(false)}
             />
-
-            {/* Morning Announcement Overlay */}
             <MorningAnnouncement
                 show={showMorningAnnouncement}
                 onComplete={() => setShowMorningAnnouncement(false)}
+            />
+
+            {/* 2. Critical Game Events (Voting is more important than Morning bg) */}
+            <VotingAnnouncement
+                show={showVotingAnnouncement}
+                onComplete={() => setShowVotingAnnouncement(false)}
             />
 
             {/* 2. SCALABLE GAME CONTAINER */}
