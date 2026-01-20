@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 
         let mafiaCount = 0;
         let townCount = 0;
-        let missingSecrets = 0;
+        const missingAddresses: string[] = [];
 
         for (const player of players) {
             const addr = player.wallet.toLowerCase();
@@ -76,9 +76,14 @@ export async function POST(request: Request) {
                         townCount++;
                     }
                 } else {
-                    missingSecrets++;
+                    missingAddresses.push(addr);
                 }
             }
+        }
+
+        const missingSecrets = missingAddresses.length;
+        if (missingSecrets > 0) {
+            console.log(`[API/CheckWin] Room #${roomId}: MISSING SECRETS for: ${missingAddresses.join(', ')}`);
         }
 
         console.log(`[API/CheckWin] Room #${roomId}: Mafia=${mafiaCount}, Town=${townCount}, Missing Secrets=${missingSecrets}`);
