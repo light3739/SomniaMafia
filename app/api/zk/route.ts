@@ -7,7 +7,7 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { roomId, mafiaCount, townCount } = body;
 
-        console.log(`[API/ZK] Generating proof for Room #${roomId}: Mafia ${mafiaCount}, Town ${townCount}`);
+        console.log(`[ZK-API] Generating proof for Room #${roomId}`);
 
         const wasmPath = path.join(process.cwd(), 'public', 'mafia_win.wasm');
         const zkeyPath = path.join(process.cwd(), 'public', 'mafia_win_0001.zkey');
@@ -25,14 +25,13 @@ export async function POST(request: Request) {
 
         const { proof, publicSignals } = await Promise.race([proofPromise, timeoutPromise]) as any;
 
-        console.log(`[API/ZK] ZK Proof generated successfully for Room #${roomId}`);
+        console.log(`[ZK-API] Success for Room #${roomId}`);
 
         return NextResponse.json({ proof, publicSignals });
     } catch (error: any) {
-        console.error('[API/ZK] Error:', error);
+        console.error(`[ZK-API] Fail:`, error.message);
         return NextResponse.json({
-            error: error.message || 'Unknown ZK error',
-            details: error.toString()
+            error: error.message || 'Unknown ZK error'
         }, { status: 500 });
     }
 }
