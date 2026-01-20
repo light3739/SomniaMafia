@@ -1183,7 +1183,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 zkData.inputs
             ]);
 
-            addLog("Game ended via Server ZK!", "success");
+            const isTownWin = zkData.inputs[0] === 1n;
+            const isMafiaWin = zkData.inputs[1] === 1n;
+            addLog(`Game ended via Server ZK! Winner: ${isTownWin ? "TOWN" : isMafiaWin ? "MAFIA" : "Unknown"}`, "success");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
