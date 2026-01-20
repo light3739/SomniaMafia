@@ -81,23 +81,29 @@ export const GameOver: React.FC = () => {
             const roles = new Map<string, Role>();
 
             // Расшифровываем все карты
+            const hasMyKeys = shuffleService.hasKeys();
+
             for (let i = 0; i < deck.length && i < gameState.players.length; i++) {
                 try {
                     let encryptedCard = deck[i];
 
-                    // Расшифровываем своим ключом
-                    encryptedCard = shuffleService.decrypt(encryptedCard);
+                    if (hasMyKeys) {
+                        // Расшифровываем своим ключом
+                        encryptedCard = shuffleService.decrypt(encryptedCard);
 
-                    // Расшифровываем ключами других
-                    for (const [_, key] of keys) {
-                        const decryptionKey = hexToString(key);
-                        encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
+                        // Расшифровываем ключами других
+                        for (const [_, key] of keys) {
+                            const decryptionKey = hexToString(key);
+                            encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
+                        }
+
+                        const role = ShuffleService.roleNumberToRole(encryptedCard);
+                        roles.set(gameState.players[i].address.toLowerCase(), role);
                     }
-
-                    const role = ShuffleService.roleNumberToRole(encryptedCard);
-                    roles.set(gameState.players[i].address.toLowerCase(), role);
-                } catch (e) {
-                    console.warn(`Failed to decrypt card ${i}:`, e);
+                } catch (e: any) {
+                    if (e.message !== "Keys not generated") {
+                        console.warn(`Failed to decrypt card ${i}:`, e);
+                    }
                 }
             }
 

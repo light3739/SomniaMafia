@@ -1,7 +1,23 @@
+import { Playfair_Display, Inter, Montserrat } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 import { BackgroundMusic } from "@/components/ui/BackgroundMusic";
 import { SoundEffects } from "@/components/ui/SoundEffects";
+
+const playfair = Playfair_Display({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-playfair",
+});
+
+const inter = Inter({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-inter",
+});
+
+const montserrat = Montserrat({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-montserrat",
+});
 
 export const metadata = {
   title: "Somnia Mafia",
@@ -15,7 +31,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="antialiased bg-black text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden">
+      <body className={`${playfair.variable} ${inter.variable} ${montserrat.variable} antialiased bg-black text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden`}>
         <BackgroundMusic />
         <SoundEffects />
         <Providers>{children}</Providers>
