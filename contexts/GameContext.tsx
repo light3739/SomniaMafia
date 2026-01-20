@@ -1216,9 +1216,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const data = await response.json();
             if (data.winDetected) {
+                // ... (pre-existing win logic)
                 const { proof, publicSignals } = data;
 
-                // Transformation for Solidity Groth16 Verifier
                 const formattedProof = {
                     a: [BigInt(proof.pi_a[0]), BigInt(proof.pi_a[1])],
                     b: [
@@ -1242,6 +1242,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 await publicClient.waitForTransactionReceipt({ hash });
                 addLog("Game ended automatically via Server ZK!", "phase");
                 await refreshPlayersList(roomId);
+            } else if (data.message && data.message !== 'Game continues') {
+                // Log diagnostic messages if they aren't just "Game continues"
+                console.log(`[AutoWinCheck] ${data.message} (${data.mafiaCount}M / ${data.townCount}T)`);
             }
         } catch (e) {
             console.warn("[AutoWin] Silent check failed:", e);
