@@ -141,7 +141,9 @@ export async function POST(request: Request) {
             mafiaCount,
             townCount,
             missingSecrets,
-            message: missingSecrets > 0 ? 'Waiting for some players to reveal secrets to server' : 'Game continues'
+            message: missingSecrets > 0
+                ? `Waiting for ${missingSecrets} secrets to sync (Alive: M:${mafiaCount} T:${townCount})`
+                : `Game continues (Alive: M:${mafiaCount} T:${townCount})`
         });
 
     } catch (error: any) {
