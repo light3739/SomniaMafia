@@ -201,8 +201,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
 
             // 2. Добавляем буфер безопасности +50% (x1.5)
-            // Для сложных операций типа Shuffle/Reveal это критично
             calculatedGas = (gasEstimate * 150n) / 100n;
+
+            // 3. Safety cap - if gas is crazy (revert symptom), don't scare MetaMask
+            if (calculatedGas > 10_000_000n) {
+                console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at 3M to avoid balance error (likely contract revert).`);
+                calculatedGas = 3_000_000n;
+            }
 
             console.log(`[Gas] Estimated for ${functionName}: ${gasEstimate}, With Buffer: ${calculatedGas}`);
         } catch (e) {
@@ -1155,7 +1160,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // V4: ZK End Game (Client generates proof of win)
     const endGameZK = useCallback(async () => {
-        if (!currentRoomId) return;
+        if (!currentRoomId || !publicClient) return;
         setIsTxPending(true);
         addLog("Generating ZK Proof of Victory...", "info");
 
@@ -1170,10 +1175,58 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             });
 
+            console.log("[ZK Debug] === endGameZK START ===");
+            console.log("[ZK Debug] MAFIA_CONTRACT_ADDRESS:", MAFIA_CONTRACT_ADDRESS);
+            console.log("[ZK Debug] Room ID:", currentRoomId.toString());
+            console.log("[ZK Debug] Counts - Mafia:", mCount, "Town:", tCount);
+
             // 2. Generate Proof via Service (calls our API)
             const zkData = await generateEndGameProof(currentRoomId, mCount, tCount);
 
-            // 3. Send Transaction
+            // 3. FORMAT ARGS FOR LOGGING (convert BigInts to strings for console)
+            const formattedArgs = {
+                roomId: currentRoomId.toString(),
+                a: zkData.a.map(x => x.toString()),
+                b: zkData.b.map(row => row.map(x => x.toString())),
+                c: zkData.c.map(x => x.toString()),
+                inputs: zkData.inputs.map(x => x.toString()),
+                inputLabels: {
+                    townWin: zkData.inputs[0].toString(),
+                    mafiaWin: zkData.inputs[1].toString(),
+                    proofRoomId: zkData.inputs[2].toString(),
+                    mafiaCount: zkData.inputs[3].toString(),
+                    townCount: zkData.inputs[4].toString()
+                }
+            };
+            console.log("[ZK Debug] Formatted Args:", JSON.stringify(formattedArgs, null, 2));
+
+            // 4. SIMULATE CONTRACT FIRST (get exact revert reason)
+            console.log("[ZK Debug] Running simulateContract to check for revert...");
+            try {
+                const simulationResult = await publicClient.simulateContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'endGameZK',
+                    args: [
+                        currentRoomId,
+                        zkData.a,
+                        zkData.b,
+                        zkData.c,
+                        zkData.inputs
+                    ],
+                    account: address,
+                });
+                console.log("[ZK Debug] Simulation SUCCESS:", simulationResult);
+            } catch (simError: any) {
+                console.error("[ZK Debug] Simulation FAILED:", simError);
+                console.error("[ZK Debug] Revert Reason:", simError.shortMessage || simError.message);
+                if (simError.cause) {
+                    console.error("[ZK Debug] Cause:", simError.cause);
+                }
+                // Continue to attempt TX anyway for additional error info
+            }
+
+            // 5. Send Transaction
             const hash = await sendGameTransaction('endGameZK', [
                 currentRoomId,
                 zkData.a,
@@ -1185,15 +1238,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const isTownWin = zkData.inputs[0] === 1n;
             const isMafiaWin = zkData.inputs[1] === 1n;
             addLog(`Game ended via Server ZK! Winner: ${isTownWin ? "TOWN" : isMafiaWin ? "MAFIA" : "Unknown"}`, "success");
-            await publicClient?.waitForTransactionReceipt({ hash });
+            await publicClient.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
         } catch (e: any) {
             console.error("[ZK] Failed:", e);
-            addLog(`Error: ${e.message}`, "danger");
+            console.error("[ZK Debug] Full error object:", JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
+            addLog(`Error: ${e.shortMessage || e.message}`, "danger");
             setIsTxPending(false);
         }
-    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList, address]);
 
     /**
      * TRIGGER AUTO WIN: A silent background check that pings the server
@@ -1236,6 +1290,34 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     inputs: publicSignals.map((s: string) => BigInt(s)) as [bigint, bigint, bigint, bigint, bigint]
                 };
 
+                // DEBUG LOGGING
+                console.log("[AutoWin ZK Debug] === endGameZK via AutoWin ===");
+                console.log("[AutoWin ZK Debug] MAFIA_CONTRACT_ADDRESS:", MAFIA_CONTRACT_ADDRESS);
+                console.log("[AutoWin ZK Debug] Room ID:", roomId.toString());
+                console.log("[AutoWin ZK Debug] Inputs:", {
+                    townWin: formattedProof.inputs[0].toString(),
+                    mafiaWin: formattedProof.inputs[1].toString(),
+                    proofRoomId: formattedProof.inputs[2].toString(),
+                    mafiaCount: formattedProof.inputs[3].toString(),
+                    townCount: formattedProof.inputs[4].toString()
+                });
+
+                // SIMULATE CONTRACT FIRST
+                console.log("[AutoWin ZK Debug] Running simulateContract...");
+                try {
+                    const simResult = await publicClient.simulateContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'endGameZK',
+                        args: [roomId, formattedProof.a, formattedProof.b, formattedProof.c, formattedProof.inputs],
+                        account: address,
+                    });
+                    console.log("[AutoWin ZK Debug] Simulation SUCCESS:", simResult);
+                } catch (simErr: any) {
+                    console.error("[AutoWin ZK Debug] Simulation FAILED:", simErr.shortMessage || simErr.message);
+                    if (simErr.cause) console.error("[AutoWin ZK Debug] Cause:", simErr.cause);
+                }
+
                 addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");
 
                 try {
@@ -1260,7 +1342,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.warn("[AutoWin] Silent check failed:", e);
         }
-    }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, isTxPending]);
+    }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, isTxPending, address]);
 
     // === SMART POLLING ===
     useEffect(() => {
