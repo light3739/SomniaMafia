@@ -29,7 +29,7 @@ export const generateEndGameProof = async (
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to generate ZK proof on server');
+            throw new Error(errorData.error || 'Proof generation failed');
         }
 
         const { proof, publicSignals } = await response.json();

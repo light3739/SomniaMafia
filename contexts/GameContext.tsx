@@ -59,6 +59,7 @@ interface GameContextType {
     endNightOnChain: () => Promise<void>;
     endGameAutomaticallyOnChain: () => Promise<void>;
     endGameZK: () => Promise<void>;
+    setCurrentRoomId: (id: bigint | null) => void;
 
     // Utility
     kickStalledPlayerOnChain: () => Promise<void>;
@@ -1189,7 +1190,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
         } catch (e: any) {
             console.error("[ZK] Failed:", e);
-            addLog("ZK Validation failed on server. Try manual claim?", "danger");
+            addLog(`Error: ${e.message}`, "danger");
             setIsTxPending(false);
         }
     }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
@@ -1758,7 +1759,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         kickStalledPlayerOnChain, refreshPlayersList,
         addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         selectedTarget, setSelectedTarget,
-        isTestMode, setIsTestMode
+        isTestMode, setIsTestMode,
+        setCurrentRoomId
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, currentRoomId,
         createLobbyOnChain, joinLobbyOnChain, startGameOnChain,
@@ -1771,7 +1773,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         kickStalledPlayerOnChain, refreshPlayersList, addLog,
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         isTestMode, setIsTestMode,
-        selectedTarget
+        selectedTarget,
+        setCurrentRoomId
     ]);
 
     return (

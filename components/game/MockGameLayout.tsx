@@ -9,13 +9,19 @@ import { GamePhase, Role } from '../../types';
 import { Button } from '../ui/Button';
 
 export const MockGameLayout: React.FC = () => {
-    const { gameState, setGameState, setIsTestMode, endGameZK } = useGameContext();
+    const { gameState, setGameState, setIsTestMode, endGameZK, setCurrentRoomId } = useGameContext();
     const hasInitialized = useRef(false);
 
     useEffect(() => {
         setIsTestMode(true);
-        return () => setIsTestMode(false);
-    }, [setIsTestMode]);
+        // Force a mock roomId if none is set
+        setCurrentRoomId(BigInt(1));
+
+        return () => {
+            setIsTestMode(false);
+            setCurrentRoomId(null);
+        };
+    }, [setIsTestMode, setCurrentRoomId]);
 
     // Загружаем моковые данные ТОЛЬКО один раз при первом монтировании
     useEffect(() => {
@@ -34,11 +40,19 @@ export const MockGameLayout: React.FC = () => {
         }));
     }, [setGameState]);
 
-    // Функция для смены роли текущего игрока (первого в списке)
-    const setMyRole = (role: Role) => {
+    // Функция для смены роли игрока
+    const setRole = (playerIndex: number, role: Role) => {
         setGameState(prev => ({
             ...prev,
-            players: prev.players.map((p, i) => i === 0 ? { ...p, role } : p)
+            players: prev.players.map((p, i) => i === playerIndex ? { ...p, role } : p)
+        }));
+    };
+
+    // Функция для переключения статуса жизни
+    const toggleLife = (playerIndex: number) => {
+        setGameState(prev => ({
+            ...prev,
+            players: prev.players.map((p, i) => i === playerIndex ? { ...p, isAlive: !p.isAlive } : p)
         }));
     };
 
@@ -103,38 +117,31 @@ export const MockGameLayout: React.FC = () => {
                 </div>
             </div>
 
-            {/* Role Controls */}
+            {/* Role & Life Controls */}
             <div>
-                <p className="text-[10px] text-white/30 uppercase mb-1">Your Role</p>
-                <div className="flex flex-wrap gap-1">
-                    <Button
-                        onClick={() => setMyRole(Role.MAFIA)}
-                        className={`text-xs px-2 py-1 ${gameState.players[0]?.role === Role.MAFIA ? 'ring-2 ring-red-500' : ''}`}
-                        variant="secondary"
-                    >
-                        🔪 Mafia
-                    </Button>
-                    <Button
-                        onClick={() => setMyRole(Role.DOCTOR)}
-                        className={`text-xs px-2 py-1 ${gameState.players[0]?.role === Role.DOCTOR ? 'ring-2 ring-green-500' : ''}`}
-                        variant="secondary"
-                    >
-                        🩺 Doctor
-                    </Button>
-                    <Button
-                        onClick={() => setMyRole(Role.DETECTIVE)}
-                        className={`text-xs px-2 py-1 ${gameState.players[0]?.role === Role.DETECTIVE ? 'ring-2 ring-blue-500' : ''}`}
-                        variant="secondary"
-                    >
-                        🔍 Detective
-                    </Button>
-                    <Button
-                        onClick={() => setMyRole(Role.CIVILIAN)}
-                        className={`text-xs px-2 py-1 ${gameState.players[0]?.role === Role.CIVILIAN ? 'ring-2 ring-gray-500' : ''}`}
-                        variant="secondary"
-                    >
-                        👤 Civilian
-                    </Button>
+                <p className="text-[10px] text-white/30 uppercase mb-1">Players Status</p>
+                <div className="flex flex-col gap-2">
+                    {gameState.players.map((p, i) => (
+                        <div key={p.address} className="flex items-center justify-between gap-2 border-b border-white/5 pb-1">
+                            <span className="text-[10px] text-white/50 truncate w-20">{p.name}</span>
+                            <div className="flex gap-1">
+                                <Button
+                                    onClick={() => toggleLife(i)}
+                                    className={`text-[8px] px-1 py-0.5 ${!p.isAlive ? 'bg-red-900 text-white' : 'bg-green-900/30'}`}
+                                    variant="secondary"
+                                >
+                                    {p.isAlive ? 'LIVE' : 'DEAD'}
+                                </Button>
+                                <select
+                                    className="bg-black text-[8px] border border-white/10 rounded"
+                                    value={p.role}
+                                    onChange={(e) => setRole(i, e.target.value as Role)}
+                                >
+                                    {Object.values(Role).map(r => <option key={r} value={r}>{r}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
