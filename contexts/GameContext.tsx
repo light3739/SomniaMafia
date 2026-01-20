@@ -1209,10 +1209,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'endGameZK',
                     args: [
                         currentRoomId,
-                        zkData.a,
-                        zkData.b,
-                        zkData.c,
-                        zkData.inputs
+                        zkData.a as readonly [bigint, bigint],
+                        zkData.b as readonly [readonly [bigint, bigint], readonly [bigint, bigint]],
+                        zkData.c as readonly [bigint, bigint],
+                        zkData.inputs as readonly [bigint, bigint, bigint, bigint, bigint]
                     ],
                     account: address,
                 });
@@ -1309,7 +1309,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI,
                         functionName: 'endGameZK',
-                        args: [roomId, formattedProof.a, formattedProof.b, formattedProof.c, formattedProof.inputs],
+                        args: [
+                            roomId,
+                            formattedProof.a as readonly [bigint, bigint],
+                            formattedProof.b as readonly [readonly [bigint, bigint], readonly [bigint, bigint]],
+                            formattedProof.c as readonly [bigint, bigint],
+                            formattedProof.inputs as readonly [bigint, bigint, bigint, bigint, bigint]
+                        ],
                         account: address,
                     });
                     console.log("[AutoWin ZK Debug] Simulation SUCCESS:", simResult);
