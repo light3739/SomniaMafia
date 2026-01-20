@@ -22,7 +22,7 @@ export const BackButton: React.FC<BackButtonProps> = ({ to, label = "Back", clas
     return (
         <button
             onClick={handleClick}
-            className={`text-white/60 hover:text-white flex items-center gap-2 transition-colors ${className}`}
+            className={`text-white/60 hover:text-white flex items-center gap-2 transition-colors cursor-pointer ${className}`}
         >
             <ArrowLeft className="w-5 h-5" />
             <span>{label}</span>

@@ -358,7 +358,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const refreshPlayersList = useCallback(async (roomId: bigint) => {
-        if (!publicClient) return;
+        if (isTestMode || !publicClient) return;
         try {
             const data = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
@@ -476,21 +476,20 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Initial load
     useEffect(() => {
-        if (currentRoomId && publicClient) {
-            refreshPlayersList(currentRoomId);
-        }
-    }, [currentRoomId, publicClient, refreshPlayersList]);
+        if (isTestMode || !currentRoomId || !publicClient) return;
+        refreshPlayersList(currentRoomId);
+    }, [currentRoomId, publicClient, refreshPlayersList, isTestMode]);
 
     // Polling для регулярного обновления состояния (backup для events)
     useEffect(() => {
-        if (!currentRoomId || !publicClient) return;
+        if (isTestMode || !currentRoomId || !publicClient) return;
 
         const interval = setInterval(() => {
             refreshPlayersList(currentRoomId);
         }, 5000); // Каждые 5 секунд
 
         return () => clearInterval(interval);
-    }, [currentRoomId, publicClient, refreshPlayersList]);
+    }, [currentRoomId, publicClient, refreshPlayersList, isTestMode]);
 
 
 
@@ -501,7 +500,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     useEffect(() => {
         // Only check during gameplay phases
-        if (gameState.phase < GamePhase.DAY || gameState.phase === GamePhase.ENDED) return;
+        if (isTestMode || gameState.phase < GamePhase.DAY || gameState.phase === GamePhase.ENDED) return;
 
         // Check if we have all roles known (can determine winner)
         const alivePlayers = gameState.players.filter(p => p.isAlive);

@@ -27,6 +27,10 @@ export class ShuffleService {
         return this.keys;
     }
 
+    public hasKeys(): boolean {
+        return this.keys !== null;
+    }
+
     // Генерация числа взаимно простого с n
     private generateCoprime(n: bigint): bigint {
         let e: bigint;

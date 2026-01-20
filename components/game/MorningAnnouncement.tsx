@@ -7,7 +7,18 @@ interface MorningAnnouncementProps {
     onComplete: () => void;
 }
 
-export const MorningAnnouncement: React.FC<MorningAnnouncementProps> = ({ show, onComplete }) => {
+export const MorningAnnouncement = React.memo(({ show, onComplete }: MorningAnnouncementProps) => {
+    // Стабилизируем случайные значения для частиц, чтобы они не дергались при перерендере
+    const rays = React.useMemo(() => {
+        return [...Array(15)].map((_, i) => ({
+            id: i,
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+            duration: 2 + Math.random() * 2,
+            delay: Math.random() * 3
+        }));
+    }, []);
+
     useEffect(() => {
         if (show) {
             const timer = setTimeout(() => {
@@ -79,13 +90,13 @@ export const MorningAnnouncement: React.FC<MorningAnnouncementProps> = ({ show, 
 
                         {/* Rays/Glitter effect */}
                         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                            {[...Array(15)].map((_, i) => (
+                            {rays.map((ray) => (
                                 <motion.div
-                                    key={i}
+                                    key={ray.id}
                                     className="absolute w-2 h-2 bg-yellow-400 blur-[1px] rounded-full"
                                     style={{
-                                        left: `${Math.random() * 100}%`,
-                                        top: `${Math.random() * 100}%`,
+                                        left: ray.left,
+                                        top: ray.top,
                                     }}
                                     animate={{
                                         opacity: [0, 0.6, 0],
@@ -93,9 +104,9 @@ export const MorningAnnouncement: React.FC<MorningAnnouncementProps> = ({ show, 
                                         y: [0, -40, -80]
                                     }}
                                     transition={{
-                                        duration: 2 + Math.random() * 2,
+                                        duration: ray.duration,
                                         repeat: Infinity,
-                                        delay: Math.random() * 3
+                                        delay: ray.delay
                                     }}
                                 />
                             ))}
@@ -105,4 +116,4 @@ export const MorningAnnouncement: React.FC<MorningAnnouncementProps> = ({ show, 
             )}
         </AnimatePresence>
     );
-};
+});

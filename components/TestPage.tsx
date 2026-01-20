@@ -186,7 +186,13 @@ type ComponentEntry = {
 };
 
 export const TestPage: React.FC = () => {
+    const { setIsTestMode } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
+
+    useEffect(() => {
+        setIsTestMode(true);
+        return () => setIsTestMode(false);
+    }, [setIsTestMode]);
 
     const components: ComponentEntry[] = [
         // UI

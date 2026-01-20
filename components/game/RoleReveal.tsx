@@ -243,6 +243,12 @@ export const RoleReveal: React.FC = () => {
             }
 
             const shuffleService = getShuffleService();
+            if (!shuffleService.hasKeys()) {
+                console.log("[RoleReveal] Keys not generated, skipping decryption");
+                setIsProcessing(false);
+                return;
+            }
+
             let myEncryptedCard = revealState.deck[revealState.myCardIndex];
 
             // Расшифровываем своим ключом
