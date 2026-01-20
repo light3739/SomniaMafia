@@ -116,13 +116,17 @@ export const ShufflePhase: React.FC = () => {
 
             if (currentIndex > 0 || revealedCount > 0) {
                 try {
+                    // Get current block number and limit range to 1000 blocks (Somnia RPC limit)
+                    const currentBlock = await publicClient.getBlockNumber();
+                    const fromBlock = currentBlock > 1000n ? currentBlock - 1000n : 0n;
+
                     // Ищем все события DeckRevealed для этой комнаты
                     const logs = await publicClient.getContractEvents({
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI,
                         eventName: 'DeckRevealed',
                         args: { roomId: currentRoomId } as any,
-                        fromBlock: 'earliest'
+                        fromBlock: fromBlock
                     });
 
                     // Если события есть, берем колоду из самого последнего
@@ -133,7 +137,8 @@ export const ShufflePhase: React.FC = () => {
                         console.log(`[Event Sync] Loaded deck with ${deck.length} cards from logs`);
                     }
                 } catch (err) {
-                    console.error("Failed to read events:", err);
+                    // Silently fall through to getDeck fallback
+                    console.warn("[Event Sync] Events not available, using direct read");
                 }
             }
 
