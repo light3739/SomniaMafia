@@ -2,7 +2,7 @@ export interface ZKProof {
     a: [bigint, bigint];
     b: [[bigint, bigint], [bigint, bigint]];
     c: [bigint, bigint];
-    inputs: [bigint, bigint, bigint, bigint]; // [ok, roomId, mafiaCount, townCount]
+    inputs: [bigint, bigint, bigint, bigint, bigint]; // [townWin, mafiaWin, roomId, mafiaCount, townCount]
 }
 
 /**
@@ -45,7 +45,7 @@ export const generateEndGameProof = async (
                 [BigInt(proof.pi_b[1][1]), BigInt(proof.pi_b[1][0])],
             ],
             c: [BigInt(proof.pi_c[0]), BigInt(proof.pi_c[1])],
-            inputs: publicSignals.map((s: string) => BigInt(s)) as [bigint, bigint, bigint, bigint]
+            inputs: publicSignals.map((s: string) => BigInt(s)) as [bigint, bigint, bigint, bigint, bigint]
         };
     } catch (e) {
         console.error("[ZK] Proof generation failed:", e);

@@ -1,6 +1,7 @@
 import { MafiaABI as MafiaArtifact } from './MafiaPortal';
 
-export const MAFIA_CONTRACT_ADDRESS = "0x0ef10029b612cb48d35561bba67d2b9c0fedf10c" as `0x${string}`;
+export const MAFIA_CONTRACT_ADDRESS = "0x45f2018503668c8b91746912d65b32f50d3addae" as `0x${string}`;
+export const VERIFIER_CONTRACT_ADDRESS = "0x15223267886bf176a3a1ed38aa71c31c6995dce9" as `0x${string}`;
 export const MAFIA_ABI = MafiaArtifact.abi;
 
 // Somnia testnet chain config - centralized here to avoid duplication
