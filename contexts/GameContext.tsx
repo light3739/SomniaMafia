@@ -1471,6 +1471,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const reason = logs[0].args.reason;
                 addLog(`${victim.slice(0, 6)}... ${reason}!`, "danger");
                 refreshPlayersList(roomId);
+                // Trigger win check in case the Mafia was eliminated
+                triggerAutoWinCheck();
             }
         }
     });
@@ -1487,6 +1489,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const kicked = logs[0].args.player;
                 addLog(`${kicked.slice(0, 6)}... was kicked (AFK)!`, "danger");
                 refreshPlayersList(roomId);
+                // Trigger win check in case the kicked player was Mafia
+                triggerAutoWinCheck();
             }
         }
     });
