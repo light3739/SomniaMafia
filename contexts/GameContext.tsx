@@ -498,35 +498,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // This triggers tryEndGame when a win condition is locally detected
     const tryEndGameRef = useRef<(() => Promise<void>) | null>(null);
 
-    useEffect(() => {
-        // Only check during gameplay phases
-        if (isTestMode || gameState.phase < GamePhase.DAY || gameState.phase === GamePhase.ENDED) return;
-
-        // Check if we have all roles known (can determine winner)
-        const alivePlayers = gameState.players.filter(p => p.isAlive);
-        const hasUnknownRoles = alivePlayers.some(p => p.role === Role.UNKNOWN);
-        if (hasUnknownRoles) return;
-
-        let aliveMafia = 0;
-        let aliveTown = 0;
-
-        for (const player of alivePlayers) {
-            if (player.role === Role.MAFIA) aliveMafia++;
-            else aliveTown++;
-        }
-
-        // Check win conditions
-        const mafiaWins = aliveMafia > 0 && aliveMafia >= aliveTown;
-        const townWins = aliveMafia === 0 && aliveTown > 0;
-
-        if (mafiaWins || townWins) {
-            console.log("[Auto Win Check] Win condition detected!", { mafiaWins, townWins });
-            // Use ref to avoid stale closure - tryEndGame will be set later
-            if (tryEndGameRef.current) {
-                tryEndGameRef.current();
-            }
-        }
-    }, [gameState.players, gameState.phase]);
+    // Local win check is disabled because Town players don't know all roles.
+    // We rely on Server-Side "Smart Polling" triggerAutoWinCheck instead.
 
     // --- LOBBY ACTIONS (V3: createRoom only, then joinRoom with session) ---
 
@@ -1229,9 +1202,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
      * TRIGGER AUTO WIN: A silent background check that pings the server
      * to see if a win condition has been met (since server knows all roles).
      */
-    const triggerAutoWinCheck = async () => {
+    const triggerAutoWinCheck = useCallback(async () => {
         const roomId = currentRoomIdRef.current;
-        if (!roomId || !publicClient) return;
+        if (!roomId || !publicClient || isTxPending) return;
 
         try {
             console.log(`[AutoWin] Checking for victory in Room #${roomId}...`);
@@ -1278,8 +1251,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.warn("[AutoWin] Silent check failed:", e);
         }
-    };
+    }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, isTxPending]);
 
+    // === SMART POLLING ===
+    useEffect(() => {
+        if (isTestMode || !currentRoomId || !publicClient) return;
+        if (gameState.phase < GamePhase.DAY || gameState.phase === GamePhase.ENDED) return;
+
+        const interval = setInterval(() => {
+            // Check if a transaction is already in progress to avoid double popups
+            if (isTxPending) return;
+
+            triggerAutoWinCheck().catch(err =>
+                console.warn("[AutoWin] Check failed silently:", err)
+            );
+        }, 5000); // Check every 5 seconds
+
+        return () => clearInterval(interval);
+    }, [currentRoomId, publicClient, isTestMode, gameState.phase, isTxPending, triggerAutoWinCheck]);
 
     // Try to end the game by first revealing our role on-chain, then calling endGameAutomatically
     const tryEndGame = useCallback(async () => {
