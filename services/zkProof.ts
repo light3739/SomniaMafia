@@ -45,8 +45,8 @@ export const generateEndGameProof = async (
         return {
             a: [BigInt(proof.pi_a[0]), BigInt(proof.pi_a[1])],
             b: [
-                [BigInt(proof.pi_b[0][1]), BigInt(proof.pi_b[0][0])],
-                [BigInt(proof.pi_b[1][1]), BigInt(proof.pi_b[1][0])],
+                [BigInt(proof.pi_b[0][0]), BigInt(proof.pi_b[0][1])],
+                [BigInt(proof.pi_b[1][0]), BigInt(proof.pi_b[1][1])],
             ],
             c: [BigInt(proof.pi_c[0]), BigInt(proof.pi_c[1])],
             inputs: publicSignals.map((s: string) => BigInt(s)) as [bigint, bigint, bigint, bigint, bigint]
