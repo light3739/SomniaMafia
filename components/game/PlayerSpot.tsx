@@ -17,7 +17,7 @@ interface PlayerSpotProps {
 }
 
 export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAct, isSelected, isNight = false, myRole }) => {
-    const { playClickSound } = useSoundEffects();
+    const { playClickSound, playMarkSound } = useSoundEffects();
     const { playerMarks, setPlayerMark } = useGameContext();
     const [isHoveringMarks, setIsHoveringMarks] = useState(false);
 
@@ -156,7 +156,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                         transition={{ duration: 0.15, ease: "linear" }}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            playClickSound();
+                                            playMarkSound();
                                             setPlayerMark(player.address, 'civilian');
                                             setIsHoveringMarks(false);
                                         }}
@@ -174,7 +174,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                         transition={{ duration: 0.15, ease: "linear" }}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            playClickSound();
+                                            playMarkSound();
                                             setPlayerMark(player.address, 'question');
                                             setIsHoveringMarks(false);
                                         }}
@@ -192,7 +192,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                         transition={{ duration: 0.15, ease: "linear" }}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            playClickSound();
+                                            playMarkSound();
                                             setPlayerMark(player.address, 'mafia');
                                             setIsHoveringMarks(false);
                                         }}

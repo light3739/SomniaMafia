@@ -184,6 +184,7 @@ export const useSoundEffects = () => {
         playProposeSound: () => playSound('propose'),
         playApproveSound: () => playSound('approve'),
         playRejectSound: () => playSound('reject'),
+        playMarkSound: () => playAudioFile('/assets/note_tick.wav', 1, 0, 0.5), // New sound for marking players
         playNightTransition: () => playAudioFile('/assets/night_sound.mp3', 5, 1, 0.3),
         playMorningTransition: () => playAudioFile('/assets/morning_sound.mp3', 5, 1, 0.3),
     }), []);
