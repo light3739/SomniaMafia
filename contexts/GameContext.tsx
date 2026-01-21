@@ -1198,7 +1198,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     townCount: zkData.inputs[4].toString()
                 }
             };
-            console.log("[ZK Debug] Formatted Args:", JSON.stringify(formattedArgs, null, 2));
+            console.log("[ZK Debug] Formatted Args:", formattedArgs);
 
             // 4. SIMULATE CONTRACT FIRST (get exact revert reason)
             console.log("[ZK Debug] Running simulateContract to check for revert...");
@@ -1251,7 +1251,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
         } catch (e: any) {
             console.error("[ZK] Failed:", e);
-            console.error("[ZK Debug] Full error object:", JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
+            console.error("[ZK Debug] Full error object:", e);
             addLog(`Error: ${e.shortMessage || e.message}`, "danger");
             setIsTxPending(false);
         }
