@@ -214,17 +214,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             calculatedGas = (gasEstimate * 150n) / 100n;
 
             // 3. Safety cap - if gas is crazy (revert symptom), don't scare MetaMask
-            if (calculatedGas > 10_000_000n) {
-                console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at 3M to avoid balance error (likely contract revert).`);
-                calculatedGas = 3_000_000n;
+            const safetyCap = functionName === 'endGameZK' ? 30_000_000n : 10_000_000n;
+            if (calculatedGas > safetyCap) {
+                console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at ${safetyCap} to avoid balance error (likely contract revert).`);
+                calculatedGas = safetyCap;
             }
 
             console.log(`[Gas] Estimated for ${functionName}: ${gasEstimate}, With Buffer: ${calculatedGas}`);
         } catch (e) {
             console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
             // Если оценка упала, используем высокий лимит для тяжелых функций
-            if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom'].includes(functionName)) {
-                calculatedGas = 20_000_000n;
+            if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK'].includes(functionName)) {
+                calculatedGas = 25_000_000n;
             } else {
                 calculatedGas = 2_000_000n;
             }
@@ -1184,6 +1185,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // 5. Отправка транзакции
+            console.log("[ZK] Sending transaction with high gas limit (15M)...");
             const hash = await sendGameTransaction('endGameZK', args as any, false);
 
             const isTownWin = zkData.inputs[0] === 1n;
@@ -1192,9 +1194,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await publicClient.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
 
-        } catch (e: any) {
-            console.error("[ZK] Transaction Failed:", e);
-            addLog(`Final ZK Error: ${e.shortMessage || e.message}`, "danger");
+        } catch (txErr: any) {
+            console.error("[ZK] Transaction Failed:", txErr);
+            addLog(`ZK Error: ${txErr.shortMessage || txErr.message}`, "danger");
         } finally {
             setIsTxPending(false);
         }
@@ -1246,19 +1248,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.log("[AutoWin ZK Debug] Room ID:", roomId.toString());
                 console.log("[AutoWin ZK Debug] Result:", data.result);
 
+                const args = [
+                    roomId,
+                    formattedProof.a,
+                    formattedProof.b,
+                    formattedProof.c,
+                    formattedProof.inputs
+                ] as const;
+
                 // SIMULATE CONTRACT FIRST
                 try {
                     await publicClient.simulateContract({
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI,
                         functionName: 'endGameZK',
-                        args: [
-                            roomId,
-                            formattedProof.a as unknown as readonly [bigint, bigint],
-                            formattedProof.b as unknown as readonly [readonly [bigint, bigint], readonly [bigint, bigint]],
-                            formattedProof.c as unknown as readonly [bigint, bigint],
-                            formattedProof.inputs as unknown as readonly [bigint, bigint, bigint, bigint, bigint]
-                        ],
+                        args: args as any,
                         account: address,
                     });
                     console.log("[AutoWin ZK Debug] Simulation SUCCESS");
@@ -1269,14 +1273,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");
 
                 try {
-                    // Send with a generous gas limit for ZK verification
-                    const hash = await sendGameTransaction('endGameZK', [
-                        roomId,
-                        formattedProof.a,
-                        formattedProof.b,
-                        formattedProof.c,
-                        formattedProof.inputs
-                    ], false);
+                    // Send with a very generous gas limit for ZK verification on Somnia
+                    const hash = await sendGameTransaction('endGameZK', args as any, false);
 
                     await publicClient.waitForTransactionReceipt({ hash });
                     addLog("Game ended automatically via Server ZK!", "phase");
