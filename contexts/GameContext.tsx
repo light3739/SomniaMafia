@@ -1133,51 +1133,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    // Manual triggers for victory claim (reveals role + checks win condition)
-    const claimVictory = useCallback(async () => {
-        if (!currentRoomId || !myPlayer) return;
-
-        try {
-            const salt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
-            if (salt) {
-                try {
-                    const roleNum = getRoleNumber(myPlayer.role);
-                    addLog("Revealing role for victory claim...", "info");
-                    await revealRoleOnChain(roleNum, salt);
-                } catch (e: any) {
-                    if (!e.message.includes("RoleAlreadyRevealed")) {
-                        console.warn("Reveal role failed during claim:", e);
-                    }
-                }
-            } else {
-                addLog("Cannot claim victory: Role salt not found!", "danger");
-                return;
-            }
-
-            try {
-                await endGameAutomaticallyOnChain();
-                await refreshPlayersList(currentRoomId);
-            } catch (e: any) {
-                if (e.message.includes("NotAllRolesRevealed")) {
-                    addLog("Victory claimed! Waiting for other survivors to claim...", "info");
-                } else {
-                    addLog(e.shortMessage || e.message, "danger");
-                }
-            }
-        } catch (e) {
-            console.error("Claim victory failed:", e);
-            addLog("Failed to claim victory.", "danger");
-        }
-    }, [currentRoomId, myPlayer, address, revealRoleOnChain, endGameAutomaticallyOnChain, refreshPlayersList, addLog]);
 
     // V4: ZK End Game (Client generates proof of win)
+    // V4: ZK End Game (Client generates proof of win via Server API)
     const endGameZK = useCallback(async () => {
         if (!currentRoomId || !publicClient) return;
         setIsTxPending(true);
         addLog("Generating ZK Proof of Victory...", "info");
 
         try {
-            // 1. Calculate counts
+            // 1. Считаем игроков локально для запроса
             let mCount = 0;
             let tCount = 0;
             gameState.players.forEach(p => {
@@ -1187,84 +1152,50 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             });
 
-            console.log("[ZK Debug] === endGameZK START ===");
-            console.log("[ZK Debug] MAFIA_CONTRACT_ADDRESS:", MAFIA_CONTRACT_ADDRESS);
-            console.log("[ZK Debug] Room ID:", currentRoomId.toString());
-            console.log("[ZK Debug] Counts - Mafia:", mCount, "Town:", tCount);
+            console.log("[ZK] Requesting proof for Room:", currentRoomId.toString());
 
-            // 2. Generate Proof via Service (calls our API)
+            // 2. Получаем УЖЕ ОТФОРМАТИРОВАННЫЕ данные (BigInt) от сервиса
             const zkData = await generateEndGameProof(currentRoomId, mCount, tCount);
 
-            // 3. FORMAT ARGS FOR LOGGING (convert BigInts to strings for console)
-            const formattedArgs = {
-                roomId: currentRoomId.toString(),
-                a: zkData.a.map(x => x.toString()),
-                b: zkData.b.map(row => row.map(x => x.toString())),
-                c: zkData.c.map(x => x.toString()),
-                inputs: zkData.inputs.map(x => x.toString()),
-                inputLabels: {
-                    townWin: zkData.inputs[0].toString(),
-                    mafiaWin: zkData.inputs[1].toString(),
-                    proofRoomId: zkData.inputs[2].toString(),
-                    mafiaCount: zkData.inputs[3].toString(),
-                    townCount: zkData.inputs[4].toString()
-                }
-            };
-            console.log("[ZK Debug] Formatted Args:", formattedArgs);
+            console.log("[ZK] Proof received. Simulating transaction...");
 
-            // 4. SIMULATE CONTRACT FIRST (get exact revert reason)
-            console.log("[ZK Debug] Running simulateContract to check for revert...");
-            try {
-                const simulationResult = await publicClient.simulateContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MAFIA_ABI,
-                    functionName: 'endGameZK',
-                    args: [
-                        currentRoomId,
-                        zkData.a as unknown as readonly [bigint, bigint],
-                        zkData.b as unknown as readonly [readonly [bigint, bigint], readonly [bigint, bigint]],
-                        zkData.c as unknown as readonly [bigint, bigint],
-                        zkData.inputs as unknown as readonly [bigint, bigint, bigint, bigint, bigint]
-                    ],
-                    account: address,
-                });
-                console.log("[ZK Debug] Simulation SUCCESS:", simulationResult);
-            } catch (simError: any) {
-                console.error("[ZK Debug] Simulation FAILED:", simError);
-                console.error("[ZK Debug] Revert Reason:", simError.shortMessage || simError.message);
-                if (simError.cause) {
-                    console.error("[ZK Debug] Cause:", simError.cause);
-                }
-                // Continue to attempt TX anyway for additional error info
-            }
-
-            // 5. Send Transaction
-            console.log("[ZK DEBUG] endGameZK args:", {
-                roomId: currentRoomId.toString(),
-                a: zkData.a.map(String),
-                b: zkData.b.map((row) => row.map(String)),
-                c: zkData.c.map(String),
-                inputs: zkData.inputs.map(String),
-            });
-
-            const hash = await sendGameTransaction('endGameZK', [
+            // 3. Формируем аргументы. zkData.b уже имеет формат [[x,y], [z,w]]
+            const args = [
                 currentRoomId,
                 zkData.a,
                 zkData.b,
                 zkData.c,
                 zkData.inputs
-            ], false); // DISABLE SESSION KEY - use main wallet for heavy/critical TX
+            ] as const;
+
+            // 4. Симуляция (проверка на ошибки контракта)
+            try {
+                await publicClient.simulateContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'endGameZK',
+                    args: args as any,
+                    account: address,
+                });
+                console.log("[ZK] Simulation SUCCESS");
+            } catch (simError: any) {
+                console.error("[ZK] Simulation FAILED:", simError.shortMessage || simError.message);
+                throw new Error("Contract rejected the proof. Check log for details.");
+            }
+
+            // 5. Отправка транзакции
+            const hash = await sendGameTransaction('endGameZK', args as any, false);
 
             const isTownWin = zkData.inputs[0] === 1n;
-            const isMafiaWin = zkData.inputs[1] === 1n;
-            addLog(`Game ended via Server ZK! Winner: ${isTownWin ? "TOWN" : isMafiaWin ? "MAFIA" : "Unknown"}`, "success");
+            addLog(`ZK Proof submitted! Winner: ${isTownWin ? "TOWN" : "MAFIA"}`, "success");
+
             await publicClient.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
-            setIsTxPending(false);
+
         } catch (e: any) {
-            console.error("[ZK] Failed:", e);
-            console.error("[ZK Debug] Full error object:", e);
-            addLog(`Error: ${e.shortMessage || e.message}`, "danger");
+            console.error("[ZK] Transaction Failed:", e);
+            addLog(`Final ZK Error: ${e.shortMessage || e.message}`, "danger");
+        } finally {
             setIsTxPending(false);
         }
     }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList, address]);
@@ -1312,20 +1243,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 // DEBUG LOGGING
                 console.log("[AutoWin ZK Debug] === endGameZK via AutoWin ===");
-                console.log("[AutoWin ZK Debug] MAFIA_CONTRACT_ADDRESS:", MAFIA_CONTRACT_ADDRESS);
                 console.log("[AutoWin ZK Debug] Room ID:", roomId.toString());
-                console.log("[AutoWin ZK Debug] Inputs:", {
-                    townWin: formattedProof.inputs[0].toString(),
-                    mafiaWin: formattedProof.inputs[1].toString(),
-                    proofRoomId: formattedProof.inputs[2].toString(),
-                    mafiaCount: formattedProof.inputs[3].toString(),
-                    townCount: formattedProof.inputs[4].toString()
-                });
+                console.log("[AutoWin ZK Debug] Result:", data.result);
 
                 // SIMULATE CONTRACT FIRST
-                console.log("[AutoWin ZK Debug] Running simulateContract...");
                 try {
-                    const simResult = await publicClient.simulateContract({
+                    await publicClient.simulateContract({
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI,
                         functionName: 'endGameZK',
@@ -1338,34 +1261,29 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         ],
                         account: address,
                     });
-                    console.log("[AutoWin ZK Debug] Simulation SUCCESS:", simResult);
+                    console.log("[AutoWin ZK Debug] Simulation SUCCESS");
                 } catch (simErr: any) {
                     console.error("[AutoWin ZK Debug] Simulation FAILED:", simErr.shortMessage || simErr.message);
-                    if (simErr.cause) console.error("[AutoWin ZK Debug] Cause:", simErr.cause);
                 }
 
                 addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");
 
                 try {
-                    console.log("[ZK DEBUG] endGameZK args:", {
-                        roomId: roomId.toString(),
-                        a: formattedProof.a.map(String),
-                        b: formattedProof.b.map((row) => row.map(String)),
-                        c: formattedProof.c.map(String),
-                        inputs: formattedProof.inputs.map(String),
-                    });
-
+                    // Send with a generous gas limit for ZK verification
                     const hash = await sendGameTransaction('endGameZK', [
                         roomId,
                         formattedProof.a,
                         formattedProof.b,
                         formattedProof.c,
                         formattedProof.inputs
-                    ], false); // DISABLE SESSION KEY
+                    ], false);
 
                     await publicClient.waitForTransactionReceipt({ hash });
                     addLog("Game ended automatically via Server ZK!", "phase");
                     await refreshPlayersList(roomId);
+                } catch (txErr: any) {
+                    console.error("[AutoWin ZK Debug] Transaction FAILED:", txErr);
+                    addLog(`Auto-Win Failed: ${txErr.shortMessage || txErr.message}`, "danger");
                 } finally {
                     setIsTxPending(false);
                 }
@@ -1377,6 +1295,48 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.warn("[AutoWin] Silent check failed:", e);
         }
     }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, isTxPending, address]);
+
+    // Manual triggers for victory claim (reveals role + checks win condition)
+    const claimVictory = useCallback(async () => {
+        if (!currentRoomId || !myPlayer) return;
+
+        try {
+            const salt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+            if (salt) {
+                try {
+                    const roleNum = getRoleNumber(myPlayer.role);
+                    addLog("Revealing role for victory claim...", "info");
+                    await revealRoleOnChain(roleNum, salt);
+                } catch (e: any) {
+                    if (!e.message.includes("RoleAlreadyRevealed")) {
+                        console.warn("Reveal role failed during claim:", e);
+                    }
+                }
+            }
+
+            // TRY ZK PATH FIRST (More reliable, doesn't need all roles revealed)
+            try {
+                addLog("Triggering ZK win check for victory claim...", "info");
+                await triggerAutoWinCheck();
+            } catch (zkErr: any) {
+                console.error("[claimVictory] ZK path failed, trying fallback:", zkErr);
+                try {
+                    await endGameAutomaticallyOnChain();
+                    addLog("Game ended via fallback!", "phase");
+                } catch (e: any) {
+                    if (e.message.includes("NotAllRolesRevealed")) {
+                        addLog("Victory claimed! Waiting for other survivors to claim...", "info");
+                    } else {
+                        addLog(e.shortMessage || e.message, "danger");
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Claim victory failed:", e);
+            addLog("Failed to claim victory.", "danger");
+        }
+    }, [currentRoomId, myPlayer, address, revealRoleOnChain, endGameAutomaticallyOnChain, triggerAutoWinCheck, addLog]);
+
 
     // === SMART POLLING ===
     useEffect(() => {
@@ -1452,21 +1412,28 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Try to end the game on-chain
         try {
-            await endGameAutomaticallyOnChain();
-            addLog("Game ended on-chain!", "phase");
+            // First try ZK path by triggering a manual check-win which produces a proof
+            addLog("Triggering final ZK win check...", "info");
+            await triggerAutoWinCheck();
         } catch (e: any) {
-            console.error("[tryEndGame] Failed to end game on-chain:", e);
-            // If contract rejects, force frontend transition to ENDED
-            if (mafiaWins || townWins) {
-                addLog("Transitioning to Game Over...", "phase");
-                setGameState(prev => ({
-                    ...prev,
-                    phase: GamePhase.ENDED,
-                    winner: mafiaWins ? 'MAFIA' : 'TOWN'
-                }));
+            console.error("[tryEndGame] ZK path failed, trying fallback:", e);
+            try {
+                await endGameAutomaticallyOnChain();
+                addLog("Game ended on-chain!", "phase");
+            } catch (fallbackErr: any) {
+                console.error("[tryEndGame] Fallback failed:", fallbackErr);
+                // If contract rejects, force frontend transition to ENDED
+                if (mafiaWins || townWins) {
+                    addLog("Transitioning to Game Over...", "phase");
+                    setGameState(prev => ({
+                        ...prev,
+                        phase: GamePhase.ENDED,
+                        winner: mafiaWins ? 'MAFIA' : 'TOWN'
+                    }));
+                }
             }
         }
-    }, [currentRoomId, address, gameState.players, revealRoleOnChain, endGameAutomaticallyOnChain, addLog, setGameState]);
+    }, [currentRoomId, address, gameState.players, revealRoleOnChain, endGameAutomaticallyOnChain, addLog, setGameState, triggerAutoWinCheck]);
 
 
 
