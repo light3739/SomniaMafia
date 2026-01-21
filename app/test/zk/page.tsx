@@ -103,11 +103,6 @@ export default function ZKTestPage() {
         addLog(`Bots joining room #${roomId}...`);
 
         for (const bot of bots) {
-            if (parseFloat(bot.balance) < 0.0001) {
-                addLog(`Bot ${bot.address.slice(0, 6)} has NO GAS! Skip.`);
-                continue;
-            }
-
             try {
                 const botClient = createWalletClient({
                     account: privateKeyToAccount(bot.pk as `0x${string}`),
@@ -121,18 +116,24 @@ export default function ZKTestPage() {
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), "BotPlayer", "0x00" as `0x${string}`, "0x0000000000000000000000000000000000000000" as `0x${string}`],
                     value: BigInt(0),
-                    gas: 500000n // Explicit gas to avoid estimation issues with low balance
+                    gas: 500000n
                 });
-                addLog(`Bot ${bot.address.slice(0, 6)} joined! Wait for TX: ${hash.slice(0, 10)}...`);
+
+                addLog(`Bot ${bot.address.slice(0, 8)} TX: ${hash.slice(0, 10)}...`);
+
                 if (publicClient) {
-                    await publicClient.waitForTransactionReceipt({ hash });
+                    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+                    if (receipt.status === 'reverted') {
+                        addLog(`Bot ${bot.address.slice(0, 8)} JOIN REVERTED!`);
+                    } else {
+                        addLog(`Bot ${bot.address.slice(0, 8)} JOIN SUCCESS!`);
+                    }
                 }
-                addLog(`Bot ${bot.address.slice(0, 6)} confirmed.`);
             } catch (e: any) {
                 addLog(`Bot Join Error: ${e.message}`);
             }
         }
-        addLog("All bots attempted to join. Click Update Balances to verify.");
+        addLog("Join sequence complete. Check Room Status to verify count.");
     };
 
     const checkRoomStatus = async () => {
@@ -144,8 +145,20 @@ export default function ZKTestPage() {
                 functionName: 'rooms',
                 args: [BigInt(roomId)]
             });
+            const players: any = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MafiaABI.abi,
+                functionName: 'getPlayers',
+                args: [BigInt(roomId)]
+            });
             const phases = ["LOBBY", "SHUFFLING", "REVEAL", "DAY", "VOTING", "NIGHT", "ENDED"];
-            addLog(`Room #${roomId} State: Phase=${phases[room[3]]}, Players=${room[5]}, Alive=${room[6]}`);
+            addLog(`Room #${roomId} State: Phase=${phases[room[3]]}, Count=${room[5]}, Max=${room[4]}`);
+
+            if (players && players.length > 0) {
+                players.forEach((p: any, i: number) => {
+                    addLog(`  P${i}: ${p.wallet.slice(0, 8)}... (${p.nickname})`);
+                });
+            }
         } catch (e: any) {
             addLog(`Room Check Error: ${e.message}`);
         }
@@ -197,7 +210,15 @@ export default function ZKTestPage() {
                     gas: 500000n
                 });
                 addLog(`Game started (Phase shifted)! TX: ${hash.slice(0, 10)}...`);
-                setStatus("Ready");
+                if (publicClient) {
+                    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+                    if (receipt.status === 'reverted') {
+                        addLog("Error: startGame REVERTED!");
+                    } else {
+                        addLog("Game started successfully!");
+                        setStatus("Ready");
+                    }
+                }
             }
         } catch (e: any) {
             addLog(`Error: ${e.message}`);
