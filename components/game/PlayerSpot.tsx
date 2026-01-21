@@ -17,7 +17,7 @@ interface PlayerSpotProps {
 }
 
 export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAct, isSelected, isNight = false, myRole }) => {
-    const { playClickSound, playApproveSound } = useSoundEffects();
+    const { playClickSound } = useSoundEffects();
     const { playerMarks, setPlayerMark } = useGameContext();
     const [isHoveringMarks, setIsHoveringMarks] = useState(false);
 
@@ -151,16 +151,16 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                     <motion.button
                                         key="mark-civ"
                                         initial={{ opacity: 0, x: 0, y: 0 }}
-                                        animate={{ opacity: 1, x: 0, y: -35 }}
+                                        animate={{ opacity: 1, x: 0, y: -45 }}
                                         exit={{ opacity: 0, x: 0, y: 0 }}
                                         transition={{ duration: 0.15, ease: "linear" }}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            playApproveSound();
+                                            playClickSound();
                                             setPlayerMark(player.address, 'civilian');
                                             setIsHoveringMarks(false);
                                         }}
-                                        className="absolute p-2 hover:scale-125 transition-transform z-20"
+                                        className="absolute p-2 hover:scale-110 transition-transform z-20"
                                     >
                                         <User className="w-6 h-6 text-green-500 drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
                                     </motion.button>
@@ -169,16 +169,16 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                     <motion.button
                                         key="mark-ques"
                                         initial={{ opacity: 0, x: 0, y: 0 }}
-                                        animate={{ opacity: 1, x: 28, y: -28 }}
+                                        animate={{ opacity: 1, x: 40, y: -40 }}
                                         exit={{ opacity: 0, x: 0, y: 0 }}
                                         transition={{ duration: 0.15, ease: "linear" }}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            playApproveSound();
+                                            playClickSound();
                                             setPlayerMark(player.address, 'question');
                                             setIsHoveringMarks(false);
                                         }}
-                                        className="absolute p-2 hover:scale-125 transition-transform z-20"
+                                        className="absolute p-2 hover:scale-110 transition-transform z-20"
                                     >
                                         <HelpCircle className="w-6 h-6 text-amber-500 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
                                     </motion.button>
@@ -187,16 +187,16 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                     <motion.button
                                         key="mark-maf"
                                         initial={{ opacity: 0, x: 0, y: 0 }}
-                                        animate={{ opacity: 1, x: 40, y: 0 }}
+                                        animate={{ opacity: 1, x: 50, y: 0 }}
                                         exit={{ opacity: 0, x: 0, y: 0 }}
                                         transition={{ duration: 0.15, ease: "linear" }}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            playApproveSound();
+                                            playClickSound();
                                             setPlayerMark(player.address, 'mafia');
                                             setIsHoveringMarks(false);
                                         }}
-                                        className="absolute p-2 hover:scale-125 transition-transform z-20"
+                                        className="absolute p-2 hover:scale-110 transition-transform z-20"
                                     >
                                         <Skull className="w-6 h-6 text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
                                     </motion.button>
