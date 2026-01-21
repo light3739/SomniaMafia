@@ -1208,7 +1208,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
      */
     const triggerAutoWinCheck = useCallback(async () => {
         const roomId = currentRoomIdRef.current;
-        if (!roomId || !publicClient || isTxPending) return;
+        if (!roomId || !publicClient) return;
+
+        // Note: We don't block the CHECK (server fetch) if isTxPending is true,
+        // because the transaction that is pending might be the one that triggers the win!
+        // We only block the SUBMISSION of the endGameZK transaction.
 
         try {
             console.log(`[AutoWin] Checking for victory in Room #${roomId}...`);
@@ -1255,6 +1259,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     formattedProof.c,
                     formattedProof.inputs
                 ] as const;
+
+                // LOCK ONLY BEFORE SUBMITTING
+                if (isTxPending) {
+                    console.log("[AutoWin] Win detected, but another transaction is pending. Retrying shortly...");
+                    return;
+                }
+                setIsTxPending(true);
 
                 // SIMULATE CONTRACT FIRST
                 try {
@@ -1587,6 +1598,38 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (BigInt(logs[0].args.roomId) === roomId) {
                 addLog(`Game Over: ${logs[0].args.reason}`, "phase");
                 refreshPlayersList(roomId);
+            }
+        }
+    });
+
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
+        eventName: 'VotingFinalized',
+        onLogs: (logs: any) => {
+            const roomId = currentRoomIdRef.current;
+            if (!roomId) return;
+
+            if (BigInt(logs[0].args.roomId) === roomId) {
+                console.log("[Event] Voting Finalized. Triggering immediate win check.");
+                refreshPlayersList(roomId);
+                triggerAutoWinCheck();
+            }
+        }
+    });
+
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
+        eventName: 'NightFinalized',
+        onLogs: (logs: any) => {
+            const roomId = currentRoomIdRef.current;
+            if (!roomId) return;
+
+            if (BigInt(logs[0].args.roomId) === roomId) {
+                console.log("[Event] Night Finalized. Triggering immediate win check.");
+                refreshPlayersList(roomId);
+                triggerAutoWinCheck();
             }
         }
     });
