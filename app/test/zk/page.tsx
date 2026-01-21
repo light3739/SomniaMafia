@@ -3,11 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { generateEndGameProof } from '@/services/zkProof';
-import { useWriteContract, usePublicClient } from 'wagmi';
+import { useWriteContract, usePublicClient, useSendTransaction } from 'wagmi';
 import { MafiaABI } from '@/contracts/MafiaPortal';
 import { MAFIA_CONTRACT_ADDRESS } from '@/contracts/config';
 import { privateKeyToAccount } from 'viem/accounts';
-import { formatEther, createWalletClient, http, defineChain } from 'viem';
+import { formatEther, parseEther, createWalletClient, http, defineChain } from 'viem';
 
 const shannon = defineChain({
     id: 50312,
@@ -68,6 +68,30 @@ export default function ZKTestPage() {
         }));
         setBots(updated);
         addLog("Bot balances updated.");
+    };
+
+    const { sendTransactionAsync } = useSendTransaction();
+
+    const fundBots = async () => {
+        addLog("Funding bots with 0.01 STT each...");
+        try {
+            for (const bot of bots) {
+                // Check if already funded to save time/gas
+                if (parseFloat(bot.balance) > 0.005) {
+                    addLog(`Bot ${bot.address.slice(0, 6)} already has funds. Skipping.`);
+                    continue;
+                }
+
+                const hash = await sendTransactionAsync({
+                    to: bot.address as `0x${string}`,
+                    value: parseEther("0.01"),
+                });
+                addLog(`Sent 0.01 STT to ${bot.address.slice(0, 6)}. TX: ${hash}`);
+            }
+            addLog("Funding complete! Wait a moment then click Update Balances.");
+        } catch (e: any) {
+            addLog(`Funding Failed: ${e.message}`);
+        }
     };
 
     const botsJoinRoom = async () => {
@@ -271,7 +295,7 @@ export default function ZKTestPage() {
                                     <div className="space-y-2">
                                         {bots.map((bot, i) => (
                                             <div key={i} className="flex justify-between items-center text-[10px] bg-white/5 p-2 rounded">
-                                                <span className="font-mono text-gray-400">{bot.address}</span>
+                                                <span className="font-mono text-gray-400">{bot.address.slice(0, 8)}...</span>
                                                 <span className={parseFloat(bot.balance) > 0 ? "text-green-400" : "text-red-400 font-bold"}>
                                                     {bot.balance} STT
                                                 </span>
@@ -279,9 +303,10 @@ export default function ZKTestPage() {
                                         ))}
                                         <div className="flex flex-col gap-2">
                                             <div className="flex gap-2">
-                                                <Button onClick={updateBotBalances} className="flex-1 bg-blue-900/30 text-[10px] h-8">Update Balances</Button>
-                                                <Button onClick={botsJoinRoom} className="flex-1 bg-green-900/30 text-[10px] h-8">Join Bots</Button>
+                                                <Button onClick={updateBotBalances} className="flex-1 bg-blue-900/30 text-[10px] h-8">Upd Balance</Button>
+                                                <Button onClick={fundBots} className="flex-1 bg-yellow-600/50 hover:bg-yellow-500/50 text-[10px] h-8 text-yellow-200">Fund Bots (0.01)</Button>
                                             </div>
+                                            <Button onClick={botsJoinRoom} className="w-full bg-green-900/30 text-[10px] h-8">Join Bots</Button>
                                             <Button onClick={botsCommitRoles} className="w-full bg-purple-900/40 text-[10px] h-8 border border-purple-500/50">Bots Reveal Roles (Commit & Sync)</Button>
                                         </div>
                                     </div>

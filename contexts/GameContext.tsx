@@ -1227,6 +1227,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // 5. Send Transaction
+            console.log("[ZK DEBUG] endGameZK args:", {
+                roomId: currentRoomId.toString(),
+                a: zkData.a.map(String),
+                b: zkData.b.map((row) => row.map(String)),
+                c: zkData.c.map(String),
+                inputs: zkData.inputs.map(String),
+            });
+
             const hash = await sendGameTransaction('endGameZK', [
                 currentRoomId,
                 zkData.a,
@@ -1327,6 +1335,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");
 
                 try {
+                    console.log("[ZK DEBUG] endGameZK args:", {
+                        roomId: roomId.toString(),
+                        a: formattedProof.a.map(String),
+                        b: formattedProof.b.map((row) => row.map(String)),
+                        c: formattedProof.c.map(String),
+                        inputs: formattedProof.inputs.map(String),
+                    });
+
                     const hash = await sendGameTransaction('endGameZK', [
                         roomId,
                         formattedProof.a,
