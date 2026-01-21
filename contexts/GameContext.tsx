@@ -1223,7 +1223,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const { formatted } = data;
                 const proofRoomId = formatted.inputs[2];
 
-                if (proofRoomId !== roomId.toString()) {
+                if (BigInt(proofRoomId) !== BigInt(roomId)) {
                     console.warn(`[AutoWin] Room ID mismatch: Frontend=${roomId}, Proof=${proofRoomId}`);
                     return;
                 }
