@@ -135,6 +135,22 @@ export default function ZKTestPage() {
         addLog("All bots attempted to join. Click Update Balances to verify.");
     };
 
+    const checkRoomStatus = async () => {
+        if (!roomId || !publicClient) return addLog("Enter Room ID!");
+        try {
+            const room: any = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MafiaABI.abi,
+                functionName: 'rooms',
+                args: [BigInt(roomId)]
+            });
+            const phases = ["LOBBY", "SHUFFLING", "REVEAL", "DAY", "VOTING", "NIGHT", "ENDED"];
+            addLog(`Room #${roomId} State: Phase=${phases[room[3]]}, Players=${room[5]}, Alive=${room[6]}`);
+        } catch (e: any) {
+            addLog(`Room Check Error: ${e.message}`);
+        }
+    };
+
     const performOnChainAction = async (type: 'create' | 'start') => {
         setStatus("Pending...");
         try {
@@ -146,10 +162,31 @@ export default function ZKTestPage() {
                     args: ["ZK-Test-Lobby", 4, "TestPlayer", "0x00" as `0x${string}`, "0x0000000000000000000000000000000000000000" as `0x${string}`],
                     value: BigInt(0)
                 });
-                addLog(`Lobby created! TX: ${hash}`);
+                addLog(`Lobby created! TX: ${hash.slice(0, 10)}...`);
                 if (publicClient) {
-                    await publicClient.waitForTransactionReceipt({ hash });
-                    addLog("Room created. Scanning for your new ID...");
+                    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+                    // Try to find RoomCreated event to get ID
+                    const { decodeEventLog } = await import('viem');
+                    let foundId = "";
+                    receipt.logs.forEach(log => {
+                        try {
+                            const decoded = decodeEventLog({
+                                abi: MafiaABI.abi,
+                                data: log.data,
+                                topics: log.topics,
+                            });
+                            if (decoded.eventName === 'RoomCreated') {
+                                foundId = (decoded.args as any).roomId.toString();
+                            }
+                        } catch (e) { }
+                    });
+
+                    if (foundId) {
+                        setRoomId(foundId);
+                        addLog(`SUCCESS! Identified Room ID: #${foundId}`);
+                    } else {
+                        addLog("Room created, but couldn't parse ID from logs. Check contract address?");
+                    }
                 }
             } else {
                 const hash = await writeContractAsync({
@@ -157,8 +194,9 @@ export default function ZKTestPage() {
                     abi: MafiaABI.abi,
                     functionName: 'startGame',
                     args: [BigInt(roomId)],
+                    gas: 500000n
                 });
-                addLog(`Game started (Phase shifted)! TX: ${hash}`);
+                addLog(`Game started (Phase shifted)! TX: ${hash.slice(0, 10)}...`);
                 setStatus("Ready");
             }
         } catch (e: any) {
@@ -424,17 +462,25 @@ export default function ZKTestPage() {
                                 )}
                             </div>
 
-                            <div className="flex gap-2 pt-4 border-t border-white/5">
-                                <input
-                                    type="number"
-                                    placeholder="Room ID"
-                                    value={roomId}
-                                    onChange={e => setRoomId(e.target.value)}
-                                    className="flex-1 bg-black border border-white/10 rounded px-3 py-2 text-white"
-                                />
+                            <div className="flex flex-col gap-2 pt-4 border-t border-white/5">
+                                <div className="flex gap-2">
+                                    <input
+                                        type="number"
+                                        placeholder="Room ID"
+                                        value={roomId}
+                                        onChange={e => setRoomId(e.target.value)}
+                                        className="flex-1 bg-black border border-white/10 rounded px-3 py-2 text-white h-10"
+                                    />
+                                    <Button
+                                        onClick={checkRoomStatus}
+                                        className="bg-purple-900/40 text-[10px] px-2 h-10 border border-purple-500/30"
+                                    >
+                                        Check Room
+                                    </Button>
+                                </div>
                                 <Button
                                     onClick={() => performOnChainAction('start')}
-                                    className="bg-green-600 hover:bg-green-500 text-xs px-2"
+                                    className="w-full bg-green-600 hover:bg-green-500 text-xs h-10"
                                 >
                                     2. Start Game
                                 </Button>
