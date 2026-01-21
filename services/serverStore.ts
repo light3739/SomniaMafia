@@ -36,8 +36,9 @@ export class ServerStore {
      * Uses a Hash structure: room:secrets:{roomId} -> {address: secret}
      */
     static async storeSecret(roomId: string, address: string, role: number, salt: string) {
+        const normalizedRoomId = BigInt(roomId).toString();
         const secret: PlayerSecret = { role, salt };
-        const key = `room:secrets:${roomId}`;
+        const key = `room:secrets:${normalizedRoomId}`;
 
         if (!redis) {
             console.warn(`[ServerStore] Redis not configured. Using MEMORY fallback for Room #${roomId}`);
@@ -62,7 +63,8 @@ export class ServerStore {
      * Retrieves all secrets for a specific room.
      */
     static async getRoomSecrets(roomId: string): Promise<Record<string, PlayerSecret> | null> {
-        const key = `room:secrets:${roomId}`;
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:secrets:${normalizedRoomId}`;
 
         if (!redis) {
             const data = memoryStore[key];
@@ -95,7 +97,8 @@ export class ServerStore {
      * Manually clears room data (optional cleanup).
      */
     static async clearRoom(roomId: string) {
-        const key = `room:secrets:${roomId}`;
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:secrets:${normalizedRoomId}`;
         if (!redis) {
             delete memoryStore[key];
             return;

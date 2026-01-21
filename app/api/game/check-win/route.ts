@@ -14,12 +14,13 @@ const FLAG_ACTIVE = 2; // From SomniaMafiaV4.sol
 
 export async function POST(request: Request) {
     try {
-        const { roomId } = await request.json();
+        const { roomId: rawRoomId } = await request.json();
 
-        if (!roomId) {
+        if (!rawRoomId) {
             return NextResponse.json({ error: 'Missing roomId' }, { status: 400 });
         }
 
+        const roomId = BigInt(rawRoomId).toString();
         console.log(`[API/CheckWin] Checking Room #${roomId}`);
 
         // 1. Get room data from blockchain
