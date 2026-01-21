@@ -34,7 +34,11 @@ export const generateEndGameProof = async (
 
         const { proof, publicSignals } = await response.json();
 
-        console.log("[ZK] Proof received from server!");
+        console.log("[ZK] Proof received from server!", proof);
+        if (!proof || !proof.pi_a) {
+            console.error("[ZK] Proof object is invalid:", proof);
+            throw new Error("Invalid proof received from server");
+        }
 
         // Transformation for Solidity Groth16 Verifier
         // SnarkJS -> Solidity requires coordinate swaps in the B matrix

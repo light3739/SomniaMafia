@@ -161,6 +161,42 @@ export default function ZKTestPage() {
         if (!roomId) return addLog("Enter Room ID first!");
         addLog(`Bots syncing secrets for room #${roomId}...`);
 
+        // 0. USER SHUFFLE (If User is Player 0)
+        // Since createAndJoin puts user at 0, they must shuffle first!
+        try {
+            addLog("Checking if User needs to shuffle...");
+            // Mock deck for user
+            const deck = Array.from({ length: 4 }, (_, k) => k + 1);
+            const deckSalt = "user_deck_salt";
+            const { keccak256, encodeAbiParameters, parseAbiParameters } = await import('viem');
+            const deckStrings = deck.map(String);
+            const encodedDeck = encodeAbiParameters(parseAbiParameters('string[] deck, string salt'), [deckStrings, deckSalt]);
+            const deckHash = keccak256(encodedDeck);
+
+            // Try commitDeck (might fail if not turn, but we try)
+            const txDeck = await writeContractAsync({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MafiaABI.abi,
+                functionName: 'commitDeck',
+                args: [BigInt(roomId), deckHash],
+            });
+            addLog("User commitDeck TX sent...");
+            await publicClient?.waitForTransactionReceipt({ hash: txDeck });
+
+            const txReveal = await writeContractAsync({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MafiaABI.abi,
+                functionName: 'revealDeck',
+                args: [BigInt(roomId), deckStrings, deckSalt],
+            });
+            addLog("User revealDeck TX sent...");
+            await publicClient?.waitForTransactionReceipt({ hash: txReveal });
+            addLog("User shuffle complete! Bots turn.");
+        } catch (e: any) {
+            console.log("User shuffle skipped:", e.message);
+            addLog("User shuffle skipped (check console). Continuing bots...");
+        }
+
         for (let i = 0; i < bots.length; i++) {
             const bot = bots[i];
             if (parseFloat(bot.balance) < 0.0001) continue;
@@ -238,26 +274,33 @@ export default function ZKTestPage() {
                 }
 
                 // 1. ROLE REVEAL PHASE
-                // Now we can proceed to Commit/Confirm Role
                 const roleHash = ShuffleService.createRoleCommitHash(role, salt);
 
-                addLog(`Bot ${bot.address.slice(0, 6)} committing role...`);
-                const tx1 = await botClient.writeContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MafiaABI.abi,
-                    functionName: 'commitRole',
-                    args: [BigInt(roomId), roleHash],
-                });
-                await publicClient?.waitForTransactionReceipt({ hash: tx1 });
+                try {
+                    addLog(`Bot ${bot.address.slice(0, 6)} committing role...`);
+                    const tx1 = await botClient.writeContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MafiaABI.abi,
+                        functionName: 'commitRole',
+                        args: [BigInt(roomId), roleHash],
+                    });
+                    await publicClient?.waitForTransactionReceipt({ hash: tx1 });
+                } catch (e: any) {
+                    // Ignore already committed
+                }
 
-                addLog(`Bot ${bot.address.slice(0, 6)} confirming role...`);
-                const tx2 = await botClient.writeContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MafiaABI.abi,
-                    functionName: 'confirmRole',
-                    args: [BigInt(roomId)],
-                });
-                await publicClient?.waitForTransactionReceipt({ hash: tx2 });
+                try {
+                    addLog(`Bot ${bot.address.slice(0, 6)} confirming role...`);
+                    const tx2 = await botClient.writeContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MafiaABI.abi,
+                        functionName: 'confirmRole',
+                        args: [BigInt(roomId)],
+                    });
+                    await publicClient?.waitForTransactionReceipt({ hash: tx2 });
+                } catch (e: any) {
+                    // Ignore
+                }
 
                 // 2. Sync with Server (so ZK check works)
                 await fetch('/api/game/reveal-secret', {
