@@ -73,22 +73,26 @@ export default function ZKTestPage() {
     const { sendTransactionAsync } = useSendTransaction();
 
     const fundBots = async () => {
-        addLog("Funding bots with 0.01 STT each...");
+        addLog("Funding bots with 0.05 STT each...");
         try {
             for (const bot of bots) {
                 // Check if already funded to save time/gas
-                if (parseFloat(bot.balance) > 0.005) {
+                if (parseFloat(bot.balance) > 0.04) {
                     addLog(`Bot ${bot.address.slice(0, 6)} already has funds. Skipping.`);
                     continue;
                 }
 
                 const hash = await sendTransactionAsync({
                     to: bot.address as `0x${string}`,
-                    value: parseEther("0.01"),
+                    value: parseEther("0.05"),
                 });
-                addLog(`Sent 0.01 STT to ${bot.address.slice(0, 6)}. TX: ${hash}`);
+                addLog(`Sent 0.05 STT to ${bot.address.slice(0, 6)}. Wait for TX: ${hash.slice(0, 10)}...`);
+                if (publicClient) {
+                    await publicClient.waitForTransactionReceipt({ hash });
+                }
             }
-            addLog("Funding complete! Wait a moment then click Update Balances.");
+            addLog("Funding complete! Updating balances...");
+            await updateBotBalances();
         } catch (e: any) {
             addLog(`Funding Failed: ${e.message}`);
         }
@@ -116,13 +120,19 @@ export default function ZKTestPage() {
                     abi: MafiaABI.abi,
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), "BotPlayer", "0x00" as `0x${string}`, "0x0000000000000000000000000000000000000000" as `0x${string}`],
-                    value: BigInt(0)
+                    value: BigInt(0),
+                    gas: 500000n // Explicit gas to avoid estimation issues with low balance
                 });
-                addLog(`Bot ${bot.address.slice(0, 6)} joined! TX: ${hash}`);
+                addLog(`Bot ${bot.address.slice(0, 6)} joined! Wait for TX: ${hash.slice(0, 10)}...`);
+                if (publicClient) {
+                    await publicClient.waitForTransactionReceipt({ hash });
+                }
+                addLog(`Bot ${bot.address.slice(0, 6)} confirmed.`);
             } catch (e: any) {
                 addLog(`Bot Join Error: ${e.message}`);
             }
         }
+        addLog("All bots attempted to join. Click Update Balances to verify.");
     };
 
     const performOnChainAction = async (type: 'create' | 'start') => {
@@ -405,7 +415,7 @@ export default function ZKTestPage() {
                                         <div className="flex flex-col gap-2">
                                             <div className="flex gap-2">
                                                 <Button onClick={updateBotBalances} className="flex-1 bg-blue-900/30 text-[10px] h-8">Upd Balance</Button>
-                                                <Button onClick={fundBots} className="flex-1 bg-yellow-600/50 hover:bg-yellow-500/50 text-[10px] h-8 text-yellow-200">Fund Bots (0.01)</Button>
+                                                <Button onClick={fundBots} className="flex-1 bg-yellow-600/50 hover:bg-yellow-500/50 text-[10px] h-8 text-yellow-200">Fund Bots (0.05)</Button>
                                             </div>
                                             <Button onClick={botsJoinRoom} className="w-full bg-green-900/30 text-[10px] h-8">Join Bots</Button>
                                             <Button onClick={botsCommitRoles} className="w-full bg-purple-900/40 text-[10px] h-8 border border-purple-500/50">Bots Reveal Roles (Commit & Sync)</Button>
