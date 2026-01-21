@@ -33,21 +33,24 @@ button:disabled,
   cursor: not-allowed !important;
 }
 
-/* Custom Scrollbar for Mafia Chat */
-.scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
+/* Custom Scrollbar for Mafia Chat and Lists */
+.scrollbar-thin::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
 }
 
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
+.scrollbar-thin::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(145, 106, 71, 0.05);
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(88, 28, 135, 0.5);
-  /* purple-900/50 */
-  border-radius: 3px;
+.scrollbar-thin::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(145, 106, 71, 0.3);
+  border-radius: 10px;
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(107, 33, 168, 0.7);
+.scrollbar-thin::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(145, 106, 71, 0.5);
 }
