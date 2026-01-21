@@ -177,10 +177,68 @@ export default function ZKTestPage() {
                 const role = i === 0 ? 1 : 4; // First bot is Mafia, others are Civilian
                 const salt = `bot_salt_${bot.address.slice(0, 8)}`;
 
-                // 1. Commit on-chain (so game can advance to Day 1)
-                // We use commitAndConfirmRole if available or just commit + confirm
-                // For simplicity here, we'll just do commitRole
+                // 0. SHUFFLE PHASE (Commit & Reveal Deck)
+                // In a real game, this is complex P2P. For bots, we just submit a dummy deck to satisfy the contract.
+                // We need to generate a valid deck (1..N) and commit it.
+                const deck = Array.from({ length: 4 }, (_, k) => k + 1); // [1, 2, 3, 4]
+                const deckSalt = `bot_deck_salt_${bot.address.slice(0, 8)}`;
                 const { ShuffleService } = await import('@/services/shuffleService');
+
+                // Generate deck hash (using service or manually if service is complex)
+                // We'll trust ShuffleService.createDeckCommitHash exists or use keccak
+                // Actually, let's use a simpler approach if ShuffleService is heavy.
+                // But wait, we need to match the contract's expectations.
+
+                // Let's assume we are in SHUFFLING phase.
+                addLog(`Bot ${bot.address.slice(0, 6)} committing deck...`);
+
+                // We need to implement deck commitment logic
+                // Since this is a test page, we can arguably skip "correct" shuffling if the contract allows simply committing *a* deck.
+                // Contract: revealDeck checks: calculatedHash == commitHash
+
+                // We need the commit hash:
+                // bytes32 calculatedHash = keccak256(abi.encode(deck, salt));
+
+                // To do this in JS (viem):
+                const { keccak256, encodeAbiParameters, parseAbiParameters } = await import('viem');
+
+                // Deck is string[] in contract (uint8[] represented as string?)
+                // revealDeck signature: revealDeck(uint256 roomId, string[] calldata deck, string calldata salt)
+                // Wait, contract view says string[]? Let's verify line 419.
+                // Yes: function revealDeck(uint256 roomId, string[] calldata deck, string calldata salt)
+
+                const deckStrings = deck.map(String);
+
+                const encodedDeck = encodeAbiParameters(
+                    parseAbiParameters('string[] deck, string salt'),
+                    [deckStrings, deckSalt]
+                );
+                const deckHash = keccak256(encodedDeck);
+
+                try {
+                    const txDeck = await botClient.writeContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MafiaABI.abi,
+                        functionName: 'commitDeck',
+                        args: [BigInt(roomId), deckHash],
+                    });
+                    await publicClient?.waitForTransactionReceipt({ hash: txDeck });
+
+                    addLog(`Bot ${bot.address.slice(0, 6)} revealing deck...`);
+                    const txReveal = await botClient.writeContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MafiaABI.abi,
+                        functionName: 'revealDeck',
+                        args: [BigInt(roomId), deckStrings, deckSalt],
+                    });
+                    await publicClient?.waitForTransactionReceipt({ hash: txReveal });
+                } catch (e: any) {
+                    // If we are already past shuffling, this might revert. Ignore and try role.
+                    console.log("Deck phase skipped/failed (maybe already done?):", e.message);
+                }
+
+                // 1. ROLE REVEAL PHASE
+                // Now we can proceed to Commit/Confirm Role
                 const roleHash = ShuffleService.createRoleCommitHash(role, salt);
 
                 addLog(`Bot ${bot.address.slice(0, 6)} committing role...`);
