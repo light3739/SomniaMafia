@@ -1277,8 +1277,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const data = await response.json();
             if (data.winDetected) {
-                const { proof, publicSignals } = data;
-                const proofRoomId = publicSignals[2];
+                const { formatted } = data;
+                const proofRoomId = formatted.inputs[2];
 
                 if (proofRoomId !== roomId.toString()) {
                     console.warn(`[AutoWin] Room ID mismatch: Frontend=${roomId}, Proof=${proofRoomId}`);
@@ -1289,13 +1289,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setIsTxPending(true);
 
                 const formattedProof = {
-                    a: [BigInt(proof.pi_a[0]), BigInt(proof.pi_a[1])],
+                    a: [BigInt(formatted.a[0]), BigInt(formatted.a[1])],
                     b: [
-                        [BigInt(proof.pi_b[0][1]), BigInt(proof.pi_b[0][0])],
-                        [BigInt(proof.pi_b[1][1]), BigInt(proof.pi_b[1][0])],
+                        [BigInt(formatted.b[0][0]), BigInt(formatted.b[0][1])],
+                        [BigInt(formatted.b[1][0]), BigInt(formatted.b[1][1])]
                     ],
-                    c: [BigInt(proof.pi_c[0]), BigInt(proof.pi_c[1])],
-                    inputs: publicSignals.map((s: string) => BigInt(s)) as [bigint, bigint, bigint, bigint, bigint]
+                    c: [BigInt(formatted.c[0]), BigInt(formatted.c[1])],
+                    inputs: formatted.inputs.map((s: string) => BigInt(s)) as [bigint, bigint, bigint, bigint, bigint]
                 };
 
                 // DEBUG LOGGING

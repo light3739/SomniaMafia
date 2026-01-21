@@ -124,15 +124,28 @@ export async function POST(request: Request) {
 
             const { proof, publicSignals } = await Promise.race([proofPromise, timeoutPromise]) as any;
 
-            console.log(`[API/CheckWin] ZK Proof generated successfully for Room #${roomId}`);
+            console.log(`[API/CheckWin] ZK Proof generated. Formatting for Solidity...`);
+
+            const callData = await (snarkjs as any).groth16.exportSolidityCallData(proof, publicSignals);
+            const argv = callData
+                .replace(/["\[\]\s]/g, "")
+                .split(",")
+                .map((x: string) => x.toString());
 
             return NextResponse.json({
                 winDetected: true,
                 result,
                 mafiaCount,
                 townCount,
-                proof,
-                publicSignals
+                formatted: {
+                    a: [argv[0], argv[1]],
+                    b: [
+                        [argv[2], argv[3]],
+                        [argv[4], argv[5]]
+                    ],
+                    c: [argv[6], argv[7]],
+                    inputs: argv.slice(8)
+                }
             });
         }
 
