@@ -112,7 +112,6 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                playClickSound();
                                 setPlayerMark(player.address, null);
                             }}
                             className="w-7 h-7 rounded-full border border-white/20 bg-black/60 backdrop-blur-md flex items-center justify-center transition-all duration-300 hover:scale-110 hover:border-white/40 z-30 shadow-lg"
@@ -160,6 +159,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                             setPlayerMark(player.address, 'civilian');
                                             setIsHoveringMarks(false);
                                         }}
+                                        data-custom-sound="true"
                                         className="absolute p-2 hover:scale-110 transition-transform z-20"
                                     >
                                         <User className="w-6 h-6 text-green-500 drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
@@ -178,6 +178,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                             setPlayerMark(player.address, 'question');
                                             setIsHoveringMarks(false);
                                         }}
+                                        data-custom-sound="true"
                                         className="absolute p-2 hover:scale-110 transition-transform z-20"
                                     >
                                         <HelpCircle className="w-6 h-6 text-amber-500 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
@@ -196,6 +197,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                             setPlayerMark(player.address, 'mafia');
                                             setIsHoveringMarks(false);
                                         }}
+                                        data-custom-sound="true"
                                         className="absolute p-2 hover:scale-110 transition-transform z-20"
                                     >
                                         <Skull className="w-6 h-6 text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
