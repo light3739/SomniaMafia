@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { GameLog } from './GameLog';
@@ -118,6 +118,10 @@ export const GameLayout: React.FC = () => {
         }
     }, [gameState.phase, gameState.dayCount, lastNightDay, playNightTransition]);
 
+    const handleCloseNightAnnouncement = useCallback(() => setShowNightAnnouncement(false), []);
+    const handleCloseMorningAnnouncement = useCallback(() => setShowMorningAnnouncement(false), []);
+    const handleCloseVotingAnnouncement = useCallback(() => setShowVotingAnnouncement(false), []);
+
     useEffect(() => {
         const handleResize = () => {
             const windowWidth = window.innerWidth;
@@ -205,7 +209,7 @@ export const GameLayout: React.FC = () => {
                     style={{
                         backgroundImage: `url(${nightBg})`,
                         opacity: isNightPhase ? 1 : 0,
-                        filter: 'grayscale(100%) brightness(25%) contrast(120%)'
+                        filter: 'grayscale(0%) brightness(25%) contrast(100%)'
                     }}
                 />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#000_100%)]" />
@@ -215,17 +219,17 @@ export const GameLayout: React.FC = () => {
             {/* 1. Environment Transitions */}
             <NightAnnouncement
                 show={showNightAnnouncement}
-                onComplete={() => setShowNightAnnouncement(false)}
+                onComplete={handleCloseNightAnnouncement}
             />
             <MorningAnnouncement
                 show={showMorningAnnouncement}
-                onComplete={() => setShowMorningAnnouncement(false)}
+                onComplete={handleCloseMorningAnnouncement}
             />
 
             {/* 2. Critical Game Events (Voting is more important than Morning bg) */}
             <VotingAnnouncement
                 show={showVotingAnnouncement}
-                onComplete={() => setShowVotingAnnouncement(false)}
+                onComplete={handleCloseVotingAnnouncement}
             />
 
             {/* 2. SCALABLE GAME CONTAINER */}

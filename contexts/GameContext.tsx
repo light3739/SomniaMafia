@@ -73,6 +73,8 @@ interface GameContextType {
     canActOnPlayer: (target: Player) => boolean;
     setIsTestMode: (val: boolean) => void;
     isTestMode: boolean;
+    playerMarks: Record<string, 'mafia' | 'civilian' | 'question' | null>;
+    setPlayerMark: (address: string, mark: 'mafia' | 'civilian' | 'question' | null) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -114,6 +116,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const publicClient = usePublicClient();
     const [isTxPending, setIsTxPending] = useState(false);
     const [isTestMode, setIsTestMode] = useState(false);
+    const [playerMarks, setPlayerMarks] = useState<Record<string, 'mafia' | 'civilian' | 'question' | null>>({});
+
+    const setPlayerMark = useCallback((address: string, mark: 'mafia' | 'civilian' | 'question' | null) => {
+        setPlayerMarks(prev => ({
+            ...prev,
+            [address.toLowerCase()]: mark
+        }));
+    }, []);
 
     // Функция для получения session wallet client (вызывается при каждой транзакции)
     const getSessionWalletClient = useCallback(() => {
@@ -869,7 +879,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('vote', [currentRoomId, targetAddress]);
-            addLog(`Voted for ${targetAddress.slice(0, 6)}...`, "warning");
+            const targetPlayer = gameState.players.find(p => p.address.toLowerCase() === targetAddress.toLowerCase());
+            const targetName = targetPlayer ? (targetPlayer.name || `Player ${gameState.players.indexOf(targetPlayer) + 1}`) : targetAddress.slice(0, 6);
+            addLog(`🗳️ You voted for ${targetName}`, "warning");
             await publicClient?.waitForTransactionReceipt({ hash });
             // V3: auto-finalize when all voted - just refresh
             await refreshPlayersList(currentRoomId);
@@ -1539,7 +1551,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!roomId) return;
 
             if (BigInt(logs[0].args.roomId) === roomId) {
-                addLog("Voting has started!", "phase");
+                addLog("📢 Voting Phase has started! Choose who to eliminate.", "phase");
                 refreshPlayersList(roomId);
             }
         }
@@ -1687,7 +1699,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const from = logs[0].args.from;
-                addLog(`${from.slice(0, 6)}... shared decryption keys`, "success");
+                const fromPlayer = gameState.players.find(p => p.address.toLowerCase() === from.toLowerCase());
+                const name = fromPlayer ? (fromPlayer.name || `Player ${gameState.players.indexOf(fromPlayer) + 1}`) : from.slice(0, 6);
+                addLog(`🔑 ${name} shared decryption keys`, "success");
             }
         }
     });
@@ -1703,7 +1717,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const voter = logs[0].args.voter;
                 const target = logs[0].args.target;
-                addLog(`${voter.slice(0, 6)}... voted for ${target.slice(0, 6)}...`, "warning");
+                const voterPlayer = gameState.players.find(p => p.address.toLowerCase() === voter.toLowerCase());
+                const targetPlayer = gameState.players.find(p => p.address.toLowerCase() === target.toLowerCase());
+                const voterLabel = voterPlayer ? (voterPlayer.name || `Player ${gameState.players.indexOf(voterPlayer) + 1}`) : voter.slice(0, 6);
+                const targetLabel = targetPlayer ? (targetPlayer.name || `Player ${gameState.players.indexOf(targetPlayer) + 1}`) : target.slice(0, 6);
+                addLog(`🗳️ ${voterLabel} cast a vote for ${targetLabel}`, "warning");
             }
         }
     });
@@ -1720,9 +1738,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const eliminated = logs[0].args.eliminated;
                 const voteCount = Number(logs[0].args.voteCount);
                 if (eliminated !== '0x0000000000000000000000000000000000000000') {
-                    addLog(`${eliminated.slice(0, 6)}... was eliminated with ${voteCount} votes!`, "danger");
+                    const elPlayer = gameState.players.find(p => p.address.toLowerCase() === eliminated.toLowerCase());
+                    const name = elPlayer ? (elPlayer.name || `Player ${gameState.players.indexOf(elPlayer) + 1}`) : eliminated.slice(0, 6);
+                    addLog(`💀 Execution: ${name} was eliminated with ${voteCount} votes!`, "danger");
                 } else {
-                    addLog("No one was eliminated - no majority reached.", "warning");
+                    addLog("⚖️ No one was eliminated - no majority reached.", "warning");
                 }
                 refreshPlayersList(roomId);
                 // Trigger auto-win check because an elimination might end the game
@@ -1744,9 +1764,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const healed = logs[0].args.healed;
                 if (killed !== '0x0000000000000000000000000000000000000000') {
                     if (killed === healed) {
-                        addLog(`Someone was saved by the doctor!`, "success");
+                        addLog(`🛡️ Someone was saved by the doctor!`, "success");
                     } else {
-                        addLog(`${killed.slice(0, 6)}... was killed during the night!`, "danger");
+                        const kPlayer = gameState.players.find(p => p.address.toLowerCase() === killed.toLowerCase());
+                        const name = kPlayer ? (kPlayer.name || `Player ${gameState.players.indexOf(kPlayer) + 1}`) : killed.slice(0, 6);
+                        addLog(`🩸 Tragedy: ${name} was killed during the night!`, "danger");
                     }
                 } else {
                     addLog("The night passes peacefully...", "info");
@@ -1768,7 +1790,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const player = logs[0].args.player;
-                addLog(`${player.slice(0, 6)}... committed night action`, "info");
+                const p = gameState.players.find(pl => pl.address.toLowerCase() === player.toLowerCase());
+                const name = p ? (p.name || `Player ${gameState.players.indexOf(p) + 1}`) : player.slice(0, 6);
+                addLog(`🌙 ${name} committed a night action`, "info");
 
                 // Play shot sound
                 try {
@@ -1800,14 +1824,52 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
 
+    // Check if current player can act on target
+    const canActOnPlayer = useCallback((target: Player) => {
+        if (!target.isAlive) return false;
+
+        // NEW: Player cannot target themselves in any action (voting or night)
+        if (target.address.toLowerCase() === myPlayer?.address.toLowerCase()) {
+            return false;
+        }
+
+        if (gameState.phase === GamePhase.VOTING) {
+            return true;
+        }
+
+        if (gameState.phase === GamePhase.NIGHT) {
+            // Only roles with night abilities can act
+            const myRole = myPlayer?.role;
+            if (myRole === Role.MAFIA || myRole === Role.DETECTIVE || myRole === Role.DOCTOR) {
+                // NEW: Mafia cannot target other Mafia members
+                if (myRole === Role.MAFIA && target.role === Role.MAFIA) {
+                    return false;
+                }
+
+                // All night roles are now blocked from targeting self by the check above
+                return true;
+            }
+            return false; // Civilians cannot act at night
+        }
+
+        return false;
+    }, [gameState.phase, myPlayer]);
+
+
     // Helper для UI - works for both VOTING and NIGHT phases
     const handlePlayerAction = useCallback((targetId: `0x${string}`) => {
+        const targetPlayer = gameState.players.find(p => p.address.toLowerCase() === targetId.toLowerCase());
+        if (!targetPlayer || !canActOnPlayer(targetPlayer)) {
+            console.log("Action not allowed on this player");
+            return;
+        }
+
         if (gameState.phase === GamePhase.VOTING || gameState.phase === GamePhase.NIGHT) {
             setSelectedTarget(prev => prev === targetId ? null : targetId);
         } else {
             console.log("Cannot select player in this phase");
         }
-    }, [gameState.phase]);
+    }, [gameState.phase, gameState.players, canActOnPlayer]);
 
 
 
@@ -1858,29 +1920,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return "SELECT";
     };
 
-    // Check if current player can act on target
-    const canActOnPlayer = (target: Player) => {
-        if (!target.isAlive) return false;
-
-        if (gameState.phase === GamePhase.VOTING) {
-            return true;
-        }
-
-        if (gameState.phase === GamePhase.NIGHT) {
-            // Only roles with night abilities can act
-            const myRole = myPlayer?.role;
-            if (myRole === Role.MAFIA || myRole === Role.DETECTIVE || myRole === Role.DOCTOR) {
-                // Doctor can target self, others cannot
-                if (myRole !== Role.DOCTOR && target.address.toLowerCase() === myPlayer?.address.toLowerCase()) {
-                    return false;
-                }
-                return true;
-            }
-            return false; // Civilians cannot act at night
-        }
-
-        return false;
-    };
 
     const contextValue = useMemo(() => ({
         playerName, setPlayerName, avatarUrl, setAvatarUrl, lobbyName, setLobbyName,
@@ -1899,6 +1938,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         selectedTarget, setSelectedTarget,
         isTestMode, setIsTestMode,
+        playerMarks, setPlayerMark,
         setCurrentRoomId
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, currentRoomId,
@@ -1913,6 +1953,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         isTestMode, setIsTestMode,
         selectedTarget,
+        playerMarks, setPlayerMark,
         setCurrentRoomId
     ]);
 

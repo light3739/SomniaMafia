@@ -1,5 +1,5 @@
 // components/game/DayPhase.tsx
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
@@ -7,7 +7,8 @@ import { usePublicClient } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { GamePhase, Player } from '../../types';
 import { Button } from '../ui/Button';
-import { Sun, Vote, Check, Clock, User, Skull } from 'lucide-react';
+import { Sun, Vote, Check, Clock, User, Skull, Mic, MicOff, ChevronRight } from 'lucide-react';
+import { GameLog } from './GameLog';
 
 interface VoteState {
     myVote: string | null;
@@ -37,56 +38,104 @@ export const DayPhase: React.FC = React.memo(() => {
     });
     const [isProcessing, setIsProcessing] = useState(false);
 
+    // Discussion Speech Logic
+    const [speakerIndex, setSpeakerIndex] = useState(0);
+    const [speechTimeLeft, setSpeechTimeLeft] = useState(60);
+    const [isSpeechActive, setIsSpeechActive] = useState(false);
+    const [isCountingDown, setIsCountingDown] = useState(false);
+
     const isVotingPhase = gameState.phase === GamePhase.VOTING;
     const isDayPhase = gameState.phase === GamePhase.DAY;
 
-    // Восстановление состояния из блокчейна после рефреша
-    useEffect(() => {
-        // Если блокчейн говорит, что мы проголосовали, а локально мы "не в курсе"
-        if (myPlayer?.hasVoted && !voteState.hasVoted) {
-            console.log("Recovering vote state: Already voted on-chain");
-            setVoteState(prev => ({
-                ...prev,
-                hasVoted: true,
-                // Мы не знаем за кого голосовали (контракт не отдает это просто так),
-                // но знаем ЧТО голосовали - UI заблокирует кнопку
-            }));
-        }
-    }, [myPlayer?.hasVoted, voteState.hasVoted]);
-
-    // Первый игрок (хост) может управлять фазами
-    const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
-
-    // Живые игроки
     const alivePlayers = gameState.players.filter(p => p.isAlive);
+    const currentSpeaker = alivePlayers[speakerIndex];
+    const isMyTurnToSpeak = currentSpeaker?.address.toLowerCase() === myPlayer?.address.toLowerCase();
 
-    // Получить количество голосов из контракта
+    const lastLoggedPhase = useRef<GamePhase | null>(null);
+
+    // Initial phase log
+    useEffect(() => {
+        if (gameState.phase !== lastLoggedPhase.current) {
+            if (isDayPhase) {
+                addLog("Discussion Phase: Players will take turns to speak (60s each).", "info");
+                setSpeakerIndex(0);
+                setSpeechTimeLeft(60);
+                setIsSpeechActive(false);
+                setIsCountingDown(false);
+            } else if (isVotingPhase) {
+                const quorum = Math.floor(alivePlayers.length / 2) + 1;
+                addLog(`Voting Phase Started. Quorum needed: ${quorum}.`, "warning");
+            }
+            lastLoggedPhase.current = gameState.phase;
+        }
+    }, [gameState.phase, isDayPhase, isVotingPhase, alivePlayers.length, addLog]);
+
+    // Speech Timer
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (isDayPhase && isSpeechActive && speechTimeLeft > 0) {
+            interval = setInterval(() => {
+                setSpeechTimeLeft(prev => prev - 1);
+            }, 1000);
+        } else if (speechTimeLeft === 0 && isSpeechActive) {
+            handleNextSpeaker();
+        }
+        return () => clearInterval(interval);
+    }, [isDayPhase, isSpeechActive, speechTimeLeft]);
+
+    const handleStartSpeech = () => {
+        setIsSpeechActive(true);
+        const speakerName = currentSpeaker?.name || `Player ${speakerIndex + 1}`;
+        addLog(`🎙️ ${speakerName} started their speech.`, "info");
+    };
+
+    const handleNextSpeaker = () => {
+        setIsSpeechActive(false);
+        if (speakerIndex < alivePlayers.length - 1) {
+            setSpeakerIndex(prev => prev + 1);
+            setSpeechTimeLeft(60);
+        } else {
+            // All speakers finished
+            startFinalCountdown();
+        }
+    };
+
+    const startFinalCountdown = () => {
+        if (isCountingDown) return;
+        setIsCountingDown(true);
+
+        addLog("All players have spoken. Voting starts in...", "warning");
+
+        let count = 3;
+        const timer = setInterval(() => {
+            if (count > 0) {
+                addLog(`${count}...`, "warning");
+                count--;
+            } else {
+                clearInterval(timer);
+                if (gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase()) {
+                    handleStartVoting();
+                }
+            }
+        }, 1000);
+    };
+
+    // Voting Logic (Polling)
     const fetchVoteCounts = useCallback(async () => {
         if (!publicClient || !currentRoomId) return;
-
         try {
             const counts = new Map<string, number>();
-
             for (const player of gameState.players) {
                 if (!player.isAlive) continue;
-
                 const count = await publicClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'voteCounts',
                     args: [BigInt(String(currentRoomId || 0)), player.address as `0x${string}`],
                 }) as unknown as bigint;
-
                 counts.set(player.address.toLowerCase(), Number(count));
             }
-
-            // Если мы в процессе отправки голоса - не затираем Optimistic UI старыми данными с чейна
-            if (isProcessing || isTxPending) {
-                console.log('[DayPhase] Skipping vote sync: transaction in progress');
-                return;
-            }
-
-            // Проверить мой голос
+            if (isProcessing || isTxPending) return;
             if (myPlayer) {
                 const myVote = await publicClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -94,13 +143,10 @@ export const DayPhase: React.FC = React.memo(() => {
                     functionName: 'votes',
                     args: [BigInt(String(currentRoomId || 0)), myPlayer.address as `0x${string}`],
                 }) as `0x${string}`;
-
                 const hasVoted = myVote !== '0x0000000000000000000000000000000000000000';
-
                 setVoteState(prev => ({
                     ...prev,
                     voteCounts: counts,
-                    // Sticky true: keep local vote if chain lags
                     myVote: (hasVoted ? myVote : null) || prev.myVote,
                     hasVoted: prev.hasVoted || hasVoted
                 }));
@@ -108,9 +154,8 @@ export const DayPhase: React.FC = React.memo(() => {
         } catch (e) {
             console.error("Failed to fetch votes:", e);
         }
-    }, [publicClient, currentRoomId, gameState.players, myPlayer]);
+    }, [publicClient, currentRoomId, gameState.players, myPlayer, isProcessing, isTxPending]);
 
-    // Polling
     useEffect(() => {
         if (isVotingPhase) {
             fetchVoteCounts();
@@ -119,69 +164,62 @@ export const DayPhase: React.FC = React.memo(() => {
         }
     }, [fetchVoteCounts, isVotingPhase]);
 
-    // Начать голосование
     const handleStartVoting = async () => {
         setIsProcessing(true);
         try {
             await startVotingOnChain();
+        } catch (e) {
+            addLog("Failed to start voting on-chain", "danger");
         } finally {
             setIsProcessing(false);
         }
     };
 
-    // Проголосовать (Optimistic UI - мгновенное обновление с rollback при ошибке)
     const handleVote = async () => {
         if (!selectedTarget) return;
         playVoteSound();
-
-        // Сохраняем предыдущее состояние для rollback
-        const previousVote = voteState.myVote;
-        const previousHasVoted = voteState.hasVoted;
-        const votedTarget = selectedTarget;
-
-        // Optimistic: обновляем UI сразу
-        setVoteState(prev => ({ ...prev, hasVoted: true, myVote: votedTarget }));
+        const prevVote = voteState.myVote;
+        const prevHasVoted = voteState.hasVoted;
+        setVoteState(prev => ({ ...prev, hasVoted: true, myVote: selectedTarget }));
         setSelectedTarget(null);
         setIsProcessing(true);
-
         try {
-            await voteOnChain(votedTarget);
-            // Успех - UI уже обновлён
+            await voteOnChain(selectedTarget);
         } catch (e: any) {
-            // Rollback при ошибке
-            setVoteState(prev => ({ ...prev, hasVoted: previousHasVoted, myVote: previousVote }));
-            addLog(e.shortMessage || "Vote failed, please try again", "danger");
+            setVoteState(prev => ({ ...prev, hasVoted: prevHasVoted, myVote: prevVote }));
+            addLog(e.shortMessage || "Vote failed", "danger");
         } finally {
             setIsProcessing(false);
         }
     };
-
-    // V3: Voting auto-finalizes when all players have voted
-
-    // Посчитать общее количество голосов
-    const totalVotes = Array.from(voteState.voteCounts.values()).reduce((a, b) => a + b, 0);
-    const quorumNeeded = Math.floor(alivePlayers.length / 2) + 1;
 
     return (
         <div className="w-full h-full flex flex-col items-center justify-center p-4 md:p-8">
             <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
                 className="max-w-2xl w-full"
             >
                 {/* Header */}
-                <div className="text-center mb-6">
-
-
-                    <h2 className="text-2xl font-['Playfair_Display'] text-white mb-2">
-                        {isVotingPhase ? 'Choose who to eliminate' : 'Discussion Phase'}
+                <div className="text-center mb-4">
+                    <h2 className="text-2xl font-['Playfair_Display'] text-white">
+                        {isVotingPhase ? 'Elimination Vote' : 'Discussion Phase'}
                     </h2>
-                    <p className="text-white/50 text-sm">
-                        {isVotingPhase
-                            ? `${totalVotes} votes cast. Quorum: ${quorumNeeded} votes needed.`
-                            : 'Discuss and find the mafia among you'
-                        }
-                    </p>
+                    {isDayPhase && !isCountingDown && (
+                        <div className="flex items-center justify-center gap-2 mt-1 text-[#916A47] text-sm font-medium">
+                            <User className="w-4 h-4" />
+                            <span>Speaker {speakerIndex + 1}/{alivePlayers.length}: {currentSpeaker?.name}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Event Feed - Larger height */}
+                <div className="mb-4 h-[360px] w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
+                    <div className="absolute top-2 right-3 z-10 flex gap-1">
+                        <div className="w-1 h-1 rounded-full bg-[#916A47]/40" />
+                        <div className="w-1 h-1 rounded-full bg-[#916A47]/20" />
+                    </div>
+                    <GameLog />
                 </div>
 
                 {/* Actions */}
@@ -193,19 +231,60 @@ export const DayPhase: React.FC = React.memo(() => {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
+                                className="w-full"
                             >
-                                <Button
-                                    onClick={handleStartVoting}
-                                    isLoading={isProcessing || isTxPending}
-                                    disabled={isProcessing || isTxPending}
-                                    className="w-full h-[50px]"
-                                >
-                                    <Vote className="w-5 h-5 mr-2" />
-                                    Start Voting
-                                </Button>
-                                <p className="text-center text-white/30 text-xs mt-2">
-                                    When ready, start the voting to eliminate a suspect
-                                </p>
+                                {!isCountingDown ? (
+                                    isMyTurnToSpeak ? (
+                                        !isSpeechActive ? (
+                                            <Button
+                                                onClick={handleStartSpeech}
+                                                className="w-full h-[60px] text-lg font-bold"
+                                            >
+                                                <Mic className="w-6 h-6 mr-2" />
+                                                Start My Speech (60s)
+                                            </Button>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between px-6 py-3 bg-[#916A47]/10 rounded-xl border border-[#916A47]/30">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="relative">
+                                                            <Mic className="w-5 h-5 text-[#916A47]" />
+                                                            <div className="absolute inset-0 animate-ping opacity-40 bg-[#916A47] rounded-full" />
+                                                        </div>
+                                                        <span className="text-white font-bold">You are speaking...</span>
+                                                    </div>
+                                                    <div className="text-[#916A47] font-mono text-xl font-bold">
+                                                        {speechTimeLeft}s
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    onClick={handleNextSpeaker}
+                                                    variant="outline-gold"
+                                                    className="w-full h-[50px]"
+                                                >
+                                                    Finish Early
+                                                    <ChevronRight className="w-4 h-4 ml-2" />
+                                                </Button>
+                                            </div>
+                                        )
+                                    ) : (
+                                        <div className="w-full py-4 text-center bg-black/20 rounded-xl border border-white/5 disabled opacity-70">
+                                            <p className="text-white/40 text-sm mb-1 uppercase tracking-widest">Next Speaker</p>
+                                            <p className="text-white font-medium">{currentSpeaker?.name}</p>
+                                            {isSpeechActive && (
+                                                <div className="text-[#916A47] font-mono mt-2 text-lg">
+                                                    Speaking: {speechTimeLeft}s
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                ) : (
+                                    <div className="w-full py-6 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                        <p className="text-[#916A47] font-bold text-xl animate-pulse">
+                                            PREPARING VOTING
+                                        </p>
+                                    </div>
+                                )}
                             </motion.div>
                         )}
 
@@ -217,47 +296,31 @@ export const DayPhase: React.FC = React.memo(() => {
                                 exit={{ opacity: 0, y: -10 }}
                                 className="space-y-3"
                             >
-                                {/* Vote button */}
                                 <Button
                                     onClick={handleVote}
                                     data-custom-sound
                                     isLoading={isProcessing || isTxPending}
                                     disabled={!selectedTarget || isProcessing || isTxPending}
                                     variant={selectedTarget ? 'primary' : 'outline-gold'}
-                                    className="w-full h-[50px]"
+                                    className="w-full h-[60px] text-lg"
                                 >
                                     {selectedTarget ? (
                                         <>
-                                            <Vote className="w-5 h-5 mr-2" />
+                                            <Vote className="w-6 h-6 mr-2" />
                                             Vote for {gameState.players.find(p => p.address.toLowerCase() === selectedTarget.toLowerCase())?.name}
                                         </>
                                     ) : voteState.hasVoted ? (
                                         <>
-                                            <Check className="w-5 h-5 mr-2" />
-                                            Vote Cast (tap player to change)
+                                            <Check className="w-6 h-6 mr-2" />
+                                            Vote Committed
                                         </>
                                     ) : (
-                                        'Select a player to vote'
+                                        'Select a target on the board'
                                     )}
                                 </Button>
-
-                                {/* V3: Auto-finalize info */}
-                                <div className="text-center text-white/40 text-sm">
-                                    {totalVotes}/{alivePlayers.length} voted • Auto-finalize when all vote
-                                </div>
                             </motion.div>
                         )}
                     </AnimatePresence>
-                </div>
-
-                {/* Info */}
-                <div className="mt-6 text-center">
-                    <p className="text-white/20 text-xs">
-                        {isVotingPhase
-                            ? 'The player with the most votes (and quorum) will be eliminated'
-                            : 'Talk with other players to identify the mafia'
-                        }
-                    </p>
                 </div>
             </motion.div>
         </div>
