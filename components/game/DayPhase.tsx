@@ -57,18 +57,30 @@ export const DayPhase: React.FC = React.memo(() => {
     useEffect(() => {
         if (gameState.phase !== lastLoggedPhase.current) {
             if (isDayPhase) {
-                addLog("Discussion Phase: Players will take turns to speak (60s each).", "info");
-                setSpeakerIndex(0);
-                setSpeechTimeLeft(60);
-                setIsSpeechActive(false);
-                setIsCountingDown(false);
+                // TEMPORARILY DISABLED: Speech phase - skip directly to voting
+                // addLog("Discussion Phase: Players will take turns to speak (60s each).", "info");
+                // setSpeakerIndex(0);
+                // setSpeechTimeLeft(60);
+                // setIsSpeechActive(false);
+                // setIsCountingDown(false);
+
+                // Auto-start voting when day begins (host triggers)
+                if (gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase()) {
+                    addLog("Day Phase: Starting vote...", "info");
+                    // Small delay to let UI render
+                    setTimeout(() => {
+                        handleStartVoting();
+                    }, 1000);
+                } else {
+                    addLog("Day Phase: Waiting for vote to start...", "info");
+                }
             } else if (isVotingPhase) {
                 const quorum = Math.floor(alivePlayers.length / 2) + 1;
                 addLog(`Voting Phase Started. Quorum needed: ${quorum}.`, "warning");
             }
             lastLoggedPhase.current = gameState.phase;
         }
-    }, [gameState.phase, isDayPhase, isVotingPhase, alivePlayers.length, addLog]);
+    }, [gameState.phase, isDayPhase, isVotingPhase, alivePlayers.length, addLog, gameState.players, myPlayer?.address]);
 
     // Speech Timer
     useEffect(() => {
@@ -225,6 +237,7 @@ export const DayPhase: React.FC = React.memo(() => {
                 {/* Actions */}
                 <div className="space-y-3">
                     <AnimatePresence mode="wait">
+                        {/* TEMPORARILY DISABLED: Speech phase UI - day now starts directly with voting */}
                         {isDayPhase && (
                             <motion.div
                                 key="day-actions"
@@ -233,60 +246,14 @@ export const DayPhase: React.FC = React.memo(() => {
                                 exit={{ opacity: 0, y: -10 }}
                                 className="w-full"
                             >
-                                {!isCountingDown ? (
-                                    isMyTurnToSpeak ? (
-                                        !isSpeechActive ? (
-                                            <Button
-                                                onClick={handleStartSpeech}
-                                                className="w-full h-[60px] text-lg font-bold"
-                                            >
-                                                <Mic className="w-6 h-6 mr-2" />
-                                                Start My Speech (60s)
-                                            </Button>
-                                        ) : (
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between px-6 py-3 bg-[#916A47]/10 rounded-xl border border-[#916A47]/30">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="relative">
-                                                            <Mic className="w-5 h-5 text-[#916A47]" />
-                                                            <div className="absolute inset-0 animate-ping opacity-40 bg-[#916A47] rounded-full" />
-                                                        </div>
-                                                        <span className="text-white font-bold">You are speaking...</span>
-                                                    </div>
-                                                    <div className="text-[#916A47] font-mono text-xl font-bold">
-                                                        {speechTimeLeft}s
-                                                    </div>
-                                                </div>
-                                                <Button
-                                                    onClick={handleNextSpeaker}
-                                                    variant="outline-gold"
-                                                    className="w-full h-[50px]"
-                                                >
-                                                    Finish Early
-                                                    <ChevronRight className="w-4 h-4 ml-2" />
-                                                </Button>
-                                            </div>
-                                        )
-                                    ) : (
-                                        <div className="w-full py-4 text-center bg-black/20 rounded-xl border border-white/5 disabled opacity-70">
-                                            <p className="text-white/40 text-sm mb-1 uppercase tracking-widest">Next Speaker</p>
-                                            <p className="text-white font-medium">{currentSpeaker?.name}</p>
-                                            {isSpeechActive && (
-                                                <div className="text-[#916A47] font-mono mt-2 text-lg">
-                                                    Speaking: {speechTimeLeft}s
-                                                </div>
-                                            )}
-                                        </div>
-                                    )
-                                ) : (
-                                    <div className="w-full py-6 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
-                                        <p className="text-[#916A47] font-bold text-xl animate-pulse">
-                                            PREPARING VOTING
-                                        </p>
-                                    </div>
-                                )}
+                                <div className="w-full py-6 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                    <p className="text-[#916A47] font-bold text-xl animate-pulse">
+                                        Starting Vote...
+                                    </p>
+                                </div>
                             </motion.div>
                         )}
+                        {/* END DISABLED SPEECH UI */}
 
                         {isVotingPhase && (
                             <motion.div
