@@ -5,7 +5,8 @@ import * as snarkjs from 'snarkjs';
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { roomId, mafiaCount, townCount } = body;
+        const { roomId: rawRoomId, mafiaCount, townCount } = body;
+        const roomId = BigInt(rawRoomId).toString();
 
         console.log(`[ZK-API] Generating proof for Room #${roomId}`);
 
