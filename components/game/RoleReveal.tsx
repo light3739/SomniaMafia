@@ -8,7 +8,7 @@ import { usePublicClient, useAccount } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { Role, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
-import { Eye, EyeOff, Check, Users, Skull, Shield, Search, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Check, Users, Skull, Shield, Search, Loader2, RefreshCw } from 'lucide-react';
 
 interface RevealState {
     deck: string[];
@@ -283,14 +283,19 @@ export const RoleReveal: React.FC = () => {
                 teammates
             }));
 
-            // Обновляем gameState с моей ролью
+            // Обновляем gameState с моей ролью и ролями союзников (если я мафия)
             setGameState(prev => ({
                 ...prev,
-                players: prev.players.map(p =>
-                    p.address.toLowerCase() === myPlayer?.address.toLowerCase()
-                        ? { ...p, role }
-                        : p
-                )
+                players: prev.players.map(p => {
+                    const addr = p.address.toLowerCase();
+                    if (addr === myPlayer?.address.toLowerCase()) {
+                        return { ...p, role };
+                    }
+                    if (role === Role.MAFIA && teammates.some(t => t.toLowerCase() === addr)) {
+                        return { ...p, role: Role.MAFIA };
+                    }
+                    return p;
+                })
             }));
 
             addLog(`Your role: ${role}`, "success");
@@ -400,7 +405,6 @@ export const RoleReveal: React.FC = () => {
             >
                 <AnimatePresence mode="wait">
                     {!revealState.isRevealed ? (
-                        // Phase 1: Key Exchange
                         <motion.div
                             key="exchange"
                             initial={{ opacity: 0, y: 20 }}
@@ -408,98 +412,114 @@ export const RoleReveal: React.FC = () => {
                             exit={{ opacity: 0, y: -20 }}
                             className="bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl pointer-events-auto"
                         >
-                            <div className="text-center mb-8">
-                                <Eye className="w-12 h-12 text-[#916A47] mx-auto mb-4" />
-                                <h2 className="text-2xl font-['Playfair_Display'] text-white mb-2">
+                            <div className="text-center mb-6">
+                                <Search className="w-10 h-10 text-[#916A47] mx-auto mb-3" />
+                                <h2 className="text-2xl font-['Playfair_Display'] text-white mb-1">
                                     Role Reveal
                                 </h2>
-                                <p className="text-white/50 text-sm">
-                                    Exchange decryption keys to reveal your role
+                                <p className="text-white/40 text-[13px]">
+                                    {revealState.hasSharedKeys ? 'Keys shared. Collecting from others...' : 'Decrypting game data...'}
                                 </p>
                             </div>
 
-                            {/* Progress */}
-                            <div className="mb-6">
-                                <div className="flex justify-between text-xs text-white/40 mb-2">
-                                    <span>Keys Collected</span>
-                                    <span>{keysCollected} / {keysNeeded}</span>
+                            {/* Players Key Status List */}
+                            <div className="space-y-1.5 mb-4 max-h-[180px] overflow-y-auto custom-scrollbar pr-2">
+                                {gameState.players.map((player, index) => {
+                                    const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
+                                    const hasKey = revealState.collectedKeys.has(player.address.toLowerCase());
+                                    const isProcessingMe = isMe && isProcessing && !revealState.hasSharedKeys;
+
+                                    return (
+                                        <motion.div
+                                            key={player.address}
+                                            layout
+                                            className={`
+                                                flex items-center justify-between p-3 rounded-xl border transition-all h-12 relative overflow-hidden
+                                                ${hasKey || (isMe && revealState.hasSharedKeys)
+                                                    ? 'bg-green-900/10 border-green-500/20 shadow-[0_0_10px_rgba(34,197,94,0.05)]'
+                                                    : isMe
+                                                        ? 'bg-[#916A47]/20 border-[#916A47]/40'
+                                                        : 'bg-white/5 border-white/10'
+                                                }
+                                            `}
+                                        >
+                                            {/* Scanner effect for active tasks */}
+                                            {(isProcessingMe || (!hasKey && !isMe)) && (
+                                                <motion.div
+                                                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"
+                                                    animate={{ x: ['-100%', '100%'] }}
+                                                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                                />
+                                            )}
+
+                                            <div className="flex items-center gap-3 relative z-10">
+                                                <div className={`
+                                                    w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold
+                                                    ${isMe && !revealState.hasSharedKeys ? 'bg-[#916A47] text-black' : (hasKey || (isMe && revealState.hasSharedKeys)) ? 'bg-green-600 text-white' : 'bg-white/10 text-white/40'}
+                                                `}>
+                                                    {(hasKey || (isMe && revealState.hasSharedKeys)) ? <Check className="w-3 h-3" /> : index + 1}
+                                                </div>
+                                                <span className={`text-sm font-medium ${(isMe && !revealState.hasSharedKeys) ? 'text-[#916A47]' : 'text-white'}`}>
+                                                    {player.name} {isMe && '(You)'}
+                                                </span>
+                                            </div>
+                                            <div className="text-[10px] relative z-10 font-mono">
+                                                {(hasKey || (isMe && revealState.hasSharedKeys)) ? (
+                                                    <span className="text-green-400 font-bold uppercase tracking-wider">Ready</span>
+                                                ) : isProcessingMe ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[#916A47] font-bold">Sharing...</span>
+                                                        <RefreshCw className="w-3 h-3 animate-spin text-[#916A47]" />
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-white/20 uppercase tracking-widest">Waiting</span>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Integrated Progress Bar */}
+                            <div className="mb-4 p-3 bg-white/5 rounded-xl border border-white/10 flex items-center gap-4">
+                                <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[#916A47]/10">
+                                    <Eye className="w-4 h-4 text-[#916A47]" />
                                 </div>
-                                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                                    <motion.div
-                                        className="h-full bg-gradient-to-r from-[#916A47] to-[#c9a227]"
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${(keysCollected / keysNeeded) * 100}%` }}
-                                    />
+                                <div className="flex-1">
+                                    <div className="flex justify-between text-[10px] text-white/40 mb-1.5">
+                                        <span>KEYS COLLECTED</span>
+                                        <span className="font-mono text-[#916A47] font-bold">{keysCollected} / {keysNeeded}</span>
+                                    </div>
+                                    <div className="h-1.5 bg-black/40 rounded-full overflow-hidden p-[1px]">
+                                        <motion.div
+                                            className="h-full bg-gradient-to-r from-[#916A47] to-[#c9a227] rounded-full"
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${(keysCollected / keysNeeded) * 100}%` }}
+                                            transition={{ duration: 0.8 }}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Actions */}
                             <div className="space-y-3">
-                                <Button
-                                    onClick={shareMyKey}
-                                    isLoading={isProcessing && !revealState.hasSharedKeys}
-                                    disabled={isProcessing || isTxPending || revealState.hasSharedKeys}
-                                    variant="outline-gold"
-                                    className="w-full"
-                                >
-                                    {revealState.hasSharedKeys ? (
-                                        <span className="flex items-center gap-2">
-                                            <Check className="w-4 h-4" /> Keys Shared
-                                        </span>
-                                    ) : isProcessing ? (
-                                        'Auto-sharing keys...'
-                                    ) : (
-                                        'Share My Decryption Key'
-                                    )}
-                                </Button>
-
-                                <Button
-                                    onClick={decryptMyRole}
-                                    isLoading={isProcessing}
-                                    disabled={isProcessing || keysCollected < keysNeeded}
-                                    className="w-full"
-                                >
-                                    {revealState.isRevealed ? (
-                                        <span className="flex items-center gap-2">
-                                            <Check className="w-4 h-4" /> Decrypted
-                                        </span>
-                                    ) : keysCollected < keysNeeded ? (
-                                        `Waiting for ${keysNeeded - keysCollected} more keys...`
-                                    ) : isProcessing ? (
-                                        'Auto-decrypting role...'
-                                    ) : (
-                                        'Decrypt My Role'
-                                    )}
-                                </Button>
-                            </div>
-
-                            {/* Players status */}
-                            <div className="mt-6 pt-4 border-t border-white/10">
-                                <p className="text-xs text-white/30 mb-3">Key Status:</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {gameState.players.map(player => {
-                                        const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
-                                        const hasKey = revealState.collectedKeys.has(player.address.toLowerCase());
-
-                                        return (
-                                            <div
-                                                key={player.address}
-                                                className={`
-                                                    px-2 py-1 rounded-full text-xs flex items-center gap-1
-                                                    ${isMe
-                                                        ? 'bg-[#916A47]/30 text-[#916A47]'
-                                                        : hasKey
-                                                            ? 'bg-green-900/30 text-green-400'
-                                                            : 'bg-white/5 text-white/30'
-                                                    }
-                                                `}
-                                            >
-                                                {hasKey && <Check className="w-3 h-3" />}
-                                                {player.name.slice(0, 8)}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                                {!revealState.hasSharedKeys ? (
+                                    <Button
+                                        onClick={shareMyKey}
+                                        isLoading={isProcessing}
+                                        disabled={isProcessing || isTxPending}
+                                        className="w-full h-12 text-base"
+                                    >
+                                        Share Decryption Key
+                                    </Button>
+                                ) : !revealState.isRevealed && (
+                                    <div className="text-center py-2 bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                        <div className="flex items-center justify-center gap-2 text-[#916A47] text-sm font-medium">
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            <span>{keysCollected < keysNeeded ? `Waiting for ${keysNeeded - keysCollected} keys...` : 'All keys ready! Decrypting...'}</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </motion.div>
                     ) : (
