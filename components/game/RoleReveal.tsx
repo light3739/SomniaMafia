@@ -660,6 +660,11 @@ const RoleRevealAuto: React.FC<{
 
     const keysNeeded = gameState.players.length - 1;
 
+    // Countdown timer for viewing role before auto-confirm
+    const ROLE_VIEW_TIME = 10; // seconds
+    const [countdown, setCountdown] = useState<number | null>(null);
+    const [hasStartedCountdown, setHasStartedCountdown] = useState(false);
+
     // 1. Auto-share keys (first step)
     useEffect(() => {
         const canShare = !revealState.hasSharedKeys && !isProcessing && !isTxPending && myPlayer;
@@ -699,9 +704,30 @@ const RoleRevealAuto: React.FC<{
         }
     }, [revealState.hasSharedKeys, revealState.isRevealed, revealState.collectedKeys.size, revealState.deck.length, keysNeeded, isProcessing, isTxPending, decryptMyRole]);
 
-    // 3. Auto-confirm role once revealed
+    // 3. Start countdown when role is revealed
+    useEffect(() => {
+        if (revealState.isRevealed && revealState.myRole !== null && !hasStartedCountdown && !revealState.hasConfirmed) {
+            console.log("[RoleReveal Auto] Role revealed. Starting countdown...");
+            setCountdown(ROLE_VIEW_TIME);
+            setHasStartedCountdown(true);
+        }
+    }, [revealState.isRevealed, revealState.myRole, hasStartedCountdown, revealState.hasConfirmed]);
+
+    // 4. Countdown timer tick
+    useEffect(() => {
+        if (countdown === null || countdown <= 0) return;
+
+        const timer = setTimeout(() => {
+            setCountdown(prev => (prev !== null ? prev - 1 : null));
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [countdown]);
+
+    // 5. Auto-confirm when countdown reaches 0
     useEffect(() => {
         const canAutoConfirm =
+            countdown === 0 &&
             revealState.isRevealed &&
             !revealState.hasConfirmed &&
             !isProcessing &&
@@ -709,6 +735,7 @@ const RoleRevealAuto: React.FC<{
             revealState.myRole !== null;
 
         console.log("[RoleReveal Auto] Confirm check:", {
+            countdown,
             isRevealed: revealState.isRevealed,
             hasConfirmed: revealState.hasConfirmed,
             isProcessing,
@@ -718,10 +745,71 @@ const RoleRevealAuto: React.FC<{
         });
 
         if (canAutoConfirm) {
-            console.log("[RoleReveal Auto] Role revealed. Auto-confirming...");
+            console.log("[RoleReveal Auto] Countdown finished. Auto-confirming...");
             handleConfirmRole();
         }
-    }, [revealState.isRevealed, revealState.hasConfirmed, revealState.myRole, isProcessing, isTxPending, handleConfirmRole]);
+    }, [countdown, revealState.isRevealed, revealState.hasConfirmed, revealState.myRole, isProcessing, isTxPending, handleConfirmRole]);
+
+    // Render countdown UI overlay
+    if (countdown !== null && countdown > 0 && !revealState.hasConfirmed) {
+        return (
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50"
+            >
+                <div className="bg-black/80 backdrop-blur-xl border border-[#916A47]/40 rounded-2xl px-6 py-4 shadow-2xl">
+                    <div className="flex items-center gap-4">
+                        {/* Circular countdown */}
+                        <div className="relative w-14 h-14">
+                            <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
+                                {/* Background circle */}
+                                <circle
+                                    cx="28"
+                                    cy="28"
+                                    r="24"
+                                    fill="none"
+                                    stroke="rgba(145, 106, 71, 0.2)"
+                                    strokeWidth="4"
+                                />
+                                {/* Progress circle */}
+                                <motion.circle
+                                    cx="28"
+                                    cy="28"
+                                    r="24"
+                                    fill="none"
+                                    stroke="#916A47"
+                                    strokeWidth="4"
+                                    strokeLinecap="round"
+                                    strokeDasharray={2 * Math.PI * 24}
+                                    initial={{ strokeDashoffset: 0 }}
+                                    animate={{ strokeDashoffset: 2 * Math.PI * 24 * (1 - countdown / ROLE_VIEW_TIME) }}
+                                    transition={{ duration: 0.3 }}
+                                />
+                            </svg>
+                            {/* Countdown number */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <motion.span
+                                    key={countdown}
+                                    initial={{ scale: 1.3, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    className="text-xl font-bold text-[#916A47] font-mono"
+                                >
+                                    {countdown}
+                                </motion.span>
+                            </div>
+                        </div>
+
+                        {/* Text */}
+                        <div>
+                            <p className="text-white font-medium text-sm">Memorize your role</p>
+                            <p className="text-white/40 text-xs">Auto-confirming in {countdown}s...</p>
+                        </div>
+                    </div>
+                </div>
+            </motion.div>
+        );
+    }
 
     return null;
 };
