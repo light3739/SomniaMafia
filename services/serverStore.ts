@@ -12,6 +12,11 @@ if (redis) {
 }
 
 /**
+ * Memory Fallback (for local development without Redis)
+ */
+const memoryStore: Record<string, Record<string, string>> = {};
+
+/**
  * Global expiration for game data (24 hours)
  */
 const GAME_DATA_TTL = 86400;
@@ -31,13 +36,15 @@ export class ServerStore {
      * Uses a Hash structure: room:secrets:{roomId} -> {address: secret}
      */
     static async storeSecret(roomId: string, address: string, role: number, salt: string) {
+        const secret: PlayerSecret = { role, salt };
+        const key = `room:secrets:${roomId}`;
+
         if (!redis) {
-            console.warn("[ServerStore] REDIS_URL not configured. Storage disabled.");
+            console.warn(`[ServerStore] Redis not configured. Using MEMORY fallback for Room #${roomId}`);
+            if (!memoryStore[key]) memoryStore[key] = {};
+            memoryStore[key][address.toLowerCase()] = JSON.stringify(secret);
             return;
         }
-
-        const key = `room:secrets:${roomId}`;
-        const secret: PlayerSecret = { role, salt };
 
         try {
             // hset expects string value for ioredis if passing record
@@ -55,13 +62,21 @@ export class ServerStore {
      * Retrieves all secrets for a specific room.
      */
     static async getRoomSecrets(roomId: string): Promise<Record<string, PlayerSecret> | null> {
+        const key = `room:secrets:${roomId}`;
+
         if (!redis) {
-            console.warn("[ServerStore] REDIS_URL not configured. Cannot fetch secrets.");
-            return null;
+            const data = memoryStore[key];
+            if (!data) return null;
+
+            const parsed: Record<string, PlayerSecret> = {};
+            for (const [addr, secretStr] of Object.entries(data)) {
+                parsed[addr] = JSON.parse(secretStr);
+            }
+            return parsed;
         }
 
         try {
-            const data = await redis.hgetall(`room:secrets:${roomId}`);
+            const data = await redis.hgetall(key);
             if (!data || Object.keys(data).length === 0) return null;
 
             // Parse JSON strings back to PlayerSecret objects
@@ -80,9 +95,13 @@ export class ServerStore {
      * Manually clears room data (optional cleanup).
      */
     static async clearRoom(roomId: string) {
-        if (!redis) return;
+        const key = `room:secrets:${roomId}`;
+        if (!redis) {
+            delete memoryStore[key];
+            return;
+        }
         try {
-            await redis.del(`room:secrets:${roomId}`);
+            await redis.del(key);
             console.log(`[ServerStore] Redis: Cleared Room #${roomId}`);
         } catch (e) {
             console.error("[ServerStore] Redis error (clear):", e);
