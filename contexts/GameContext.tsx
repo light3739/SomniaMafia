@@ -214,7 +214,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             calculatedGas = (gasEstimate * 150n) / 100n;
 
             // 3. Safety cap - if gas is crazy (revert symptom), don't scare MetaMask
-            const safetyCap = functionName === 'endGameZK' ? 30_000_000n : 10_000_000n;
+            const safetyCap = functionName === 'endGameZK' ? 150_000_000n : 30_000_000n;
             if (calculatedGas > safetyCap) {
                 console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at ${safetyCap} to avoid balance error (likely contract revert).`);
                 calculatedGas = safetyCap;
@@ -225,9 +225,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
             // Если оценка упала, используем высокий лимит для тяжелых функций
             if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK'].includes(functionName)) {
-                calculatedGas = 25_000_000n;
+                calculatedGas = functionName === 'endGameZK' ? 100_000_000n : 30_000_000n;
             } else {
-                calculatedGas = 2_000_000n;
+                calculatedGas = 5_000_000n;
             }
         }
 
@@ -1267,7 +1267,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     });
                     console.log("[AutoWin ZK Debug] Simulation SUCCESS");
                 } catch (simErr: any) {
-                    console.error("[AutoWin ZK Debug] Simulation FAILED:", simErr.shortMessage || simErr.message);
+                    console.error("[AutoWin ZK Debug] Simulation FAILED!");
+                    console.error("Reason:", simErr.reason || simErr.shortMessage || "Unknown revert");
+                    console.error("Full Error:", simErr);
                 }
 
                 addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");
