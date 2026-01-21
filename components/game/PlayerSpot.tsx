@@ -17,7 +17,7 @@ interface PlayerSpotProps {
 }
 
 export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAct, isSelected, isNight = false, myRole }) => {
-    const { playClickSound } = useSoundEffects();
+    const { playClickSound, playApproveSound } = useSoundEffects();
     const { playerMarks, setPlayerMark } = useGameContext();
     const [isHoveringMarks, setIsHoveringMarks] = useState(false);
 
@@ -112,6 +112,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
+                                playClickSound();
                                 setPlayerMark(player.address, null);
                             }}
                             className="w-7 h-7 rounded-full border border-white/20 bg-black/60 backdrop-blur-md flex items-center justify-center transition-all duration-300 hover:scale-110 hover:border-white/40 z-30 shadow-lg"
@@ -150,11 +151,12 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                     <motion.button
                                         key="mark-civ"
                                         initial={{ opacity: 0, x: 0, y: 0 }}
-                                        animate={{ opacity: 1, x: 0, y: -45 }}
+                                        animate={{ opacity: 1, x: 0, y: -35 }}
                                         exit={{ opacity: 0, x: 0, y: 0 }}
                                         transition={{ duration: 0.15, ease: "linear" }}
                                         onClick={(e) => {
                                             e.stopPropagation();
+                                            playApproveSound();
                                             setPlayerMark(player.address, 'civilian');
                                             setIsHoveringMarks(false);
                                         }}
@@ -167,11 +169,12 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                     <motion.button
                                         key="mark-ques"
                                         initial={{ opacity: 0, x: 0, y: 0 }}
-                                        animate={{ opacity: 1, x: 40, y: -40 }}
+                                        animate={{ opacity: 1, x: 28, y: -28 }}
                                         exit={{ opacity: 0, x: 0, y: 0 }}
                                         transition={{ duration: 0.15, ease: "linear" }}
                                         onClick={(e) => {
                                             e.stopPropagation();
+                                            playApproveSound();
                                             setPlayerMark(player.address, 'question');
                                             setIsHoveringMarks(false);
                                         }}
@@ -184,11 +187,12 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                     <motion.button
                                         key="mark-maf"
                                         initial={{ opacity: 0, x: 0, y: 0 }}
-                                        animate={{ opacity: 1, x: 50, y: 0 }}
+                                        animate={{ opacity: 1, x: 40, y: 0 }}
                                         exit={{ opacity: 0, x: 0, y: 0 }}
                                         transition={{ duration: 0.15, ease: "linear" }}
                                         onClick={(e) => {
                                             e.stopPropagation();
+                                            playApproveSound();
                                             setPlayerMark(player.address, 'mafia');
                                             setIsHoveringMarks(false);
                                         }}
