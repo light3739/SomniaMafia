@@ -23,27 +23,52 @@ export async function POST(request: Request) {
         console.log(`[API/Investigate] Detective ${detectiveAddress} checking ${targetAddress} in Room #${roomId}`);
 
         // 1. Verify on-chain that the detective revealed a CHECK on the target
-        const revealedAction = await publicClient.readContract({
+        // We use getContractEvents instead of reading mappings because mappings are cleared 
+        // as soon as the night ends (gas optimization), creating a race condition.
+        const currentBlock = await publicClient.getBlockNumber();
+        const logs = await publicClient.getContractEvents({
             address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
             abi: MAFIA_ABI,
-            functionName: 'revealedActions',
-            args: [roomId, detectiveAddress as `0x${string}`],
-        }) as number;
+            eventName: 'NightActionRevealed',
+            args: {
+                roomId: roomId
+            },
+            fromBlock: currentBlock - 990n // Somnia RPC limit is 1000 blocks
+        });
 
-        const revealedTarget = await publicClient.readContract({
-            address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
-            abi: MAFIA_ABI,
-            functionName: 'revealedTargets',
-            args: [roomId, detectiveAddress as `0x${string}`],
-        }) as string;
+        const revealEvent = logs.find(log =>
+            (log.args as any).player?.toLowerCase() === detectiveAddress.toLowerCase() &&
+            (log.args as any).action === ACTION_CHECK &&
+            (log.args as any).target?.toLowerCase() === targetAddress.toLowerCase()
+        );
 
-        if (revealedAction !== ACTION_CHECK || revealedTarget.toLowerCase() !== targetAddress.toLowerCase()) {
-            return NextResponse.json({
-                error: 'Detective action not verified on-chain',
-                revealedAction,
-                revealedTarget
-            }, { status: 403 });
+        if (!revealEvent) {
+            // Fallback: try checking current mappings if event not found (might not have indexed yet)
+            const revealedAction = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+                abi: MAFIA_ABI,
+                functionName: 'revealedActions',
+                args: [roomId, detectiveAddress as `0x${string}`],
+            }) as number;
+
+            const revealedTarget = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+                abi: MAFIA_ABI,
+                functionName: 'revealedTargets',
+                args: [roomId, detectiveAddress as `0x${string}`],
+            }) as string;
+
+            if (revealedAction !== ACTION_CHECK || revealedTarget.toLowerCase() !== targetAddress.toLowerCase()) {
+                console.log(`[API/Investigate] Verification failed for ${detectiveAddress}. No event and mapping mismatch.`);
+                return NextResponse.json({
+                    error: 'Detective action not verified on-chain (No event or mapping match)',
+                    revealedAction,
+                    revealedTarget
+                }, { status: 403 });
+            }
         }
+
+        console.log(`[API/Investigate] Verification SUCCESS via ${revealEvent ? 'Event' : 'Mapping'}`);
 
         // 2. Get target's role from ServerStore
         const secrets = await ServerStore.getRoomSecrets(roomId.toString());
