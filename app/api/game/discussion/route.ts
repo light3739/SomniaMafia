@@ -107,14 +107,27 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: 'Discussion not active' }, { status: 400 });
             }
 
-            // Verify it's the current speaker
+            // Verify it's the current speaker OR the Host
             const currentSpeaker = alivePlayers[state.currentSpeakerIndex];
-            if (playerAddress && currentSpeaker?.wallet.toLowerCase() !== playerAddress.toLowerCase()) {
-                return NextResponse.json({ error: 'Not your turn to speak' }, { status: 403 });
+
+            // Fetch Room Host to allow force-skip
+            const roomData = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+                abi: MAFIA_ABI,
+                functionName: 'rooms',
+                args: [BigInt(roomId)],
+            }) as any;
+            const hostAddress = roomData[1]; // storage Room member 1 is host
+
+            const isSpeaker = currentSpeaker?.wallet.toLowerCase() === playerAddress?.toLowerCase();
+            const isHost = hostAddress.toLowerCase() === playerAddress?.toLowerCase();
+
+            if (!isSpeaker && !isHost) {
+                return NextResponse.json({ error: 'Not your turn to speak (and you are not Host)' }, { status: 403 });
             }
 
             const newState = await ServerStore.advanceSpeaker(roomId, totalSpeakers);
-            console.log(`[API/Discussion] Speaker skipped in Room #${roomId}, new index: ${newState?.currentSpeakerIndex}`);
+            console.log(`[API/Discussion] Speaker skipped by ${isHost ? 'HOST' : 'PLAYER'} in Room #${roomId}, new index: ${newState?.currentSpeakerIndex}`);
             return buildResponse(newState, alivePlayers, playerAddress);
         }
 
