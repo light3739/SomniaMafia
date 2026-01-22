@@ -54,6 +54,19 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
 
     // Handle "+" agree (plays propose sound)
     const handleAgree = () => {
+        if (selectedTarget) {
+            const targetPlayer = players.find(p => p.address.toLowerCase() === selectedTarget.toLowerCase());
+            if (targetPlayer) {
+                playProposeSound();
+                handleSendMessage({
+                    type: 'agree',
+                    targetName: targetPlayer.name
+                });
+                setLastSuggestion(selectedTarget);
+                return;
+            }
+        }
+
         if (!lastSuggestion) return;
         playProposeSound();
         handleSendMessage({ type: 'agree' });
@@ -64,6 +77,18 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
 
     // Handle "-" disagree
     const handleDisagree = () => {
+        if (selectedTarget) {
+            const targetPlayer = players.find(p => p.address.toLowerCase() === selectedTarget.toLowerCase());
+            if (targetPlayer) {
+                playRejectSound();
+                handleSendMessage({
+                    type: 'disagree',
+                    targetName: targetPlayer.name
+                });
+                return;
+            }
+        }
+
         playRejectSound();
         handleSendMessage({ type: 'disagree' });
     };
@@ -84,7 +109,11 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                 return (
                     <span>
                         <span className="text-green-400 font-medium">{msg.playerName}</span>
-                        <span className="text-green-400/70"> согласен </span>
+                        {msg.content.targetName ? (
+                            <span className="text-green-400/70"> согласен убить {msg.content.targetName} </span>
+                        ) : (
+                            <span className="text-green-400/70"> согласен </span>
+                        )}
                         <Plus className="inline w-3 h-3 text-green-400" />
                     </span>
                 );
@@ -92,7 +121,11 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                 return (
                     <span>
                         <span className="text-red-400 font-medium">{msg.playerName}</span>
-                        <span className="text-red-400/70"> против </span>
+                        {msg.content.targetName ? (
+                            <span className="text-red-400/70"> не поддерживает убийство {msg.content.targetName} </span>
+                        ) : (
+                            <span className="text-red-400/70"> против </span>
+                        )}
                         <Minus className="inline w-3 h-3 text-red-400" />
                     </span>
                 );
@@ -127,9 +160,9 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                     {/* Agree button */}
                     <button
                         onClick={handleAgree}
-                        disabled={!lastSuggestion || isSending}
+                        disabled={(!lastSuggestion && !selectedTarget) || isSending}
                         data-custom-sound
-                        className={`p-2 rounded-lg transition-all ${lastSuggestion
+                        className={`p-2 rounded-lg transition-all ${(lastSuggestion || selectedTarget)
                             ? 'bg-white/5 text-green-400 hover:bg-green-500/20'
                             : 'bg-white/5 text-white/20 cursor-not-allowed'
                             }`}
@@ -141,9 +174,9 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                     {/* Disagree button */}
                     <button
                         onClick={handleDisagree}
-                        disabled={!lastSuggestion || isSending}
+                        disabled={(!lastSuggestion && !selectedTarget) || isSending}
                         data-custom-sound
-                        className={`p-2 rounded-lg transition-all ${lastSuggestion
+                        className={`p-2 rounded-lg transition-all ${(lastSuggestion || selectedTarget)
                             ? 'bg-white/5 text-red-400 hover:bg-red-500/20'
                             : 'bg-white/5 text-white/20 cursor-not-allowed'
                             }`}
