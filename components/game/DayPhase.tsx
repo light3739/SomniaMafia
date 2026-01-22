@@ -28,7 +28,15 @@ export const DayPhase: React.FC = React.memo(() => {
         selectedTarget,
         setSelectedTarget,
     } = useGameContext();
-    const { playVoteSound } = useSoundEffects();
+    const {
+        playClickSound,
+        playTypeSound,
+        playVoteSound,
+        playProposeSound,
+        playApproveSound,
+        playRejectSound,
+        playVotingStart // New sound function
+    } = useSoundEffects();
 
     const publicClient = usePublicClient();
     const [voteState, setVoteState] = useState<VoteState>({
@@ -75,6 +83,7 @@ export const DayPhase: React.FC = React.memo(() => {
                     addLog("Day Phase: Waiting for vote to start...", "info");
                 }
             } else if (isVotingPhase) {
+                playVotingStart(); // Play sound for everyone
                 const quorum = Math.floor(alivePlayers.length / 2) + 1;
                 addLog(`Voting Phase Started. Quorum needed: ${quorum}.`, "warning");
             }
