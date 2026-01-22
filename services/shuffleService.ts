@@ -242,6 +242,43 @@ export class ShuffleService {
         crypto.getRandomValues(array);
         return `0x${Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('')}`;
     }
+
+    // ============ PERSISTENCE ============
+
+    public saveKeys(roomId: string, address: string): void {
+        if (!this.keys) return;
+        const key = `mafia_keys_${roomId}_${address.toLowerCase()}`;
+        const data = JSON.stringify({
+            e: this.keys.encryptionKey.toString(),
+            d: this.keys.decryptionKey.toString()
+        });
+        localStorage.setItem(key, data);
+        console.log("[ShuffleService] Keys saved to local storage");
+    }
+
+    public loadKeys(roomId: string, address: string): boolean {
+        const key = `mafia_keys_${roomId}_${address.toLowerCase()}`;
+        const saved = localStorage.getItem(key);
+        if (!saved) return false;
+
+        try {
+            const data = JSON.parse(saved);
+            this.keys = {
+                encryptionKey: BigInt(data.e),
+                decryptionKey: BigInt(data.d)
+            };
+            console.log("[ShuffleService] Keys loaded from local storage");
+            return true;
+        } catch (e) {
+            console.error("[ShuffleService] Failed to load keys:", e);
+            return false;
+        }
+    }
+
+    public clearKeys(roomId: string, address: string): void {
+        const key = `mafia_keys_${roomId}_${address.toLowerCase()}`;
+        localStorage.removeItem(key);
+    }
 }
 
 // Синглтон для использования в компонентах
