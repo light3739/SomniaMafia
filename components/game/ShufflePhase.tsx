@@ -60,10 +60,25 @@ export const ShufflePhase: React.FC = () => {
                 if (deck && salt) {
                     setPendingDeck(deck);
                     setPendingSalt(salt);
-                    setShuffleState(prev => ({ ...prev, hasCommitted: true, isMyTurn: true }));
+                    if (hasCommitted) {
+                        setShuffleState(prev => ({ ...prev, hasCommitted: true, isMyTurn: true }));
+                    } else {
+                        // If we have data but not committed, it means we crashed/refreshed during TX or before it finished.
+                        // Restore state so user can click "Retry" or we can auto-retry if needed.
+                        setShuffleState(prev => ({ ...prev, isMyTurn: true }));
+                        console.log("Restored pending shuffle state (pre-commit)");
+                    }
                 }
             } catch (e) {
                 console.error("Failed to recover pending deck", e);
+            }
+        }
+
+        // V4 Fix: Restore keys if they exist
+        if (currentRoomId && myPlayer) {
+            const shuffleService = getShuffleService();
+            if (!shuffleService.hasKeys()) {
+                shuffleService.loadKeys(currentRoomId.toString(), myPlayer.address);
             }
         }
     }, [SHUFFLE_COMMIT_KEY]);
@@ -255,9 +270,20 @@ export const ShufflePhase: React.FC = () => {
             const salt = ShuffleService.generateSalt();
             const deckHash = ShuffleService.createDeckCommitHash(newDeck, salt);
 
+            // V4 Fix: Save state BEFORE transaction to prevent data loss
+            localStorage.setItem(SHUFFLE_COMMIT_KEY, JSON.stringify({
+                deck: newDeck,
+                salt: salt,
+                hasCommitted: false // Not yet committed
+            }));
+
+            // V4 Fix: Save keys immediately
+            shuffleService.saveKeys(currentRoomId.toString(), myPlayer.address);
+
             addLog("Committing deck hash...", "info");
             await commitDeckOnChain(deckHash);
 
+            // Update to committed=true
             localStorage.setItem(SHUFFLE_COMMIT_KEY, JSON.stringify({
                 deck: newDeck,
                 salt: salt,

@@ -103,6 +103,17 @@ export const RoleReveal: React.FC = () => {
     const fetchDeck = useCallback(async () => {
         if (!publicClient || !currentRoomId) return;
 
+        // V4: Restore keys on mount if missing (Refresh handling)
+        if (myPlayer) {
+            const shuffleService = getShuffleService();
+            if (!shuffleService.hasKeys()) {
+                const loaded = shuffleService.loadKeys(currentRoomId.toString(), myPlayer.address);
+                if (loaded) {
+                    console.log("[RoleReveal] Keys recovered from local storage");
+                }
+            }
+        }
+
         try {
             const deck = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
@@ -121,7 +132,7 @@ export const RoleReveal: React.FC = () => {
         } catch (e) {
             console.error("Failed to fetch deck:", e);
         }
-    }, [publicClient, currentRoomId, findMyCardIndex]);
+    }, [publicClient, currentRoomId, findMyCardIndex, myPlayer]);
 
     // V3.1: Собрать ВСЕ ключи от всех игроков - используем getAllKeysForMe
     const collectKeys = useCallback(async () => {

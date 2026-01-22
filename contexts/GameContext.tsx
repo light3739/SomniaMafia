@@ -808,16 +808,37 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
         let saltToUse = salt;
-        let shouldCommitOnChain = !savedSalt;
+
+        // Check if we are already confirmed on chain to avoid redundant txs
+        const isConfirmedOnChain = myPlayer?.hasConfirmedRole;
 
         if (savedSalt) {
             saltToUse = savedSalt;
-            console.log("Role already committed locally, will check server sync.");
+            console.log("Role already committed locally.");
         }
 
         setIsTxPending(true);
         try {
-            if (shouldCommitOnChain) {
+            // FIX: If we have a saved salt but NOT confirmed on chain, we must complete the process.
+            // If we assume commit was successful (because salt is saved), we try confirmRole.
+            // If we don't have salt, we do the full commitAndConfirm.
+
+            if (isConfirmedOnChain) {
+                console.log("Role already confirmed on-chain. Skipping transaction, syncing DB only.");
+            } else if (savedSalt && !isConfirmedOnChain) {
+                console.log("Found local salt but not confirmed on-chain. Attempting `confirmRole` fallback...");
+                try {
+                    const hash = await sendGameTransaction('confirmRole', [currentRoomId]);
+                    addLog("Role confirmed (fallback).", "success");
+                    await publicClient?.waitForTransactionReceipt({ hash });
+                } catch (err: any) {
+                    // If confirm fails, maybe we never actually committed? 
+                    // Hard to distinguish without checking hasCommitted flag, but let's assume if this fails we might need manual intervention or reset.
+                    console.error("Fallback confirm failed:", err);
+                    throw err;
+                }
+            } else {
+                // Normal flow: No salt, not confirmed -> Commit + Confirm
                 try {
                     const { ShuffleService } = await import('../services/shuffleService');
                     const roleHash = ShuffleService.createRoleCommitHash(role, saltToUse);
@@ -892,7 +913,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             throw e;
         }
-    }, [currentRoomId, address, publicClient, sendGameTransaction, addLog, refreshPlayersList]);
+    }, [currentRoomId, address, publicClient, sendGameTransaction, addLog, refreshPlayersList, myPlayer?.hasConfirmedRole]);
 
     // --- DAY & VOTING ---
 
