@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 
 // Contract Address & ABI
-const MAFIA_CONTRACT_ADDRESS = '0x45f2018503668c8b91746912d65b32f50d3addae';
+const MAFIA_CONTRACT_ADDRESS = '0xb58130d6183844b3bfb28ff1ffc96825eee82be3';
 const MAFIA_ABI = require('../contracts/MafiaPortal.json').abi;
 
 // Client Setup
