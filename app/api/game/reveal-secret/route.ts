@@ -3,14 +3,15 @@ import { ServerStore } from '@/services/serverStore';
 
 export async function POST(request: Request) {
     try {
-        const { roomId, address, role, salt } = await request.json();
+        const { roomId: rawRoomId, address, role, salt } = await request.json();
 
-        if (!roomId || !address || role === undefined || !salt) {
+        if (!rawRoomId || !address || role === undefined || !salt) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
+        const roomId = BigInt(rawRoomId).toString();
         // Store the secret on the server
-        await ServerStore.storeSecret(roomId.toString(), address, role, salt);
+        await ServerStore.storeSecret(roomId, address, role, salt);
 
         return NextResponse.json({ success: true });
     } catch (error: any) {

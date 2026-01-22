@@ -4,10 +4,15 @@ import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 const lobbyBg = "/assets/lobby_background.png";
 import { BackButton } from '../ui/BackButton';
-import { usePublicClient } from 'wagmi';
+import { usePublicClient, useAccount } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 
-export const JoinLobby: React.FC = () => {
+interface JoinLobbyProps {
+    initialRoomId?: string | null;
+}
+
+export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const { setLobbyName, joinLobbyOnChain, isTxPending } = useGameContext();
     const router = useRouter();
     const publicClient = usePublicClient();
@@ -19,36 +24,64 @@ export const JoinLobby: React.FC = () => {
         const fetchRooms = async () => {
             if (!publicClient) return;
             try {
-                // Узнаем сколько всего комнат было создано
-                const nextId = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MAFIA_ABI,
-                    functionName: 'nextRoomId',
-                }) as bigint;
-
                 const roomList = [];
-                // Берем последние 10 комнат (или меньше, если их нет)
-                const start = nextId > 10n ? nextId - 10n : 1n;
 
-                for (let i = nextId - 1n; i >= start; i--) {
+                if (initialRoomId) {
+                    // Fetch SPECIFIC room
+                    const roomId = BigInt(initialRoomId);
                     const roomData = await publicClient.readContract({
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI,
                         functionName: 'rooms',
-                        args: [i],
+                        args: [roomId],
                     }) as any;
 
-                    // roomData[2] is now the Name (string) in V4
-                    // roomData[3] is the Phase (uint8, 0 = LOBBY)
-                    const phase = Number(roomData[3]);
-                    if (phase === 0) {
-                        roomList.push({
-                            id: Number(roomData[0]),
-                            host: roomData[1],
-                            name: roomData[2],
-                            players: Number(roomData[5]), // index 5 is players for V4
-                            max: Number(roomData[4])    // index 4 is maxPlayers for V4
-                        });
+                    // Check if it exists/is valid (phase 0 = LOBBY)
+                    // If roomData[0] is 0 and host is 0x0, it doesn't exist. 
+                    // But contract returns struct. Check ID matching.
+                    if (Number(roomData[0]) === Number(roomId)) {
+                        const phase = Number(roomData[3]);
+                        // Even if phase != 0, we might want to show it (but maybe disabled?)
+                        // User likely wants to join.
+                        if (phase === 0) {
+                            roomList.push({
+                                id: Number(roomData[0]),
+                                host: roomData[1],
+                                name: roomData[2],
+                                players: Number(roomData[5]),
+                                max: Number(roomData[4])
+                            });
+                        }
+                    }
+
+                } else {
+                    // Fetch LAST 10 rooms (Default behavior)
+                    const nextId = await publicClient.readContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'nextRoomId',
+                    }) as bigint;
+
+                    const start = nextId > 10n ? nextId - 10n : 1n;
+
+                    for (let i = nextId - 1n; i >= start; i--) {
+                        const roomData = await publicClient.readContract({
+                            address: MAFIA_CONTRACT_ADDRESS,
+                            abi: MAFIA_ABI,
+                            functionName: 'rooms',
+                            args: [i],
+                        }) as any;
+
+                        const phase = Number(roomData[3]);
+                        if (phase === 0) {
+                            roomList.push({
+                                id: Number(roomData[0]),
+                                host: roomData[1],
+                                name: roomData[2],
+                                players: Number(roomData[5]),
+                                max: Number(roomData[4])
+                            });
+                        }
                     }
                 }
                 setRooms(roomList);
@@ -60,13 +93,20 @@ export const JoinLobby: React.FC = () => {
         };
 
         fetchRooms();
-    }, [publicClient]);
+    }, [publicClient, initialRoomId]);
 
     const handleJoin = async (room: any) => {
+        if (!isConnected) {
+            // Usually ConnectButton handles this, but if we have a custom button setup:
+            // For now, we rely on the UI showing ConnectButton instead of Join if not connected.
+            return;
+        }
         await joinLobbyOnChain(room.id);
         setLobbyName(room.name || `Room #${room.id}`);
         router.push('/waiting');
     };
+
+    const { isConnected } = useAccount();
 
     return (
         <div className="relative w-full min-h-screen font-['Montserrat'] flex items-center justify-center p-4">
@@ -75,7 +115,35 @@ export const JoinLobby: React.FC = () => {
             </div>
 
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-6 py-10">
-                <div className="w-full flex items-center justify-start"><BackButton /></div>
+                <div className="w-full flex items-center justify-between">
+                    <BackButton />
+                    <ConnectButton accountStatus="avatar" chainStatus="icon" showBalance={false} />
+                </div>
+
+                {initialRoomId && !isLoading && (
+                    <div className="w-full p-4 bg-[#916A47]/20 border border-[#916A47] rounded-xl text-center mb-4">
+                        <h3 className="text-white text-xl font-bold mb-2">You were invited to Room #{initialRoomId}</h3>
+                        {rooms.find(r => r.id === Number(initialRoomId)) ? (
+                            <div className="flex flex-col gap-3">
+                                <p className="text-white/70 text-sm">Join the conspiracy now.</p>
+                                {!isConnected ? (
+                                    <div className="flex justify-center"><ConnectButton label="Connect & Join" /></div>
+                                ) : (
+                                    <button
+                                        onClick={() => handleJoin(rooms.find(r => r.id === Number(initialRoomId)))}
+                                        disabled={isTxPending}
+                                        className="bg-[#916A47] hover:bg-[#A37B58] text-white py-3 px-6 rounded-lg font-bold transition-all"
+                                    >
+                                        JOIN ROOM #{initialRoomId}
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <p className="text-red-400">Room not found or game already started.</p>
+                        )}
+                    </div>
+                )}
+
                 <h2 className="text-white text-3xl font-light tracking-widest uppercase">Live Sessions</h2>
 
                 <div className="w-full flex flex-col gap-3">
@@ -89,9 +157,11 @@ export const JoinLobby: React.FC = () => {
                         <motion.button
                             key={room.id}
                             whileHover={{ scale: 1.02, backgroundColor: "rgba(145, 106, 71, 0.2)" }}
-                            onClick={() => handleJoin(room)}
-                            disabled={isTxPending}
-                            className="w-full p-5 bg-[#19130D]/80 backdrop-blur-sm border border-white/10 rounded-[15px] flex items-center justify-between group transition-all"
+                            onClick={() => !isConnected ? null : handleJoin(room)}
+                            disabled={isTxPending || (!isConnected && !initialRoomId)} // Allow click if not connected to trigger tooltip? No, replace with connect instructions?
+                            // Actually, let's keep it simple: If not connected, the top right button allows connection. 
+                            // But better UX: click room -> if not connected -> highlight connect button or show alert.
+                            className={`w-full p-5 bg-[#19130D]/80 backdrop-blur-sm border border-white/10 rounded-[15px] flex items-center justify-between group transition-all ${!isConnected ? 'opacity-70 grayscale' : ''}`}
                         >
                             <div className="flex flex-col items-start gap-1">
                                 <span className="text-white text-lg font-medium">{room.name || `Room #${room.id}`}</span>
@@ -102,11 +172,18 @@ export const JoinLobby: React.FC = () => {
                                     <span className="text-[#916A47] font-bold block">{room.players}/{room.max}</span>
                                     <span className="text-white/20 text-[8px] uppercase tracking-wider">Players Joined</span>
                                 </div>
-                                <div className="w-8 h-8 rounded-full bg-[#916A47]/20 flex items-center justify-center text-[#916A47]">→</div>
+                                <div className="w-8 h-8 rounded-full bg-[#916A47]/20 flex items-center justify-center text-[#916A47]">
+                                    {isConnected ? '→' : '🔒'}
+                                </div>
                             </div>
                         </motion.button>
                     ))}
                 </div>
+                {!isConnected && rooms.length > 0 && !initialRoomId && (
+                    <div className="mt-4 text-white/50 text-xs">
+                        * Connect Wallet to join a session
+                    </div>
+                )}
             </motion.div>
         </div>
     );
