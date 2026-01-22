@@ -333,14 +333,13 @@ export const GameLayout: React.FC = () => {
                     )}
                 </div>
 
-                {/* OVERLAYS (Shuffle, Reveal, GameOver) - Full Screen Container */}
-                {isOverlayPhase && (
-                    <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-                        {renderPhaseContent()}
-                    </div>
-                )}
-
             </div>
+            {/* OVERLAYS (Shuffle, Reveal, GameOver) - Outside scalable container for full screen coverage */}
+            {isOverlayPhase && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+                    {renderPhaseContent()}
+                </div>
+            )}
 
             {/* UI OVERLAYS (Fixed to Screen, ignoring scale) */}
             <div className="fixed top-0 left-0 right-0 z-40 h-16 px-6 flex items-center justify-between pointer-events-none select-none">

@@ -1,6 +1,15 @@
 "use client";
 
 import React, { useEffect, useCallback } from 'react';
+import { useAudioSettings } from '../../contexts/AudioContext';
+
+// GLOBAL multipliers for sounds (updated by React component)
+let globalSfxVolume = 0.7;
+let globalMusicVolume = 0.5;
+
+// GLOBAL state for persistent victory music
+let victoryGainNode: GainNode | null = null;
+let victorySource: AudioBufferSourceNode | null = null;
 
 // GLOBAL SINGLETON AudioContext
 let globalAudioCtx: AudioContext | null = null;
@@ -64,6 +73,9 @@ const loadAudioBuffer = async (ctx: AudioContext, url: string): Promise<AudioBuf
 const playAudioFile = async (url: string, duration: number = 5, fadeIn: number = 0.05, volume: number = 1.0, startOffset: number = 0, fadeOut?: number) => {
     const ctx = initCtx();
     if (!ctx) return;
+
+    // Применяем глобальный множитель звуковых эффектов
+    const finalVolume = volume * globalSfxVolume;
     if (ctx.state === 'suspended') {
         try {
             await ctx.resume();
@@ -93,15 +105,15 @@ const playAudioFile = async (url: string, duration: number = 5, fadeIn: number =
 
         // Instant attack if fadeIn is very small (avoid click)
         if (fadeIn < 0.01) {
-            gainNode.gain.setValueAtTime(volume, t);
+            gainNode.gain.setValueAtTime(finalVolume, t);
         } else {
-            gainNode.gain.linearRampToValueAtTime(volume, t + fadeIn);
+            gainNode.gain.linearRampToValueAtTime(finalVolume, t + fadeIn);
         }
 
         // Use provided fadeOut or fallback to fadeIn
         const actualFadeOut = fadeOut !== undefined ? fadeOut : fadeIn;
 
-        gainNode.gain.setValueAtTime(volume, t + finalDuration - actualFadeOut);
+        gainNode.gain.setValueAtTime(finalVolume, t + finalDuration - actualFadeOut);
         gainNode.gain.linearRampToValueAtTime(0, t + finalDuration);
 
         source.connect(gainNode);
@@ -111,6 +123,71 @@ const playAudioFile = async (url: string, duration: number = 5, fadeIn: number =
         source.stop(t + finalDuration);
     } catch (e) {
         console.error("Failed to play sound:", url, e);
+    }
+};
+
+// Функция для плавного проигрывания бесконечного (победного) трека
+const playVictoryMusic = async (url: string, duration: number, volume: number) => {
+    const ctx = initCtx();
+    if (!ctx) return;
+
+    // Победная музыка считается музыкой, а не эффектом
+    const finalVolume = volume * globalMusicVolume;
+
+    if (ctx.state === 'suspended') {
+        try { await ctx.resume(); } catch (e) { }
+    }
+
+    try {
+        const audioBuffer = await loadAudioBuffer(ctx, url);
+        if (!audioBuffer) return;
+
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.loop = false;
+
+        const gainNode = ctx.createGain();
+        const t = ctx.currentTime;
+
+        // Плавное нарастание (Fade In)
+        gainNode.gain.setValueAtTime(0, t);
+        gainNode.gain.linearRampToValueAtTime(finalVolume, t + 1.5);
+
+        // Плавное затухание в конце трека (Fade Out)
+        gainNode.gain.setValueAtTime(finalVolume, t + duration - 1.5);
+        gainNode.gain.linearRampToValueAtTime(0, t + duration);
+
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        source.start(t, 0, duration);
+
+        // Сохраняем ссылки для остановки
+        victorySource = source;
+        victoryGainNode = gainNode;
+    } catch (e) {
+        console.error("Failed to play victory music:", url, e);
+    }
+};
+
+// Функция для остановки победной музыки с плавным затуханием
+const stopVictoryMusic = () => {
+    if (victoryGainNode && globalAudioCtx) {
+        const t = globalAudioCtx.currentTime;
+        // Плавное затухание (Fade Out)
+        victoryGainNode.gain.cancelScheduledValues(t);
+        victoryGainNode.gain.setValueAtTime(victoryGainNode.gain.value, t);
+        victoryGainNode.gain.linearRampToValueAtTime(0, t + 1.0);
+
+        const sourceToStop = victorySource;
+        setTimeout(() => {
+            try {
+                sourceToStop?.stop();
+            } catch (e) { }
+        }, 1100);
+
+        victorySource = null;
+        victoryGainNode = null;
     }
 };
 
@@ -127,7 +204,9 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
         const g = ctx.createGain();
         osc.type = oscType;
         osc.frequency.setValueAtTime(freq, t + fadeStart);
-        g.gain.setValueAtTime(vol, t + fadeStart);
+        // Применяем глобальный множитель SFX к синтезированным звукам
+        const finalVol = vol * globalSfxVolume;
+        g.gain.setValueAtTime(finalVol, t + fadeStart);
         g.gain.exponentialRampToValueAtTime(0.001, t + fadeStart + duration);
         osc.connect(g);
         g.connect(ctx.destination);
@@ -138,18 +217,18 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
 
     switch (type) {
         case 'button':
-            playAudioFile('/assets/default_sound.mp3', 1, 0.01, 0.25);
+            playAudioFile('/assets/default_sound.mp3', 1, 0.01, 0.15);
             break;
 
         case 'keyboard':
-            createOsc(600, 'sine', 0.03, 0.05);
-            playSharpNoise(ctx, t, { duration: 0.02, vol: 0.05, freq: 3000, type: 'highpass' });
+            createOsc(600, 'sine', 0.03, 0.035);
+            playSharpNoise(ctx, t, { duration: 0.02, vol: 0.035, freq: 3000, type: 'highpass' });
             break;
 
         case 'vote':
             // Ставим печать (уверенно и звонко)
-            createOsc(200, 'sine', 0.1, 0.4);
-            playSharpNoise(ctx, t, { duration: 0.05, vol: 0.2, freq: 5000, type: 'highpass' });
+            createOsc(200, 'sine', 0.1, 0.15);
+            playSharpNoise(ctx, t, { duration: 0.05, vol: 0.1, freq: 5000, type: 'highpass' });
             break;
 
         case 'protect':
@@ -202,20 +281,38 @@ export const useSoundEffects = () => {
         playProposeSound: () => playSound('propose'),
         playApproveSound: () => playSound('approve'),
         playRejectSound: () => playSound('reject'),
-        playMarkSound: () => playAudioFile('/assets/note_tick.wav', 1, 0, 0.55),
+        playMarkSound: () => playAudioFile('/assets/note_tick.wav', 1, 0, 0.25),
 
         // Переход в ночь: длительность 5s, offset 5s, fadeOut 1s
-        playNightTransition: () => playAudioFile('/assets/night_sound2.mp3', 5, 0.1, 0.45, 5, 1.0),
+        playNightTransition: () => playAudioFile('/assets/night_sound2.mp3', 5, 0.1, 0.3, 5, 1.0),
 
         // Переход в день
-        playMorningTransition: () => playAudioFile('/assets/morning_sound.mp3', 5, 1, 0.15),
+        playMorningTransition: () => playAudioFile('/assets/morning_sound.mp3', 5, 1, 0.1),
 
         // Переход к голосованию: offset 0 (играем с начала)
         playVotingStart: () => playAudioFile('/assets/Voting_sound.mp3', 4, 0.1, 0.25, 0),
+
+        // Победные треки (RMS ~-15dB, ставим 0.2 для комфорта)
+        playTownWin: () => playVictoryMusic('/assets/TownWin_sound.mp3', 15.86, 0.2),
+        playMafiaWin: () => playVictoryMusic('/assets/MafiaWin_Sound.mp3', 243.51, 0.2),
+        stopVictoryMusic: () => stopVictoryMusic(),
     }), []);
 };
 
 export const SoundEffects: React.FC = () => {
+    const { sfxVolume, musicVolume } = useAudioSettings();
+
+    useEffect(() => {
+        globalSfxVolume = sfxVolume;
+        globalMusicVolume = musicVolume;
+
+        // Update current victory music volume if playing
+        if (victoryGainNode && globalAudioCtx) {
+            const t = globalAudioCtx.currentTime;
+            victoryGainNode.gain.setTargetAtTime(0.2 * musicVolume, t, 0.1);
+        }
+    }, [sfxVolume, musicVolume]);
+
     useEffect(() => {
         // PRELOAD ALL CRITICAL SOUNDS
         const preload = async () => {
@@ -229,7 +326,9 @@ export const SoundEffects: React.FC = () => {
                     '/assets/morning_sound.mp3',
                     '/assets/protect.mp3',
                     '/assets/kill.wav',
-                    '/assets/investigate.mp3'
+                    '/assets/investigate.mp3',
+                    '/assets/TownWin_sound.mp3',
+                    '/assets/MafiaWin_Sound.mp3'
                 ];
                 // Load sequentially or parallel
                 sounds.forEach(url => loadAudioBuffer(ctx, url));
