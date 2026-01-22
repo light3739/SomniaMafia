@@ -9,6 +9,7 @@ import { ShuffleService, getShuffleService } from '../../services/shuffleService
 import { hexToString } from '../../services/cryptoUtils';
 import { Role } from '../../types';
 import { Button } from '../ui/Button';
+import { useSoundEffects } from '../ui/SoundEffects';
 import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye } from 'lucide-react';
 
 const RoleIcons: Record<Role, React.ReactNode> = {
@@ -45,6 +46,7 @@ export const GameOver: React.FC = () => {
     const [revealedRoles, setRevealedRoles] = useState<Map<string, Role>>(new Map());
     const [isRevealing, setIsRevealing] = useState(false);
     const [winner, setWinner] = useState<Winner>('DRAW');
+    const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
 
     // Расшифровать все роли в конце игры
     const revealAllRoles = useCallback(async () => {
@@ -163,6 +165,18 @@ export const GameOver: React.FC = () => {
         revealAllRoles();
     }, [revealAllRoles]);
 
+    // Музыка победы
+    useEffect(() => {
+        if (winner === 'MAFIA') {
+            playMafiaWin();
+        } else if (winner === 'TOWN') {
+            playTownWin();
+        }
+
+        // Остановка при размонтировании (на всякий случай)
+        return () => stopVictoryMusic();
+    }, [winner, playMafiaWin, playTownWin, stopVictoryMusic]);
+
     const myRole = revealedRoles.get(myPlayer?.address.toLowerCase() || '') || myPlayer?.role || Role.UNKNOWN;
 
     const didIWin =
@@ -196,179 +210,188 @@ export const GameOver: React.FC = () => {
     const config = winnerConfig[winner];
 
     const handlePlayAgain = () => {
+        stopVictoryMusic();
         sessionStorage.removeItem('currentRoomId');
         router.push('/setup');
     };
 
     const handleHome = () => {
+        stopVictoryMusic();
         sessionStorage.removeItem('currentRoomId');
         router.push('/');
     };
 
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center p-8 overflow-y-auto">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: "spring", duration: 0.8 }}
-                className="max-w-2xl w-full"
-            >
-                {/* Winner Banner */}
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1 }}
+            className="fixed inset-[-100vw] z-[100] flex items-center justify-center p-8 bg-black/80 backdrop-blur-xl pointer-events-auto"
+        >
+            <div className="w-full h-full flex flex-col items-center justify-center overflow-y-auto py-20">
                 <motion.div
-                    initial={{ y: -50, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.2 }}
-                    className={`text-center p-8 rounded-3xl mb-8 bg-gradient-to-br ${config.bg} border`}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ type: "spring", duration: 0.8 }}
+                    className="max-w-2xl w-full"
                 >
+                    {/* Winner Banner */}
                     <motion.div
-                        initial={{ rotate: -180, scale: 0 }}
-                        animate={{ rotate: 0, scale: 1 }}
-                        transition={{ delay: 0.4, type: "spring" }}
-                        className="mb-4"
+                        initial={{ y: -50, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.2 }}
+                        className={`text-center p-8 rounded-3xl mb-8 bg-gradient-to-br ${config.bg} border`}
                     >
-                        <Trophy className={`w-20 h-20 mx-auto ${config.trophy}`} />
-                    </motion.div>
+                        <motion.div
+                            initial={{ rotate: -180, scale: 0 }}
+                            animate={{ rotate: 0, scale: 1 }}
+                            transition={{ delay: 0.4, type: "spring" }}
+                            className="mb-4"
+                        >
+                            <Trophy className={`w-20 h-20 mx-auto ${config.trophy}`} />
+                        </motion.div>
 
-                    <motion.h1
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.6 }}
-                        className={`text-4xl md:text-5xl font-['Playfair_Display'] mb-2 ${config.color}`}
-                    >
-                        {config.title}
-                    </motion.h1>
+                        <motion.h1
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.6 }}
+                            className={`text-4xl md:text-5xl font-['Playfair_Display'] mb-2 ${config.color}`}
+                        >
+                            {config.title}
+                        </motion.h1>
 
-                    <motion.p
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.8 }}
-                        className="text-white/60"
-                    >
-                        {config.description}
-                    </motion.p>
+                        <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.8 }}
+                            className="text-white/60"
+                        >
+                            {config.description}
+                        </motion.p>
 
-                    {/* Personal result */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 1 }}
-                        className={`
+                        {/* Personal result */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 1 }}
+                            className={`
                             mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full
                             ${didIWin
-                                ? 'bg-green-900/30 text-green-400 border border-green-500/30'
-                                : 'bg-gray-900/30 text-gray-400 border border-gray-500/30'
-                            }
+                                    ? 'bg-green-900/30 text-green-400 border border-green-500/30'
+                                    : 'bg-gray-900/30 text-gray-400 border border-gray-500/30'
+                                }
                         `}
-                    >
-                        {didIWin ? (
-                            <>
-                                <Trophy className="w-4 h-4" />
-                                <span className="font-medium">You Won!</span>
-                            </>
-                        ) : (
-                            <>
-                                <Skull className="w-4 h-4" />
-                                <span className="font-medium">You Lost</span>
-                            </>
-                        )}
-                        <span className="text-white/40">as {myRole}</span>
+                        >
+                            {didIWin ? (
+                                <>
+                                    <Trophy className="w-4 h-4" />
+                                    <span className="font-medium">You Won!</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Skull className="w-4 h-4" />
+                                    <span className="font-medium">You Lost</span>
+                                </>
+                            )}
+                            <span className="text-white/40">as {myRole}</span>
+                        </motion.div>
                     </motion.div>
-                </motion.div>
 
-                {/* All Players Reveal */}
-                <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.2 }}
-                    className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 p-6 mb-6"
-                >
-                    <div className="flex items-center gap-2 mb-4">
-                        <Eye className="w-5 h-5 text-[#916A47]" />
-                        <h3 className="text-white/50 text-sm uppercase tracking-wider">All Roles Revealed</h3>
-                        {isRevealing && <span className="text-xs text-white/30">(decrypting...)</span>}
-                    </div>
+                    {/* All Players Reveal */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 1.2 }}
+                        className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 p-6 mb-6"
+                    >
+                        <div className="flex items-center gap-2 mb-4">
+                            <Eye className="w-5 h-5 text-[#916A47]" />
+                            <h3 className="text-white/50 text-sm uppercase tracking-wider">All Roles Revealed</h3>
+                            {isRevealing && <span className="text-xs text-white/30">(decrypting...)</span>}
+                        </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {gameState.players.map((player, index) => {
-                            const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
-                            const isDead = !player.isAlive;
-                            const role = revealedRoles.get(player.address.toLowerCase()) || player.role;
-                            const roleKnown = role !== Role.UNKNOWN;
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {gameState.players.map((player, index) => {
+                                const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
+                                const isDead = !player.isAlive;
+                                const role = revealedRoles.get(player.address.toLowerCase()) || player.role;
+                                const roleKnown = role !== Role.UNKNOWN;
 
-                            return (
-                                <motion.div
-                                    key={player.address}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: 1.4 + index * 0.1 }}
-                                    className={`
+                                return (
+                                    <motion.div
+                                        key={player.address}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: 1.4 + index * 0.1 }}
+                                        className={`
                                         p-3 rounded-xl border
                                         ${isDead
-                                            ? 'bg-gray-900/50 border-gray-800 opacity-60'
-                                            : isMe
-                                                ? 'bg-[#916A47]/20 border-[#916A47]/40'
-                                                : 'bg-white/5 border-white/10'
-                                        }
+                                                ? 'bg-gray-900/50 border-gray-800 opacity-60'
+                                                : isMe
+                                                    ? 'bg-[#916A47]/20 border-[#916A47]/40'
+                                                    : 'bg-white/5 border-white/10'
+                                            }
                                     `}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${RoleBgColors[role]}`}>
-                                            {RoleIcons[role]}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${RoleBgColors[role]}`}>
+                                                {RoleIcons[role]}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className={`font-medium truncate ${isMe ? 'text-[#916A47]' : 'text-white'}`}>
+                                                    {player.name} {isMe && '(You)'}
+                                                </p>
+                                                <p className={`text-xs ${roleKnown ? RoleColors[role] : 'text-gray-500'}`}>
+                                                    {roleKnown ? role : '🔒 Encrypted'}
+                                                </p>
+                                            </div>
+                                            {isDead && (
+                                                <Skull className="w-4 h-4 text-red-500/50" />
+                                            )}
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className={`font-medium truncate ${isMe ? 'text-[#916A47]' : 'text-white'}`}>
-                                                {player.name} {isMe && '(You)'}
-                                            </p>
-                                            <p className={`text-xs ${roleKnown ? RoleColors[role] : 'text-gray-500'}`}>
-                                                {roleKnown ? role : '🔒 Encrypted'}
-                                            </p>
-                                        </div>
-                                        {isDead && (
-                                            <Skull className="w-4 h-4 text-red-500/50" />
-                                        )}
-                                    </div>
-                                </motion.div>
-                            );
-                        })}
-                    </div>
-                </motion.div>
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
+                    </motion.div>
 
-                {/* Actions */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 2 }}
-                    className="flex gap-4"
-                >
-                    <Button
-                        onClick={handlePlayAgain}
-                        className="flex-1"
+                    {/* Actions */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 2 }}
+                        className="flex gap-4"
                     >
-                        <RotateCcw className="w-5 h-5 mr-2" />
-                        Play Again
-                    </Button>
-                    <Button
-                        onClick={handleHome}
-                        variant="outline-gold"
-                        className="flex-1"
-                    >
-                        <Home className="w-5 h-5 mr-2" />
-                        Home
-                    </Button>
-                </motion.div>
+                        <Button
+                            onClick={handlePlayAgain}
+                            className="flex-1"
+                        >
+                            <RotateCcw className="w-5 h-5 mr-2" />
+                            Play Again
+                        </Button>
+                        <Button
+                            onClick={handleHome}
+                            variant="outline-gold"
+                            className="flex-1"
+                        >
+                            <Home className="w-5 h-5 mr-2" />
+                            Home
+                        </Button>
+                    </motion.div>
 
-                {/* Game Stats */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 2.2 }}
-                    className="mt-6 text-center"
-                >
-                    <p className="text-white/20 text-xs">
-                        Game lasted {gameState.dayCount} days • {gameState.players.filter(p => !p.isAlive).length} eliminated
-                    </p>
+                    {/* Game Stats */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 2.2 }}
+                        className="mt-6 text-center"
+                    >
+                        <p className="text-white/20 text-xs">
+                            Game lasted {gameState.dayCount} days • {gameState.players.filter(p => !p.isAlive).length} eliminated
+                        </p>
+                    </motion.div>
                 </motion.div>
-            </motion.div>
-        </div>
+            </div>
+        </motion.div>
     );
 };
