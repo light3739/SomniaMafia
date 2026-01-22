@@ -9,6 +9,7 @@ import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../contracts/con
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
 import { loadSession, createNewSession, markSessionRegistered } from '../services/sessionKeyService';
 import { generateEndGameProof } from '../services/zkProof';
+import { ShuffleService } from '../services/shuffleService';
 
 const shotSound = "/assets/mafia_shot.wav";
 
@@ -59,6 +60,7 @@ interface GameContextType {
     endNightOnChain: () => Promise<void>;
     endGameAutomaticallyOnChain: () => Promise<void>;
     endGameZK: () => Promise<void>;
+    getInvestigationResultOnChain: (detective: string, target: string) => Promise<{ role: Role; isMafia: boolean }>;
     setCurrentRoomId: (id: bigint | null) => void;
 
     // Utility
@@ -214,19 +216,20 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             calculatedGas = (gasEstimate * 150n) / 100n;
 
             // 3. Safety cap - if gas is crazy (revert symptom), don't scare MetaMask
-            if (calculatedGas > 10_000_000n) {
-                console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at 3M to avoid balance error (likely contract revert).`);
-                calculatedGas = 3_000_000n;
+            const safetyCap = functionName === 'endGameZK' ? 150_000_000n : 30_000_000n;
+            if (calculatedGas > safetyCap) {
+                console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at ${safetyCap} to avoid balance error (likely contract revert).`);
+                calculatedGas = safetyCap;
             }
 
             console.log(`[Gas] Estimated for ${functionName}: ${gasEstimate}, With Buffer: ${calculatedGas}`);
         } catch (e) {
             console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
             // Если оценка упала, используем высокий лимит для тяжелых функций
-            if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom'].includes(functionName)) {
-                calculatedGas = 20_000_000n;
+            if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK'].includes(functionName)) {
+                calculatedGas = functionName === 'endGameZK' ? 100_000_000n : 30_000_000n;
             } else {
-                calculatedGas = 2_000_000n;
+                calculatedGas = 5_000_000n;
             }
         }
 
@@ -971,6 +974,41 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
+    const getInvestigationResultOnChain = useCallback(async (detective: string, target: string) => {
+        if (!currentRoomId) return { role: Role.UNKNOWN, isMafia: false };
+
+        try {
+            console.log(`[Investigation API] Fetching result for ${detective} -> ${target}`);
+            const response = await fetch('/api/game/investigate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId: currentRoomId.toString(),
+                    detectiveAddress: detective,
+                    targetAddress: target
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to fetch investigation result');
+            }
+
+            const data = await response.json();
+            // Convert numerical role to Role enum
+            const role = ShuffleService.roleNumberToRole(data.role.toString());
+
+            return {
+                role,
+                isMafia: data.isMafia
+            };
+        } catch (e: any) {
+            console.error('[Investigation API Failed]', e);
+            addLog(`Investigation failed: ${e.message}`, "danger");
+            return { role: Role.UNKNOWN, isMafia: false };
+        }
+    }, [currentRoomId, addLog]);
+
     const endNightOnChain = useCallback(async () => {
         if (!currentRoomId) return;
         setIsTxPending(true);
@@ -1138,11 +1176,37 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // V4: ZK End Game (Client generates proof of win via Server API)
     const endGameZK = useCallback(async () => {
         if (!currentRoomId || !publicClient) return;
+
+        // --- 1. COORDINATION LOGIC ("Waterfall") ---
+        // Sort active players by address to have a deterministic order
+        const activePlayers = gameState.players
+            .filter(p => p.isAlive)
+            .sort((a, b) => a.address.localeCompare(b.address));
+
+        const myIndex = activePlayers.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+
+        // If I am not found (shouldn't happen if alive), default to 0
+        const delayIndex = myIndex >= 0 ? myIndex : 0;
+
+        // Delay: 1st player = 0s, 2nd = 15s, 3rd = 30s...
+        const delayMs = delayIndex * 15000;
+
+        if (delayMs > 0) {
+            console.log(`[ZK] Designated Submitter: I am #${delayIndex + 1}. Waiting ${delayMs / 1000}s before submission...`);
+            addLog(`Waiting turn to submit proof (${delayMs / 1000}s)...`, "info");
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+
+            // Re-check if game ended while waiting
+            // We can check if we are still on the same room/state, but ideally we check if the game is OVER.
+            // However, endGameZK is usually called when we *think* it's over.
+            // A simple check is if another tx is pending or if phase changed (though phase won't change until tx confirms)
+        }
+
         setIsTxPending(true);
         addLog("Generating ZK Proof of Victory...", "info");
 
         try {
-            // 1. Считаем игроков локально для запроса
+            // 1. Local counts
             let mCount = 0;
             let tCount = 0;
             gameState.players.forEach(p => {
@@ -1154,12 +1218,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             console.log("[ZK] Requesting proof for Room:", currentRoomId.toString());
 
-            // 2. Получаем УЖЕ ОТФОРМАТИРОВАННЫЕ данные (BigInt) от сервиса
+            // 2. Fetch Proof
             const zkData = await generateEndGameProof(currentRoomId, mCount, tCount);
 
             console.log("[ZK] Proof received. Simulating transaction...");
 
-            // 3. Формируем аргументы. zkData.b уже имеет формат [[x,y], [z,w]]
+            // 3. Form args
             const args = [
                 currentRoomId,
                 zkData.a,
@@ -1168,7 +1232,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 zkData.inputs
             ] as const;
 
-            // 4. Симуляция (проверка на ошибки контракта)
+            // 4. Simulate
             try {
                 await publicClient.simulateContract({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -1183,8 +1247,27 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 throw new Error("Contract rejected the proof. Check log for details.");
             }
 
-            // 5. Отправка транзакции
-            const hash = await sendGameTransaction('endGameZK', args as any, false);
+            // 5. DECIDE WALLET (Session vs Main) based on balance
+            let useSessionKey = false;
+            const session = loadSession();
+            if (session && session.registeredOnChain && Date.now() < session.expiresAt && session.roomId === Number(currentRoomId)) {
+                try {
+                    const balance = await publicClient.getBalance({ address: session.address as `0x${string}` });
+                    const MIN_BALANCE = 5_000_000_000_000_000n; // 0.005 ETH
+                    if (balance >= MIN_BALANCE) {
+                        useSessionKey = true;
+                        console.log(`[ZK] Session Key has balance (${balance}), optimizing submission.`);
+                    } else {
+                        console.warn(`[ZK] Session Key balance too low (${balance}), falling back to Main Wallet.`);
+                    }
+                } catch (e) {
+                    console.error("[ZK] Failed to check session balance:", e);
+                }
+            }
+
+            // 6. Send Transaction
+            console.log(`[ZK] Sending transaction (Session: ${useSessionKey})...`);
+            const hash = await sendGameTransaction('endGameZK', args as any, useSessionKey);
 
             const isTownWin = zkData.inputs[0] === 1n;
             addLog(`ZK Proof submitted! Winner: ${isTownWin ? "TOWN" : "MAFIA"}`, "success");
@@ -1192,13 +1275,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await publicClient.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
 
-        } catch (e: any) {
-            console.error("[ZK] Transaction Failed:", e);
-            addLog(`Final ZK Error: ${e.shortMessage || e.message}`, "danger");
+        } catch (txErr: any) {
+            console.error("[ZK] Transaction Failed:", txErr);
+            addLog(`ZK Error: ${txErr.shortMessage || txErr.message}`, "danger");
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList, address]);
+    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList, address, myPlayer?.address]);
 
     /**
      * TRIGGER AUTO WIN: A silent background check that pings the server
@@ -1206,7 +1289,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
      */
     const triggerAutoWinCheck = useCallback(async () => {
         const roomId = currentRoomIdRef.current;
-        if (!roomId || !publicClient || isTxPending) return;
+        if (!roomId || !publicClient) return;
+
+        // Note: We don't block the CHECK (server fetch) if isTxPending is true,
+        // because the transaction that is pending might be the one that triggers the win!
+        // We only block the SUBMISSION of the endGameZK transaction.
 
         try {
             console.log(`[AutoWin] Checking for victory in Room #${roomId}...`);
@@ -1223,7 +1310,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const { formatted } = data;
                 const proofRoomId = formatted.inputs[2];
 
-                if (proofRoomId !== roomId.toString()) {
+                if (BigInt(proofRoomId) !== BigInt(roomId)) {
                     console.warn(`[AutoWin] Room ID mismatch: Frontend=${roomId}, Proof=${proofRoomId}`);
                     return;
                 }
@@ -1246,37 +1333,42 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.log("[AutoWin ZK Debug] Room ID:", roomId.toString());
                 console.log("[AutoWin ZK Debug] Result:", data.result);
 
+                const args = [
+                    roomId,
+                    formattedProof.a,
+                    formattedProof.b,
+                    formattedProof.c,
+                    formattedProof.inputs
+                ] as const;
+
+                // LOCK ONLY BEFORE SUBMITTING
+                if (isTxPending) {
+                    console.log("[AutoWin] Win detected, but another transaction is pending. Retrying shortly...");
+                    return;
+                }
+                setIsTxPending(true);
+
                 // SIMULATE CONTRACT FIRST
                 try {
                     await publicClient.simulateContract({
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI,
                         functionName: 'endGameZK',
-                        args: [
-                            roomId,
-                            formattedProof.a as unknown as readonly [bigint, bigint],
-                            formattedProof.b as unknown as readonly [readonly [bigint, bigint], readonly [bigint, bigint]],
-                            formattedProof.c as unknown as readonly [bigint, bigint],
-                            formattedProof.inputs as unknown as readonly [bigint, bigint, bigint, bigint, bigint]
-                        ],
+                        args: args as any,
                         account: address,
                     });
                     console.log("[AutoWin ZK Debug] Simulation SUCCESS");
                 } catch (simErr: any) {
-                    console.error("[AutoWin ZK Debug] Simulation FAILED:", simErr.shortMessage || simErr.message);
+                    console.error("[AutoWin ZK Debug] Simulation FAILED!");
+                    console.error("Reason:", simErr.reason || simErr.shortMessage || "Unknown revert");
+                    console.error("Full Error:", simErr);
                 }
 
                 addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");
 
                 try {
-                    // Send with a generous gas limit for ZK verification
-                    const hash = await sendGameTransaction('endGameZK', [
-                        roomId,
-                        formattedProof.a,
-                        formattedProof.b,
-                        formattedProof.c,
-                        formattedProof.inputs
-                    ], false);
+                    // Send with a very generous gas limit for ZK verification on Somnia
+                    const hash = await sendGameTransaction('endGameZK', args as any, false);
 
                     await publicClient.waitForTransactionReceipt({ hash });
                     addLog("Game ended automatically via Server ZK!", "phase");
@@ -1594,6 +1686,38 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useWatchContractEvent({
         address: MAFIA_CONTRACT_ADDRESS,
         abi: MAFIA_ABI,
+        eventName: 'VotingFinalized',
+        onLogs: (logs: any) => {
+            const roomId = currentRoomIdRef.current;
+            if (!roomId) return;
+
+            if (BigInt(logs[0].args.roomId) === roomId) {
+                console.log("[Event] Voting Finalized. Triggering immediate win check.");
+                refreshPlayersList(roomId);
+                triggerAutoWinCheck();
+            }
+        }
+    });
+
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
+        eventName: 'NightFinalized',
+        onLogs: (logs: any) => {
+            const roomId = currentRoomIdRef.current;
+            if (!roomId) return;
+
+            if (BigInt(logs[0].args.roomId) === roomId) {
+                console.log("[Event] Night Finalized. Triggering immediate win check.");
+                refreshPlayersList(roomId);
+                triggerAutoWinCheck();
+            }
+        }
+    });
+
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
         eventName: 'RoleConfirmed',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
@@ -1898,7 +2022,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         startVotingOnChain, voteOnChain,
         commitNightActionOnChain, revealNightActionOnChain,
         commitMafiaTargetOnChain, revealMafiaTargetOnChain,
-        endNightOnChain, endGameAutomaticallyOnChain,
+        endNightOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain,
         revealRoleOnChain, tryEndGame, claimVictory, endGameZK,
         sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList,
@@ -1914,7 +2038,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         commitRoleOnChain, confirmRoleOnChain, commitAndConfirmRoleOnChain,
         startVotingOnChain, voteOnChain, commitNightActionOnChain,
         revealNightActionOnChain, commitMafiaTargetOnChain, revealMafiaTargetOnChain,
-        endNightOnChain, endGameAutomaticallyOnChain, revealRoleOnChain,
+        endNightOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain, revealRoleOnChain,
         tryEndGame, claimVictory, endGameZK, sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList, addLog,
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,

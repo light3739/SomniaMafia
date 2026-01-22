@@ -36,8 +36,9 @@ export class ServerStore {
      * Uses a Hash structure: room:secrets:{roomId} -> {address: secret}
      */
     static async storeSecret(roomId: string, address: string, role: number, salt: string) {
+        const normalizedRoomId = BigInt(roomId).toString();
         const secret: PlayerSecret = { role, salt };
-        const key = `room:secrets:${roomId}`;
+        const key = `room:secrets:${normalizedRoomId}`;
 
         if (!redis) {
             console.warn(`[ServerStore] Redis not configured. Using MEMORY fallback for Room #${roomId}`);
@@ -62,7 +63,8 @@ export class ServerStore {
      * Retrieves all secrets for a specific room.
      */
     static async getRoomSecrets(roomId: string): Promise<Record<string, PlayerSecret> | null> {
-        const key = `room:secrets:${roomId}`;
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:secrets:${normalizedRoomId}`;
 
         if (!redis) {
             const data = memoryStore[key];
@@ -95,7 +97,8 @@ export class ServerStore {
      * Manually clears room data (optional cleanup).
      */
     static async clearRoom(roomId: string) {
-        const key = `room:secrets:${roomId}`;
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:secrets:${normalizedRoomId}`;
         if (!redis) {
             delete memoryStore[key];
             return;
@@ -107,4 +110,106 @@ export class ServerStore {
             console.error("[ServerStore] Redis error (clear):", e);
         }
     }
+
+    // ============ DISCUSSION STATE ============
+
+    /**
+     * Get the current discussion state for a room.
+     */
+    static async getDiscussionState(roomId: string): Promise<DiscussionState | null> {
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:discussion:${normalizedRoomId}`;
+
+        if (!redis) {
+            const data = memoryStore[key];
+            if (!data || !data['state']) return null;
+            return JSON.parse(data['state']);
+        }
+
+        try {
+            const data = await redis.get(key);
+            if (!data) return null;
+            return JSON.parse(data);
+        } catch (e) {
+            console.error("[ServerStore] Redis error (getDiscussion):", e);
+            return null;
+        }
+    }
+
+    /**
+     * Set the discussion state for a room.
+     */
+    static async setDiscussionState(roomId: string, state: DiscussionState) {
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:discussion:${normalizedRoomId}`;
+
+        if (!redis) {
+            if (!memoryStore[key]) memoryStore[key] = {};
+            memoryStore[key]['state'] = JSON.stringify(state);
+            return;
+        }
+
+        try {
+            await redis.set(key, JSON.stringify(state), 'EX', GAME_DATA_TTL);
+        } catch (e) {
+            console.error("[ServerStore] Redis error (setDiscussion):", e);
+        }
+    }
+
+    /**
+     * Advance to the next speaker. Returns updated state or null if finished.
+     */
+    static async advanceSpeaker(roomId: string, totalAlivePlayers: number): Promise<DiscussionState | null> {
+        const state = await this.getDiscussionState(roomId);
+        if (!state || state.finished) return state;
+
+        const nextIndex = state.currentSpeakerIndex + 1;
+        if (nextIndex >= totalAlivePlayers) {
+            // All players have spoken
+            const finishedState: DiscussionState = {
+                ...state,
+                finished: true
+            };
+            await this.setDiscussionState(roomId, finishedState);
+            return finishedState;
+        }
+
+        const newState: DiscussionState = {
+            currentSpeakerIndex: nextIndex,
+            speakerStartTime: Date.now(),
+            speakerDuration: state.speakerDuration,
+            finished: false
+        };
+        await this.setDiscussionState(roomId, newState);
+        return newState;
+    }
+
+    /**
+     * Clear discussion state (e.g., when voting starts).
+     */
+    static async clearDiscussionState(roomId: string) {
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:discussion:${normalizedRoomId}`;
+
+        if (!redis) {
+            delete memoryStore[key];
+            return;
+        }
+
+        try {
+            await redis.del(key);
+        } catch (e) {
+            console.error("[ServerStore] Redis error (clearDiscussion):", e);
+        }
+    }
+}
+
+/**
+ * Discussion state for turn-based speaking during DAY phase.
+ */
+export interface DiscussionState {
+    currentSpeakerIndex: number;
+    speakerStartTime: number; // Unix timestamp (ms)
+    speakerDuration: number;  // Seconds per speaker (default: 60)
+    finished: boolean;
 }
