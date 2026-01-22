@@ -435,16 +435,29 @@ export const NightPhase: React.FC = React.memo(() => {
             let investigationResult: Role | null = null;
             if (myRole === Role.DETECTIVE && roleConfig.action === NightActionType.CHECK) {
                 addLog("Fetching investigation result from server...", "info");
-                // Wait a bit for the transaction to be indexed/seen by the public client in the API
-                await new Promise(resolve => setTimeout(resolve, 2000));
 
-                const result = await getInvestigationResultOnChain(address || '', nightState.committedTarget || '');
-                if (result && result.role !== Role.UNKNOWN) {
-                    investigationResult = result.role;
-                    const targetName = gameState.players.find(
-                        p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase()
-                    )?.name || 'Unknown';
-                    addLog(`Investigation complete: ${targetName} is ${result.isMafia ? 'EVIL' : 'INNOCENT'}!`, "success");
+                // Retry loop to handle block propagation latency
+                const MAX_RETRIES = 5;
+                for (let i = 0; i < MAX_RETRIES; i++) {
+                    // Wait before check (2s delay each time giving time for indexer)
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+
+                    if (i > 0) addLog(`Verifying action on-chain (Attempt ${i + 1}/${MAX_RETRIES})...`, "info");
+
+                    const result = await getInvestigationResultOnChain(address || '', nightState.committedTarget || '');
+
+                    if (result && result.role !== Role.UNKNOWN) {
+                        investigationResult = result.role;
+                        const targetName = gameState.players.find(
+                            p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase()
+                        )?.name || 'Unknown';
+                        addLog(`Investigation complete: ${targetName} is ${result.isMafia ? 'EVIL' : 'INNOCENT'}!`, "success");
+                        break; // Success!
+                    }
+                }
+
+                if (!investigationResult) {
+                    addLog("Could not verify investigation result after multiple attempts.", "warning");
                 }
             }
 
