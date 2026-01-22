@@ -236,20 +236,36 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // === ОТПРАВКА ТРАНЗАКЦИИ ===
         if (canUseSession && sessionClient) {
             console.log(`[Session TX] Sending ${functionName} with gas ${calculatedGas}...`);
-            try {
-                const hash = await sessionClient.writeContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MAFIA_ABI as any,
-                    functionName: functionName as any,
-                    args: args as any,
-                    gas: calculatedGas,
-                });
-                console.log(`[Session TX] Success! Hash: ${hash}`);
-                return hash;
-            } catch (err: any) {
-                console.error('[Session TX] Failed:', err.message || err);
-                throw err;
-            }
+
+            const attemptSend = async (retry: boolean = true): Promise<`0x${string}`> => {
+                try {
+                    const hash = await sessionClient.writeContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI as any,
+                        functionName: functionName as any,
+                        args: args as any,
+                        gas: calculatedGas,
+                    });
+                    console.log(`[Session TX] Success! Hash: ${hash}`);
+                    return hash;
+                } catch (err: any) {
+                    const errMsg = err.message || '';
+                    if (retry && (errMsg.includes('nonce too low') || errMsg.includes('Nonce provided for the transaction is lower'))) {
+                        console.warn(`[Session TX] Nonce too low for ${functionName}. Retrying with fresh nonce...`);
+
+                        // Wait a bit for RPC to sync or mempool to update
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+
+                        // Explicitly fetch next nonce if possible, or just let viem try again
+                        // Most reliable is to just retry once, viem will call getTransactionCount again
+                        return attemptSend(false);
+                    }
+                    console.error('[Session TX] Failed:', err.message || err);
+                    throw err;
+                }
+            };
+
+            return attemptSend();
         } else {
             // Fallback на основной кошелек (MetaMask)
             console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas}`);
@@ -270,6 +286,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         myPlayerId: null,
         logs: [],
         mafiaMessages: [],
+        revealedCount: 0,
+        mafiaCommittedCount: 0,
+        mafiaRevealedCount: 0,
         winner: null
     });
 
@@ -419,6 +438,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 revealedCount = Number(roomData.revealedCount);
             }
 
+            // Fetch Mafia Consensus counts
+            const [mafiaCommitted, mafiaRevealed] = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'getMafiaConsensus',
+                args: [roomId],
+            }) as [number, number, string];
+
+            const mafiaCommittedCount = Number(mafiaCommitted);
+            const mafiaRevealedCount = Number(mafiaRevealed);
+
             // DEBUG: Log current phase from contract
             console.log('[Phase Sync]', {
                 contractPhase: phase,
@@ -481,7 +511,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     players: formattedPlayers,
                     phase: finalPhase,
                     dayCount,
-                    winner: winner || prev.winner // Сохраняем победителя
+                    revealedCount,
+                    mafiaCommittedCount,
+                    mafiaRevealedCount,
+                    winner: winner || prev.winner
                 };
             });
         } catch (e) {

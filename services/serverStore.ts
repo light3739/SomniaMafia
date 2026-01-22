@@ -114,11 +114,11 @@ export class ServerStore {
     // ============ DISCUSSION STATE ============
 
     /**
-     * Get the current discussion state for a room.
+     * Get the current discussion state for a room and day.
      */
-    static async getDiscussionState(roomId: string): Promise<DiscussionState | null> {
+    static async getDiscussionState(roomId: string, dayCount: number): Promise<DiscussionState | null> {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:discussion:${normalizedRoomId}`;
+        const key = `room:discussion:${normalizedRoomId}:${dayCount}`;
 
         if (!redis) {
             const data = memoryStore[key];
@@ -137,11 +137,11 @@ export class ServerStore {
     }
 
     /**
-     * Set the discussion state for a room.
+     * Set the discussion state for a room and day.
      */
-    static async setDiscussionState(roomId: string, state: DiscussionState) {
+    static async setDiscussionState(roomId: string, dayCount: number, state: DiscussionState) {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:discussion:${normalizedRoomId}`;
+        const key = `room:discussion:${normalizedRoomId}:${dayCount}`;
 
         if (!redis) {
             if (!memoryStore[key]) memoryStore[key] = {};
@@ -159,8 +159,8 @@ export class ServerStore {
     /**
      * Advance to the next speaker. Returns updated state or null if finished.
      */
-    static async advanceSpeaker(roomId: string, totalAlivePlayers: number): Promise<DiscussionState | null> {
-        const state = await this.getDiscussionState(roomId);
+    static async advanceSpeaker(roomId: string, dayCount: number, totalAlivePlayers: number): Promise<DiscussionState | null> {
+        const state = await this.getDiscussionState(roomId, dayCount);
         if (!state || state.finished) return state;
 
         const nextIndex = state.currentSpeakerIndex + 1;
@@ -170,7 +170,7 @@ export class ServerStore {
                 ...state,
                 finished: true
             };
-            await this.setDiscussionState(roomId, finishedState);
+            await this.setDiscussionState(roomId, dayCount, finishedState);
             return finishedState;
         }
 
@@ -180,16 +180,16 @@ export class ServerStore {
             speakerDuration: state.speakerDuration,
             finished: false
         };
-        await this.setDiscussionState(roomId, newState);
+        await this.setDiscussionState(roomId, dayCount, newState);
         return newState;
     }
 
     /**
      * Clear discussion state (e.g., when voting starts).
      */
-    static async clearDiscussionState(roomId: string) {
+    static async clearDiscussionState(roomId: string, dayCount: number) {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:discussion:${normalizedRoomId}`;
+        const key = `room:discussion:${normalizedRoomId}:${dayCount}`;
 
         if (!redis) {
             delete memoryStore[key];

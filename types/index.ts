@@ -74,6 +74,9 @@ export interface GameState {
   myPlayerId: string | null;
   logs: LogEntry[];
   mafiaMessages: MafiaChatMessage[];
+  revealedCount: number; // For night phase (Town)
+  mafiaCommittedCount: number; // For night phase (Mafia)
+  mafiaRevealedCount: number; // For night phase (Mafia)
   winner: 'MAFIA' | 'TOWN' | null;
 }
 
