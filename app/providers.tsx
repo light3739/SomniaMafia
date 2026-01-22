@@ -19,6 +19,7 @@ import {
 import { WagmiProvider } from 'wagmi';
 import { somniaChain } from '../contracts/config';
 import { GameProvider } from '../contexts/GameContext'; // Adjust path if needed
+import { AudioProvider } from '../contexts/AudioContext';
 import '@rainbow-me/rainbowkit/styles.css';
 
 const { wallets } = getDefaultWallets();
@@ -46,9 +47,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <WagmiProvider config={config}>
             <QueryClientProvider client={queryClient}>
                 <RainbowKitProvider theme={darkTheme()}>
-                    <GameProvider>
-                        {children}
-                    </GameProvider>
+                    <AudioProvider>
+                        <GameProvider>
+                            {children}
+                        </GameProvider>
+                    </AudioProvider>
                 </RainbowKitProvider>
             </QueryClientProvider>
         </WagmiProvider>
