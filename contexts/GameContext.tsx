@@ -1176,11 +1176,37 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // V4: ZK End Game (Client generates proof of win via Server API)
     const endGameZK = useCallback(async () => {
         if (!currentRoomId || !publicClient) return;
+
+        // --- 1. COORDINATION LOGIC ("Waterfall") ---
+        // Sort active players by address to have a deterministic order
+        const activePlayers = gameState.players
+            .filter(p => p.isAlive)
+            .sort((a, b) => a.address.localeCompare(b.address));
+
+        const myIndex = activePlayers.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+
+        // If I am not found (shouldn't happen if alive), default to 0
+        const delayIndex = myIndex >= 0 ? myIndex : 0;
+
+        // Delay: 1st player = 0s, 2nd = 15s, 3rd = 30s...
+        const delayMs = delayIndex * 15000;
+
+        if (delayMs > 0) {
+            console.log(`[ZK] Designated Submitter: I am #${delayIndex + 1}. Waiting ${delayMs / 1000}s before submission...`);
+            addLog(`Waiting turn to submit proof (${delayMs / 1000}s)...`, "info");
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+
+            // Re-check if game ended while waiting
+            // We can check if we are still on the same room/state, but ideally we check if the game is OVER.
+            // However, endGameZK is usually called when we *think* it's over.
+            // A simple check is if another tx is pending or if phase changed (though phase won't change until tx confirms)
+        }
+
         setIsTxPending(true);
         addLog("Generating ZK Proof of Victory...", "info");
 
         try {
-            // 1. Считаем игроков локально для запроса
+            // 1. Local counts
             let mCount = 0;
             let tCount = 0;
             gameState.players.forEach(p => {
@@ -1192,12 +1218,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             console.log("[ZK] Requesting proof for Room:", currentRoomId.toString());
 
-            // 2. Получаем УЖЕ ОТФОРМАТИРОВАННЫЕ данные (BigInt) от сервиса
+            // 2. Fetch Proof
             const zkData = await generateEndGameProof(currentRoomId, mCount, tCount);
 
             console.log("[ZK] Proof received. Simulating transaction...");
 
-            // 3. Формируем аргументы. zkData.b уже имеет формат [[x,y], [z,w]]
+            // 3. Form args
             const args = [
                 currentRoomId,
                 zkData.a,
@@ -1206,7 +1232,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 zkData.inputs
             ] as const;
 
-            // 4. Симуляция (проверка на ошибки контракта)
+            // 4. Simulate
             try {
                 await publicClient.simulateContract({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -1221,9 +1247,27 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 throw new Error("Contract rejected the proof. Check log for details.");
             }
 
-            // 5. Отправка транзакции
-            console.log("[ZK] Sending transaction with high gas limit (15M)...");
-            const hash = await sendGameTransaction('endGameZK', args as any, false);
+            // 5. DECIDE WALLET (Session vs Main) based on balance
+            let useSessionKey = false;
+            const session = loadSession();
+            if (session && session.registeredOnChain && Date.now() < session.expiresAt && session.roomId === Number(currentRoomId)) {
+                try {
+                    const balance = await publicClient.getBalance({ address: session.address as `0x${string}` });
+                    const MIN_BALANCE = 5_000_000_000_000_000n; // 0.005 ETH
+                    if (balance >= MIN_BALANCE) {
+                        useSessionKey = true;
+                        console.log(`[ZK] Session Key has balance (${balance}), optimizing submission.`);
+                    } else {
+                        console.warn(`[ZK] Session Key balance too low (${balance}), falling back to Main Wallet.`);
+                    }
+                } catch (e) {
+                    console.error("[ZK] Failed to check session balance:", e);
+                }
+            }
+
+            // 6. Send Transaction
+            console.log(`[ZK] Sending transaction (Session: ${useSessionKey})...`);
+            const hash = await sendGameTransaction('endGameZK', args as any, useSessionKey);
 
             const isTownWin = zkData.inputs[0] === 1n;
             addLog(`ZK Proof submitted! Winner: ${isTownWin ? "TOWN" : "MAFIA"}`, "success");
@@ -1237,7 +1281,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList, address]);
+    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList, address, myPlayer?.address]);
 
     /**
      * TRIGGER AUTO WIN: A silent background check that pings the server
