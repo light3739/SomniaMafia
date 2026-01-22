@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { GameLog } from './GameLog';
@@ -195,24 +196,30 @@ export const GameLayout: React.FC = () => {
             {/* 1. ФОН (Fixed Background) - Smooth transition between day/night */}
             <div className="fixed inset-0 z-0 pointer-events-none">
                 {/* Day Background */}
-                <div
-                    className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out"
-                    style={{
-                        backgroundImage: `url(${dayBg})`,
-                        opacity: isNightPhase ? 0 : 1,
-                        filter: 'grayscale(30%) brightness(40%)'
-                    }}
-                />
+                <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isNightPhase ? 'opacity-0' : 'opacity-100'}`}>
+                    <Image
+                        src={dayBg}
+                        alt="Day Background"
+                        fill
+                        priority
+                        className="object-cover"
+                        style={{ filter: 'grayscale(30%) brightness(40%)' }}
+                    />
+                </div>
+
                 {/* Night Background */}
-                <div
-                    className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out"
-                    style={{
-                        backgroundImage: `url(${nightBg})`,
-                        opacity: isNightPhase ? 1 : 0,
-                        filter: 'grayscale(0%) brightness(25%) contrast(100%)'
-                    }}
-                />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#000_100%)]" />
+                <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isNightPhase ? 'opacity-100' : 'opacity-0'}`}>
+                    <Image
+                        src={nightBg}
+                        alt="Night Background"
+                        fill
+                        priority
+                        className="object-cover"
+                        style={{ filter: 'grayscale(0%) brightness(25%) contrast(100%)' }}
+                    />
+                </div>
+
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#000_100%)] z-10" />
             </div>
 
             {/* Overlays in order of priority (lower in code = higher z-index) */}
