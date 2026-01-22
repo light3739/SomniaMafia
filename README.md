@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Somnia Mafia 🕵️‍♂️
+
+A **V4 Web3 Social Deduction Game** built on the Somnia Blockchain.
+Featuring Zero-Knowledge Proofs for role verification, Session Keys for seamless UX, and a synchronized game loop.
+
+![Banner](/public/assets/mafia_shot.png)
+
+## Features
+
+- **Protocol V4**: Atomic lobby creation, commit-reveal schemes for all actions.
+- **ZK Endgame**: Client-side Zero-Knowledge Proof generation (Groth16) to prove win conditions without revealing sensitive data.
+- **Session Keys**: Burner wallets stored in-memory/local storage allow for instant, signature-free game actions after initial approval.
+- **Discussion Timer**: Synchronized server-side timer (Redis) for fair turn-based speech.
+- **Role Mechanics**:
+  - **Mafia**: Encrypted P2P Chat, Consensus Kills.
+  - **Detective**: "Check" action to investigate roles (Server-side validation).
+  - **Doctor**: "Heal" action to protect targets.
+
+## Tech Stack
+
+- **Frontend**: Next.js 14, TailwindCSS, Framer Motion
+- **Blockchain**: Solidity, Hardhat, Viem/Wagmi
+- **ZK**: SnarkJS, Circom
+- **Backend**: Next.js API Routes, Redis (Upstash compatible)
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- Redis (Optional, falls back to memory for dev)
+- Metamask (configured for Somnia Devnet)
+
+### Environment Variables
+
+Copy `.env.example` to `.env.local`:
+
+```bash
+# Public (Frontend)
+NEXT_PUBLIC_MAFIA_ADDRESS=0x...
+NEXT_PUBLIC_ENABLE_TEST_MODE=false
+
+# Private (Backend)
+REDIS_URL=redis://... # Optional
+```
+
+### Installation
+
+```bash
+npm install
+# or
+yarn install
+```
+
+### Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deployment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Build**: `npm run build`
+2. **Environment**: Ensure `NEXT_PUBLIC_MAFIA_ADDRESS` points to the correct deployment.
+3. **ZK Circuits**: Ensure `public/mafia_outcome.wasm` and `public/mafia_outcome_0001.zkey` are present.
 
-## Learn More
+## Architecture Highlights
 
-To learn more about Next.js, take a look at the following resources:
+### The "Waterfall" Submission
+To prevent race conditions during auto-endgame, clients coordinate submission:
+- Players are sorted by address.
+- Player #1 submits immediately.
+- Player #2 waits 15s, etc.
+- Priority is given to Session Keys if balance allows.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Discussion API
+`/api/game/discussion` manages the state of the Day phase timer, ensuring all clients see the same effective time remaining despite network latency.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Credits
+Built for the Somnia Hackathon.

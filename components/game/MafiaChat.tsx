@@ -133,7 +133,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                             ? 'bg-white/5 text-green-400 hover:bg-green-500/20'
                             : 'bg-white/5 text-white/20 cursor-not-allowed'
                             }`}
-                        title="Согласен с последним предложением"
+                        title="Agree / Vote to Kill"
                     >
                         <Plus className="w-4 h-4" />
                     </button>
@@ -147,7 +147,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                             ? 'bg-white/5 text-red-400 hover:bg-red-500/20'
                             : 'bg-white/5 text-white/20 cursor-not-allowed'
                             }`}
-                        title="Не согласен"
+                        title="Disagree / Against"
                     >
                         <Minus className="w-4 h-4" />
                     </button>
@@ -161,7 +161,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
             >
                 {messages.length === 0 ? (
                     <p className="text-white/20 text-xs text-center py-8">
-                        Выберите игрока и нажмите + чтобы согласиться
+                        Select a player to suggest a target, or use +/- to vote.
                     </p>
                 ) : (
                     messages.map(msg => (
