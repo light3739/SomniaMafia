@@ -766,10 +766,21 @@ export const NightPhase: React.FC = React.memo(() => {
                     isTxPending={isTxPending}
                     handleReveal={handleReveal}
                 />
+
+                {/* AUTOMATION: Night End Hands-Free (Explicitly called when all revealed) */}
+                <NightEndAutomator
+                    nightState={nightState}
+                    isProcessing={isProcessing}
+                    isTxPending={isTxPending}
+                />
             </motion.div>
         </div>
     );
 });
+
+/**
+ * Automator #1: Handles self-reveal when commit is detected in state
+ */
 const NightRevealAuto: React.FC<{
     nightState: NightState,
     isProcessing: boolean,
@@ -778,10 +789,70 @@ const NightRevealAuto: React.FC<{
 }> = ({ nightState, isProcessing, isTxPending, handleReveal }) => {
     useEffect(() => {
         if (nightState.hasCommitted && !nightState.hasRevealed && !isProcessing && !isTxPending && nightState.salt) {
-            console.log("[Night Auto] Detected commit. Reconfirming reveal...");
+            console.log("[Night Auto] Detected commit locally. Triggering reveal...");
             handleReveal();
         }
     }, [nightState.hasCommitted, nightState.hasRevealed, nightState.salt, isProcessing, isTxPending, handleReveal]);
+
+    return null;
+};
+
+/**
+ * Automator #2: Monitors ALL players and triggers endNight when everyone is ready.
+ * Only the Host (or the last person to reveal) calls endNight.
+ */
+const NightEndAutomator: React.FC<{
+    nightState: NightState,
+    isProcessing: boolean,
+    isTxPending: boolean
+}> = ({ nightState, isProcessing, isTxPending }) => {
+    const { gameState, endNightOnChain, currentRoomId, myPlayer, addLog } = useGameContext();
+    const endNightStartedRef = useRef(false);
+
+    useEffect(() => {
+        if (!currentRoomId || gameState.phase !== GamePhase.NIGHT) {
+            endNightStartedRef.current = false;
+            return;
+        }
+
+        // Logic: Who is expected to act tonight?
+        const alivePlayers = gameState.players.filter(p => p.isAlive);
+        const expectedTownReveals = alivePlayers.filter(p => [Role.DETECTIVE, Role.DOCTOR].includes(p.role)).length;
+        const expectedMafiaReveals = alivePlayers.filter(p => p.role === Role.MAFIA).length;
+
+        // Current status from contract (synced via GameContext)
+        const currentTownRevealed = gameState.revealedCount || 0;
+        const currentMafiaRevealed = gameState.mafiaRevealedCount || 0;
+
+        // Condition for ending night: everyone who MUST act has REVEALED
+        const townReady = currentTownRevealed >= expectedTownReveals;
+        const mafiaReady = currentMafiaRevealed >= expectedMafiaReveals;
+
+        if (townReady && mafiaReady && (expectedTownReveals > 0 || expectedMafiaReveals > 0) && !isProcessing && !isTxPending && !endNightStartedRef.current) {
+
+            // Designated Submitter: Either the Host or the last person who revealed
+            const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+            const iAmActiveRole = [Role.MAFIA, Role.DOCTOR, Role.DETECTIVE].includes(myPlayer?.role || Role.UNKNOWN);
+
+            if (isHost || (iAmActiveRole && nightState.hasRevealed)) {
+                console.log(`[NightEndAutomator] All actions revealed (Town: ${currentTownRevealed}/${expectedTownReveals}, Mafia: ${currentMafiaRevealed}/${expectedMafiaReveals}). Ending night...`);
+                endNightStartedRef.current = true;
+
+                // Add a small delay to ensure block propagation
+                const timer = setTimeout(async () => {
+                    try {
+                        await endNightOnChain();
+                        addLog("Dawn is coming...", "success");
+                    } catch (e) {
+                        console.error("Auto endNight failed:", e);
+                        endNightStartedRef.current = false;
+                    }
+                }, 2000);
+
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [gameState.revealedCount, gameState.mafiaRevealedCount, gameState.phase, gameState.players, currentRoomId, isProcessing, isTxPending, myPlayer, endNightOnChain, addLog, nightState.hasRevealed]);
 
     return null;
 };
