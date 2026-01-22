@@ -3,7 +3,7 @@ const { createPublicClient, http } = require('viem');
 const path = require('path');
 
 // Configuration from your project
-const MAFIA_CONTRACT_ADDRESS = "0x45f2018503668c8b91746912d65b32f50d3addae";
+const MAFIA_CONTRACT_ADDRESS = "0xb58130d6183844b3bfb28ff1ffc96825eee82be3";
 const VERIFIER_CONTRACT_ADDRESS = "0x13467da1c154c4e0e8674744edf734985d66b4c9";
 
 const MAFIA_ABI = [
