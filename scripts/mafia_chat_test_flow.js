@@ -3,7 +3,7 @@ const { privateKeyToAccount } = require('viem/accounts');
 const path = require('path');
 
 // Configuration
-const MAFIA_CONTRACT_ADDRESS = "0x45f2018503668c8b91746912d65b32f50d3addae";
+const MAFIA_CONTRACT_ADDRESS = "0xb58130d6183844b3bfb28ff1ffc96825eee82be3";
 const somniaChain = {
     id: 50312,
     name: 'Somnia Testnet',
