@@ -138,12 +138,12 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
 
     switch (type) {
         case 'button':
-            playAudioFile('/assets/default_sound.mp3', 1);
+            playAudioFile('/assets/default_sound.mp3', 1, 0.01, 0.25);
             break;
 
         case 'keyboard':
-            createOsc(600, 'sine', 0.03, 0.1);
-            playSharpNoise(ctx, t, { duration: 0.02, vol: 0.1, freq: 3000, type: 'highpass' });
+            createOsc(600, 'sine', 0.03, 0.05);
+            playSharpNoise(ctx, t, { duration: 0.02, vol: 0.05, freq: 3000, type: 'highpass' });
             break;
 
         case 'vote':
@@ -153,15 +153,15 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
             break;
 
         case 'protect':
-            playAudioFile('/assets/protect.mp3', 2, 0.05, 0.3);
+            playAudioFile('/assets/protect.mp3', 2, 0.05, 0.2);
             break;
 
         case 'kill':
-            playAudioFile('/assets/kill.wav', 2, 0.05, 0.3);
+            playAudioFile('/assets/kill.wav', 2, 0.05, 0.12);
             break;
 
         case 'investigate':
-            playAudioFile('/assets/investigate.mp3', 2);
+            playAudioFile('/assets/investigate.mp3', 2, 0.05, 0.4);
             break;
 
         case 'propose':
@@ -170,22 +170,22 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
             const gP = ctx.createGain();
             oscP.frequency.setValueAtTime(900, t);
             oscP.frequency.exponentialRampToValueAtTime(1400, t + 0.2);
-            gP.gain.setValueAtTime(0.2, t);
+            gP.gain.setValueAtTime(0.12, t);
             gP.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
             oscP.connect(gP); gP.connect(ctx.destination);
             oscP.start(t); oscP.stop(t + 0.2);
             break;
 
         case 'approve':
-            createOsc(3000, 'sine', 0.2, 0.3);
-            createOsc(3500, 'sine', 0.15, 0.2);
+            createOsc(3000, 'sine', 0.2, 0.15);
+            createOsc(3500, 'sine', 0.15, 0.1);
             break;
 
         case 'reject':
-            playSharpNoise(ctx, t, { duration: 0.04, vol: 0.4, freq: 3000, type: 'highpass' });
+            playSharpNoise(ctx, t, { duration: 0.04, vol: 0.2, freq: 3000, type: 'highpass' });
             setTimeout(() => {
                 const ctx2 = initCtx(); if (!ctx2) return;
-                playSharpNoise(ctx2, ctx2.currentTime, { duration: 0.03, vol: 0.3, freq: 2500, type: 'highpass' });
+                playSharpNoise(ctx2, ctx2.currentTime, { duration: 0.03, vol: 0.15, freq: 2500, type: 'highpass' });
             }, 30);
             break;
     }
@@ -202,16 +202,16 @@ export const useSoundEffects = () => {
         playProposeSound: () => playSound('propose'),
         playApproveSound: () => playSound('approve'),
         playRejectSound: () => playSound('reject'),
-        playMarkSound: () => playAudioFile('/assets/note_tick.wav', 1, 0, 0.5),
+        playMarkSound: () => playAudioFile('/assets/note_tick.wav', 1, 0, 0.55),
 
         // Переход в ночь: длительность 5s, offset 5s, fadeOut 1s
-        playNightTransition: () => playAudioFile('/assets/night_sound2.mp3', 5, 0.1, 0.35, 5, 1.0),
+        playNightTransition: () => playAudioFile('/assets/night_sound2.mp3', 5, 0.1, 0.45, 5, 1.0),
 
         // Переход в день
-        playMorningTransition: () => playAudioFile('/assets/morning_sound.mp3', 5, 1, 0.1),
+        playMorningTransition: () => playAudioFile('/assets/morning_sound.mp3', 5, 1, 0.15),
 
         // Переход к голосованию: offset 0 (играем с начала)
-        playVotingStart: () => playAudioFile('/assets/Voting_sound.mp3', 4, 0.1, 0.3, 0),
+        playVotingStart: () => playAudioFile('/assets/Voting_sound.mp3', 4, 0.1, 0.25, 0),
     }), []);
 };
 
