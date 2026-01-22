@@ -73,7 +73,7 @@ export const DayPhase: React.FC = React.memo(() => {
         if (!currentRoomId) return;
         try {
             const response = await fetch(
-                `/api/game/discussion?roomId=${currentRoomId}&playerAddress=${myPlayer?.address || ''}`
+                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}`
             );
             const data = await response.json();
             setDiscussionState(data);
@@ -82,7 +82,7 @@ export const DayPhase: React.FC = React.memo(() => {
             console.error("Failed to fetch discussion state:", e);
             return null;
         }
-    }, [currentRoomId, myPlayer?.address]);
+    }, [currentRoomId, myPlayer?.address, gameState.dayCount]);
 
     // Start discussion (host only)
     const startDiscussion = useCallback(async () => {
@@ -94,6 +94,7 @@ export const DayPhase: React.FC = React.memo(() => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     roomId: currentRoomId.toString(),
+                    dayCount: gameState.dayCount,
                     action: 'start',
                     playerAddress: myPlayer?.address
                 })
@@ -114,6 +115,7 @@ export const DayPhase: React.FC = React.memo(() => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     roomId: currentRoomId.toString(),
+                    dayCount: gameState.dayCount,
                     action: 'skip',
                     playerAddress: myPlayer?.address
                 })
@@ -178,16 +180,25 @@ export const DayPhase: React.FC = React.memo(() => {
         };
     }, [isDayPhase, currentRoomId, fetchDiscussionState, discussionState?.finished]);
 
+    const votingStartedRef = useRef(false);
+
     // Auto-transition to voting when discussion finished
     useEffect(() => {
-        if (discussionState?.finished && isDayPhase) {
+        if (discussionState?.finished && isDayPhase && !votingStartedRef.current) {
             // Host triggers voting
             if (gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase()) {
+                votingStartedRef.current = true;
                 addLog("All players have spoken. Starting vote...", "warning");
-                setTimeout(() => {
+                const timer = setTimeout(() => {
                     handleStartVoting();
                 }, 2000);
+                return () => clearTimeout(timer);
             }
+        }
+
+        // Reset the ref if we leave the day phase or discussion is no longer finished
+        if (!isDayPhase || !discussionState?.finished) {
+            votingStartedRef.current = false;
         }
     }, [discussionState?.finished, isDayPhase, gameState.players, myPlayer?.address, addLog]);
 
