@@ -38,41 +38,96 @@ export const DayPhase: React.FC = React.memo(() => {
     });
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // Discussion Speech Logic
-    const [speakerIndex, setSpeakerIndex] = useState(0);
-    const [speechTimeLeft, setSpeechTimeLeft] = useState(60);
-    const [isSpeechActive, setIsSpeechActive] = useState(false);
-    const [isCountingDown, setIsCountingDown] = useState(false);
+    // Discussion Speech Logic (synced with backend)
+    const [discussionState, setDiscussionState] = useState<{
+        active: boolean;
+        finished: boolean;
+        currentSpeakerIndex: number;
+        currentSpeakerAddress: string | null;
+        totalSpeakers: number;
+        timeRemaining: number;
+        isMyTurn: boolean;
+    } | null>(null);
 
     const isVotingPhase = gameState.phase === GamePhase.VOTING;
     const isDayPhase = gameState.phase === GamePhase.DAY;
 
     const alivePlayers = gameState.players.filter(p => p.isAlive);
-    const currentSpeaker = alivePlayers[speakerIndex];
-    const isMyTurnToSpeak = currentSpeaker?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+    const currentSpeaker = discussionState?.currentSpeakerAddress
+        ? gameState.players.find(p => p.address.toLowerCase() === discussionState.currentSpeakerAddress?.toLowerCase())
+        : null;
 
     const lastLoggedPhase = useRef<GamePhase | null>(null);
+    const discussionStartedRef = useRef(false);
 
-    // Initial phase log
+    // Fetch discussion state from backend
+    const fetchDiscussionState = useCallback(async () => {
+        if (!currentRoomId) return;
+        try {
+            const response = await fetch(
+                `/api/game/discussion?roomId=${currentRoomId}&playerAddress=${myPlayer?.address || ''}`
+            );
+            const data = await response.json();
+            setDiscussionState(data);
+            return data;
+        } catch (e) {
+            console.error("Failed to fetch discussion state:", e);
+            return null;
+        }
+    }, [currentRoomId, myPlayer?.address]);
+
+    // Start discussion (host only)
+    const startDiscussion = useCallback(async () => {
+        if (!currentRoomId || discussionStartedRef.current) return;
+        discussionStartedRef.current = true;
+        try {
+            await fetch('/api/game/discussion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId: currentRoomId.toString(),
+                    action: 'start',
+                    playerAddress: myPlayer?.address
+                })
+            });
+            addLog("Discussion Phase: Players speak in turns (60s each).", "info");
+        } catch (e) {
+            console.error("Failed to start discussion:", e);
+        }
+    }, [currentRoomId, myPlayer?.address, addLog]);
+
+    // Skip speech (current speaker only)
+    const skipSpeech = useCallback(async () => {
+        if (!currentRoomId) return;
+        setIsProcessing(true);
+        try {
+            await fetch('/api/game/discussion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId: currentRoomId.toString(),
+                    action: 'skip',
+                    playerAddress: myPlayer?.address
+                })
+            });
+            await fetchDiscussionState();
+        } catch (e) {
+            console.error("Failed to skip speech:", e);
+        } finally {
+            setIsProcessing(false);
+        }
+    }, [currentRoomId, myPlayer?.address, fetchDiscussionState]);
+
+    // Initial phase log and discussion start
     useEffect(() => {
         if (gameState.phase !== lastLoggedPhase.current) {
             if (isDayPhase) {
-                // TEMPORARILY DISABLED: Speech phase - skip directly to voting
-                // addLog("Discussion Phase: Players will take turns to speak (60s each).", "info");
-                // setSpeakerIndex(0);
-                // setSpeechTimeLeft(60);
-                // setIsSpeechActive(false);
-                // setIsCountingDown(false);
-
-                // Auto-start voting when day begins (host triggers)
+                discussionStartedRef.current = false;
+                // Host starts discussion
                 if (gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase()) {
-                    addLog("Day Phase: Starting vote...", "info");
-                    // Small delay to let UI render
-                    setTimeout(() => {
-                        handleStartVoting();
-                    }, 1000);
+                    startDiscussion();
                 } else {
-                    addLog("Day Phase: Waiting for vote to start...", "info");
+                    addLog("Day Phase: Discussion starting...", "info");
                 }
             } else if (isVotingPhase) {
                 const quorum = Math.floor(alivePlayers.length / 2) + 1;
@@ -80,57 +135,29 @@ export const DayPhase: React.FC = React.memo(() => {
             }
             lastLoggedPhase.current = gameState.phase;
         }
-    }, [gameState.phase, isDayPhase, isVotingPhase, alivePlayers.length, addLog, gameState.players, myPlayer?.address]);
+    }, [gameState.phase, isDayPhase, isVotingPhase, alivePlayers.length, addLog, gameState.players, myPlayer?.address, startDiscussion]);
 
-    // Speech Timer
+    // Poll discussion state
     useEffect(() => {
-        let interval: NodeJS.Timeout;
-        if (isDayPhase && isSpeechActive && speechTimeLeft > 0) {
-            interval = setInterval(() => {
-                setSpeechTimeLeft(prev => prev - 1);
-            }, 1000);
-        } else if (speechTimeLeft === 0 && isSpeechActive) {
-            handleNextSpeaker();
-        }
+        if (!isDayPhase || !currentRoomId) return;
+
+        fetchDiscussionState();
+        const interval = setInterval(fetchDiscussionState, 1500);
         return () => clearInterval(interval);
-    }, [isDayPhase, isSpeechActive, speechTimeLeft]);
+    }, [isDayPhase, currentRoomId, fetchDiscussionState]);
 
-    const handleStartSpeech = () => {
-        setIsSpeechActive(true);
-        const speakerName = currentSpeaker?.name || `Player ${speakerIndex + 1}`;
-        addLog(`🎙️ ${speakerName} started their speech.`, "info");
-    };
-
-    const handleNextSpeaker = () => {
-        setIsSpeechActive(false);
-        if (speakerIndex < alivePlayers.length - 1) {
-            setSpeakerIndex(prev => prev + 1);
-            setSpeechTimeLeft(60);
-        } else {
-            // All speakers finished
-            startFinalCountdown();
-        }
-    };
-
-    const startFinalCountdown = () => {
-        if (isCountingDown) return;
-        setIsCountingDown(true);
-
-        addLog("All players have spoken. Voting starts in...", "warning");
-
-        let count = 3;
-        const timer = setInterval(() => {
-            if (count > 0) {
-                addLog(`${count}...`, "warning");
-                count--;
-            } else {
-                clearInterval(timer);
-                if (gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase()) {
+    // Auto-transition to voting when discussion finished
+    useEffect(() => {
+        if (discussionState?.finished && isDayPhase) {
+            // Host triggers voting
+            if (gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase()) {
+                addLog("All players have spoken. Starting vote...", "warning");
+                setTimeout(() => {
                     handleStartVoting();
-                }
+                }, 2000);
             }
-        }, 1000);
-    };
+        }
+    }, [discussionState?.finished, isDayPhase, gameState.players, myPlayer?.address, addLog]);
 
     // Voting Logic (Polling)
     const fetchVoteCounts = useCallback(async () => {
@@ -217,10 +244,10 @@ export const DayPhase: React.FC = React.memo(() => {
                     <h2 className="text-2xl font-['Playfair_Display'] text-white">
                         {isVotingPhase ? 'Elimination Vote' : 'Discussion Phase'}
                     </h2>
-                    {isDayPhase && !isCountingDown && (
+                    {isDayPhase && discussionState?.active && (
                         <div className="flex items-center justify-center gap-2 mt-1 text-[#916A47] text-sm font-medium">
                             <User className="w-4 h-4" />
-                            <span>Speaker {speakerIndex + 1}/{alivePlayers.length}: {currentSpeaker?.name}</span>
+                            <span>Speaker {(discussionState?.currentSpeakerIndex || 0) + 1}/{discussionState?.totalSpeakers || alivePlayers.length}: {currentSpeaker?.name}</span>
                         </div>
                     )}
                 </div>
@@ -237,23 +264,59 @@ export const DayPhase: React.FC = React.memo(() => {
                 {/* Actions */}
                 <div className="space-y-3">
                     <AnimatePresence mode="wait">
-                        {/* TEMPORARILY DISABLED: Speech phase UI - day now starts directly with voting */}
+                        {/* Discussion Phase UI */}
                         {isDayPhase && (
                             <motion.div
                                 key="day-actions"
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
-                                className="w-full"
+                                className="w-full space-y-3"
                             >
-                                <div className="w-full py-6 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
-                                    <p className="text-[#916A47] font-bold text-xl animate-pulse">
-                                        Starting Vote...
-                                    </p>
-                                </div>
+                                {discussionState?.active ? (
+                                    <>
+                                        {/* Timer display */}
+                                        <div className="w-full py-4 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                            <div className="flex items-center justify-center gap-3">
+                                                <Clock className="w-6 h-6 text-[#916A47]" />
+                                                <span className="text-3xl font-bold text-white tabular-nums">
+                                                    {Math.floor((discussionState?.timeRemaining || 0) / 60)}:{String((discussionState?.timeRemaining || 0) % 60).padStart(2, '0')}
+                                                </span>
+                                            </div>
+                                            <p className="text-[#916A47]/70 text-sm mt-1">
+                                                {discussionState?.isMyTurn ? '🎙️ Your turn to speak!' : `${currentSpeaker?.name || 'Player'} is speaking...`}
+                                            </p>
+                                        </div>
+
+                                        {/* Skip button (only for current speaker) */}
+                                        {discussionState?.isMyTurn && (
+                                            <Button
+                                                onClick={skipSpeech}
+                                                disabled={isProcessing}
+                                                isLoading={isProcessing}
+                                                variant="outline-gold"
+                                                className="w-full h-[50px]"
+                                            >
+                                                <ChevronRight className="w-5 h-5 mr-2" />
+                                                Finish Speech Early
+                                            </Button>
+                                        )}
+                                    </>
+                                ) : discussionState?.finished ? (
+                                    <div className="w-full py-6 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                        <p className="text-[#916A47] font-bold text-xl animate-pulse">
+                                            Starting Vote...
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="w-full py-6 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                        <p className="text-[#916A47] font-medium text-lg animate-pulse">
+                                            Waiting for discussion to start...
+                                        </p>
+                                    </div>
+                                )}
                             </motion.div>
                         )}
-                        {/* END DISABLED SPEECH UI */}
 
                         {isVotingPhase && (
                             <motion.div

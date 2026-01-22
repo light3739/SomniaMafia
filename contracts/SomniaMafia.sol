@@ -117,6 +117,7 @@ uint32 constant FLAG_HAS_REVEALED = 0x10;
 uint32 constant FLAG_HAS_SHARED_KEYS = 0x20;
 uint32 constant FLAG_DECK_COMMITTED = 0x40;
 uint32 constant FLAG_CLAIMED_MAFIA = 0x80;
+uint32 constant FLAG_CLAIMED_DETECTIVE = 0x100;
 
 event RoomCreated(uint256 indexed roomId, address host, string name, uint256 maxPlayers);
 event PlayerJoined(uint256 indexed roomId, address player, string nickname, address sessionKey);
@@ -702,6 +703,11 @@ function revealNightAction(
     revealedTargets[roomId][player] = target;
     _setFlag(roomId, player, FLAG_HAS_REVEALED);
     room.revealedCount++;
+
+    if (action == NightActionType.CHECK) {
+        _setFlag(roomId, player, FLAG_CLAIMED_DETECTIVE);
+    }
+
     emit NightActionRevealed(roomId, player, action, target);
     
     if (room.revealedCount == room.committedCount && room.committedCount > 0) _finalizeNight(roomId);
@@ -906,6 +912,11 @@ function revealRole(uint256 roomId, Role role, string calldata salt)
         emit MafiaCheaterPunished(roomId, player, role);
         emit PlayerEliminated(roomId, player, "Used mafia functions with non-mafia role");
     }
+
+    if (_hasFlag(roomId, player, FLAG_CLAIMED_DETECTIVE) && role != Role.DETECTIVE) {
+        _killPlayer(roomId, player);
+        emit PlayerEliminated(roomId, player, "Used detective check with non-detective role");
+    }
 }
 
 function forcePhaseTimeout(uint256 roomId) external nonReentrant onlyActiveParticipant(roomId) whenNotPaused {
@@ -961,7 +972,8 @@ function _kickUnconfirmedPlayers(uint256 roomId) internal {
 }
 
 function withdrawFees() external onlyRole(ADMIN_ROLE) {
-    payable(msg.sender).transfer(address(this).balance);
+    (bool sent, ) = payable(msg.sender).call{value: address(this).balance}("");
+    require(sent, "Failed to withdraw");
 }
 
 function getPlayers(uint256 roomId) external view returns (Player[] memory) {
