@@ -205,13 +205,13 @@ export const useSoundEffects = () => {
         playMarkSound: () => playAudioFile('/assets/note_tick.wav', 1, 0, 0.5),
 
         // Переход в ночь: длительность 5s, offset 5s, fadeOut 1s
-        playNightTransition: () => playAudioFile('/assets/night_sound2.mp3', 5, 0.1, 0.4, 5, 1.0),
+        playNightTransition: () => playAudioFile('/assets/night_sound2.mp3', 5, 0.1, 0.35, 5, 1.0),
 
         // Переход в день
-        playMorningTransition: () => playAudioFile('/assets/morning_sound.mp3', 5, 1, 0.3),
+        playMorningTransition: () => playAudioFile('/assets/morning_sound.mp3', 5, 1, 0.1),
 
         // Переход к голосованию: offset 0 (играем с начала)
-        playVotingStart: () => playAudioFile('/assets/Voting_sound.mp3', 4, 0.1, 0.6, 0),
+        playVotingStart: () => playAudioFile('/assets/Voting_sound.mp3', 4, 0.1, 0.3, 0),
     }), []);
 };
 
