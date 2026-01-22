@@ -6,7 +6,7 @@ import { Volume2, VolumeX, Square, Play } from 'lucide-react';
 export const BackgroundMusic: React.FC = () => {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
-    const [volume, setVolume] = useState(0.10);
+    const [volume, setVolume] = useState(0.05);
     const [isMuted, setIsMuted] = useState(false);
     const [isStopped, setIsStopped] = useState(false);
     const pathname = usePathname();
