@@ -1,0 +1,271 @@
+Host: 0x30E123bDa62a8DAE0b12f18770085505Bf982A2B
+
+0. Creating Room...
+Room Created! ID: 12
+Bot 0 joined.
+Bot 1 joined.
+Bot 2 joined.
+Bot 3 joined.
+Game started.
+Waiting for phase 1...
+Current Phase: 0
+Current Phase: 1
+/home/light/projects/SomniaMafia/node_modules/viem/_cjs/utils/errors/getContractError.js:36
+    return new contract_js_1.ContractFunctionExecutionError(cause, {
+           ^
+
+ContractFunctionExecutionError: The contract function "revealDeck" reverted with the following signature:
+0x9ea6d127
+
+Unable to decode signature "0x9ea6d127" as it was not found on the provided ABI.
+Make sure you are using the correct ABI and that the error exists on it.
+You can look up the decoded signature here: https://openchain.xyz/signatures?query=0x9ea6d127.
+ 
+Contract Call:
+  address:   0xb58130d6183844b3bfb28ff1ffc96825eee82be3
+  function:  revealDeck(uint256 roomId, string[] deck, string salt)
+  args:                (12, ["0","1","2","3","4"], salt)
+  sender:    0x30E123bDa62a8DAE0b12f18770085505Bf982A2B
+
+Docs: https://viem.sh/docs/contract/decodeErrorResult
+Version: viem@2.44.4
+    at getContractError (/home/light/projects/SomniaMafia/node_modules/viem/_cjs/utils/errors/getContractError.js:36:12)
+    at AsyncFunction.internal (/home/light/projects/SomniaMafia/node_modules/viem/_cjs/actions/wallet/writeContract.js:35:62)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async run (/home/light/projects/SomniaMafia/scripts/verify_robust.js:86:9) {
+  cause: ContractFunctionRevertedError: The contract function "revealDeck" reverted with the following signature:
+  0x9ea6d127
+  
+  Unable to decode signature "0x9ea6d127" as it was not found on the provided ABI.
+  Make sure you are using the correct ABI and that the error exists on it.
+  You can look up the decoded signature here: https://openchain.xyz/signatures?query=0x9ea6d127.
+  
+  Docs: https://viem.sh/docs/contract/decodeErrorResult
+  Version: viem@2.44.4
+      at /home/light/projects/SomniaMafia/node_modules/viem/_cjs/utils/errors/getContractError.js:25:20
+      ... 3 lines matching cause stack trace ...
+      at async run (/home/light/projects/SomniaMafia/scripts/verify_robust.js:86:9) {
+    details: undefined,
+    docsPath: '/docs/contract/decodeErrorResult',
+    metaMessages: [
+      'Unable to decode signature "0x9ea6d127" as it was not found on the provided ABI.',
+      'Make sure you are using the correct ABI and that the error exists on it.',
+      'You can look up the decoded signature here: https://openchain.xyz/signatures?query=0x9ea6d127.'
+    ],
+    shortMessage: 'The contract function "revealDeck" reverted with the following signature:\n' +
+      '0x9ea6d127',
+    version: '2.44.4',
+    data: undefined,
+    raw: '0x9ea6d127',
+    reason: undefined,
+    signature: '0x9ea6d127',
+    [cause]: AbiErrorSignatureNotFoundError: Encoded error signature "0x9ea6d127" not found on ABI.
+    Make sure you are using the correct ABI and that the error exists on it.
+    You can look up the decoded signature here: https://openchain.xyz/signatures?query=0x9ea6d127.
+    
+    Docs: https://viem.sh/docs/contract/decodeErrorResult
+    Version: viem@2.44.4
+        at decodeErrorResult (/home/light/projects/SomniaMafia/node_modules/viem/_cjs/utils/abi/decodeErrorResult.js:18:15)
+        at new ContractFunctionRevertedError (/home/light/projects/SomniaMafia/node_modules/viem/_cjs/errors/contract.js:151:76)
+        at /home/light/projects/SomniaMafia/node_modules/viem/_cjs/utils/errors/getContractError.js:25:20
+        at getContractError (/home/light/projects/SomniaMafia/node_modules/viem/_cjs/utils/errors/getContractError.js:35:7)
+        at AsyncFunction.internal (/home/light/projects/SomniaMafia/node_modules/viem/_cjs/actions/wallet/writeContract.js:35:62)
+        at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at async run (/home/light/projects/SomniaMafia/scripts/verify_robust.js:86:9) {
+      details: undefined,
+      docsPath: '/docs/contract/decodeErrorResult',
+      metaMessages: undefined,
+      shortMessage: 'Encoded error signature "0x9ea6d127" not found on ABI.\n' +
+        'Make sure you are using the correct ABI and that the error exists on it.\n' +
+        'You can look up the decoded signature here: https://openchain.xyz/signatures?query=0x9ea6d127.',
+      version: '2.44.4',
+      signature: '0x9ea6d127'
+    }
+  },
+  details: undefined,
+  docsPath: '/docs/contract/decodeErrorResult',
+  metaMessages: [
+    'Unable to decode signature "0x9ea6d127" as it was not found on the provided ABI.',
+    'Make sure you are using the correct ABI and that the error exists on it.',
+    'You can look up the decoded signature here: https://openchain.xyz/signatures?query=0x9ea6d127.',
+    ' ',
+    'Contract Call:',
+    '  address:   0xb58130d6183844b3bfb28ff1ffc96825eee82be3\n' +
+      '  function:  revealDeck(uint256 roomId, string[] deck, string salt)\n' +
+      '  args:                (12, ["0","1","2","3","4"], salt)\n' +
+      '  sender:    0x30E123bDa62a8DAE0b12f18770085505Bf982A2B'
+  ],
+  shortMessage: 'The contract function "revealDeck" reverted with the following signature:\n' +
+    '0x9ea6d127',
+  version: '2.44.4',
+  abi: [
+    {
+      inputs: [
+        { internalType: 'string', name: 'roomName', type: 'string' },
+        { internalType: 'uint8', name: 'maxPlayers', type: 'uint8' },
+        { internalType: 'string', name: 'nickname', type: 'string' },
+        { internalType: 'bytes', name: 'publicKey', type: 'bytes' },
+        {
+          internalType: 'address',
+          name: 'sessionAddress',
+          type: 'address'
+        }
+      ],
+      name: 'createAndJoin',
+      outputs: [ { internalType: 'uint256', name: '', type: 'uint256' } ],
+      stateMutability: 'payable',
+      type: 'function'
+    },
+    {
+      inputs: [
+        { internalType: 'uint256', name: 'roomId', type: 'uint256' },
+        { internalType: 'string', name: 'nickname', type: 'string' },
+        { internalType: 'bytes', name: 'publicKey', type: 'bytes' },
+        {
+          internalType: 'address',
+          name: 'sessionAddress',
+          type: 'address'
+        }
+      ],
+      name: 'joinRoom',
+      outputs: [],
+      stateMutability: 'payable',
+      type: 'function'
+    },
+    {
+      inputs: [ { internalType: 'uint256', name: 'roomId', type: 'uint256' } ],
+      name: 'startGame',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function'
+    },
+    {
+      inputs: [
+        { internalType: 'uint256', name: 'roomId', type: 'uint256' },
+        { internalType: 'bytes32', name: 'deckHash', type: 'bytes32' }
+      ],
+      name: 'commitDeck',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function'
+    },
+    {
+      inputs: [
+        { internalType: 'uint256', name: 'roomId', type: 'uint256' },
+        { internalType: 'string[]', name: 'deck', type: 'string[]' },
+        { internalType: 'string', name: 'salt', type: 'string' }
+      ],
+      name: 'revealDeck',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function'
+    },
+    {
+      inputs: [
+        { internalType: 'uint256', name: 'roomId', type: 'uint256' },
+        {
+          internalType: 'address[]',
+          name: 'recipients',
+          type: 'address[]'
+        },
+        {
+          internalType: 'bytes[]',
+          name: 'encryptedKeys',
+          type: 'bytes[]'
+        }
+      ],
+      name: 'shareKeysToAll',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function'
+    },
+    {
+      inputs: [
+        { internalType: 'uint256', name: 'roomId', type: 'uint256' },
+        { internalType: 'bytes32', name: 'roleHash', type: 'bytes32' }
+      ],
+      name: 'commitAndConfirmRole',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function'
+    },
+    {
+      inputs: [ { internalType: 'uint256', name: 'roomId', type: 'uint256' } ],
+      name: 'startVoting',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function'
+    },
+    {
+      inputs: [
+        { internalType: 'uint256', name: 'roomId', type: 'uint256' },
+        { internalType: 'address', name: 'target', type: 'address' }
+      ],
+      name: 'vote',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function'
+    },
+    {
+      inputs: [ { internalType: 'uint256', name: 'roomId', type: 'uint256' } ],
+      name: 'rooms',
+      outputs: [
+        { internalType: 'uint64', name: 'id', type: 'uint64' },
+        { internalType: 'address', name: 'host', type: 'address' },
+        { internalType: 'string', name: 'name', type: 'string' },
+        { internalType: 'uint8', name: 'phase', type: 'uint8' }
+      ],
+      stateMutability: 'view',
+      type: 'function'
+    },
+    {
+      inputs: [
+        { internalType: 'uint256', name: 'roomId', type: 'uint256' },
+        { internalType: 'bytes32', name: 'hash', type: 'bytes32' }
+      ],
+      name: 'commitNightAction',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function'
+    },
+    {
+      inputs: [
+        { internalType: 'uint256', name: 'roomId', type: 'uint256' },
+        { internalType: 'uint8', name: 'action', type: 'uint8' },
+        { internalType: 'address', name: 'target', type: 'address' },
+        { internalType: 'string', name: 'salt', type: 'string' }
+      ],
+      name: 'revealNightAction',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function'
+    },
+    {
+      inputs: [
+        { internalType: 'uint256', name: 'roomId', type: 'uint256' },
+        { internalType: 'address', name: 'player', type: 'address' }
+      ],
+      name: 'revealedActions',
+      outputs: [ { internalType: 'uint8', name: '', type: 'uint8' } ],
+      stateMutability: 'view',
+      type: 'function'
+    },
+    {
+      inputs: [
+        { internalType: 'uint256', name: 'roomId', type: 'uint256' },
+        { internalType: 'address', name: 'player', type: 'address' }
+      ],
+      name: 'revealedTargets',
+      outputs: [ { internalType: 'address', name: '', type: 'address' } ],
+      stateMutability: 'view',
+      type: 'function'
+    }
+  ],
+  args: [ 12n, [ '0', '1', '2', '3', '4' ], 'salt' ],
+  contractAddress: '0xb58130d6183844b3bfb28ff1ffc96825eee82be3',
+  formattedArgs: undefined,
+  functionName: 'revealDeck',
+  sender: '0x30E123bDa62a8DAE0b12f18770085505Bf982A2B'
+}
+
+Node.js v22.20.0

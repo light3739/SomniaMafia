@@ -26,7 +26,9 @@ export async function GET(request: Request) {
         }
 
         const roomId = BigInt(rawRoomId).toString();
-        const state = await ServerStore.getDiscussionState(roomId);
+        const rawDayCount = searchParams.get('dayCount');
+        const dayCount = rawDayCount ? parseInt(rawDayCount) : 1;
+        let state = await ServerStore.getDiscussionState(roomId, dayCount);
 
         if (!state) {
             return NextResponse.json({
@@ -49,9 +51,9 @@ export async function GET(request: Request) {
         // Auto-advance if time expired
         const elapsed = (Date.now() - state.speakerStartTime) / 1000;
         if (!state.finished && elapsed >= state.speakerDuration) {
-            const newState = await ServerStore.advanceSpeaker(roomId, totalSpeakers);
+            const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
             if (newState) {
-                return buildResponse(newState, alivePlayers, playerAddress);
+                state = newState; // Update state for buildResponse
             }
         }
 
@@ -65,17 +67,18 @@ export async function GET(request: Request) {
 
 /**
  * POST /api/game/discussion
- * Body: { roomId, action: 'start' | 'skip', playerAddress }
+ * Body: { roomId, dayCount, action: 'start' | 'skip', playerAddress }
  */
 export async function POST(request: Request) {
     try {
-        const { roomId: rawRoomId, action, playerAddress } = await request.json();
+        const { roomId: rawRoomId, dayCount: rawDayCount, action, playerAddress } = await request.json();
 
         if (!rawRoomId || !action) {
             return NextResponse.json({ error: 'Missing roomId or action' }, { status: 400 });
         }
 
         const roomId = BigInt(rawRoomId).toString();
+        const dayCount = rawDayCount ? parseInt(rawDayCount) : 1;
 
         // Get alive players
         const players: any = await publicClient.readContract({
@@ -96,13 +99,13 @@ export async function POST(request: Request) {
                 speakerDuration: SPEAKER_DURATION,
                 finished: false
             };
-            await ServerStore.setDiscussionState(roomId, newState);
-            console.log(`[API/Discussion] Started discussion for Room #${roomId}`);
+            await ServerStore.setDiscussionState(roomId, dayCount, newState);
+            console.log(`[API/Discussion] Started discussion for Room #${roomId} Day ${dayCount}`);
             return buildResponse(newState, alivePlayers, playerAddress);
         }
 
         if (action === 'skip') {
-            const state = await ServerStore.getDiscussionState(roomId);
+            const state = await ServerStore.getDiscussionState(roomId, dayCount);
             if (!state || state.finished) {
                 return NextResponse.json({ error: 'Discussion not active' }, { status: 400 });
             }
@@ -126,8 +129,8 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: 'Not your turn to speak (and you are not Host)' }, { status: 403 });
             }
 
-            const newState = await ServerStore.advanceSpeaker(roomId, totalSpeakers);
-            console.log(`[API/Discussion] Speaker skipped by ${isHost ? 'HOST' : 'PLAYER'} in Room #${roomId}, new index: ${newState?.currentSpeakerIndex}`);
+            const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
+            console.log(`[API/Discussion] Speaker skipped by ${isHost ? 'HOST' : 'PLAYER'} in Room #${roomId} Day ${dayCount}, new index: ${newState?.currentSpeakerIndex}`);
             return buildResponse(newState, alivePlayers, playerAddress);
         }
 

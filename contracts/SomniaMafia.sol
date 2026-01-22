@@ -105,7 +105,8 @@ mapping(address => bool) public isRegisteredSession;
 
 uint256 public nextRoomId = 1;
 uint32 public constant TURN_TIMEOUT = 2 minutes;
-uint32 public constant PHASE_TIMEOUT = 5 minutes;
+uint32 public constant PHASE_TIMEOUT = 3 minutes;
+uint32 public constant NIGHT_TIMEOUT = 1 minutes;
 uint32 public constant SESSION_DURATION = 4 hours;
 uint32 public constant MAX_ARRAY_SIZE = 50;
 
@@ -628,7 +629,7 @@ function _transitionToNight(uint256 roomId) internal {
     room.phase = GamePhase.NIGHT;
     room.committedCount = 0;
     room.revealedCount = 0;
-    room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
+    room.phaseDeadline = uint32(block.timestamp + NIGHT_TIMEOUT);
     
     Player[] storage players = roomPlayers[roomId];
     for (uint8 i = 0; i < players.length; i++) {
@@ -709,8 +710,6 @@ function revealNightAction(
     }
 
     emit NightActionRevealed(roomId, player, action, target);
-    
-    if (room.revealedCount == room.committedCount && room.committedCount > 0) _finalizeNight(roomId);
 }
 
 function sendMafiaMessage(uint256 roomId, bytes calldata encryptedMessage) 
