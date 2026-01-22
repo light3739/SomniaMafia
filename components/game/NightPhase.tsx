@@ -75,6 +75,7 @@ export const NightPhase: React.FC = React.memo(() => {
         revealNightActionOnChain,
         commitMafiaTargetOnChain,
         revealMafiaTargetOnChain,
+        getInvestigationResultOnChain,
         endNightOnChain,
         addLog,
         isTxPending,
@@ -390,63 +391,6 @@ export const NightPhase: React.FC = React.memo(() => {
         }
     }, [selectedTarget, nightState.hasCommitted, myRole, gameState.phase, roleConfig.action, commitMafiaTargetOnChain, commitNightActionOnChain, NIGHT_COMMIT_KEY, addLog, playKillSound, playProtectSound, playInvestigateSound]);
 
-    // Decrypt target's role (for Detective)
-    const decryptTargetRole = useCallback(async (targetAddress: string): Promise<Role | null> => {
-        if (!publicClient || !currentRoomId) return null;
-
-        try {
-            // Find target's index in players array
-            const targetIndex = gameState.players.findIndex(
-                p => p.address.toLowerCase() === targetAddress.toLowerCase()
-            );
-            if (targetIndex < 0) return null;
-
-            // Get deck from contract (single call)
-            const deck = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'getDeck',
-                args: [currentRoomId],
-            }) as string[];
-
-            if (targetIndex >= deck.length) return null;
-
-            // Collect all keys
-            const keys = new Map<string, string>();
-            for (const player of gameState.players) {
-                if (player.address.toLowerCase() === address?.toLowerCase()) continue;
-                try {
-                    const key = await publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MAFIA_ABI,
-                        functionName: 'playerDeckKeys',
-                        args: [BigInt(currentRoomId), player.address as `0x${string}`, address as `0x${string}`],
-                    }) as `0x${string}`;
-                    if (key && key !== '0x') {
-                        keys.set(player.address, key);
-                    }
-                } catch { }
-            }
-
-            const shuffleService = getShuffleService();
-            let encryptedCard = deck[targetIndex];
-
-            // Decrypt with my key
-            encryptedCard = shuffleService.decrypt(encryptedCard);
-
-            // Decrypt with others' keys
-            for (const [_, key] of keys) {
-                const decryptionKey = hexToString(key);
-                encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
-            }
-
-            return ShuffleService.roleNumberToRole(encryptedCard);
-        } catch (e) {
-            console.error("Failed to decrypt target role:", e);
-            return null;
-        }
-    }, [publicClient, currentRoomId, gameState.players, address]);
-
     const handleReveal = useCallback(async () => {
         if (!nightState.committedTarget || !nightState.salt || nightState.hasRevealed || revealStartedRef.current) return;
         revealStartedRef.current = true;
@@ -490,12 +434,17 @@ export const NightPhase: React.FC = React.memo(() => {
 
             let investigationResult: Role | null = null;
             if (myRole === Role.DETECTIVE && roleConfig.action === NightActionType.CHECK) {
-                investigationResult = await decryptTargetRole(nightState.committedTarget || '');
-                if (investigationResult) {
+                addLog("Fetching investigation result from server...", "info");
+                // Wait a bit for the transaction to be indexed/seen by the public client in the API
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                const result = await getInvestigationResultOnChain(address || '', nightState.committedTarget || '');
+                if (result && result.role !== Role.UNKNOWN) {
+                    investigationResult = result.role;
                     const targetName = gameState.players.find(
                         p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase()
                     )?.name || 'Unknown';
-                    addLog(`Investigation: ${targetName} is ${investigationResult}!`, "success");
+                    addLog(`Investigation complete: ${targetName} is ${result.isMafia ? 'EVIL' : 'INNOCENT'}!`, "success");
                 }
             }
 
@@ -517,7 +466,7 @@ export const NightPhase: React.FC = React.memo(() => {
             setIsProcessing(false);
             revealStartedRef.current = false;
         }
-    }, [nightState.committedTarget, nightState.salt, nightState.hasRevealed, nightState.commitHash, myRole, roleConfig.action, revealMafiaTargetOnChain, revealNightActionOnChain, NIGHT_COMMIT_KEY, decryptTargetRole, gameState.players, addLog, setSelectedTarget]);
+    }, [nightState.committedTarget, nightState.salt, nightState.hasRevealed, nightState.commitHash, myRole, roleConfig.action, revealMafiaTargetOnChain, revealNightActionOnChain, NIGHT_COMMIT_KEY, getInvestigationResultOnChain, address, gameState.players, addLog, setSelectedTarget]);
 
     // Civilians just wait - show blocked UI
     if (!canAct) {

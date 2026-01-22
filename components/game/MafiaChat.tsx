@@ -2,13 +2,11 @@
 // Чат для координации мафии ночью
 
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { HelpCircle, Plus, Minus, Skull, MessageCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Plus, Minus, MessageCircle } from 'lucide-react';
 import { Player, MafiaChatMessage } from '../../types';
 import { useSoundEffects } from '../ui/SoundEffects';
 
-// Chat action mode
-type ChatMode = 'none' | 'suggest';
 
 interface MafiaChatProps {
     myName: string;
@@ -30,11 +28,10 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
     messages,
     onSendMessage
 }) => {
-    const [mode, setMode] = useState<ChatMode>('none');
     const [lastSuggestion, setLastSuggestion] = useState<`0x${string}` | null>(null);
     const chatRef = useRef<HTMLDivElement>(null);
     const [isSending, setIsSending] = useState(false);
-    const { playProposeSound, playApproveSound, playRejectSound } = useSoundEffects();
+    const { playProposeSound, playRejectSound } = useSoundEffects();
 
     // Auto-scroll to bottom when new messages arrive
     useEffect(() => {
@@ -55,47 +52,15 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
         }
     };
 
-    // Handle "?" button - enter suggest mode
-    const handleSuggestMode = () => {
-        if (mode === 'suggest') {
-            setMode('none');
-        } else {
-            playProposeSound();
-            setMode('suggest');
-        }
-    };
-
-    // Handle clicking a player while in suggest mode
-    const handlePlayerSelect = (targetAddress: `0x${string}`) => {
-        if (mode !== 'suggest') return;
-
-        const targetPlayer = players.find(p => p.address.toLowerCase() === targetAddress.toLowerCase());
-        if (!targetPlayer) return;
-
-        // Add suggestion message
-        handleSendMessage({
-            type: 'suggest',
-            targetName: targetPlayer.name || targetPlayer.address.slice(0, 6)
-        });
-
-        // Set as last suggestion for voting (optimistic)
-        setLastSuggestion(targetAddress);
-
-        // Also set as selected target
-        onSuggestTarget(targetAddress);
-
-        // Exit suggest mode
-        setMode('none');
-    };
-
-    // Handle "+" agree
+    // Handle "+" agree (plays propose sound)
     const handleAgree = () => {
         if (!lastSuggestion) return;
-        playApproveSound();
+        playProposeSound();
         handleSendMessage({ type: 'agree' });
         // Also select the suggested target
         onSuggestTarget(lastSuggestion);
     };
+
 
     // Handle "-" disagree
     const handleDisagree = () => {
@@ -103,12 +68,6 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
         handleSendMessage({ type: 'disagree' });
     };
 
-    // When selectedTarget changes in suggest mode, treat it as a suggestion
-    useEffect(() => {
-        if (mode === 'suggest' && selectedTarget) {
-            handlePlayerSelect(selectedTarget);
-        }
-    }, [selectedTarget, mode]);
 
     // Render message content
     const renderMessage = (msg: MafiaChatMessage) => {
@@ -165,19 +124,6 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
 
                 {/* Action buttons */}
                 <div className="flex items-center gap-1">
-                    {/* Suggest button */}
-                    <button
-                        onClick={handleSuggestMode}
-                        data-custom-sound
-                        className={`p-2 rounded-lg transition-all ${mode === 'suggest'
-                            ? 'bg-yellow-500/30 text-yellow-300 ring-2 ring-yellow-500/50'
-                            : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
-                            }`}
-                        title="Предложить цель (кликните на игрока)"
-                    >
-                        <HelpCircle className="w-4 h-4" />
-                    </button>
-
                     {/* Agree button */}
                     <button
                         onClick={handleAgree}
@@ -208,23 +154,6 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
                 </div>
             </div>
 
-            {/* Suggest mode indicator */}
-            <AnimatePresence>
-                {mode === 'suggest' && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        className="absolute top-[49px] left-0 right-0 z-10 bg-yellow-900/90 border-b border-yellow-500/20 px-3 py-2 backdrop-blur-sm"
-                    >
-                        <p className="text-yellow-300 text-xs flex items-center justify-center gap-2 font-medium">
-                            <Skull className="w-3 h-3" />
-                            Кликните на карточку игрока
-                        </p>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
             {/* Chat messages */}
             <div
                 ref={chatRef}
@@ -232,7 +161,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
             >
                 {messages.length === 0 ? (
                     <p className="text-white/20 text-xs text-center py-8">
-                        Выберите игрока для обсуждения и нажмите ?
+                        Выберите игрока и нажмите + чтобы согласиться
                     </p>
                 ) : (
                     messages.map(msg => (

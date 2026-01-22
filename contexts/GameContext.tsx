@@ -9,6 +9,7 @@ import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../contracts/con
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
 import { loadSession, createNewSession, markSessionRegistered } from '../services/sessionKeyService';
 import { generateEndGameProof } from '../services/zkProof';
+import { ShuffleService } from '../services/shuffleService';
 
 const shotSound = "/assets/mafia_shot.wav";
 
@@ -59,6 +60,7 @@ interface GameContextType {
     endNightOnChain: () => Promise<void>;
     endGameAutomaticallyOnChain: () => Promise<void>;
     endGameZK: () => Promise<void>;
+    getInvestigationResultOnChain: (detective: string, target: string) => Promise<{ role: Role; isMafia: boolean }>;
     setCurrentRoomId: (id: bigint | null) => void;
 
     // Utility
@@ -971,6 +973,41 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             throw e;
         }
     }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+
+    const getInvestigationResultOnChain = useCallback(async (detective: string, target: string) => {
+        if (!currentRoomId) return { role: Role.UNKNOWN, isMafia: false };
+
+        try {
+            console.log(`[Investigation API] Fetching result for ${detective} -> ${target}`);
+            const response = await fetch('/api/game/investigate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId: currentRoomId.toString(),
+                    detectiveAddress: detective,
+                    targetAddress: target
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to fetch investigation result');
+            }
+
+            const data = await response.json();
+            // Convert numerical role to Role enum
+            const role = ShuffleService.roleNumberToRole(data.role.toString());
+
+            return {
+                role,
+                isMafia: data.isMafia
+            };
+        } catch (e: any) {
+            console.error('[Investigation API Failed]', e);
+            addLog(`Investigation failed: ${e.message}`, "danger");
+            return { role: Role.UNKNOWN, isMafia: false };
+        }
+    }, [currentRoomId, addLog]);
 
     const endNightOnChain = useCallback(async () => {
         if (!currentRoomId) return;
@@ -1941,7 +1978,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         startVotingOnChain, voteOnChain,
         commitNightActionOnChain, revealNightActionOnChain,
         commitMafiaTargetOnChain, revealMafiaTargetOnChain,
-        endNightOnChain, endGameAutomaticallyOnChain,
+        endNightOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain,
         revealRoleOnChain, tryEndGame, claimVictory, endGameZK,
         sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList,
@@ -1957,7 +1994,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         commitRoleOnChain, confirmRoleOnChain, commitAndConfirmRoleOnChain,
         startVotingOnChain, voteOnChain, commitNightActionOnChain,
         revealNightActionOnChain, commitMafiaTargetOnChain, revealMafiaTargetOnChain,
-        endNightOnChain, endGameAutomaticallyOnChain, revealRoleOnChain,
+        endNightOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain, revealRoleOnChain,
         tryEndGame, claimVictory, endGameZK, sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList, addLog,
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
