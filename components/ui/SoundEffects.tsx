@@ -153,11 +153,11 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
             break;
 
         case 'protect':
-            playAudioFile('/assets/protect.mp3', 2);
+            playAudioFile('/assets/protect.mp3', 2, 0.05, 0.3);
             break;
 
         case 'kill':
-            playAudioFile('/assets/kill.wav', 2);
+            playAudioFile('/assets/kill.wav', 2, 0.05, 0.3);
             break;
 
         case 'investigate':
