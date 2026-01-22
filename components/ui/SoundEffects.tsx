@@ -40,9 +40,28 @@ const playSharpNoise = (ctx: AudioContext, t: number, params: { duration: number
     source.stop(t + params.duration);
 };
 
+// GLOBAL Cache for decoded audio buffers
+const audioBufferCache: Record<string, AudioBuffer> = {};
+
+// Helper to load buffer
+const loadAudioBuffer = async (ctx: AudioContext, url: string): Promise<AudioBuffer | null> => {
+    if (audioBufferCache[url]) return audioBufferCache[url];
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+        audioBufferCache[url] = audioBuffer;
+        return audioBuffer;
+    } catch (e) {
+        console.error("Failed to load audio:", url, e);
+        return null;
+    }
+};
+
 // Вспомогательная функция для проигрывания MP3
-const playAudioFile = async (url: string, duration: number = 5, fadeIn: number = 0.05, volume: number = 1.0) => {
-    // В Vite/React активы из папки public доступны по прямому пути от корня
+const playAudioFile = async (url: string, duration: number = 5, fadeIn: number = 0.05, volume: number = 1.0, startOffset: number = 0, fadeOut?: number) => {
     const ctx = initCtx();
     if (!ctx) return;
     if (ctx.state === 'suspended') {
@@ -54,10 +73,9 @@ const playAudioFile = async (url: string, duration: number = 5, fadeIn: number =
     }
 
     try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const arrayBuffer = await response.arrayBuffer();
-        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+        // Try to load from cache or fetch new
+        const audioBuffer = await loadAudioBuffer(ctx, url);
+        if (!audioBuffer) return; // Error handled in loadAudioBuffer
 
         const source = ctx.createBufferSource();
         source.buffer = audioBuffer;
@@ -65,33 +83,39 @@ const playAudioFile = async (url: string, duration: number = 5, fadeIn: number =
         const gainNode = ctx.createGain();
         const t = ctx.currentTime;
 
-        const finalDuration = Math.min(duration, audioBuffer.duration);
+        if (startOffset >= audioBuffer.duration) return;
+
+        const remainingDuration = audioBuffer.duration - startOffset;
+        const finalDuration = Math.min(duration, remainingDuration);
 
         // Быстрый Fade In/Out
         gainNode.gain.setValueAtTime(0, t);
-        gainNode.gain.linearRampToValueAtTime(volume, t + fadeIn);
-        gainNode.gain.setValueAtTime(volume, t + finalDuration - fadeIn);
+
+        // Instant attack if fadeIn is very small (avoid click)
+        if (fadeIn < 0.01) {
+            gainNode.gain.setValueAtTime(volume, t);
+        } else {
+            gainNode.gain.linearRampToValueAtTime(volume, t + fadeIn);
+        }
+
+        // Use provided fadeOut or fallback to fadeIn
+        const actualFadeOut = fadeOut !== undefined ? fadeOut : fadeIn;
+
+        gainNode.gain.setValueAtTime(volume, t + finalDuration - actualFadeOut);
         gainNode.gain.linearRampToValueAtTime(0, t + finalDuration);
 
         source.connect(gainNode);
         gainNode.connect(ctx.destination);
 
-        source.start(t);
+        source.start(t, startOffset, finalDuration);
         source.stop(t + finalDuration);
     } catch (e) {
         console.error("Failed to play sound:", url, e);
-        // Fallback: если файл не загрузился, пикнем синусоидой, чтобы пользователь хоть что-то слышал
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.frequency.setValueAtTime(440, ctx.currentTime);
-        g.gain.setValueAtTime(0.1, ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-        osc.connect(g); g.connect(ctx.destination);
-        osc.start(); osc.stop(ctx.currentTime + 0.1);
     }
 };
 
 export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'kill' | 'investigate' | 'propose' | 'approve' | 'reject') => {
+    // ... существующий код playSound ...
     const ctx = initCtx();
     if (!ctx) return;
     if (ctx.state === 'suspended') ctx.resume();
@@ -114,7 +138,6 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
 
     switch (type) {
         case 'button':
-            // Используем загруженный mp3 для дефолтного звука кнопок
             playAudioFile('/assets/default_sound.mp3', 1);
             break;
 
@@ -130,17 +153,14 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
             break;
 
         case 'protect':
-            // Используем загруженный mp3 для доктора
             playAudioFile('/assets/protect.mp3', 2);
             break;
 
         case 'kill':
-            // Используем загруженный wav для мафии
             playAudioFile('/assets/kill.wav', 2);
             break;
 
         case 'investigate':
-            // Используем загруженный mp3 для шерифа
             playAudioFile('/assets/investigate.mp3', 2);
             break;
 
@@ -157,13 +177,11 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
             break;
 
         case 'approve':
-            // Звонкая золотая монета
             createOsc(3000, 'sine', 0.2, 0.3);
             createOsc(3500, 'sine', 0.15, 0.2);
             break;
 
         case 'reject':
-            // ВЗВОД КУРКА (Металлический щелчок вместо барабана)
             playSharpNoise(ctx, t, { duration: 0.04, vol: 0.4, freq: 3000, type: 'highpass' });
             setTimeout(() => {
                 const ctx2 = initCtx(); if (!ctx2) return;
@@ -177,21 +195,48 @@ export const useSoundEffects = () => {
     return React.useMemo(() => ({
         playClickSound: () => playSound('button'),
         playTypeSound: () => playSound('keyboard'),
-        playVoteSound: () => playSound('vote'),
+        playVoteSound: () => playSound('vote'), // Звук "печати" при голосовании за кого-то
         playProtectSound: () => playSound('protect'),
         playKillSound: () => playSound('kill'),
         playInvestigateSound: () => playSound('investigate'),
         playProposeSound: () => playSound('propose'),
         playApproveSound: () => playSound('approve'),
         playRejectSound: () => playSound('reject'),
-        playMarkSound: () => playAudioFile('/assets/note_tick.wav', 1, 0, 0.5), // New sound for marking players
-        playNightTransition: () => playAudioFile('/assets/night_sound.mp3', 5, 1, 0.3),
+        playMarkSound: () => playAudioFile('/assets/note_tick.wav', 1, 0, 0.5),
+
+        // Переход в ночь: длительность 5s, offset 5s, fadeOut 1s
+        playNightTransition: () => playAudioFile('/assets/night_sound2.mp3', 5, 0.1, 0.4, 5, 1.0),
+
+        // Переход в день
         playMorningTransition: () => playAudioFile('/assets/morning_sound.mp3', 5, 1, 0.3),
+
+        // Переход к голосованию: offset 0 (играем с начала)
+        playVotingStart: () => playAudioFile('/assets/Voting_sound.mp3', 4, 0.1, 0.6, 0),
     }), []);
 };
 
 export const SoundEffects: React.FC = () => {
     useEffect(() => {
+        // PRELOAD ALL CRITICAL SOUNDS
+        const preload = async () => {
+            const ctx = initCtx();
+            if (ctx) {
+                const sounds = [
+                    '/assets/default_sound.mp3',
+                    '/assets/note_tick.wav',
+                    '/assets/Voting_sound.mp3',
+                    '/assets/night_sound2.mp3',
+                    '/assets/morning_sound.mp3',
+                    '/assets/protect.mp3',
+                    '/assets/kill.wav',
+                    '/assets/investigate.mp3'
+                ];
+                // Load sequentially or parallel
+                sounds.forEach(url => loadAudioBuffer(ctx, url));
+            }
+        };
+        preload();
+
         const handleButtonClick = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
             const btn = target.closest('button');
