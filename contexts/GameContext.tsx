@@ -826,8 +826,41 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     await publicClient?.waitForTransactionReceipt({ hash: txHash });
                     localStorage.setItem(`role_salt_${currentRoomId}_${address}`, saltToUse);
                 } catch (txErr: any) {
-                    if (txErr.message?.includes("AlreadyCommitted") || txErr.message?.includes("AlreadyConfirmed")) {
-                        console.log("Role already on-chain, proceeding to server sync.");
+                    const errMsg = (txErr.message || "").toLowerCase();
+                    const shortMsg = (txErr.shortMessage || "").toLowerCase();
+
+                    // Check for RoleAlreadyCommitted (revert)
+                    if (errMsg.includes("rolealreadycommitted") || shortMsg.includes("rolealreadycommitted") ||
+                        errMsg.includes("alreadycommitted") || shortMsg.includes("alreadycommitted")) {
+
+                        console.warn("Role already committed. Checking confirmation status...");
+
+                        // Check if we are already confirmed
+                        const flags = await publicClient?.readContract({
+                            address: MAFIA_CONTRACT_ADDRESS,
+                            abi: MAFIA_ABI,
+                            functionName: 'getPlayerFlags',
+                            args: [currentRoomId, address as `0x${string}`],
+                        }) as unknown as any[]; // returns tuple of bools
+
+                        // Tuple index 1 is hasConfirmedRole (see RoleReveal)
+                        // [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys, hasClaimedMafia]
+                        const isConfirmed = flags?.[1];
+
+                        if (!isConfirmed) {
+                            console.log("Role committed but NOT confirmed. Calling confirmRole...");
+                            addLog("Role previously committed. Confirming now...", "info");
+                            // Determine gas for confirmRole
+                            const confirmHash = await sendGameTransaction('confirmRole', [currentRoomId]);
+                            await publicClient?.waitForTransactionReceipt({ hash: confirmHash });
+                            addLog("Role confirmed separately!", "success");
+                        } else {
+                            console.log("Role already confirmed on-chain.");
+                        }
+
+                    } else if (errMsg.includes("alreadyrevealed") || shortMsg.includes("alreadyrevealed") ||
+                        errMsg.includes("alreadyconfirmed") || shortMsg.includes("alreadyconfirmed")) {
+                        console.log("Role already confirmed on-chain.");
                     } else {
                         throw txErr;
                     }
@@ -854,6 +887,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
         } catch (e: any) {
+            console.error("Confirmation error:", e);
             addLog(e.shortMessage || "Confirmation failed", "danger");
             setIsTxPending(false);
             throw e;
