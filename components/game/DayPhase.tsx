@@ -138,13 +138,36 @@ export const DayPhase: React.FC = React.memo(() => {
     }, [gameState.phase, isDayPhase, isVotingPhase, alivePlayers.length, addLog, gameState.players, myPlayer?.address, startDiscussion]);
 
     // Poll discussion state
+    // Poll discussion state (Adaptive)
     useEffect(() => {
         if (!isDayPhase || !currentRoomId) return;
+        if (discussionState?.finished) return; // Stop polling if finished
 
-        fetchDiscussionState();
-        const interval = setInterval(fetchDiscussionState, 1500);
-        return () => clearInterval(interval);
-    }, [isDayPhase, currentRoomId, fetchDiscussionState]);
+        let timeoutId: NodeJS.Timeout;
+
+        const poll = async () => {
+            await fetchDiscussionState();
+            // Adaptive delay: 1.5s if visible, 10s if hidden background tab
+            const delay = typeof document !== 'undefined' && document.hidden ? 10000 : 1500;
+            timeoutId = setTimeout(poll, delay);
+        };
+
+        poll();
+
+        // Handle visibility change to resume fast polling immediately
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                clearTimeout(timeoutId);
+                poll();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            clearTimeout(timeoutId);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [isDayPhase, currentRoomId, fetchDiscussionState, discussionState?.finished]);
 
     // Auto-transition to voting when discussion finished
     useEffect(() => {
@@ -299,6 +322,20 @@ export const DayPhase: React.FC = React.memo(() => {
                                             >
                                                 <ChevronRight className="w-5 h-5 mr-2" />
                                                 Finish Speech Early
+                                            </Button>
+                                        )}
+
+                                        {/* Host Force Skip (if not speaker) */}
+                                        {!discussionState?.isMyTurn && gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase() && (
+                                            <Button
+                                                onClick={skipSpeech}
+                                                disabled={isProcessing}
+                                                isLoading={isProcessing}
+                                                variant="secondary"
+                                                className="w-full h-[50px] mt-2 bg-red-900/40 hover:bg-red-900/60 border-red-500/30 text-red-200"
+                                            >
+                                                <ChevronRight className="w-5 h-5 mr-2" />
+                                                Force Skip (Host)
                                             </Button>
                                         )}
                                     </>
