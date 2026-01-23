@@ -10,7 +10,7 @@ import { PhaseIndicator } from './PhaseIndicator';
 import { ShufflePhase } from './ShufflePhase';
 import { RoleReveal } from './RoleReveal';
 import { DayPhase } from './DayPhase';
-import { NightPhase } from './NightPhase';
+import { NightPhase, NightPhaseTimer } from './NightPhase';
 import { GameOver } from './GameOver';
 import { VotingAnnouncement } from './VotingAnnouncement';
 import { NightAnnouncement } from './NightAnnouncement';
@@ -52,8 +52,8 @@ const PLAYER_POSITIONS = [
 const BASE_WIDTH = 1488;
 const BASE_HEIGHT = 1024;
 
-export const GameLayout: React.FC = () => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK } = useGameContext();
+export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNightState }) => {
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const players = gameState.players || [];
     const [scale, setScale] = useState(1);
@@ -186,7 +186,7 @@ export const GameLayout: React.FC = () => {
             case GamePhase.VOTING:
                 return <DayPhase />;
             case GamePhase.NIGHT:
-                return <NightPhase />;
+                return <NightPhase initialNightState={initialNightState} />;
             case GamePhase.ENDED:
                 return <GameOver />;
             default:
@@ -381,11 +381,14 @@ export const GameLayout: React.FC = () => {
 
                 {/* Right: Phase & Role */}
                 <div className="pointer-events-auto flex items-center gap-4">
-
+                    {/* Centered Night Timer (only visible during Night) */}
+                    {gameState.phase === GamePhase.NIGHT && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-6">
+                            <NightPhaseTimer isTxPending={isTxPending} />
+                        </div>
+                    )}
 
                     <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />
-
-
                 </div>
             </div>
 
