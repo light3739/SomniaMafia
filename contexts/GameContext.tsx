@@ -289,6 +289,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         revealedCount: 0,
         mafiaCommittedCount: 0,
         mafiaRevealedCount: 0,
+        expectedTownReveals: 0,
+        expectedMafiaReveals: 0,
         winner: null
     });
 
@@ -449,6 +451,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const mafiaCommittedCount = Number(mafiaCommitted);
             const mafiaRevealedCount = Number(mafiaRevealed);
 
+            // Fetch Night Summary (Role Counts) from backend if Night phase
+            let expectedTownReveals = 0;
+            let expectedMafiaReveals = 0;
+
+            if (phase === GamePhase.NIGHT) {
+                try {
+                    const res = await fetch(`/api/game/night-summary?roomId=${roomId}`);
+                    const summary = await res.json();
+                    if (summary && !summary.error) {
+                        expectedTownReveals = summary.expectedTownReveals;
+                        expectedMafiaReveals = summary.expectedMafiaReveals;
+                    }
+                } catch (e) {
+                    console.error("[Night Summary] Fetch failed:", e);
+                }
+            }
+
             // DEBUG: Log current phase from contract
             console.log('[Phase Sync]', {
                 contractPhase: phase,
@@ -514,6 +533,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     revealedCount,
                     mafiaCommittedCount,
                     mafiaRevealedCount,
+                    expectedTownReveals,
+                    expectedMafiaReveals,
                     winner: winner || prev.winner
                 };
             });
