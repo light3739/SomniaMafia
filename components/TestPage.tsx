@@ -70,6 +70,9 @@ const NightPhaseTestWrapper: React.FC<{ testRole: Role }> = ({ testRole }) => {
                 { id: '1', timestamp: '12:00:00', message: 'Night falls...', type: 'phase' },
                 { id: '2', timestamp: '12:00:01', message: `You are a ${testRole}`, type: 'info' }
             ],
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
             winner: null,
             mafiaMessages: []
         });
@@ -116,6 +119,9 @@ const DayPhaseTestWrapper: React.FC = () => {
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Day 1 begins!', type: 'phase' }
             ],
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
             winner: null,
             mafiaMessages: []
         });
@@ -143,6 +149,9 @@ const VotingPhaseTestWrapper: React.FC = () => {
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Voting has started!', type: 'phase' }
             ],
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
             winner: null,
             mafiaMessages: []
         });
