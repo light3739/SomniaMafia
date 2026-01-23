@@ -57,7 +57,7 @@ interface GameContextType {
     // Mafia consensus kill (V4)
     commitMafiaTargetOnChain: (targetHash: string) => Promise<void>;
     revealMafiaTargetOnChain: (target: `0x${string}`, salt: string) => Promise<void>;
-    endNightOnChain: () => Promise<void>;
+    forcePhaseTimeoutOnChain: () => Promise<void>;
     endGameAutomaticallyOnChain: () => Promise<void>;
     endGameZK: () => Promise<void>;
     getInvestigationResultOnChain: (detective: string, target: string) => Promise<{ role: Role; isMafia: boolean }>;
@@ -289,7 +289,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         revealedCount: 0,
         mafiaCommittedCount: 0,
         mafiaRevealedCount: 0,
-        deadRevealedRoles: [],
+        phaseDeadline: 0,
         winner: null
     });
 
@@ -418,6 +418,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let aliveCount: number;
             let committedCount: number;
             let revealedCount: number;
+            let phaseDeadline: number;
 
             if (Array.isArray(roomData)) {
                 // [id, host, roomName, phase, maxPlayers, playersCount, aliveCount, dayCount, currentShufflerIndex, ...]
@@ -431,12 +432,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 dayCount = Number(roomData[7]);
                 committedCount = Number(roomData[13]);
                 revealedCount = Number(roomData[14]);
+                phaseDeadline = Number(roomData[10]);
             } else {
                 phase = Number(roomData.phase) as GamePhase;
                 dayCount = Number(roomData.dayCount);
                 aliveCount = Number(roomData.aliveCount);
                 committedCount = Number(roomData.committedCount);
                 revealedCount = Number(roomData.revealedCount);
+                phaseDeadline = Number(roomData.phaseDeadline);
             }
 
             // Fetch Mafia Consensus counts
@@ -515,6 +518,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     revealedCount,
                     mafiaCommittedCount,
                     mafiaRevealedCount,
+                    phaseDeadline,
                     winner: winner || prev.winner
                 };
             });
@@ -1098,13 +1102,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [currentRoomId, addLog]);
 
-    const endNightOnChain = useCallback(async () => {
+    const forcePhaseTimeoutOnChain = useCallback(async () => {
         if (!currentRoomId) return;
         setIsTxPending(true);
         try {
-            const hash = await sendGameTransaction('endNight', [currentRoomId]);
-            addLog("Night ended!", "phase");
+            const hash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
+            addLog("Phase timeout triggered!", "warning");
             await publicClient?.waitForTransactionReceipt({ hash });
+            await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
@@ -1855,35 +1860,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useWatchContractEvent({
         address: MAFIA_CONTRACT_ADDRESS,
         abi: MAFIA_ABI,
-        eventName: 'RoleRevealed',
-        onLogs(logs: any) {
-            logs.forEach((log: any) => {
-                const { roomId, player, role } = log.args;
-                if (!currentRoomId || BigInt(roomId) !== currentRoomId) return;
-
-                const roleMap: Record<number, Role> = {
-                    1: Role.MAFIA,
-                    2: Role.DOCTOR,
-                    3: Role.DETECTIVE,
-                    4: Role.CIVILIAN
-                };
-                const revealedRole = roleMap[Number(role)] || Role.CIVILIAN;
-
-                setGameState(prev => {
-                    // Avoid duplicates
-                    if (prev.deadRevealedRoles.some(r => r.address.toLowerCase() === player.toLowerCase())) return prev;
-                    return {
-                        ...prev,
-                        deadRevealedRoles: [...prev.deadRevealedRoles, { address: player, role: revealedRole }]
-                    };
-                });
-            });
-        },
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
         eventName: 'DeckCommitted',
         onLogs: (logs: any) => {
             const roomId = currentRoomIdRef.current;
@@ -2140,7 +2116,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         startVotingOnChain, voteOnChain,
         commitNightActionOnChain, revealNightActionOnChain,
         commitMafiaTargetOnChain, revealMafiaTargetOnChain,
-        endNightOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain,
+        forcePhaseTimeoutOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain,
         revealRoleOnChain, tryEndGame, claimVictory, endGameZK,
         sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList,
@@ -2156,7 +2132,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         commitRoleOnChain, confirmRoleOnChain, commitAndConfirmRoleOnChain,
         startVotingOnChain, voteOnChain, commitNightActionOnChain,
         revealNightActionOnChain, commitMafiaTargetOnChain, revealMafiaTargetOnChain,
-        endNightOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain, revealRoleOnChain,
+        forcePhaseTimeoutOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain, revealRoleOnChain,
         tryEndGame, claimVictory, endGameZK, sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList, addLog,
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,

@@ -73,7 +73,7 @@ const NightPhaseTestWrapper: React.FC<{ testRole: Role }> = ({ testRole }) => {
             revealedCount: 0,
             mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
-            deadRevealedRoles: [],
+            phaseDeadline: 0,
             winner: null,
             mafiaMessages: []
         });
@@ -123,7 +123,7 @@ const DayPhaseTestWrapper: React.FC = () => {
             revealedCount: 0,
             mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
-            deadRevealedRoles: [],
+            phaseDeadline: 0,
             winner: null,
             mafiaMessages: []
         });
@@ -154,7 +154,7 @@ const VotingPhaseTestWrapper: React.FC = () => {
             revealedCount: 0,
             mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
-            deadRevealedRoles: [],
+            phaseDeadline: 0,
             winner: null,
             mafiaMessages: []
         });

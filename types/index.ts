@@ -77,7 +77,7 @@ export interface GameState {
   revealedCount: number; // For night phase (Town)
   mafiaCommittedCount: number; // For night phase (Mafia)
   mafiaRevealedCount: number; // For night phase (Mafia)
-  deadRevealedRoles: { address: string; role: Role }[]; // Explicitly revealed roles of dead players
+  phaseDeadline: number; // Unix timestamp in seconds
   winner: 'MAFIA' | 'TOWN' | null;
 }
 
