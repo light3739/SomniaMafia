@@ -66,7 +66,24 @@ export const DayPhase: React.FC = React.memo(() => {
         : null;
 
     const lastLoggedPhase = useRef<GamePhase | null>(null);
+    const lastSpeakerRef = useRef<string | null>(null);
     const discussionStartedRef = useRef(false);
+
+    // Логируем начало речи каждого игрока
+    useEffect(() => {
+        if (isDayPhase && discussionState?.active && discussionState.currentSpeakerAddress) {
+            if (discussionState.currentSpeakerAddress !== lastSpeakerRef.current) {
+                const speaker = gameState.players.find(p => p.address.toLowerCase() === discussionState.currentSpeakerAddress?.toLowerCase());
+                if (speaker) {
+                    addLog(`${speaker.name} is now speaking.`, "info");
+                }
+                lastSpeakerRef.current = discussionState.currentSpeakerAddress;
+            }
+        }
+        if (!isDayPhase) {
+            lastSpeakerRef.current = null;
+        }
+    }, [isDayPhase, discussionState?.active, discussionState?.currentSpeakerAddress, gameState.players, addLog]);
 
     // Fetch discussion state from backend
     const fetchDiscussionState = useCallback(async () => {
@@ -295,7 +312,7 @@ export const DayPhase: React.FC = React.memo(() => {
                     )}
                 </div>
 
-                {/* Event Feed - Larger height */}
+                {/* Event Feed - Restored height */}
                 <div className="mb-4 h-[360px] w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
                     <div className="absolute top-2 right-3 z-10 flex gap-1">
                         <div className="w-1 h-1 rounded-full bg-[#916A47]/40" />
@@ -318,17 +335,17 @@ export const DayPhase: React.FC = React.memo(() => {
                             >
                                 {discussionState?.active ? (
                                     <>
-                                        {/* Timer display */}
-                                        <div className="w-full py-4 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
-                                            <div className="flex items-center justify-center gap-3">
-                                                <Clock className="w-6 h-6 text-[#916A47]" />
-                                                <span className="text-3xl font-bold text-white tabular-nums">
+                                        {/* Ultra-compact timer display */}
+                                        <div className="w-full py-1 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <Clock className="w-4 h-4 text-[#916A47]" />
+                                                <span className="text-xl font-bold text-white tabular-nums">
                                                     {Math.floor((discussionState?.timeRemaining || 0) / 60)}:{String((discussionState?.timeRemaining || 0) % 60).padStart(2, '0')}
                                                 </span>
+                                                <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
+                                                    {discussionState?.isMyTurn ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
+                                                </span>
                                             </div>
-                                            <p className="text-[#916A47]/70 text-sm mt-1">
-                                                {discussionState?.isMyTurn ? '🎙️ Your turn to speak!' : `${currentSpeaker?.name || 'Player'} is speaking...`}
-                                            </p>
                                         </div>
 
                                         {/* Skip button (only for current speaker) */}

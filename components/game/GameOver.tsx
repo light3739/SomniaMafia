@@ -364,7 +364,7 @@ export const GameOver: React.FC = () => {
                     >
                         <Button
                             onClick={handlePlayAgain}
-                            className="flex-1"
+                            className="flex-1 h-[60px] text-lg"
                         >
                             <RotateCcw className="w-5 h-5 mr-2" />
                             Play Again
@@ -372,24 +372,13 @@ export const GameOver: React.FC = () => {
                         <Button
                             onClick={handleHome}
                             variant="outline-gold"
-                            className="flex-1"
+                            className="flex-1 h-[60px] text-lg"
                         >
                             <Home className="w-5 h-5 mr-2" />
                             Home
                         </Button>
                     </motion.div>
 
-                    {/* Game Stats */}
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 2.2 }}
-                        className="mt-6 text-center"
-                    >
-                        <p className="text-white/20 text-xs">
-                            Game lasted {gameState.dayCount} days • {gameState.players.filter(p => !p.isAlive).length} eliminated
-                        </p>
-                    </motion.div>
                 </motion.div>
             </div>
         </motion.div>
