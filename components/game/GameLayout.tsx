@@ -56,9 +56,35 @@ export const GameLayout: React.FC = () => {
     const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const players = gameState.players || [];
+    const [scale, setScale] = useState(1);
+
+    // Deterministic shuffle based on roomId for randomized seating
+    const visualPlayers = useMemo(() => {
+        if (!players.length) return [];
+        // Keep join order in Lobby, shuffle in other phases
+        if (gameState.phase === GamePhase.LOBBY || !currentRoomId) return players;
+
+        const shuffled = [...players];
+        // Use currentRoomId as seed for Fisher-Yates shuffle
+        const seed = Number(currentRoomId % 1000000n);
+        let m = shuffled.length, t, i;
+        let s = seed;
+
+        const random = () => {
+            s = (s * 9301 + 49297) % 233280;
+            return s / 233280;
+        };
+
+        while (m) {
+            i = Math.floor(random() * m--);
+            t = shuffled[m];
+            shuffled[m] = shuffled[i];
+            shuffled[i] = t;
+        }
+        return shuffled;
+    }, [players, gameState.phase, currentRoomId]);
 
     // Handle window resize for scaling
-    const [scale, setScale] = useState(1);
 
     // Voting announcement state
     const [showVotingAnnouncement, setShowVotingAnnouncement] = useState(false);
@@ -270,7 +296,7 @@ export const GameLayout: React.FC = () => {
 
                 {/* Players */}
                 {PLAYER_POSITIONS.map((pos, index) => {
-                    const player = players[index];
+                    const player = visualPlayers[index];
                     if (!player) return null; // Slot empty
 
                     return (
