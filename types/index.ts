@@ -77,6 +77,8 @@ export interface GameState {
   revealedCount: number; // For night phase (Town)
   mafiaCommittedCount: number; // For night phase (Mafia)
   mafiaRevealedCount: number; // For night phase (Mafia)
+  expectedTownReveals: number; // From backend
+  expectedMafiaReveals: number; // From backend
   winner: 'MAFIA' | 'TOWN' | null;
 }
 
