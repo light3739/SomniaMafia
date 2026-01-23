@@ -1,7 +1,7 @@
 "use client";
 
-import { MockGameLayout } from "@/components/game/MockGameLayout";
+import TestPage from "@/components/TestPage";
 
-export default function TestPage() {
-    return <MockGameLayout />;
+export default function TestRoute() {
+    return <TestPage />;
 }
