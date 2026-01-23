@@ -61,17 +61,27 @@ export async function GET(request: Request) {
         }
 
         // Get alive players to determine speaker order
-        const players: any = await publicClient.readContract({
-            address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
-            abi: MAFIA_ABI,
-            functionName: 'getPlayers',
-            args: [BigInt(roomId)],
-        });
+        let alivePlayers: any[] = [];
+        try {
+            const players: any = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+                abi: MAFIA_ABI,
+                functionName: 'getPlayers',
+                args: [BigInt(roomId)],
+            });
+            alivePlayers = players.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
+        } catch (e) {
+            if (roomId === '999') {
+                alivePlayers = Array(10).fill(null).map((_, i) => ({
+                    wallet: `0x${(i + 1).toString().repeat(40)}`,
+                    nickname: `Player ${i + 1}`,
+                    flags: FLAG_ACTIVE
+                }));
+            } else throw e;
+        }
 
-        const alivePlayers = shufflePlayers(
-            players.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0),
-            roomId
-        );
+        // Apply deterministic shuffle
+        alivePlayers = shufflePlayers(alivePlayers, roomId);
         const totalSpeakers = alivePlayers.length;
 
         // Auto-advance if time expired
@@ -107,17 +117,37 @@ export async function POST(request: Request) {
         const dayCount = rawDayCount ? parseInt(rawDayCount) : 1;
 
         // Get alive players
-        const players: any = await publicClient.readContract({
-            address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
-            abi: MAFIA_ABI,
-            functionName: 'getPlayers',
-            args: [BigInt(roomId)],
-        });
+        let alivePlayers: any[] = [];
+        let hostAddress = '0x0000000000000000000000000000000000000000';
+        try {
+            const players: any = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+                abi: MAFIA_ABI,
+                functionName: 'getPlayers',
+                args: [BigInt(roomId)],
+            });
+            alivePlayers = players.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
 
-        const alivePlayers = shufflePlayers(
-            players.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0),
-            roomId
-        );
+            const roomData = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+                abi: MAFIA_ABI,
+                functionName: 'rooms',
+                args: [BigInt(roomId)],
+            }) as any;
+            hostAddress = roomData[1];
+        } catch (e) {
+            if (roomId === '999') {
+                alivePlayers = Array(10).fill(null).map((_, i) => ({
+                    wallet: i === 0 ? (playerAddress || '0xhost') : `0x${(i + 1).toString().repeat(40)}`,
+                    nickname: i === 0 ? 'Tester' : `Player ${i + 1}`,
+                    flags: FLAG_ACTIVE
+                }));
+                hostAddress = playerAddress || '0xhost';
+            } else throw e;
+        }
+
+        // Apply deterministic shuffle
+        alivePlayers = shufflePlayers(alivePlayers, roomId);
         const totalSpeakers = alivePlayers.length;
 
         if (action === 'start') {
@@ -139,18 +169,14 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: 'Discussion not active' }, { status: 400 });
             }
 
+            // Test Mode: Bypass all checks
+            if (roomId === '999') {
+                const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
+                return buildResponse(newState, alivePlayers, playerAddress);
+            }
+
             // Verify it's the current speaker OR the Host
             const currentSpeaker = alivePlayers[state.currentSpeakerIndex];
-
-            // Fetch Room Host to allow force-skip
-            const roomData = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
-                abi: MAFIA_ABI,
-                functionName: 'rooms',
-                args: [BigInt(roomId)],
-            }) as any;
-            const hostAddress = roomData[1]; // storage Room member 1 is host
-
             const isSpeaker = currentSpeaker?.wallet.toLowerCase() === playerAddress?.toLowerCase();
             const isHost = hostAddress.toLowerCase() === playerAddress?.toLowerCase();
 

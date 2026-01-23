@@ -3,9 +3,8 @@
 import React, { useEffect, useCallback } from 'react';
 import { useAudioSettings } from '../../contexts/AudioContext';
 
-// GLOBAL multipliers for sounds (updated by React component)
-let globalSfxVolume = 0.7;
-let globalMusicVolume = 0.5;
+// GLOBAL multiplier for all sounds (updated by React component)
+let globalMasterVolume = 0.5;
 
 // GLOBAL state for persistent victory music
 let victoryGainNode: GainNode | null = null;
@@ -74,8 +73,8 @@ const playAudioFile = async (url: string, duration: number = 5, fadeIn: number =
     const ctx = initCtx();
     if (!ctx) return;
 
-    // Применяем глобальный множитель звуковых эффектов
-    const finalVolume = volume * globalSfxVolume;
+    // Применяем глобальный множитель мастер-громкости
+    const finalVolume = volume * globalMasterVolume;
     if (ctx.state === 'suspended') {
         try {
             await ctx.resume();
@@ -131,8 +130,8 @@ const playVictoryMusic = async (url: string, duration: number, volume: number) =
     const ctx = initCtx();
     if (!ctx) return;
 
-    // Победная музыка считается музыкой, а не эффектом
-    const finalVolume = volume * globalMusicVolume;
+    // Весь звук масштабируется мастер-громкостью
+    const finalVolume = volume * globalMasterVolume;
 
     if (ctx.state === 'suspended') {
         try { await ctx.resume(); } catch (e) { }
@@ -204,8 +203,8 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
         const g = ctx.createGain();
         osc.type = oscType;
         osc.frequency.setValueAtTime(freq, t + fadeStart);
-        // Применяем глобальный множитель SFX к синтезированным звукам
-        const finalVol = vol * globalSfxVolume;
+        // Применяем глобальный множитель к синтезированным звукам
+        const finalVol = vol * globalMasterVolume;
         g.gain.setValueAtTime(finalVol, t + fadeStart);
         g.gain.exponentialRampToValueAtTime(0.001, t + fadeStart + duration);
         osc.connect(g);
@@ -300,18 +299,17 @@ export const useSoundEffects = () => {
 };
 
 export const SoundEffects: React.FC = () => {
-    const { sfxVolume, musicVolume } = useAudioSettings();
+    const { masterVolume } = useAudioSettings();
 
     useEffect(() => {
-        globalSfxVolume = sfxVolume;
-        globalMusicVolume = musicVolume;
+        globalMasterVolume = masterVolume;
 
         // Update current victory music volume if playing
         if (victoryGainNode && globalAudioCtx) {
             const t = globalAudioCtx.currentTime;
-            victoryGainNode.gain.setTargetAtTime(0.2 * musicVolume, t, 0.1);
+            victoryGainNode.gain.setTargetAtTime(0.2 * masterVolume, t, 0.1);
         }
-    }, [sfxVolume, musicVolume]);
+    }, [masterVolume]);
 
     useEffect(() => {
         // PRELOAD ALL CRITICAL SOUNDS
