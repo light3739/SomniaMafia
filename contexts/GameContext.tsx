@@ -289,8 +289,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         revealedCount: 0,
         mafiaCommittedCount: 0,
         mafiaRevealedCount: 0,
-        expectedTownReveals: 0,
-        expectedMafiaReveals: 0,
+        deadRevealedRoles: [],
         winner: null
     });
 
@@ -451,23 +450,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const mafiaCommittedCount = Number(mafiaCommitted);
             const mafiaRevealedCount = Number(mafiaRevealed);
 
-            // Fetch Night Summary (Role Counts) from backend if Night phase
-            let expectedTownReveals = 0;
-            let expectedMafiaReveals = 0;
-
-            if (phase === GamePhase.NIGHT) {
-                try {
-                    const res = await fetch(`/api/game/night-summary?roomId=${roomId}`);
-                    const summary = await res.json();
-                    if (summary && !summary.error) {
-                        expectedTownReveals = summary.expectedTownReveals;
-                        expectedMafiaReveals = summary.expectedMafiaReveals;
-                    }
-                } catch (e) {
-                    console.error("[Night Summary] Fetch failed:", e);
-                }
-            }
-
             // DEBUG: Log current phase from contract
             console.log('[Phase Sync]', {
                 contractPhase: phase,
@@ -533,8 +515,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     revealedCount,
                     mafiaCommittedCount,
                     mafiaRevealedCount,
-                    expectedTownReveals,
-                    expectedMafiaReveals,
                     winner: winner || prev.winner
                 };
             });
@@ -1870,6 +1850,35 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 refreshPlayersList(roomId);
             }
         }
+    });
+
+    useWatchContractEvent({
+        address: MAFIA_CONTRACT_ADDRESS,
+        abi: MAFIA_ABI,
+        eventName: 'RoleRevealed',
+        onLogs(logs: any) {
+            logs.forEach((log: any) => {
+                const { roomId, player, role } = log.args;
+                if (!currentRoomId || BigInt(roomId) !== currentRoomId) return;
+
+                const roleMap: Record<number, Role> = {
+                    1: Role.MAFIA,
+                    2: Role.DOCTOR,
+                    3: Role.DETECTIVE,
+                    4: Role.CIVILIAN
+                };
+                const revealedRole = roleMap[Number(role)] || Role.CIVILIAN;
+
+                setGameState(prev => {
+                    // Avoid duplicates
+                    if (prev.deadRevealedRoles.some(r => r.address.toLowerCase() === player.toLowerCase())) return prev;
+                    return {
+                        ...prev,
+                        deadRevealedRoles: [...prev.deadRevealedRoles, { address: player, role: revealedRole }]
+                    };
+                });
+            });
+        },
     });
 
     useWatchContractEvent({
