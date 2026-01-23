@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAudioSettings } from '@/contexts/AudioContext';
 
 export const BackgroundMusic: React.FC = () => {
-    const { musicVolume, sfxVolume, setMusicVolume, setSfxVolume } = useAudioSettings();
+    const { masterVolume, setMasterVolume } = useAudioSettings();
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
@@ -30,11 +30,10 @@ export const BackgroundMusic: React.FC = () => {
     // Update internal audio volume based on context and local mute
     useEffect(() => {
         if (audioRef.current) {
-            // Background music uses the calibrated 2% (0.02) as the peak, 
-            // controlled by the master musicVolume slider
-            audioRef.current.volume = isMuted ? 0 : (0.02 * musicVolume);
+            // Background music uses its calibrated peak (0.02) scaled by master volume
+            audioRef.current.volume = isMuted ? 0 : (0.02 * masterVolume);
         }
-    }, [musicVolume, isMuted]);
+    }, [masterVolume, isMuted]);
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -122,46 +121,24 @@ export const BackgroundMusic: React.FC = () => {
                             Audio Settings
                         </h3>
 
-                        <div className="space-y-6">
-                            {/* Music Volume */}
+                        <div className="space-y-4">
+                            {/* Master Volume */}
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center text-xs">
                                     <div className="flex items-center gap-2 text-white/50">
-                                        <Music className="w-3 h-3" />
-                                        <span>Music</span>
+                                        <Volume2 className="w-3 h-3" />
+                                        <span>Master Volume</span>
                                     </div>
-                                    <span className="text-[#916A47] font-mono">{Math.round(musicVolume * 100)}%</span>
+                                    <span className="text-[#916A47] font-mono">{Math.round(masterVolume * 100)}%</span>
                                 </div>
                                 <input
                                     type="range"
                                     min="0" max="1" step="0.01"
-                                    value={musicVolume}
-                                    onChange={(e) => setMusicVolume(parseFloat(e.target.value))}
+                                    value={masterVolume}
+                                    onChange={(e) => setMasterVolume(parseFloat(e.target.value))}
                                     className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-[#916A47] hover:accent-[#b0845a] transition-all"
                                 />
                             </div>
-
-                            {/* SFX Volume */}
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center text-xs">
-                                    <div className="flex items-center gap-2 text-white/50">
-                                        <Zap className="w-3 h-3" />
-                                        <span>Effects</span>
-                                    </div>
-                                    <span className="text-[#916A47] font-mono">{Math.round(sfxVolume * 100)}%</span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min="0" max="1" step="0.01"
-                                    value={sfxVolume}
-                                    onChange={(e) => setSfxVolume(parseFloat(e.target.value))}
-                                    className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-[#916A47] hover:accent-[#b0845a] transition-all"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="mt-5 pt-4 border-t border-white/5 text-[10px] text-white/20 text-center uppercase tracking-tighter">
-                            Settings are saved automatically
                         </div>
                     </motion.div>
                 )}
