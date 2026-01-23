@@ -815,11 +815,24 @@ const NightEndAutomator: React.FC<{
             return;
         }
 
-        // Logic: Who is expected to act tonight?
-        // We now get these counts securely from the backend (night-summary API)
-        // because individual players might not know who has which role.
-        const expectedTownReveals = gameState.expectedTownReveals || 0;
-        const expectedMafiaReveals = gameState.expectedMafiaReveals || 0;
+        // Logic: Calculate expected actions locally (SECURE)
+        // 1. Get initial board composition (known by everyone in Mafia)
+        const totalPlayers = gameState.players.length;
+        const initialMafiaCount = Math.max(1, Math.floor(totalPlayers / 4));
+        const initialDoctorCount = totalPlayers >= 4 ? 1 : 0;
+        const initialDetectiveCount = totalPlayers >= 5 ? 1 : 0;
+
+        // 2. Subtract roles of players who died and REVEALED their roles
+        const revealedDeadMafia = gameState.deadRevealedRoles.filter(r => r.role === Role.MAFIA).length;
+        const revealedDeadDoctor = gameState.deadRevealedRoles.filter(r => r.role === Role.DOCTOR).length;
+        const revealedDeadDetective = gameState.deadRevealedRoles.filter(r => r.role === Role.DETECTIVE).length;
+
+        // 3. Expected = Initial - Revealed Dead
+        // Note: For mafia, if at least one mafia is alive, they must act (consensus)
+        // In this architecture, we wait for ALL alive mafia to confirm consensus targets.
+        // If the contract confirmedCount/revealedCount handles this, we map to it.
+        const expectedMafiaReveals = initialMafiaCount - revealedDeadMafia;
+        const expectedTownReveals = (initialDoctorCount - revealedDeadDoctor) + (initialDetectiveCount - revealedDeadDetective);
 
         // Current status from contract (synced via GameContext)
         const currentTownRevealed = gameState.revealedCount || 0;
