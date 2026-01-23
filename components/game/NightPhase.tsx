@@ -809,17 +809,28 @@ const NightPhaseTimer: React.FC<{
     const { gameState, forcePhaseTimeoutOnChain, currentRoomId, myPlayer } = useGameContext();
     const [timeLeft, setTimeLeft] = useState<number>(0);
     const timeoutStartedRef = useRef(false);
+    // Используем локальный stable deadline для плавного отсчёта
+    const stableDeadlineRef = useRef<number>(0);
 
     useEffect(() => {
         if (!currentRoomId || gameState.phase !== GamePhase.NIGHT || gameState.phaseDeadline === 0) {
             setTimeLeft(0);
             timeoutStartedRef.current = false;
+            stableDeadlineRef.current = 0;
             return;
+        }
+
+        // Обновляем stableDeadline только если контракт изменил deadline значительно (>5 секунд разницы)
+        // Это предотвращает прыжки при обычных polling обновлениях
+        const contractDeadline = gameState.phaseDeadline;
+        if (stableDeadlineRef.current === 0 || Math.abs(contractDeadline - stableDeadlineRef.current) > 5) {
+            stableDeadlineRef.current = contractDeadline;
+            console.log(`[Timer] Updated stable deadline to ${contractDeadline}`);
         }
 
         const tick = () => {
             const now = Math.floor(Date.now() / 1000);
-            const remaining = Math.max(0, gameState.phaseDeadline - now);
+            const remaining = Math.max(0, stableDeadlineRef.current - now);
             setTimeLeft(remaining);
 
             // Auto-trigger fallback: if time expired and no one has ended the night yet
@@ -841,7 +852,7 @@ const NightPhaseTimer: React.FC<{
         tick();
         const interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
-    }, [gameState.phaseDeadline, gameState.phase, currentRoomId, isProcessing, isTxPending, myPlayer, forcePhaseTimeoutOnChain]);
+    }, [gameState.phaseDeadline, gameState.phase, currentRoomId, isProcessing, isTxPending, myPlayer, gameState.players, forcePhaseTimeoutOnChain]);
 
     if (timeLeft === 0 && gameState.phase !== GamePhase.NIGHT) return null;
 
