@@ -67,7 +67,11 @@ const RoleActions: Record<Role, { action: NightActionType; label: string; icon: 
     }
 };
 
-export const NightPhase: React.FC = React.memo(() => {
+interface NightPhaseProps {
+    initialNightState?: Partial<NightState>;
+}
+
+export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightState }) => {
     const {
         gameState,
         myPlayer,
@@ -82,23 +86,34 @@ export const NightPhase: React.FC = React.memo(() => {
         selectedTarget,
         setSelectedTarget,
         currentRoomId,
-        sendMafiaMessageOnChain
+        sendMafiaMessageOnChain,
+        isTestMode
     } = useGameContext();
     const { playKillSound, playProtectSound, playInvestigateSound } = useSoundEffects();
 
     const [nightState, setNightState] = useState<NightState>({
-        hasCommitted: false,
-        hasRevealed: false,
-        commitHash: null,
-        salt: null,
-        investigationResult: null,
-        teammates: [],
-        committedTarget: null,
-        // V4: Mafia consensus
-        mafiaCommitted: 0,
-        mafiaRevealed: 0,
-        mafiaConsensusTarget: null
+        hasCommitted: initialNightState?.hasCommitted ?? false,
+        hasRevealed: initialNightState?.hasRevealed ?? false,
+        commitHash: initialNightState?.commitHash ?? null,
+        salt: initialNightState?.salt ?? null,
+        investigationResult: initialNightState?.investigationResult ?? null,
+        teammates: initialNightState?.teammates ?? [],
+        committedTarget: initialNightState?.committedTarget ?? null,
+        mafiaCommitted: initialNightState?.mafiaCommitted ?? 0,
+        mafiaRevealed: initialNightState?.mafiaRevealed ?? 0,
+        mafiaConsensusTarget: initialNightState?.mafiaConsensusTarget ?? null
     });
+
+    // Handle initialNightState updates for testing
+    useEffect(() => {
+        if (initialNightState) {
+            console.log('[NightPhase] Syncing with initialNightState:', initialNightState);
+            setNightState(prev => ({
+                ...prev,
+                ...initialNightState
+            }));
+        }
+    }, [initialNightState, isTestMode]);
     const [isProcessing, setIsProcessing] = useState(false);
     const publicClient = usePublicClient();
     const { address } = useAccount();
@@ -144,15 +159,28 @@ export const NightPhase: React.FC = React.memo(() => {
 
     // Sync on mount and periodically
     useEffect(() => {
+        if (isTestMode && initialNightState) return;
+
         syncWithContract();
         const interval = setInterval(syncWithContract, 2000);
         return () => clearInterval(interval);
-    }, [syncWithContract]);
+    }, [syncWithContract, isTestMode, initialNightState]);
 
     // Моя роль
     const myRole = myPlayer?.role || Role.UNKNOWN;
     const roleConfig = RoleActions[myRole];
     const canAct = roleConfig.action !== NightActionType.NONE;
+
+    if (isTestMode) {
+        console.log('[NightPhase Debug]', {
+            myRole,
+            hasCommitted: nightState.hasCommitted,
+            hasRevealed: nightState.hasRevealed,
+            investigationResult: nightState.investigationResult,
+            playersCount: gameState.players.length,
+            isProcessing
+        });
+    }
 
     // Get selected player name (from side card selection)
     const selectedPlayer = gameState.players.find(p => p.address.toLowerCase() === selectedTarget?.toLowerCase());
@@ -268,6 +296,7 @@ export const NightPhase: React.FC = React.memo(() => {
 
     // Восстановление состояния из блокчейна после рефреша (используя флаги из GameContext)
     useEffect(() => {
+        if (isTestMode && initialNightState) return;
         // Если контракт говорит "Ты уже сделал Commit", но локально мы не знаем
         if (myPlayer?.hasNightCommitted && !nightState.hasCommitted) {
             console.log("Recovering Night State: Commit detected on-chain");
@@ -357,10 +386,12 @@ export const NightPhase: React.FC = React.memo(() => {
                 hash: hash
             });
 
-            if (myRole === Role.MAFIA) {
-                await commitMafiaTargetOnChain(hash);
-            } else {
-                await commitNightActionOnChain(hash);
+            if (!isTestMode) {
+                if (myRole === Role.MAFIA) {
+                    await commitMafiaTargetOnChain(hash);
+                } else {
+                    await commitNightActionOnChain(hash);
+                }
             }
 
             // Сохраняем в localStorage только после успеха
@@ -404,43 +435,56 @@ export const NightPhase: React.FC = React.memo(() => {
         setIsProcessing(true);
 
         try {
-            if (myRole === Role.MAFIA) {
-                console.log('[Mafia Reveal]', {
-                    target: nightState.committedTarget,
-                    salt: nightState.salt,
-                    expectedHash: nightState.commitHash
-                });
+            if (!isTestMode) {
+                if (myRole === Role.MAFIA) {
+                    console.log('[Mafia Reveal]', {
+                        target: nightState.committedTarget,
+                        salt: nightState.salt,
+                        expectedHash: nightState.commitHash
+                    });
 
-                await revealMafiaTargetOnChain(
-                    nightState.committedTarget as `0x${string}`,
-                    nightState.salt
-                );
-            } else {
-                console.log('[Night Reveal]', {
-                    action: roleConfig.action,
-                    target: nightState.committedTarget,
-                    salt: nightState.salt,
-                    expectedHash: nightState.commitHash
-                });
+                    await revealMafiaTargetOnChain(
+                        nightState.committedTarget as `0x${string}`,
+                        nightState.salt
+                    );
+                } else {
+                    console.log('[Night Reveal]', {
+                        action: roleConfig.action,
+                        target: nightState.committedTarget,
+                        salt: nightState.salt,
+                        expectedHash: nightState.commitHash
+                    });
 
-                await revealNightActionOnChain(
-                    roleConfig.action,
-                    nightState.committedTarget as `0x${string}`,
-                    nightState.salt
-                );
+                    await revealNightActionOnChain(
+                        roleConfig.action,
+                        nightState.committedTarget as `0x${string}`,
+                        nightState.salt
+                    );
+                }
             }
 
             localStorage.removeItem(NIGHT_COMMIT_KEY);
 
-            let investigationResult: Role | null = null;
-            if (myRole === Role.DETECTIVE && roleConfig.action === NightActionType.CHECK) {
+            let investigationResult: Role | null = nightState.investigationResult;
+
+            // Generate mock result in test mode if none exists
+            if (isTestMode && myRole === Role.DETECTIVE && !investigationResult) {
+                investigationResult = Math.random() > 0.5 ? Role.MAFIA : Role.CIVILIAN;
+                addLog(`[Test] Player is actually ${investigationResult}`, investigationResult === Role.MAFIA ? "danger" : "success");
+            }
+
+            console.log('[NightPhase handleReveal]', { isTestMode, myRole, currentResult: investigationResult });
+
+            if (!isTestMode && myRole === Role.DETECTIVE && roleConfig.action === NightActionType.CHECK) {
                 addLog("Fetching investigation result from server...", "info");
 
                 // Retry loop to handle block propagation latency
                 const MAX_RETRIES = 5;
                 for (let i = 0; i < MAX_RETRIES; i++) {
                     // Wait before check (2s delay each time giving time for indexer)
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    if (!isTestMode) {
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
 
                     if (i > 0) addLog(`Verifying action on-chain (Attempt ${i + 1}/${MAX_RETRIES})...`, "info");
 
@@ -529,8 +573,6 @@ export const NightPhase: React.FC = React.memo(() => {
                         <span className="text-sm">Others are making their moves...</span>
                     </div>
 
-                    {/* TIMER for civilians too */}
-                    <NightPhaseTimer isProcessing={false} isTxPending={isTxPending} />
                 </motion.div>
             </div>
         );
@@ -544,24 +586,21 @@ export const NightPhase: React.FC = React.memo(() => {
                 animate={{ opacity: 1, y: 0 }}
                 className="max-w-lg w-full"
             >
-                {/* Header */}
-                <div className="text-center mb-6">
-                    <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black/40 border border-white/10 mb-4`}>
-                        <span className={roleConfig.color}>{roleConfig.icon}</span>
-                        <span className={`font-bold ${roleConfig.color}`}>{myRole}</span>
+                {/* Header - only show instructions before action is completed */}
+                {!nightState.hasRevealed && (
+                    <div className="text-center mb-6">
+                        <h2 className="text-2xl font-['Playfair_Display'] text-white mb-2">
+                            {myRole === Role.MAFIA && 'Choose your victim'}
+                            {myRole === Role.DOCTOR && 'Choose who to protect'}
+                            {myRole === Role.DETECTIVE && 'Choose who to investigate'}
+                        </h2>
+                        <p className="text-white/50 text-sm">
+                            {myRole === Role.MAFIA && 'Choose your target to eliminate'}
+                            {myRole === Role.DOCTOR && 'Choose a player to protect tonight'}
+                            {myRole === Role.DETECTIVE && 'Choose a player to investigate'}
+                        </p>
                     </div>
-
-                    <h2 className="text-2xl font-['Playfair_Display'] text-white mb-2">
-                        {myRole === Role.MAFIA && 'Choose your victim'}
-                        {myRole === Role.DOCTOR && 'Choose who to protect'}
-                        {myRole === Role.DETECTIVE && 'Choose who to investigate'}
-                    </h2>
-                    <p className="text-white/50 text-sm">
-                        {myRole === Role.MAFIA && 'Choose your target to eliminate'}
-                        {myRole === Role.DOCTOR && 'Choose a player to protect tonight'}
-                        {myRole === Role.DETECTIVE && 'Choose a player to investigate'}
-                    </p>
-                </div>
+                )}
 
                 {/* Mafia Teammates */}
                 {myRole === Role.MAFIA && nightState.teammates.length > 0 && (
@@ -593,39 +632,78 @@ export const NightPhase: React.FC = React.memo(() => {
                     </motion.div>
                 )}
 
-                {/* V4: Mafia Consensus Status */}
-                {myRole === Role.MAFIA && (nightState.mafiaCommitted > 0 || nightState.mafiaRevealed > 0) && (
+                {/* V4: Mafia Consensus Status - Show after player has committed */}
+                {myRole === Role.MAFIA && nightState.hasCommitted && (
                     <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="mb-4 p-4 bg-red-950/20 border border-red-500/20 rounded-2xl"
                     >
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2 mb-3">
                             <Users className="w-4 h-4 text-red-400" />
                             <span className="text-red-300 text-sm font-medium">Mafia Consensus</span>
                         </div>
-                        <div className="flex justify-between text-sm">
+
+                        {/* Progress indicators */}
+                        <div className="flex justify-between text-sm mb-3">
                             <span className="text-red-200/60">Committed: {nightState.mafiaCommitted}</span>
                             <span className="text-red-200/60">Revealed: {nightState.mafiaRevealed}</span>
                         </div>
-                        {nightState.mafiaConsensusTarget && (
-                            <div className="mt-2 p-2 bg-red-900/30 rounded-lg">
-                                <span className="text-xs text-red-300">Consensus Target: </span>
-                                <span className="text-red-200 font-medium">
-                                    {gameState.players.find(p => p.address.toLowerCase() === nightState.mafiaConsensusTarget?.toLowerCase())?.name || nightState.mafiaConsensusTarget?.slice(0, 8)}
-                                </span>
+
+                        {/* Waiting for others */}
+                        {nightState.mafiaRevealed < nightState.mafiaCommitted && (
+                            <div className="p-3 bg-red-900/20 rounded-lg border border-red-500/10">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                                    <span className="text-red-300 text-sm">Waiting for other Mafia members...</span>
+                                </div>
                             </div>
                         )}
-                        {nightState.mafiaRevealed === nightState.mafiaCommitted && nightState.mafiaRevealed > 0 && !nightState.mafiaConsensusTarget && (
-                            <div className="mt-2 p-2 bg-yellow-900/30 rounded-lg">
-                                <span className="text-xs text-yellow-300">⚠️ No consensus - targets don't match!</span>
-                            </div>
+
+                        {/* Kill Result - Consensus reached */}
+                        {nightState.mafiaRevealed > 0 && nightState.mafiaRevealed === nightState.mafiaCommitted && nightState.mafiaConsensusTarget && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="p-4 bg-red-900/40 rounded-xl border border-red-500/30"
+                            >
+                                <p className="text-xs uppercase tracking-wider mb-2 flex items-center justify-center gap-2 text-red-400">
+                                    <Skull className="w-4 h-4" />
+                                    Kill Confirmed
+                                </p>
+                                <p className="text-xl font-bold text-red-400 text-center">
+                                    {gameState.players.find(p => p.address.toLowerCase() === nightState.mafiaConsensusTarget?.toLowerCase())?.name || 'Target'} will be eliminated 💀
+                                </p>
+                                <p className="text-red-300/60 text-xs mt-2 text-center">
+                                    All Mafia members agreed on this target.
+                                </p>
+                            </motion.div>
+                        )}
+
+                        {/* No Consensus - targets don't match */}
+                        {nightState.mafiaRevealed > 0 && nightState.mafiaRevealed === nightState.mafiaCommitted && !nightState.mafiaConsensusTarget && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="p-4 bg-yellow-900/30 rounded-xl border border-yellow-500/30"
+                            >
+                                <p className="text-xs uppercase tracking-wider mb-2 flex items-center justify-center gap-2 text-yellow-400">
+                                    <AlertCircle className="w-4 h-4" />
+                                    No Consensus
+                                </p>
+                                <p className="text-xl font-bold text-yellow-400 text-center">
+                                    No one will be killed tonight 🌙
+                                </p>
+                                <p className="text-yellow-300/60 text-xs mt-2 text-center">
+                                    Mafia members chose different targets.
+                                </p>
+                            </motion.div>
                         )}
                     </motion.div>
                 )}
 
-                {/* Mafia Chat - for coordination */}
-                {myRole === Role.MAFIA && (
+                {/* Mafia Chat - only show BEFORE commit (for coordination) */}
+                {myRole === Role.MAFIA && !nightState.hasCommitted && (
                     <MafiaChat
                         myName={myPlayer?.name || 'You'}
                         teammates={nightState.teammates}
@@ -725,17 +803,38 @@ export const NightPhase: React.FC = React.memo(() => {
                                 animate={{ opacity: 1, y: 0 }}
                                 className="text-center py-4"
                             >
-                                <div className="flex items-center justify-center gap-2 text-green-400 mb-2">
+                                {/* Action Completed - Always at top */}
+                                <div className="flex items-center justify-center gap-2 text-green-400 mb-4">
                                     <Check className="w-5 h-5" />
                                     <span className="font-medium">Action Completed!</span>
                                 </div>
 
-                                {/* Detective Investigation Result */}
-                                {myRole === Role.DETECTIVE && nightState.investigationResult && (
+                                {/* Doctor Protection Result */}
+                                {myRole === Role.DOCTOR && nightState.committedTarget && (
                                     <motion.div
                                         initial={{ opacity: 0, scale: 0.9 }}
                                         animate={{ opacity: 1, scale: 1 }}
-                                        className={`mt-4 p-4 rounded-xl border ${nightState.investigationResult === Role.MAFIA
+                                        className="mb-4 p-4 rounded-xl border bg-green-950/30 border-green-500/30"
+                                    >
+                                        <p className="text-xs uppercase tracking-wider mb-2 flex items-center justify-center gap-2 text-green-400">
+                                            <Shield className="w-4 h-4" />
+                                            Protection Active
+                                        </p>
+                                        <p className="text-xl font-bold text-green-400">
+                                            {gameState.players.find(p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase())?.name || 'Target'} is protected 🛡️
+                                        </p>
+                                        <p className="text-green-300/60 text-xs mt-2">
+                                            If the Mafia targets this player, they will survive the night.
+                                        </p>
+                                    </motion.div>
+                                )}
+
+                                {/* Detective Investigation Result */}
+                                {(myRole === Role.DETECTIVE || isTestMode) && nightState.investigationResult !== null && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className={`mb-4 p-4 rounded-xl border ${nightState.investigationResult === Role.MAFIA
                                             ? 'bg-red-950/30 border-red-500/30'
                                             : 'bg-green-950/30 border-green-500/30'
                                             }`}
@@ -745,15 +844,22 @@ export const NightPhase: React.FC = React.memo(() => {
                                             Investigation Result
                                         </p>
                                         <p className={`text-xl font-bold ${nightState.investigationResult === Role.MAFIA ? 'text-red-400' : 'text-green-400'}`}>
-                                            {gameState.players.find(p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase())?.name} is {nightState.investigationResult === Role.MAFIA ? '🔴 EVIL' : '🟢 INNOCENT'}
+                                            {gameState.players.find(p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase())?.name || 'Target'} is {nightState.investigationResult === Role.MAFIA ? '🔴 EVIL' : '🟢 INNOCENT'}
                                         </p>
                                         <p className="text-white/40 text-xs mt-1">
-                                            Role: {nightState.investigationResult}
+                                            {nightState.investigationResult === Role.MAFIA
+                                                ? 'This player is a member of the Mafia!'
+                                                : 'This player is not a member of the Mafia.'}
                                         </p>
+                                        {isTestMode && (
+                                            <div className="mt-2 pt-2 border-t border-white/5 text-[10px] text-white/20">
+                                                Debug: Role={myRole} Res={nightState.investigationResult} Target={nightState.committedTarget?.slice(0, 6)}
+                                            </div>
+                                        )}
                                     </motion.div>
                                 )}
 
-                                <p className="text-white/40 text-sm mt-4">
+                                <p className="text-white/40 text-sm">
                                     Dawn is approaching... Wait for the night to end.
                                 </p>
                             </motion.div>
@@ -769,11 +875,6 @@ export const NightPhase: React.FC = React.memo(() => {
                     handleReveal={handleReveal}
                 />
 
-                {/* AUTOMATION: Night End Hands-Free (Triggered by Timeout) */}
-                <NightPhaseTimer
-                    isProcessing={isProcessing}
-                    isTxPending={isTxPending}
-                />
             </motion.div>
         </div>
     );
@@ -802,10 +903,10 @@ const NightRevealAuto: React.FC<{
  * Automator #2: Monitors phaseDeadline and triggers forcePhaseTimeout when time expires.
  * Displays a countdown timer to the user.
  */
-const NightPhaseTimer: React.FC<{
-    isProcessing: boolean,
-    isTxPending: boolean
-}> = ({ isProcessing, isTxPending }) => {
+export const NightPhaseTimer: React.FC<{
+    isProcessing?: boolean,
+    isTxPending?: boolean
+}> = ({ isProcessing = false, isTxPending = false }) => {
     const { gameState, forcePhaseTimeoutOnChain, currentRoomId, myPlayer } = useGameContext();
     const [timeLeft, setTimeLeft] = useState<number>(0);
     const timeoutStartedRef = useRef(false);
@@ -857,17 +958,15 @@ const NightPhaseTimer: React.FC<{
     if (timeLeft === 0 && gameState.phase !== GamePhase.NIGHT) return null;
 
     return (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-            <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-black/60 backdrop-blur-md border border-red-500/30 px-6 py-2 rounded-full flex items-center gap-3 shadow-[0_0_20px_rgba(239,68,68,0.2)]"
-            >
-                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-red-400 text-xs font-bold tracking-widest uppercase">
-                    Night Ends In: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
-                </span>
-            </motion.div>
-        </div>
+        <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-indigo-950/50 backdrop-blur-md border border-indigo-500/30 px-6 py-2 rounded-full flex items-center gap-3 shadow-lg"
+        >
+            <Clock className="w-5 h-5 text-indigo-400" />
+            <span className="text-lg font-bold font-['Montserrat'] uppercase tracking-widest text-indigo-300">
+                Night Ends In: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+            </span>
+        </motion.div>
     );
 };

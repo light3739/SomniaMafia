@@ -2,7 +2,7 @@
 import React, { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Player, Role } from '../../types';
-import { Shield, Crosshair, Eye, Skull, HelpCircle, User, Users, X } from 'lucide-react';
+import { Skull, HelpCircle, User, X } from 'lucide-react';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { useGameContext } from '../../contexts/GameContext';
 
@@ -53,19 +53,6 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
 
         // Day/Voting phase - brown color
         return 'bg-[#916A47]/50 border border-[#916A47] ring-2 ring-[#916A47] shadow-[0_0_20px_rgba(145,106,71,0.5)]';
-    };
-
-    const getRoleIcon = () => {
-        // Show role if it's me, OR if I'm Mafia and they are Mafia
-        const canSeeRole = isMe || (myRole === Role.MAFIA && player.role === Role.MAFIA);
-        if (!canSeeRole && player.isAlive && player.role === Role.UNKNOWN) return null;
-
-        switch (player.role) {
-            case Role.MAFIA: return <Crosshair className="w-3 h-3 text-red-500" />;
-            case Role.DOCTOR: return <Shield className="w-3 h-3 text-green-500" />;
-            case Role.DETECTIVE: return <Eye className="w-3 h-3 text-blue-500" />;
-            default: return null;
-        }
     };
 
     const isMafiaVisible = isNight && myRole === Role.MAFIA && player.role === Role.MAFIA;
@@ -253,9 +240,6 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                     <span className={`text-sm md:text-base font-bold truncate block max-w-full ${isMafiaVisible ? 'text-red-500' : 'text-[#916A47]'}`}>
                         {player.name}
                     </span>
-                    <div className="shrink-0">
-                        {getRoleIcon()}
-                    </div>
                 </div>
                 <div className="text-[10px] text-white/30 font-mono">
                     {player.address ? `${player.address.slice(0, 4)}...${player.address.slice(-4)}` : '0x...'}
