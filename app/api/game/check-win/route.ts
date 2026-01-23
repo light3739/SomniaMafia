@@ -136,8 +136,6 @@ export async function POST(request: Request) {
             return NextResponse.json({
                 winDetected: true,
                 result,
-                mafiaCount,
-                townCount,
                 formatted: {
                     a: [argv[0], argv[1]],
                     b: [
@@ -152,12 +150,9 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
             winDetected: false,
-            mafiaCount,
-            townCount,
-            missingSecrets,
             message: missingSecrets > 0
-                ? `Waiting for ${missingSecrets} secrets to sync (Alive: M:${mafiaCount} T:${townCount})`
-                : `Game continues (Alive: M:${mafiaCount} T:${townCount})`
+                ? 'Waiting for secrets to sync'
+                : 'Game continues'
         });
 
     } catch (error: any) {
