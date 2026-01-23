@@ -7,23 +7,21 @@ export interface ZKProof {
 
 /**
  * Generates an end-game ZK proof using the server-side API.
- * This offloads heavy computation from the client and ensures reliability.
+ * Uses /api/game/check-win which validates game state and generates proof.
  */
 export const generateEndGameProof = async (
     roomId: bigint,
-    mafiaCount: number,
-    townCount: number
+    _mafiaCount: number,  // Unused - server calculates from secrets
+    _townCount: number    // Unused - server calculates from secrets  
 ): Promise<ZKProof> => {
-    console.log("[ZK] Requesting Server Proof...", { roomId: roomId.toString(), mafiaCount, townCount });
+    console.log("[ZK] Requesting Server Proof via check-win...", { roomId: roomId.toString() });
 
     try {
-        const response = await fetch('/api/zk', {
+        const response = await fetch('/api/game/check-win', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                roomId: roomId.toString(),
-                mafiaCount,
-                townCount
+                roomId: roomId.toString()
             })
         });
 
@@ -32,9 +30,15 @@ export const generateEndGameProof = async (
             throw new Error(errorData.error || 'Proof generation failed');
         }
 
-        const { formatted } = await response.json();
+        const data = await response.json();
 
-        console.log("[ZK] Formatted proof received from server!", formatted);
+        if (!data.winDetected) {
+            throw new Error(data.message || 'No win condition detected');
+        }
+
+        const { formatted } = data;
+
+        console.log("[ZK] Formatted proof received from server!");
 
         if (!formatted || !formatted.a) {
             throw new Error("Invalid proof format received from server");

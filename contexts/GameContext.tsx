@@ -1475,7 +1475,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             } else if (data.message && data.message !== 'Game continues') {
                 // Log diagnostic messages if they aren't just "Game continues"
-                console.log(`[AutoWinCheck] ${data.message} (${data.mafiaCount}M / ${data.townCount}T)`);
+                console.log(`[AutoWinCheck] ${data.message}`);
             }
         } catch (e) {
             console.warn("[AutoWin] Silent check failed:", e);
