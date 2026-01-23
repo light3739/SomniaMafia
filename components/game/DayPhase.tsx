@@ -387,7 +387,7 @@ export const DayPhase: React.FC = React.memo(() => {
                                     onClick={handleVote}
                                     data-custom-sound
                                     isLoading={isProcessing || isTxPending}
-                                    disabled={!selectedTarget || isProcessing || isTxPending}
+                                    disabled={!selectedTarget || isProcessing || isTxPending || voteState.hasVoted}
                                     variant={selectedTarget ? 'primary' : 'outline-gold'}
                                     className="w-full h-[60px] text-lg"
                                 >

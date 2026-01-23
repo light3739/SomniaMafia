@@ -12,6 +12,29 @@ const FLAG_ACTIVE = 2;
 const SPEAKER_DURATION = 60; // seconds per speaker
 
 /**
+ * Deterministic shuffle using roomId as seed (must match frontend GameLayout.tsx logic)
+ */
+function shufflePlayers(players: any[], roomId: string): any[] {
+    const shuffled = [...players];
+    const seed = Number(BigInt(roomId) % 1000000n);
+    let m = shuffled.length, t, i;
+    let s = seed;
+
+    const random = () => {
+        s = (s * 9301 + 49297) % 233280;
+        return s / 233280;
+    };
+
+    while (m) {
+        i = Math.floor(random() * m--);
+        t = shuffled[m];
+        shuffled[m] = shuffled[i];
+        shuffled[i] = t;
+    }
+    return shuffled;
+}
+
+/**
  * GET /api/game/discussion?roomId=...&playerAddress=...
  * Returns current discussion state with calculated time remaining.
  */
@@ -45,7 +68,10 @@ export async function GET(request: Request) {
             args: [BigInt(roomId)],
         });
 
-        const alivePlayers = players.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
+        const alivePlayers = shufflePlayers(
+            players.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0),
+            roomId
+        );
         const totalSpeakers = alivePlayers.length;
 
         // Auto-advance if time expired
@@ -88,7 +114,10 @@ export async function POST(request: Request) {
             args: [BigInt(roomId)],
         });
 
-        const alivePlayers = players.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
+        const alivePlayers = shufflePlayers(
+            players.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0),
+            roomId
+        );
         const totalSpeakers = alivePlayers.length;
 
         if (action === 'start') {
