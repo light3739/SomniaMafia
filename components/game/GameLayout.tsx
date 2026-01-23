@@ -325,7 +325,7 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
 
                 {/* CENTER CONTENT (Day Phase, Vote, Logs etc) */}
                 {/* CENTER CONTENT (Day/Night/Voting) */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[500px] flex items-center justify-center z-10">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] flex items-center justify-center z-10">
                     {/* Day/Voting Phase Content */}
                     {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) && (
                         <div className="w-full h-full">
