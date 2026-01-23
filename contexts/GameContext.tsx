@@ -75,6 +75,7 @@ interface GameContextType {
     canActOnPlayer: (target: Player) => boolean;
     setIsTestMode: (val: boolean) => void;
     isTestMode: boolean;
+    setIsTxPending: (val: boolean) => void;
     playerMarks: Record<string, 'mafia' | 'civilian' | 'question' | null>;
     setPlayerMark: (address: string, mark: 'mafia' | 'civilian' | 'question' | null) => void;
 }
@@ -1068,6 +1069,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
     const getInvestigationResultOnChain = useCallback(async (detective: string, target: string) => {
+        if (isTestMode) {
+            // Mock results for Testing
+            if (target.toLowerCase().includes('4444')) {
+                return { role: Role.MAFIA, isMafia: true };
+            }
+            return { role: Role.CIVILIAN, isMafia: false };
+        }
         if (!currentRoomId) return { role: Role.UNKNOWN, isMafia: false };
 
         try {
@@ -2123,6 +2131,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         selectedTarget, setSelectedTarget,
         isTestMode, setIsTestMode,
+        setIsTxPending,
         playerMarks, setPlayerMark,
         setCurrentRoomId
     }), [

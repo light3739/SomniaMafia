@@ -11,9 +11,10 @@ import { CreateLobby } from './lobby_flow/CreateLobby';
 import { JoinLobby } from './lobby_flow/JoinLobby';
 import { WaitingRoom } from './lobby_flow/WaitingRoom';
 import { GameLayout } from './game/GameLayout';
-import { GamePhase, Role, Player } from '../types';
+import { GamePhase, Role, Player, MafiaChatMessage } from '../types';
 import { VotingAnnouncement } from './game/VotingAnnouncement';
 import { NightAnnouncement } from './game/NightAnnouncement';
+import { MafiaChat } from './game/MafiaChat';
 import { useGameContext } from '../contexts/GameContext';
 
 // Wrapper for testing VotingAnnouncement state
@@ -44,11 +45,11 @@ const NightAnnouncementWrapper = () => {
 const generateMockPlayers = (myRole: Role, myAddress: `0x${string}`): Player[] => {
     return [
         { id: '1', name: 'You (Test)', role: myRole, isAlive: true, address: myAddress, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '2', name: 'Alice', role: Role.CIVILIAN, isAlive: true, address: '0x2222222222222222222222222222222222222222' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '3', name: 'Bob', role: Role.CIVILIAN, isAlive: true, address: '0x3333333333333333333333333333333333333333' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '4', name: 'Charlie', role: Role.MAFIA, isAlive: true, address: '0x4444444444444444444444444444444444444444' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '5', name: 'Diana', role: Role.DOCTOR, isAlive: true, address: '0x5555555555555555555555555555555555555555' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '6', name: 'Eve', role: Role.DETECTIVE, isAlive: true, address: '0x6666666666666666666666666666666666666666' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '2', name: 'Alice (Civilian)', role: Role.CIVILIAN, isAlive: true, address: '0x2222222222222222222222222222222222222222' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: true, hasNightRevealed: true },
+        { id: '3', name: 'Bob (Civilian)', role: Role.CIVILIAN, isAlive: true, address: '0x3333333333333333333333333333333333333333' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '4', name: 'Charlie (Mafia)', role: Role.MAFIA, isAlive: true, address: '0x4444444444444444444444444444444444444444' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: true, hasNightRevealed: true },
+        { id: '5', name: 'Diana (Doctor)', role: Role.DOCTOR, isAlive: true, address: '0x5555555555555555555555555555555555555555' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: true, hasNightRevealed: true },
+        { id: '6', name: 'Eve (Detective)', role: Role.DETECTIVE, isAlive: true, address: '0x6666666666666666666666666666666666666666' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
     ];
 };
 
@@ -73,7 +74,7 @@ const NightPhaseTestWrapper: React.FC<{ testRole: Role }> = ({ testRole }) => {
             revealedCount: 0,
             mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
-            phaseDeadline: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 60,
             winner: null,
             mafiaMessages: []
         });
@@ -123,7 +124,7 @@ const DayPhaseTestWrapper: React.FC = () => {
             revealedCount: 0,
             mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
-            phaseDeadline: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 60,
             winner: null,
             mafiaMessages: []
         });
@@ -154,7 +155,7 @@ const VotingPhaseTestWrapper: React.FC = () => {
             revealedCount: 0,
             mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
-            phaseDeadline: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 60,
             winner: null,
             mafiaMessages: []
         });
@@ -190,6 +191,112 @@ const mockLogs = [
     { id: '1', message: 'Game started', type: 'system', timestamp: Date.now() },
     { id: '2', message: 'Player 1 was killed', type: 'error', timestamp: Date.now() }
 ];
+
+// Mock Mafia Chat messages for testing
+const mockMafiaChatMessages: MafiaChatMessage[] = [
+    { id: '1', sender: '0x1111', playerName: 'Godfather', content: { type: 'suggest', targetName: 'Alice' }, timestamp: Date.now() - 5000 },
+    { id: '2', sender: '0x2222', playerName: 'Hitman', content: { type: 'agree', targetName: 'Alice' }, timestamp: Date.now() - 3000 },
+    { id: '3', sender: '0x3333', playerName: 'Consigliere', content: { type: 'disagree', targetName: 'Alice' }, timestamp: Date.now() - 1000 },
+];
+
+// Test wrapper for MafiaChat component
+const MafiaChatTestWrapper: React.FC = () => {
+    const [messages, setMessages] = useState<MafiaChatMessage[]>(mockMafiaChatMessages);
+    const [selectedTarget, setSelectedTarget] = useState<`0x${string}` | null>(null);
+
+    const mockPlayers: Player[] = [
+        { id: '1', name: 'Alice', role: Role.CIVILIAN, isAlive: true, address: '0xAAAA' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '2', name: 'Bob', role: Role.DOCTOR, isAlive: true, address: '0xBBBB' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '3', name: 'Charlie', role: Role.DETECTIVE, isAlive: true, address: '0xCCCC' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+    ];
+
+    const handleSendMessage = async (content: MafiaChatMessage['content']) => {
+        const newMsg: MafiaChatMessage = {
+            id: Date.now().toString(),
+            sender: '0x1111',
+            playerName: 'You (Godfather)',
+            content,
+            timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, newMsg]);
+    };
+
+    return (
+        <div className="w-[400px]">
+            <MafiaChat
+                myName="You (Godfather)"
+                teammates={['0x2222' as `0x${string}`, '0x3333' as `0x${string}`]}
+                players={mockPlayers}
+                selectedTarget={selectedTarget}
+                onSuggestTarget={(addr) => setSelectedTarget(addr)}
+                messages={messages}
+                onSendMessage={handleSendMessage}
+            />
+            <div className="mt-4 flex gap-2 flex-wrap">
+                {mockPlayers.map(p => (
+                    <button
+                        key={p.id}
+                        onClick={() => setSelectedTarget(p.address)}
+                        className={`px-3 py-1 rounded text-sm ${selectedTarget === p.address ? 'bg-red-600 text-white' : 'bg-white/10 text-white/70'}`}
+                    >
+                        {p.name}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// Test wrapper for Mafia Consensus panel
+const MafiaConsensusTestWrapper: React.FC = () => {
+    const [committed, setCommitted] = useState(2);
+    const [revealed, setRevealed] = useState(1);
+    const [consensusTarget, setConsensusTarget] = useState<string | null>('Alice');
+
+    return (
+        <div className="w-[400px] space-y-4">
+            {/* Mafia Consensus Panel (matches NightPhase.tsx styling) */}
+            <div className="p-4 bg-red-950/20 border border-red-500/20 rounded-2xl">
+                <div className="flex items-center gap-2 mb-2">
+                    <span className="text-red-400">👥</span>
+                    <span className="text-red-300 text-sm font-medium">Mafia Consensus</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-red-200/60">Committed: {committed}</span>
+                    <span className="text-red-200/60">Revealed: {revealed}</span>
+                </div>
+                {consensusTarget && (
+                    <div className="mt-2 p-2 bg-red-900/30 rounded-lg">
+                        <span className="text-xs text-red-300">Consensus Target: </span>
+                        <span className="text-red-200 font-medium">{consensusTarget}</span>
+                    </div>
+                )}
+                {revealed === committed && revealed > 0 && !consensusTarget && (
+                    <div className="mt-2 p-2 bg-yellow-900/30 rounded-lg">
+                        <span className="text-xs text-yellow-300">⚠️ No consensus - targets don't match!</span>
+                    </div>
+                )}
+            </div>
+
+            {/* Controls for testing */}
+            <div className="p-3 bg-white/5 rounded-lg space-y-2">
+                <p className="text-white/50 text-xs mb-2">Test Controls:</p>
+                <div className="flex gap-2">
+                    <button onClick={() => setCommitted(c => Math.max(0, c - 1))} className="px-2 py-1 bg-white/10 text-white rounded text-xs">- Committed</button>
+                    <button onClick={() => setCommitted(c => c + 1)} className="px-2 py-1 bg-white/10 text-white rounded text-xs">+ Committed</button>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={() => setRevealed(r => Math.max(0, r - 1))} className="px-2 py-1 bg-white/10 text-white rounded text-xs">- Revealed</button>
+                    <button onClick={() => setRevealed(r => r + 1)} className="px-2 py-1 bg-white/10 text-white rounded text-xs">+ Revealed</button>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={() => setConsensusTarget('Alice')} className="px-2 py-1 bg-green-900/50 text-green-300 rounded text-xs">Set Target: Alice</button>
+                    <button onClick={() => setConsensusTarget(null)} className="px-2 py-1 bg-yellow-900/50 text-yellow-300 rounded text-xs">No Consensus</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 type ComponentEntry = {
     name: string;
@@ -232,14 +339,56 @@ export // Wrapper for testing phase timeout transition
         return <GameLayout />;
     };
 
+// Wrapper for testing investigation results directly
+const InvestigationResultTestWrapper: React.FC<{ isMafia: boolean }> = ({ isMafia }) => {
+    const { setGameState, setIsTestMode } = useGameContext();
+    const [isReady, setIsReady] = useState(false);
+
+    useEffect(() => {
+        console.log('[InvestigationTest] Initializing test mode...');
+        setIsTestMode(true);
+        setGameState({
+            phase: GamePhase.NIGHT,
+            dayCount: 1,
+            myPlayerId: TEST_ADDRESS,
+            players: generateMockPlayers(Role.DETECTIVE, TEST_ADDRESS),
+            logs: [],
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 60,
+            winner: null,
+            mafiaMessages: []
+        });
+        setTimeout(() => setIsReady(true), 100);
+    }, [setGameState, isMafia, setIsTestMode]);
+
+    if (!isReady) return null;
+
+    const targetAddr = isMafia
+        ? '0x4444444444444444444444444444444444444444'
+        : '0x2222222222222222222222222222222222222222';
+
+    const initialNightState = {
+        hasCommitted: true,
+        hasRevealed: true,
+        salt: 'test-salt',
+        investigationResult: isMafia ? Role.MAFIA : Role.CIVILIAN,
+        committedTarget: targetAddr
+    };
+
+    return <GameLayout initialNightState={initialNightState} />;
+};
+
 const TestPage: React.FC = () => {
-    const { setIsTestMode } = useGameContext();
+    const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
 
     useEffect(() => {
         setIsTestMode(true);
+        setIsTxPending(false); // Reset any pending TX state
         return () => setIsTestMode(false);
-    }, [setIsTestMode]);
+    }, [setIsTestMode, setIsTxPending]);
 
     const components: ComponentEntry[] = [
         // UI
@@ -253,11 +402,15 @@ const TestPage: React.FC = () => {
         { name: 'SystemLog', group: 'Game Components', component: <div className="h-60"><SystemLog logs={mockLogs as any} /></div> },
         { name: 'VotingAnnouncement', group: 'Game Components', component: <VotingAnnouncementWrapper /> },
         { name: 'NightAnnouncement', group: 'Game Components', component: <NightAnnouncementWrapper /> },
+        { name: 'Mafia Chat', group: 'Game Components', component: <MafiaChatTestWrapper /> },
+        { name: 'Mafia Consensus', group: 'Game Components', component: <MafiaConsensusTestWrapper /> },
 
         // Game Phases (Test different phases and roles)
         { name: 'Night - Mafia', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.MAFIA} /> },
         { name: 'Night - Doctor', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.DOCTOR} /> },
         { name: 'Night - Detective', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.DETECTIVE} /> },
+        { name: 'Detective Result (EVIL)', group: 'Game Phases', component: <InvestigationResultTestWrapper isMafia={true} /> },
+        { name: 'Detective Result (INNOCENT)', group: 'Game Phases', component: <InvestigationResultTestWrapper isMafia={false} /> },
         { name: 'Night - Timeout', group: 'Game Phases', component: <TimeoutTestWrapper /> },
         { name: 'Night - Civilian', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.CIVILIAN} /> },
         { name: 'Day Phase', group: 'Game Phases', component: <DayPhaseTestWrapper /> },
@@ -333,3 +486,5 @@ const TestPage: React.FC = () => {
         </div>
     );
 };
+
+export default TestPage;
