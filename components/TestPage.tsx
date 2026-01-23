@@ -197,7 +197,42 @@ type ComponentEntry = {
     component: React.ReactNode;
 };
 
-export const TestPage: React.FC = () => {
+export // Wrapper for testing phase timeout transition
+    const TimeoutTestWrapper: React.FC = () => {
+        const { setGameState } = useGameContext();
+        const [isReady, setIsReady] = useState(false);
+
+        useEffect(() => {
+            // Now + 10 seconds
+            const deadline = Math.floor(Date.now() / 1000) + 10;
+
+            setGameState({
+                phase: GamePhase.NIGHT,
+                dayCount: 1,
+                myPlayerId: TEST_ADDRESS,
+                players: generateMockPlayers(Role.MAFIA, TEST_ADDRESS),
+                logs: [
+                    { id: '1', timestamp: '12:00:00', message: 'Night falls (Timeout Test Mode)', type: 'phase' },
+                    { id: '2', timestamp: '12:00:01', message: `Wait 10 seconds for auto-transition`, type: 'info' }
+                ],
+                revealedCount: 0,
+                mafiaCommittedCount: 0,
+                mafiaRevealedCount: 0,
+                phaseDeadline: deadline,
+                winner: null,
+                mafiaMessages: []
+            });
+            setTimeout(() => setIsReady(true), 50);
+        }, [setGameState]);
+
+        if (!isReady) {
+            return <div className="w-full h-full flex items-center justify-center text-white">Loading Timeout Test...</div>;
+        }
+
+        return <GameLayout />;
+    };
+
+const TestPage: React.FC = () => {
     const { setIsTestMode } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
 
@@ -223,6 +258,7 @@ export const TestPage: React.FC = () => {
         { name: 'Night - Mafia', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.MAFIA} /> },
         { name: 'Night - Doctor', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.DOCTOR} /> },
         { name: 'Night - Detective', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.DETECTIVE} /> },
+        { name: 'Night - Timeout', group: 'Game Phases', component: <TimeoutTestWrapper /> },
         { name: 'Night - Civilian', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.CIVILIAN} /> },
         { name: 'Day Phase', group: 'Game Phases', component: <DayPhaseTestWrapper /> },
         { name: 'Voting Phase', group: 'Game Phases', component: <VotingPhaseTestWrapper /> },

@@ -1,7 +1,7 @@
 const { createPublicClient, createWalletClient, http, parseEther, keccak256, encodeAbiParameters, parseAbiParameters } = require('viem');
 const { privateKeyToAccount, generatePrivateKey } = require('viem/accounts');
 
-const MAFIA_CONTRACT_ADDRESS = "0xb58130d6183844b3bfb28ff1ffc96825eee82be3";
+const MAFIA_CONTRACT_ADDRESS = "0xa962880aceeaf638c597d78d324dab6fab5981b1";
 const somniaChain = {
     id: 50312,
     name: 'Somnia Testnet',
