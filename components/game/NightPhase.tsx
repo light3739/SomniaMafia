@@ -816,9 +816,10 @@ const NightEndAutomator: React.FC<{
         }
 
         // Logic: Who is expected to act tonight?
-        const alivePlayers = gameState.players.filter(p => p.isAlive);
-        const expectedTownReveals = alivePlayers.filter(p => [Role.DETECTIVE, Role.DOCTOR].includes(p.role)).length;
-        const expectedMafiaReveals = alivePlayers.filter(p => p.role === Role.MAFIA).length;
+        // We now get these counts securely from the backend (night-summary API)
+        // because individual players might not know who has which role.
+        const expectedTownReveals = gameState.expectedTownReveals || 0;
+        const expectedMafiaReveals = gameState.expectedMafiaReveals || 0;
 
         // Current status from contract (synced via GameContext)
         const currentTownRevealed = gameState.revealedCount || 0;
