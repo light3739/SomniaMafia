@@ -2031,6 +2031,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         if (gameState.phase === GamePhase.NIGHT) {
+            // Block everything if already committed
+            if (myPlayer?.hasNightCommitted) return false;
+
             // Only roles with night abilities can act
             const myRole = myPlayer?.role;
             if (myRole === Role.MAFIA || myRole === Role.DETECTIVE || myRole === Role.DOCTOR) {
