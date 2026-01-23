@@ -76,7 +76,7 @@ export const NightPhase: React.FC = React.memo(() => {
         commitMafiaTargetOnChain,
         revealMafiaTargetOnChain,
         getInvestigationResultOnChain,
-        endNightOnChain,
+        forcePhaseTimeoutOnChain,
         addLog,
         isTxPending,
         selectedTarget,
@@ -528,6 +528,9 @@ export const NightPhase: React.FC = React.memo(() => {
                         <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
                         <span className="text-sm">Others are making their moves...</span>
                     </div>
+
+                    {/* TIMER for civilians too */}
+                    <NightPhaseTimer isProcessing={false} isTxPending={isTxPending} />
                 </motion.div>
             </div>
         );
@@ -635,7 +638,6 @@ export const NightPhase: React.FC = React.memo(() => {
                 )}
 
                 {/* Selected Target Display */}
-                {/* Selected Target Display - Only show when selected, no bulky placeholder */}
                 {selectedTarget && selectedPlayer && (
                     <motion.div
                         initial={{ scale: 0.9, opacity: 0 }}
@@ -752,7 +754,7 @@ export const NightPhase: React.FC = React.memo(() => {
                                 )}
 
                                 <p className="text-white/40 text-sm mt-4">
-                                    Night will end automatically when all reveal
+                                    Dawn is approaching... Wait for the night to end.
                                 </p>
                             </motion.div>
                         )}
@@ -767,9 +769,8 @@ export const NightPhase: React.FC = React.memo(() => {
                     handleReveal={handleReveal}
                 />
 
-                {/* AUTOMATION: Night End Hands-Free (Explicitly called when all revealed) */}
-                <NightEndAutomator
-                    nightState={nightState}
+                {/* AUTOMATION: Night End Hands-Free (Triggered by Timeout) */}
+                <NightPhaseTimer
                     isProcessing={isProcessing}
                     isTxPending={isTxPending}
                 />
@@ -798,75 +799,64 @@ const NightRevealAuto: React.FC<{
 };
 
 /**
- * Automator #2: Monitors ALL players and triggers endNight when everyone is ready.
- * Only the Host (or the last person to reveal) calls endNight.
+ * Automator #2: Monitors phaseDeadline and triggers forcePhaseTimeout when time expires.
+ * Displays a countdown timer to the user.
  */
-const NightEndAutomator: React.FC<{
-    nightState: NightState,
+const NightPhaseTimer: React.FC<{
     isProcessing: boolean,
     isTxPending: boolean
-}> = ({ nightState, isProcessing, isTxPending }) => {
-    const { gameState, endNightOnChain, currentRoomId, myPlayer, addLog } = useGameContext();
-    const endNightStartedRef = useRef(false);
+}> = ({ isProcessing, isTxPending }) => {
+    const { gameState, forcePhaseTimeoutOnChain, currentRoomId, myPlayer } = useGameContext();
+    const [timeLeft, setTimeLeft] = useState<number>(0);
+    const timeoutStartedRef = useRef(false);
 
     useEffect(() => {
-        if (!currentRoomId || gameState.phase !== GamePhase.NIGHT) {
-            endNightStartedRef.current = false;
+        if (!currentRoomId || gameState.phase !== GamePhase.NIGHT || gameState.phaseDeadline === 0) {
+            setTimeLeft(0);
+            timeoutStartedRef.current = false;
             return;
         }
 
-        // Logic: Calculate expected actions locally (SECURE)
-        // 1. Get initial board composition (known by everyone in Mafia)
-        const totalPlayers = gameState.players.length;
-        const initialMafiaCount = Math.max(1, Math.floor(totalPlayers / 4));
-        const initialDoctorCount = totalPlayers >= 4 ? 1 : 0;
-        const initialDetectiveCount = totalPlayers >= 5 ? 1 : 0;
+        const tick = () => {
+            const now = Math.floor(Date.now() / 1000);
+            const remaining = Math.max(0, gameState.phaseDeadline - now);
+            setTimeLeft(remaining);
 
-        // 2. Subtract roles of players who died and REVEALED their roles
-        const revealedDeadMafia = gameState.deadRevealedRoles.filter(r => r.role === Role.MAFIA).length;
-        const revealedDeadDoctor = gameState.deadRevealedRoles.filter(r => r.role === Role.DOCTOR).length;
-        const revealedDeadDetective = gameState.deadRevealedRoles.filter(r => r.role === Role.DETECTIVE).length;
+            // Auto-trigger fallback: if time expired and no one has ended the night yet
+            if (remaining === 0 && !isProcessing && !isTxPending && !timeoutStartedRef.current) {
+                // Anyone can trigger timeout, but we let the Host be primary to reduce noise
+                const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
 
-        // 3. Expected = Initial - Revealed Dead
-        // Note: For mafia, if at least one mafia is alive, they must act (consensus)
-        // In this architecture, we wait for ALL alive mafia to confirm consensus targets.
-        // If the contract confirmedCount/revealedCount handles this, we map to it.
-        const expectedMafiaReveals = initialMafiaCount - revealedDeadMafia;
-        const expectedTownReveals = (initialDoctorCount - revealedDeadDoctor) + (initialDetectiveCount - revealedDeadDetective);
-
-        // Current status from contract (synced via GameContext)
-        const currentTownRevealed = gameState.revealedCount || 0;
-        const currentMafiaRevealed = gameState.mafiaRevealedCount || 0;
-
-        // Condition for ending night: everyone who MUST act has REVEALED
-        const townReady = currentTownRevealed >= expectedTownReveals;
-        const mafiaReady = currentMafiaRevealed >= expectedMafiaReveals;
-
-        if (townReady && mafiaReady && (expectedTownReveals > 0 || expectedMafiaReveals > 0) && !isProcessing && !isTxPending && !endNightStartedRef.current) {
-
-            // Designated Submitter: Either the Host or the last person who revealed
-            const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
-            const iAmActiveRole = [Role.MAFIA, Role.DOCTOR, Role.DETECTIVE].includes(myPlayer?.role || Role.UNKNOWN);
-
-            if (isHost || (iAmActiveRole && nightState.hasRevealed)) {
-                console.log(`[NightEndAutomator] All actions revealed (Town: ${currentTownRevealed}/${expectedTownReveals}, Mafia: ${currentMafiaRevealed}/${expectedMafiaReveals}). Ending night...`);
-                endNightStartedRef.current = true;
-
-                // Add a small delay to ensure block propagation
-                const timer = setTimeout(async () => {
-                    try {
-                        await endNightOnChain();
-                        addLog("Dawn is coming...", "success");
-                    } catch (e) {
-                        console.error("Auto endNight failed:", e);
-                        endNightStartedRef.current = false;
-                    }
-                }, 2000);
-
-                return () => clearTimeout(timer);
+                if (isHost) {
+                    console.log(`[NightPhaseTimer] Time expired. Triggering forcePhaseTimeout...`);
+                    timeoutStartedRef.current = true;
+                    forcePhaseTimeoutOnChain().catch(e => {
+                        console.error("Auto timeout failed:", e);
+                        timeoutStartedRef.current = false;
+                    });
+                }
             }
-        }
-    }, [gameState.revealedCount, gameState.mafiaRevealedCount, gameState.phase, gameState.players, currentRoomId, isProcessing, isTxPending, myPlayer, endNightOnChain, addLog, nightState.hasRevealed]);
+        };
 
-    return null;
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [gameState.phaseDeadline, gameState.phase, currentRoomId, isProcessing, isTxPending, myPlayer, forcePhaseTimeoutOnChain]);
+
+    if (timeLeft === 0 && gameState.phase !== GamePhase.NIGHT) return null;
+
+    return (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+            <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-black/60 backdrop-blur-md border border-red-500/30 px-6 py-2 rounded-full flex items-center gap-3 shadow-[0_0_20px_rgba(239,68,68,0.2)]"
+            >
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-red-400 text-xs font-bold tracking-widest uppercase">
+                    Night Ends In: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+                </span>
+            </motion.div>
+        </div>
+    );
 };
