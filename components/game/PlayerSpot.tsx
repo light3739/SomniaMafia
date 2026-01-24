@@ -232,12 +232,11 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                 </div>
 
                 {/* Online/Offline Status Dot */}
-                {player.isAlive && (
-                    <div className={`
-                        absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-[#19130D]
-                        ${player.status === 'connected' ? 'bg-green-500' : 'bg-red-500'}
-                    `}></div>
-                )}
+                {/* Online/Offline Status Dot - Green for Alive/Connected, Red for Dead/Kicked */}
+                <div className={`
+                    absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-[#19130D]
+                    ${player.status === 'connected' && player.isAlive ? 'bg-green-500' : 'bg-red-500'}
+                `}></div>
             </div>
 
             {/* Text Info */}
