@@ -673,7 +673,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 value: parseEther('0.1'),
                 gas: gasLimit,
             });
-            addLog("Joining with auto-sign...", "info");
+            // addLog("Joining with auto-sign...", "info");
             await publicClient?.waitForTransactionReceipt({ hash });
 
             // 5. Mark session as registered
@@ -681,7 +681,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             setCurrentRoomId(BigInt(roomId));
             await refreshPlayersList(BigInt(roomId));
-            addLog("Joined with auto-sign enabled!", "success");
+            // addLog("Joined with auto-sign enabled!", "success");
             setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
@@ -1348,7 +1348,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         setIsTxPending(true);
-        addLog("Generating ZK Proof of Victory...", "info");
+        addLog("Verifying victory conditions...", "info");
 
         try {
             // 1. Local counts
@@ -1415,7 +1415,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const hash = await sendGameTransaction('endGameZK', args as any, useSessionKey);
 
             const isTownWin = zkData.inputs[0] === 1n;
-            addLog(`ZK Proof submitted! Winner: ${isTownWin ? "TOWN" : "MAFIA"}`, "success");
+            // addLog(`ZK Proof submitted! Winner: ${isTownWin ? "TOWN" : "MAFIA"}`, "success"); // Removed tech log
 
             await publicClient.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
@@ -1715,7 +1715,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             logs.forEach((log: any) => {
                 if (BigInt(log.args.roomId) === roomId) {
-                    addLog(`${log.args.nickname} joined!`, "info");
+                    // addLog(`${log.args.nickname} joined!`, "info");
                     refreshPlayersList(roomId);
                 }
             });
@@ -1731,7 +1731,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!roomId) return;
 
             if (BigInt(logs[0].args.roomId) === roomId) {
-                addLog("Shuffle started!", "phase");
+                // addLog("Shuffle started!", "phase");
                 refreshPlayersList(roomId);
             }
         }
@@ -1761,7 +1761,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!roomId) return;
 
             if (BigInt(logs[0].args.roomId) === roomId) {
-                addLog("📢 Voting Phase has started! Choose who to eliminate.", "phase");
+                addLog("Voting Phase Started", "phase");
                 refreshPlayersList(roomId);
             }
         }
@@ -1776,7 +1776,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!roomId) return;
 
             if (BigInt(logs[0].args.roomId) === roomId) {
-                addLog("Night falls...", "phase");
+                addLog("Night started", "phase");
                 refreshPlayersList(roomId);
             }
         }
@@ -1876,7 +1876,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const player = logs[0].args.player;
-                addLog(`${player.slice(0, 6)}... confirmed role`, "info");
+                // addLog(`${player.slice(0, 6)}... confirmed role`, "info");
                 refreshPlayersList(roomId);
                 // Trigger auto-win check because this might be the last reveal needed
                 triggerAutoWinCheck();
@@ -1893,7 +1893,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!roomId) return;
 
             if (BigInt(logs[0].args.roomId) === roomId) {
-                addLog("All roles confirmed! Day begins...", "phase");
+                // addLog("All roles confirmed! Day begins...", "phase");
                 refreshPlayersList(roomId);
             }
         }
@@ -1908,7 +1908,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!roomId) return;
 
             if (BigInt(logs[0].args.roomId) === roomId) {
-                addLog("All players shared keys! Decrypt your role.", "success");
+                // addLog("All players shared keys! Decrypt your role.", "success");
                 refreshPlayersList(roomId);
             }
         }
@@ -1925,7 +1925,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const player = logs[0].args.byPlayer;
                 const nextIndex = Number(logs[0].args.nextIndex);
-                addLog(`${player.slice(0, 6)}... shuffled the deck`, "info");
+                // addLog(`${player.slice(0, 6)}... shuffled the deck`, "info");
                 refreshPlayersList(roomId);
             }
         }
@@ -1943,7 +1943,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const from = logs[0].args.from;
                 const fromPlayer = gameState.players.find(p => p.address.toLowerCase() === from.toLowerCase());
                 const name = fromPlayer ? (fromPlayer.name || `Player ${gameState.players.indexOf(fromPlayer) + 1}`) : from.slice(0, 6);
-                addLog(`🔑 ${name} shared decryption keys`, "success");
+                // addLog(`🔑 ${name} shared decryption keys`, "success");
             }
         }
     });
@@ -1963,7 +1963,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const targetPlayer = gameState.players.find(p => p.address.toLowerCase() === target.toLowerCase());
                 const voterLabel = voterPlayer ? (voterPlayer.name || `Player ${gameState.players.indexOf(voterPlayer) + 1}`) : voter.slice(0, 6);
                 const targetLabel = targetPlayer ? (targetPlayer.name || `Player ${gameState.players.indexOf(targetPlayer) + 1}`) : target.slice(0, 6);
-                addLog(`🗳️ ${voterLabel} cast a vote for ${targetLabel}`, "warning");
+                addLog(`${voterLabel} voted for ${targetLabel}`, "warning");
             }
         }
     });
@@ -1982,9 +1982,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (eliminated !== '0x0000000000000000000000000000000000000000') {
                     const elPlayer = gameState.players.find(p => p.address.toLowerCase() === eliminated.toLowerCase());
                     const name = elPlayer ? (elPlayer.name || `Player ${gameState.players.indexOf(elPlayer) + 1}`) : eliminated.slice(0, 6);
-                    addLog(`💀 Execution: ${name} was eliminated with ${voteCount} votes!`, "danger");
+                    addLog(`Execution: ${name} was eliminated with ${voteCount} votes!`, "danger");
                 } else {
-                    addLog("⚖️ No one was eliminated - no majority reached.", "warning");
+                    addLog("No one was eliminated - no majority reached.", "warning");
                 }
                 refreshPlayersList(roomId);
                 // Trigger auto-win check because an elimination might end the game
@@ -2006,11 +2006,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const healed = logs[0].args.healed;
                 if (killed !== '0x0000000000000000000000000000000000000000') {
                     if (killed === healed) {
-                        addLog(`🛡️ Someone was saved by the doctor!`, "success");
+                        // addLog(`🛡️ Someone was saved by the doctor!`, "success");
                     } else {
                         const kPlayer = gameState.players.find(p => p.address.toLowerCase() === killed.toLowerCase());
                         const name = kPlayer ? (kPlayer.name || `Player ${gameState.players.indexOf(kPlayer) + 1}`) : killed.slice(0, 6);
-                        addLog(`🩸 Tragedy: ${name} was killed during the night!`, "danger");
+                        addLog(`Tragedy: ${name} was killed during the night!`, "danger");
                     }
                 } else {
                     addLog("The night passes peacefully...", "info");
@@ -2034,13 +2034,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const player = logs[0].args.player;
                 const p = gameState.players.find(pl => pl.address.toLowerCase() === player.toLowerCase());
                 const name = p ? (p.name || `Player ${gameState.players.indexOf(p) + 1}`) : player.slice(0, 6);
-                addLog(`🌙 ${name} committed a night action`, "info");
+                // addLog(`🌙 ${name} committed a night action`, "info");
 
                 // Play shot sound
                 try {
                     const audio = new Audio(shotSound);
                     audio.volume = 0.2;
-                    audio.play().catch(e => console.error("Audio play failed:", e));
+                    // audio.play().catch(e => console.error("Audio play failed:", e));
                 } catch (e) {
                     console.error("Audio error:", e);
                 }
