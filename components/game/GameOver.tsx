@@ -50,7 +50,7 @@ const contractRoleToRole = (contractRole: number): Role => {
 
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
-export const GameOver: React.FC = () => {
+export const GameOver: React.FC = React.memo(() => {
     const { gameState, myPlayer, currentRoomId, setGameState, isTestMode } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
@@ -290,7 +290,7 @@ export const GameOver: React.FC = () => {
         (winner === 'MAFIA' && myRole === Role.MAFIA) ||
         (winner === 'TOWN' && (myRole === Role.CIVILIAN || myRole === Role.DOCTOR || myRole === Role.DETECTIVE));
 
-    const winnerConfig = {
+    const winnerConfig = React.useMemo(() => ({
         'MAFIA': {
             title: 'Mafia Wins!',
             description: 'The mafia has taken control of the town...',
@@ -312,21 +312,21 @@ export const GameOver: React.FC = () => {
             bg: 'from-gray-950/50 to-gray-900/30 border-gray-500/30',
             trophy: 'text-gray-500'
         }
-    };
+    }), []);
 
     const config = winnerConfig[winner];
 
-    const handlePlayAgain = () => {
+    const handlePlayAgain = useCallback(() => {
         stopVictoryMusic();
         sessionStorage.removeItem('currentRoomId');
         router.push('/setup');
-    };
+    }, [stopVictoryMusic, router]);
 
-    const handleHome = () => {
+    const handleHome = useCallback(() => {
         stopVictoryMusic();
         sessionStorage.removeItem('currentRoomId');
         router.push('/');
-    };
+    }, [stopVictoryMusic, router]);
 
     return (
         <motion.div
@@ -497,4 +497,6 @@ export const GameOver: React.FC = () => {
             </div>
         </motion.div>
     );
-};
+});
+
+GameOver.displayName = 'GameOver';
