@@ -886,7 +886,7 @@ export const NightPhaseTimer: React.FC<{ isTxPending?: boolean }> = React.memo((
         <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/40 border border-white/10 backdrop-blur-md shadow-lg"
+            className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/40 border border-white/10 backdrop-blur-sm shadow-lg"
         >
             <Clock className={`w-3.5 h-3.5 ${timeLeft < 20 ? 'text-red-400 animate-pulse' : 'text-white/40'}`} />
             <span className={`font-mono text-xs tracking-wider ${timeLeft < 20 ? 'text-red-400' : 'text-white/70'}`}>
