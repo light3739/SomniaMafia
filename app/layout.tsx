@@ -63,7 +63,7 @@ export default function RootLayout({
           <SoundEffects />
           <div className="fixed inset-0 z-0">
             <Image
-              src="/assets/lobby_background.webp"
+              src="/assets/mafia1.jpg"
               alt="Lobby Background"
               fill
               priority
