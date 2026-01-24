@@ -160,7 +160,7 @@ export class ServerStore {
      * Advance discussion state. Handles transitions between phases.
      * Flow: initial_delay -> speaking -> speaking -> ... -> finished
      */
-    static async advanceSpeaker(roomId: string, dayCount: number, totalAlivePlayers: number): Promise<DiscussionState | null> {
+    static async advanceSpeaker(roomId: string, dayCount: number, totalAlivePlayers: number, force: boolean = false): Promise<DiscussionState | null> {
         const state = await this.getDiscussionState(roomId, dayCount);
         if (!state || state.finished) return state;
 
@@ -179,6 +179,13 @@ export class ServerStore {
 
         // Handle speaking -> next speaker or finished
         if (state.phase === 'speaking') {
+            // Safety Check: Don't auto-advance if speaking for less than 1.5 seconds (prevents glitches)
+            const elapsed = (Date.now() - state.speakerStartTime) / 1000;
+            if (!force && elapsed < 1.5) {
+                console.warn(`[ServerStore] Ignored premature advance (elapsed: ${elapsed.toFixed(2)}s)`);
+                return state;
+            }
+
             const nextIndex = state.currentSpeakerIndex + 1;
 
             if (nextIndex >= totalAlivePlayers) {
