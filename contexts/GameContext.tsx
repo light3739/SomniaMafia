@@ -482,6 +482,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     // FLAG_HAS_COMMITTED = 8, FLAG_HAS_REVEALED = 16, FLAG_HAS_SHARED_KEYS = 32,
                     // FLAG_DECK_COMMITTED = 64, FLAG_CLAIMED_MAFIA = 128
 
+                    // Preserve existing avatar or use uploaded one for current player
+                    const existingPlayer = gameState.players.find(
+                        ep => ep.address.toLowerCase() === p.wallet.toLowerCase()
+                    );
+                    const isMe = p.wallet.toLowerCase() === address?.toLowerCase();
+                    // Priority: 1. Existing avatar, 2. Uploaded avatar (for me), 3. Picsum fallback
+                    const playerAvatar = existingPlayer?.avatarUrl ||
+                        (isMe && avatarUrl) ||
+                        `https://picsum.photos/seed/${p.wallet}/200`;
+
                     return {
                         id: p.wallet,
                         name: p.nickname,
@@ -493,7 +503,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         hasVoted: (flags & 4) !== 0,           // Voting phase
                         hasNightCommitted: (flags & 8) !== 0,  // Night phase commit
                         hasNightRevealed: (flags & 16) !== 0,  // Night phase reveal
-                        avatarUrl: `https://picsum.photos/seed/${p.wallet}/200`,
+                        avatarUrl: playerAvatar,
                         votesReceived: 0,
                         status: (flags & FLAG_ACTIVE) !== 0 ? 'connected' : 'slashed'
                     };
