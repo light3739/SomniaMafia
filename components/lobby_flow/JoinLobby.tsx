@@ -63,23 +63,31 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     }) as bigint;
 
                     const start = nextId > 10n ? nextId - 10n : 1n;
+                    const fetchPromises = [];
 
                     for (let i = nextId - 1n; i >= start; i--) {
-                        const roomData = await publicClient.readContract({
-                            address: MAFIA_CONTRACT_ADDRESS,
-                            abi: MAFIA_ABI,
-                            functionName: 'rooms',
-                            args: [i],
-                        }) as any;
+                        fetchPromises.push(
+                            publicClient.readContract({
+                                address: MAFIA_CONTRACT_ADDRESS,
+                                abi: MAFIA_ABI,
+                                functionName: 'rooms',
+                                args: [i],
+                            }).then(data => ({ id: i, data: data as any }))
+                        );
+                    }
 
-                        const phase = Number(roomData[3]);
+                    const results = await Promise.all(fetchPromises);
+
+                    // Process results in order
+                    for (const { id, data } of results) {
+                        const phase = Number(data[3]);
                         if (phase === 0) {
                             roomList.push({
-                                id: Number(roomData[0]),
-                                host: roomData[1],
-                                name: roomData[2],
-                                players: Number(roomData[5]),
-                                max: Number(roomData[4])
+                                id: Number(data[0]),
+                                host: data[1],
+                                name: data[2],
+                                players: Number(data[5]),
+                                max: Number(data[4])
                             });
                         }
                     }
