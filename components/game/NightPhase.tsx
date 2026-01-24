@@ -542,27 +542,23 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         }
     }, [nightState.committedTarget, nightState.salt, nightState.hasRevealed, nightState.commitHash, myRole, roleConfig.action, revealMafiaTargetOnChain, revealNightActionOnChain, NIGHT_COMMIT_KEY, getInvestigationResultOnChain, address, gameState.players, addLog, setSelectedTarget, isTestMode, playApproveSound, playVoteSound, setGameState, nightState.investigationResult]);
 
-    // Night Reveal Auto Component (Internal for automation)
-    const NightRevealAuto: React.FC<{
-        nightState: NightState;
-        isProcessing: boolean;
-        isTxPending: boolean;
-        handleReveal: () => Promise<void>;
-    }> = ({ nightState, isProcessing, isTxPending, handleReveal }) => {
-        useEffect(() => {
-            if (nightState.hasCommitted && !nightState.hasRevealed && !isProcessing && !isTxPending) {
-                const checkReady = async () => {
-                    const saved = localStorage.getItem(NIGHT_COMMIT_KEY);
-                    if (saved) {
-                        console.log("[NightPhase] Auto-revealing action...");
-                        handleReveal();
-                    }
-                };
-                checkReady();
-            }
-        }, [nightState.hasCommitted, nightState.hasRevealed, isProcessing, isTxPending, handleReveal]);
-        return null;
-    };
+    // Auto-reveal effect (formerly NightRevealAuto)
+    useEffect(() => {
+        if (nightState.hasCommitted && !nightState.hasRevealed && !isProcessing && !isTxPending) {
+            const checkReady = async () => {
+                const saved = localStorage.getItem(NIGHT_COMMIT_KEY);
+                if (saved) {
+                    console.log("[NightPhase] Auto-revealing action...");
+                    handleReveal();
+                }
+            };
+            checkReady();
+        }
+    }, [nightState.hasCommitted, nightState.hasRevealed, isProcessing, isTxPending, handleReveal, NIGHT_COMMIT_KEY]);
+
+    const handleSuggestTarget = useCallback((addr: string) => {
+        setSelectedTarget(addr as `0x${string}`);
+    }, [setSelectedTarget]);
 
     if (!canAct) {
         return (
@@ -677,7 +673,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                         teammates={nightState.teammates}
                                         players={gameState.players}
                                         selectedTarget={selectedTarget}
-                                        onSuggestTarget={(addr) => setSelectedTarget(addr)}
+                                        onSuggestTarget={handleSuggestTarget}
                                         messages={gameState.mafiaMessages || []}
                                         onSendMessage={sendMafiaMessageOnChain}
                                     />
@@ -854,12 +850,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     )}
                 </AnimatePresence>
 
-                <NightRevealAuto
-                    nightState={nightState}
-                    isProcessing={isProcessing}
-                    isTxPending={isTxPending}
-                    handleReveal={handleReveal}
-                />
+
             </motion.div>
         </div>
     );

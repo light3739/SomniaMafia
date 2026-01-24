@@ -88,21 +88,25 @@ export const GameOver: React.FC = React.memo(() => {
                 args: [currentRoomId],
             }) as string[];
 
-            // Собираем ключи от всех игроков
+            // Собираем ключи от всех игроков (V3.1 Batch Fetch)
             const keys = new Map<string, string>();
-            for (const player of gameState.players) {
-                if (player.address.toLowerCase() === address?.toLowerCase()) continue;
-                try {
-                    const key = await publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MAFIA_ABI,
-                        functionName: 'playerDeckKeys',
-                        args: [currentRoomId, player.address, address as `0x${string}`],
-                    }) as `0x${string}`;
-                    if (key && key !== '0x') {
-                        keys.set(player.address, key);
+
+            try {
+                const [senders, keyBytes] = await publicClient.readContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'getAllKeysForMe',
+                    args: [currentRoomId],
+                    account: address,
+                }) as [string[], string[]];
+
+                for (let i = 0; i < senders.length; i++) {
+                    if (keyBytes[i] && keyBytes[i] !== '0x') {
+                        keys.set(senders[i].toLowerCase(), keyBytes[i]);
                     }
-                } catch { }
+                }
+            } catch (e) {
+                console.error("Failed to batch fetch keys:", e);
             }
 
             const shuffleService = getShuffleService();

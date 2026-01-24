@@ -38,11 +38,13 @@ const config = getDefaultConfig({
 
 const queryClient = new QueryClient();
 
+const theme = darkTheme();
+
 export const Web3Provider = ({ children }: { children: React.ReactNode }) => {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider theme={darkTheme()}>
+        <RainbowKitProvider theme={theme}>
           {children}
         </RainbowKitProvider>
       </QueryClientProvider>
