@@ -182,7 +182,7 @@ export const DayPhase: React.FC = React.memo(() => {
                     isMyTurn: true
                 });
             }
-            addLog("Discussion Phase: Players speak in turns (60s each).", "info");
+            addLog("Discussion Phase started.", "info");
         } catch (e) {
             console.error("Failed to start discussion:", e);
         }
@@ -226,7 +226,7 @@ export const DayPhase: React.FC = React.memo(() => {
                 playVotingStart(); // Play sound for everyone
                 const quorum = Math.floor(alivePlayers.length / 2) + 1;
                 const duration = Math.max(0, (gameState.phaseDeadline || 0) - Math.floor(Date.now() / 1000));
-                addLog(`Voting Phase Started (${Math.floor(duration / 60)}m ${duration % 60}s). Quorum needed: ${quorum}.`, "warning");
+                addLog(`Voting Phase Started. Quorum needed: ${quorum}.`, "warning");
             }
             lastLoggedPhase.current = gameState.phase;
         }
@@ -585,7 +585,7 @@ const VotingTimer: React.FC = React.memo(() => {
 
                     if (!hasAutoVotedRef.current && myPlayer && !myPlayer.hasVoted && myPlayer.isAlive) {
                         hasAutoVotedRef.current = true;
-                        addLog("⏳ 1 minute limit reached. Auto-voting for self...", "warning");
+                        addLog("1 minute limit reached. Auto-voting for self...", "warning");
                         voteOnChain(myPlayer.address as `0x${string}`).catch(e => {
                             console.error("[AutoVote] Failed:", e);
                             addLog("Auto-vote failed. Please vote manually!", "danger");
@@ -596,6 +596,16 @@ const VotingTimer: React.FC = React.memo(() => {
                     // If game is still going, show real contract time
                     setTimeLeft(realRemaining);
                     setTimerMode('hard');
+
+                    // LATE JOINER PROTECTION: Auto-vote if in Hard Mode
+                    if (!hasAutoVotedRef.current && myPlayer && !myPlayer.hasVoted && myPlayer.isAlive) {
+                        hasAutoVotedRef.current = true;
+                        addLog("Late join during hard timer. Auto-voting for self...", "warning");
+                        voteOnChain(myPlayer.address as `0x${string}`).catch(e => {
+                            console.error("[AutoVote] Failed:", e);
+                            addLog("Auto-vote failed.", "danger");
+                        });
+                    }
                 }
             }
         };
