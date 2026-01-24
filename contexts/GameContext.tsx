@@ -294,6 +294,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         winner: null
     });
 
+    // Ref for players to avoid stale closure in event handlers
+    const playersRef = useRef<Player[]>(gameState.players);
+    useEffect(() => {
+        playersRef.current = gameState.players;
+    }, [gameState.players]);
+
     // Ищем myPlayer: если myPlayerId установлен (тестовый режим), используем его, иначе - адрес кошелька
     const myPlayerById = gameState.myPlayerId
         ? gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase())
@@ -1961,11 +1967,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const voter = logs[0].args.voter;
                 const target = logs[0].args.target;
-                const voterPlayer = gameState.players.find(p => p.address.toLowerCase() === voter.toLowerCase());
-                const targetPlayer = gameState.players.find(p => p.address.toLowerCase() === target.toLowerCase());
-                const voterLabel = voterPlayer ? (voterPlayer.name || `Player ${gameState.players.indexOf(voterPlayer) + 1}`) : voter.slice(0, 6);
-                const targetLabel = targetPlayer ? (targetPlayer.name || `Player ${gameState.players.indexOf(targetPlayer) + 1}`) : target.slice(0, 6);
-                addLog(`${voterLabel} voted for ${targetLabel}`, "warning");
+                // Use playersRef to get current players, avoiding stale closure
+                const currentPlayers = playersRef.current;
+                const voterPlayer = currentPlayers.find(p => p.address.toLowerCase() === voter.toLowerCase());
+                const targetPlayer = currentPlayers.find(p => p.address.toLowerCase() === target.toLowerCase());
+                const voterLabel = voterPlayer ? (voterPlayer.name || `Player ${currentPlayers.indexOf(voterPlayer) + 1}`) : voter.slice(0, 6);
+                const targetLabel = targetPlayer ? (targetPlayer.name || `Player ${currentPlayers.indexOf(targetPlayer) + 1}`) : target.slice(0, 6);
+                addLog(`🗳️ ${voterLabel} voted for ${targetLabel}`, "warning");
             }
         }
     });
