@@ -41,7 +41,7 @@ export const WaitingRoom: React.FC = () => {
 
     // V4: Min 4 players for proper mafia game
     const minPlayers = 4;
-    const canStartGame = isParticipant && gameState.players.length >= minPlayers;
+    const canStartGame = isRoomCreator && gameState.players.length >= minPlayers;
 
     const handleStart = async () => {
         if (isTxPending) return;
@@ -167,6 +167,7 @@ export const WaitingRoom: React.FC = () => {
                 </motion.div>
 
                 {/* V4: Any participant can start the game when enough players */}
+                {/* Host only can start */}
                 {canStartGame ? (
                     <Button
                         onClick={handleStart}
@@ -179,7 +180,9 @@ export const WaitingRoom: React.FC = () => {
                 ) : isParticipant ? (
                     <div className="w-full p-6 rounded-2xl bg-white/[0.02] border border-white/5 text-center backdrop-blur-sm">
                         <p className="text-white/30 text-sm italic">
-                            Waiting for more players ({gameState.players.length}/{minPlayers} minimum)...
+                            {!isRoomCreator && gameState.players.length >= minPlayers
+                                ? "Waiting for Host to start the game..."
+                                : `Waiting for more players (${gameState.players.length}/${minPlayers} minimum)...`}
                         </p>
                     </div>
                 ) : (
