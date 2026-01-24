@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
+import Image from 'next/image';
 const lobbyBg = "/assets/lobby_background.webp";
 import { BackButton } from '../ui/BackButton';
 import { usePublicClient, useAccount } from 'wagmi';
@@ -118,7 +119,14 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
     return (
         <div className="relative w-full min-h-screen font-['Montserrat'] flex items-center justify-center p-4">
-            <div className="fixed inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url(${lobbyBg})` }}>
+            <div className="fixed inset-0 z-0">
+                <Image
+                    src={lobbyBg}
+                    alt="Lobby Background"
+                    fill
+                    priority
+                    className="object-cover"
+                />
                 <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
             </div>
 

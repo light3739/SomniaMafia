@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Player, Role } from '../../types';
 import { Skull, HelpCircle, User, X } from 'lucide-react';
 import { useSoundEffects } from '../ui/SoundEffects';
-import { useGameContext } from '../../contexts/GameContext';
+
 
 interface PlayerSpotProps {
     player: Player;
@@ -15,14 +15,13 @@ interface PlayerSpotProps {
     isSelected?: boolean;
     isNight?: boolean;
     myRole?: Role; // Role of the current player (for night selection colors)
+    mark: 'mafia' | 'civilian' | 'question' | null;
+    onSetMark: (address: string, mark: 'mafia' | 'civilian' | 'question' | null) => void;
 }
 
-export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAct, isSelected, isNight = false, myRole }) => {
+export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAct, isSelected, isNight = false, myRole, mark: currentMark, onSetMark: setPlayerMark }) => {
     const { playClickSound, playMarkSound } = useSoundEffects();
-    const { playerMarks, setPlayerMark } = useGameContext();
     const [isHoveringMarks, setIsHoveringMarks] = useState(false);
-
-    const currentMark = playerMarks[player.address.toLowerCase()] || null;
 
     // Determine selection color based on role during night
     const getSelectionClasses = () => {
