@@ -318,12 +318,12 @@ export const SoundEffects: React.FC = () => {
             if (ctx) {
                 const sounds = [
                     '/assets/default_sound.mp3',
-                    '/assets/note_tick.wav',
+                    '/assets/note_tick.mp3',
                     '/assets/Voting_sound.mp3',
                     '/assets/night_sound2.mp3',
                     '/assets/morning_sound.mp3',
                     '/assets/protect.mp3',
-                    '/assets/kill.wav',
+                    '/assets/kill.mp3',
                     '/assets/investigate.mp3',
                     '/assets/TownWin_sound.mp3',
                     '/assets/MafiaWin_Sound.mp3'

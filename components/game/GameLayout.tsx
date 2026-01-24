@@ -74,7 +74,7 @@ const BASE_WIDTH = 1488;
 const BASE_HEIGHT = 1024;
 
 export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNightState }) => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog } = useGameContext();
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const players = gameState.players || [];
     const [scale, setScale] = useState(1);
@@ -338,6 +338,8 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
                                 isSelected={selectedTarget?.toLowerCase() === player.address.toLowerCase()}
                                 isNight={isNightPhase}
                                 myRole={myPlayer?.role}
+                                mark={playerMarks[player.address.toLowerCase()] || null}
+                                onSetMark={setPlayerMark}
                             />
                         </div>
                     );
