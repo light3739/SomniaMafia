@@ -68,9 +68,8 @@ export default function RootLayout({
               fill
               priority
               sizes="100vw"
-              className="object-cover opacity-80"
+              className="object-cover"
             />
-            <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
           </div>
           {children}
         </Providers>
