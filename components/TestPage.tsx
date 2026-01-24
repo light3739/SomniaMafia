@@ -18,6 +18,7 @@ import { GamePhase, Role, Player, MafiaChatMessage } from '../types';
 import { VotingAnnouncement } from './game/VotingAnnouncement';
 import { NightAnnouncement } from './game/NightAnnouncement';
 import { MafiaChat } from './game/MafiaChat';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../contexts/GameContext';
 import { Skull, Shield, Search, Users, EyeOff } from 'lucide-react';
 
@@ -604,10 +605,12 @@ const RoleRevealAnimatedTest: React.FC = () => {
 };
 
 // Role Card Showcase - shows the role card moment (when player sees their role)
+// Role Card Showcase - shows the role card moment (when player sees their role)
 const RoleCardShowcaseTest: React.FC = () => {
     const [selectedRole, setSelectedRole] = useState<Role>(Role.MAFIA);
     const [countdown, setCountdown] = useState(10);
     const [isCountingDown, setIsCountingDown] = useState(false);
+    const [revealPhase, setRevealPhase] = useState<'hidden' | 'revealing' | 'revealed' | 'complete'>('revealed');
 
     // Role configurations using Lucide icons (matching RoleReveal.tsx)
     const roleConfigs: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; description: string }> = {
@@ -645,17 +648,31 @@ const RoleCardShowcaseTest: React.FC = () => {
 
     const config = roleConfigs[selectedRole];
 
+    const handleTestAnimation = () => {
+        setRevealPhase('hidden');
+        setCountdown(10);
+        setIsCountingDown(false);
+
+        // Start sequence
+        setTimeout(() => setRevealPhase('revealing'), 1000);
+        setTimeout(() => {
+            setRevealPhase('revealed');
+            setIsCountingDown(true);
+        }, 2500);
+    };
+
     // Countdown timer
     useEffect(() => {
-        if (!isCountingDown || countdown <= 0) return;
+        if (!isCountingDown || countdown <= 0) {
+            if (isCountingDown && countdown <= 0) {
+                setRevealPhase('complete');
+                setIsCountingDown(false);
+            }
+            return;
+        }
         const timer = setTimeout(() => setCountdown(prev => prev - 1), 1000);
         return () => clearTimeout(timer);
     }, [isCountingDown, countdown]);
-
-    const startCountdown = () => {
-        setCountdown(10);
-        setIsCountingDown(true);
-    };
 
     return (
         <div className="w-full flex flex-col items-center gap-6">
@@ -675,42 +692,86 @@ const RoleCardShowcaseTest: React.FC = () => {
             </div>
 
             <button
-                onClick={startCountdown}
+                onClick={handleTestAnimation}
                 className="px-4 py-2 bg-[#916A47] text-white rounded-lg hover:bg-[#a67b52]"
             >
-                Start 10s Timer
+                Test Full Reveal Flow
             </button>
 
-            {/* Timer */}
-            {isCountingDown && countdown > 0 && (
-                <div className="text-4xl font-bold text-[#916A47]">{countdown}s</div>
+            {revealPhase === 'complete' ? (
+                <div className="text-center py-20 bg-black/40 rounded-3xl w-[400px] h-[400px] flex flex-col items-center justify-center border border-[#916A47]/30">
+                    <h2 className="text-3xl text-[#916A47] mb-2 font-bold animate-pulse">Transitioning to Day Phase...</h2>
+                    <p className="text-white/40">Game starting now</p>
+                </div>
+            ) : (
+                <div className="relative w-[400px] h-[400px]">
+                    <AnimatePresence mode="wait">
+                        {revealPhase === 'hidden' || revealPhase === 'revealing' ? (
+                            <motion.div
+                                key="hidden"
+                                initial={{ rotateY: 0, opacity: 1 }}
+                                exit={{ rotateY: 90, opacity: 0 }}
+                                transition={{ duration: 0.5 }}
+                                className="absolute inset-0 bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl flex flex-col items-center justify-center text-center"
+                            >
+                                <Search className={`w-16 h-16 text-[#916A47] mb-4 ${revealPhase === 'revealing' ? 'animate-spin' : 'animate-bounce'}`} />
+                                <h3 className="text-2xl text-white font-['Playfair_Display'] mb-2">
+                                    {revealPhase === 'revealing' ? 'Decrypting...' : 'Encrypted Data'}
+                                </h3>
+                                <p className="text-white/40 text-sm">
+                                    {revealPhase === 'revealing' ? 'Verifying on-chain...' : 'Waiting for keys...'}
+                                </p>
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="revealed"
+                                initial={{ rotateY: 90, opacity: 0 }}
+                                animate={{ rotateY: 0, opacity: 1 }}
+                                transition={{ type: "spring", duration: 0.8 }}
+                                className={`absolute inset-0 bg-gradient-to-br ${config.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-12 shadow-2xl flex flex-col justify-between`}
+                            >
+                                <div className="text-center flex-1 flex flex-col justify-center">
+                                    {/* Role Name */}
+                                    <motion.h2
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.3 }}
+                                        className={`text-5xl font-['Playfair_Display'] mb-6 ${config.color}`}
+                                    >
+                                        {selectedRole}
+                                    </motion.h2>
+
+                                    {/* Description */}
+                                    <motion.p
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ delay: 0.5 }}
+                                        className="text-white/60 text-sm max-w-xs mx-auto"
+                                    >
+                                        {config.description}
+                                    </motion.p>
+                                </div>
+
+                                <div className="space-y-3 mt-6">
+                                    {/* Confirm Button Mock */}
+                                    <motion.button
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 1 }}
+                                        className="w-full px-6 py-3 bg-gradient-to-r from-[#916A47] to-[#7a5a3c] text-white rounded-xl font-medium hover:from-[#a67b52] hover:to-[#916A47] transition-all"
+                                    >
+                                        I Understand My Role ({countdown})
+                                    </motion.button>
+
+                                    <div className="text-xs text-white/30 text-center">
+                                        Display closes in {countdown}s
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
             )}
-
-            {/* Role Card */}
-            <div className={`bg-gradient-to-br ${config.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-10 shadow-2xl w-[360px] min-h-[320px] flex flex-col justify-between`}>
-                <div className="text-center flex-1 flex flex-col justify-center">
-                    {/* Role Name */}
-                    <h2 className={`text-5xl font-['Playfair_Display'] mb-6 ${config.color}`}>
-                        {selectedRole}
-                    </h2>
-
-                    {/* Description */}
-                    <p className="text-white/60 text-sm max-w-xs mx-auto">
-                        {config.description}
-                    </p>
-                </div>
-
-                <div className="space-y-3 mt-6">
-                    {/* Confirm Button Mock */}
-                    <button className="w-full px-6 py-3 bg-gradient-to-r from-[#916A47] to-[#7a5a3c] text-white rounded-xl font-medium hover:from-[#a67b52] hover:to-[#916A47] transition-all">
-                        I Understand My Role
-                    </button>
-
-                    <div className="text-xs text-white/30 text-center">
-                        3 / 6 confirmed
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };

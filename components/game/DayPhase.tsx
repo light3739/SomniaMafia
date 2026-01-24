@@ -52,7 +52,7 @@ export const DayPhase: React.FC = React.memo(() => {
     const [discussionState, setDiscussionState] = useState<{
         active: boolean;
         finished: boolean;
-        phase: 'initial_delay' | 'speaking' | 'between_delay' | 'final_delay' | 'finished';
+        phase: 'initial_delay' | 'speaking' | 'finished';
         currentSpeakerIndex: number;
         currentSpeakerAddress: string | null;
         totalSpeakers: number;
@@ -301,7 +301,7 @@ export const DayPhase: React.FC = React.memo(() => {
                 const timer = setTimeout(() => {
                     console.log('[DayPhase] Calling handleStartVoting...');
                     handleStartVoting();
-                }, 2000);
+                }, 2000); // Small buffer before starting voting
                 return () => clearTimeout(timer);
             }
         }
@@ -419,70 +419,57 @@ export const DayPhase: React.FC = React.memo(() => {
                             >
                                 {discussionState?.active ? (
                                     <>
-                                        {/* Delay Phase UI - Countdown before speaker */}
-                                        {(discussionState?.phase === 'initial_delay' ||
-                                            discussionState?.phase === 'between_delay' ||
-                                            discussionState?.phase === 'final_delay') && (
-                                                <motion.div
-                                                    initial={{ opacity: 0, scale: 0.9 }}
-                                                    animate={{ opacity: 1, scale: 1 }}
-                                                    className="w-full py-6 text-center bg-[#916A47]/10 rounded-xl border border-[#916A47]/30"
-                                                >
-                                                    <div className="text-5xl font-bold text-[#916A47] mb-2">
-                                                        {discussionState?.timeRemaining || 0}
-                                                    </div>
-                                                    <div className="text-white/60 text-sm">
-                                                        {discussionState?.phase === 'initial_delay' && 'Discussion starting...'}
-                                                        {discussionState?.phase === 'between_delay' && `Next: ${gameState.players.find(p => p.address.toLowerCase() === discussionState?.currentSpeakerAddress?.toLowerCase())?.name || 'Next Speaker'}`}
-                                                        {discussionState?.phase === 'final_delay' && 'Voting starts soon...'}
-                                                    </div>
-                                                </motion.div>
-                                            )}
-
-                                        {/* Speaking Phase UI */}
-                                        {discussionState?.phase === 'speaking' && (
-                                            <>
-                                                {/* Ultra-compact timer display */}
-                                                <div className="w-full py-1 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <Clock className="w-4 h-4 text-[#916A47]" />
-                                                        <span className="text-xl font-bold text-white tabular-nums">
-                                                            {Math.floor((discussionState?.timeRemaining || 0) / 60)}:{String((discussionState?.timeRemaining || 0) % 60).padStart(2, '0')}
-                                                        </span>
-                                                        <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
-                                                            {discussionState?.isMyTurn ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
-                                                        </span>
-                                                    </div>
+                                        {/* Timer Display (Handles both Delay and Speaking phases) */}
+                                        <div className="w-full py-1 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                            {discussionState?.phase === 'initial_delay' ? (
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Clock className="w-4 h-4 text-[#916A47]" />
+                                                    <span className="text-xl font-bold text-white tabular-nums">
+                                                        {discussionState?.timeRemaining}s
+                                                    </span>
+                                                    <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
+                                                        Starting Discussion...
+                                                    </span>
                                                 </div>
+                                            ) : (
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Clock className="w-4 h-4 text-[#916A47]" />
+                                                    <span className="text-xl font-bold text-white tabular-nums">
+                                                        {Math.floor((discussionState?.timeRemaining || 0) / 60)}:{String((discussionState?.timeRemaining || 0) % 60).padStart(2, '0')}
+                                                    </span>
+                                                    <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
+                                                        {discussionState?.isMyTurn ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
 
-                                                {/* Skip button (only for current speaker) */}
-                                                {discussionState?.isMyTurn && (
-                                                    <Button
-                                                        onClick={skipSpeech}
-                                                        disabled={isProcessing}
-                                                        isLoading={isProcessing}
-                                                        variant="outline-gold"
-                                                        className="w-full h-[50px]"
-                                                    >
-                                                        <ChevronRight className="w-5 h-5 mr-2" />
-                                                        Finish Speech Early
-                                                    </Button>
-                                                )}
+                                        {/* Skip button (only for current speaker) */}
+                                        {discussionState?.isMyTurn && (
+                                            <Button
+                                                onClick={skipSpeech}
+                                                disabled={isProcessing}
+                                                isLoading={isProcessing}
+                                                variant="outline-gold"
+                                                className="w-full h-[50px]"
+                                            >
+                                                <ChevronRight className="w-5 h-5 mr-2" />
+                                                Finish Speech Early
+                                            </Button>
+                                        )}
 
-                                                {/* Host Force Skip (if not speaker) */}
-                                                {!discussionState?.isMyTurn && gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase() && (
-                                                    <Button
-                                                        onClick={skipSpeech}
-                                                        disabled={isProcessing}
-                                                        isLoading={isProcessing}
-                                                        variant="secondary"
-                                                        className="w-full h-[44px] mt-2 bg-amber-900/30 hover:bg-amber-900/50 border-amber-500/30 text-amber-200"
-                                                    >
-                                                        <ChevronRight className="w-5 h-5 mr-2" />
-                                                        Force Skip (Host)
-                                                    </Button>
-                                                )}
-                                            </>
+                                        {/* Host Force Skip (if not speaker) */}
+                                        {!discussionState?.isMyTurn && gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase() && (
+                                            <Button
+                                                onClick={skipSpeech}
+                                                disabled={isProcessing}
+                                                isLoading={isProcessing}
+                                                variant="secondary"
+                                                className="w-full h-[44px] mt-2 bg-amber-900/30 hover:bg-amber-900/50 border-amber-500/30 text-amber-200"
+                                            >
+                                                <ChevronRight className="w-5 h-5 mr-2" />
+                                                Force Skip (Host)
+                                            </Button>
                                         )}
                                     </>
                                 ) : discussionState?.finished ? (
@@ -536,8 +523,8 @@ export const DayPhase: React.FC = React.memo(() => {
                         )}
                     </AnimatePresence>
                 </div>
-            </motion.div>
-        </div>
+            </motion.div >
+        </div >
     );
 });
 
@@ -574,7 +561,7 @@ const VotingTimer: React.FC = React.memo(() => {
                     {minutes}:{String(seconds).padStart(2, '0')}
                 </span>
                 <span className={`text-[10px] uppercase font-bold tracking-widest ml-2 ${isLow ? 'text-rose-400/70' : 'text-[#916A47]/50'}`}>
-                    Time to Vote
+                    {timeLeft <= 0 ? 'Voting Closed' : 'Time to Vote'}
                 </span>
             </div>
         </div>
