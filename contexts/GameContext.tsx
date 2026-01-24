@@ -2068,6 +2068,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Check if current player can act on target
     const canActOnPlayer = useCallback((target: Player) => {
+        // Must be alive to act
+        if (!myPlayer?.isAlive) return false;
+
+        // Target must be alive
         if (!target.isAlive) return false;
 
         // NEW: Player cannot target themselves in any action (voting or night)

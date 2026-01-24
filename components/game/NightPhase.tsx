@@ -98,7 +98,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
     // Моя роль (defined early for use in callbacks)
     const myRole = myPlayer?.role || Role.UNKNOWN;
     const roleConfig = RoleActions[myRole];
-    const canAct = roleConfig.action !== NightActionType.NONE;
+    // Can act only if role has action AND player is alive
+    const canAct = roleConfig.action !== NightActionType.NONE && myPlayer?.isAlive;
 
     const [nightState, setNightState] = useState<NightState>({
         hasCommitted: initialNightState?.hasCommitted ?? false,
@@ -483,8 +484,9 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         if (!selectedTarget || nightState.hasCommitted || commitStartedRef.current) return;
         commitStartedRef.current = true;
 
-        if (myRole === Role.MAFIA) playKillSound();
-        else if (myRole === Role.DOCTOR) playProtectSound();
+        if (myRole === Role.MAFIA) {
+            // playKillSound(); // Removed as requested
+        } else if (myRole === Role.DOCTOR) playProtectSound();
         else if (myRole === Role.DETECTIVE) playInvestigateSound();
 
         if (gameState.phase !== GamePhase.NIGHT) {
