@@ -434,7 +434,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                                     ${isCurrentTurn
                                         ? 'bg-[#916A47]/20 border-[#916A47]/40 shadow-[0_0_15px_rgba(145,106,71,0.1)]'
                                         : isDone
-                                            ? 'bg-green-900/10 border-green-500/20'
+                                            ? 'bg-[#916A47]/10 border-[#916A47]/30'
                                             : 'bg-white/5 border-white/10'
                                     }
                                 `}
@@ -449,7 +449,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                                 <div className="flex items-center gap-3 relative z-10">
                                     <div className={`
                                         w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold
-                                        ${isCurrentTurn ? 'bg-[#916A47] text-black' : isDone ? 'bg-green-600 text-white' : 'bg-white/10 text-white/40'}
+                                        ${isCurrentTurn ? 'bg-[#916A47] text-black' : isDone ? 'bg-[#916A47] text-white' : 'bg-white/10 text-white/40'}
                                     `}>
                                         {isDone ? <Check className="w-3 h-3" /> : index + 1}
                                     </div>
@@ -458,7 +458,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                                     </span>
                                 </div>
                                 <div className="text-[10px] relative z-10">
-                                    {isDone && <span className="text-green-400 font-medium">Done</span>}
+                                    {isDone && <span className="text-[#916A47] font-medium">Done</span>}
                                     {isCurrentTurn && (
                                         <div className="flex items-center gap-2">
                                             <span className="text-[#916A47] font-bold">
