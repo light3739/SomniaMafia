@@ -162,7 +162,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                 collectedKeys: keys
             }));
 
-            addLog(`Collected ${keys.size} decryption keys`, "info");
+            // addLog(`Collected ${keys.size} decryption keys`, "info");
             return keys;
         } catch (e) {
             console.error("Failed to collect keys:", e);
@@ -226,10 +226,10 @@ export const RoleReveal: React.FC = React.memo(() => {
                 encryptedKeys.push(stringToHex(myDecryptionKey));
             }
 
-            addLog(`Sharing keys to ${recipients.length} players...`, "info");
+            // addLog(`Sharing keys to ${recipients.length} players...`, "info");
             await shareKeysToAllOnChain(recipients, encryptedKeys);
             setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
-            addLog("All keys shared in one tx!", "success");
+            // addLog("All keys shared in one tx!", "success");
         } catch (e: any) {
             console.error("Failed to share keys:", e);
             addLog(e.message || "Failed to share keys", "danger");
@@ -289,7 +289,7 @@ export const RoleReveal: React.FC = React.memo(() => {
             const keys = await collectKeys();
 
             if (!keys || keys.size < gameState.players.length - 1) {
-                addLog(`Waiting for keys: ${keys?.size || 0}/${gameState.players.length - 1}`, "warning");
+                // addLog(`Waiting for keys: ${keys?.size || 0}/${gameState.players.length - 1}`, "warning");
                 setIsProcessing(false);
                 return;
             }
