@@ -485,7 +485,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         commitStartedRef.current = true;
 
         if (myRole === Role.MAFIA) {
-            // playKillSound(); // Removed as requested
+            playKillSound();
         } else if (myRole === Role.DOCTOR) playProtectSound();
         else if (myRole === Role.DETECTIVE) playInvestigateSound();
 
