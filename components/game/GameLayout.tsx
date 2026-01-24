@@ -2,16 +2,12 @@
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { GameLog } from './GameLog';
 import { PlayerSpot } from './PlayerSpot';
 import { PhaseIndicator } from './PhaseIndicator';
-import { ShufflePhase } from './ShufflePhase';
-import { RoleReveal } from './RoleReveal';
-import { DayPhase } from './DayPhase';
-import { NightPhase, NightPhaseTimer } from './NightPhase';
-import { GameOver } from './GameOver';
 import { VotingAnnouncement } from './VotingAnnouncement';
 import { NightAnnouncement } from './NightAnnouncement';
 import { MorningAnnouncement } from './MorningAnnouncement';
@@ -20,6 +16,31 @@ import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { GamePhase, Role } from '../../types';
+
+// Dynamic imports for heavy components (code splitting)
+const ShufflePhase = dynamic(() => import('./ShufflePhase').then(m => m.ShufflePhase), {
+    loading: () => <div className="text-white/50 animate-pulse">Loading...</div>,
+    ssr: false
+});
+const RoleReveal = dynamic(() => import('./RoleReveal').then(m => m.RoleReveal), {
+    loading: () => <div className="text-white/50 animate-pulse">Loading...</div>,
+    ssr: false
+});
+const DayPhase = dynamic(() => import('./DayPhase').then(m => m.DayPhase), {
+    loading: () => <div className="text-white/50 animate-pulse">Loading...</div>,
+    ssr: false
+});
+const NightPhase = dynamic(() => import('./NightPhase').then(m => m.NightPhase), {
+    loading: () => <div className="text-white/50 animate-pulse">Loading...</div>,
+    ssr: false
+});
+const NightPhaseTimer = dynamic(() => import('./NightPhase').then(m => m.NightPhaseTimer), {
+    ssr: false
+});
+const GameOver = dynamic(() => import('./GameOver').then(m => m.GameOver), {
+    loading: () => <div className="text-white/50 animate-pulse">Loading...</div>,
+    ssr: false
+});
 
 const dayBg = "/assets/game_background_light.png";
 const nightBg = "/assets/game_background.png";
