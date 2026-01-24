@@ -15,9 +15,9 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, isMe, onAction, 
 
   const getRoleIcon = (role: Role) => {
     switch (role) {
-      case Role.MAFIA: return <Crosshair className="w-4 h-4 text-red-500" />;
-      case Role.DOCTOR: return <Shield className="w-4 h-4 text-green-500" />;
-      case Role.DETECTIVE: return <Eye className="w-4 h-4 text-blue-500" />;
+      case Role.MAFIA: return <Crosshair className="w-4 h-4 text-rose-400" />;
+      case Role.DOCTOR: return <Shield className="w-4 h-4 text-teal-400" />;
+      case Role.DETECTIVE: return <Eye className="w-4 h-4 text-sky-400" />;
       default: return <User className="w-4 h-4 text-gray-400" />;
     }
   };
