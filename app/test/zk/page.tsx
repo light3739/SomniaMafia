@@ -84,9 +84,9 @@ export default function ZKTestPage() {
 
                 const hash = await sendTransactionAsync({
                     to: bot.address as `0x${string}`,
-                    value: parseEther("0.05"),
+                    value: parseEther("1.0"),
                 });
-                addLog(`Sent 0.05 STT to ${bot.address.slice(0, 6)}. Wait for TX: ${hash.slice(0, 10)}...`);
+                addLog(`Sent 1.0 STT to ${bot.address.slice(0, 6)}. Wait for TX: ${hash.slice(0, 10)}...`);
                 if (publicClient) {
                     await publicClient.waitForTransactionReceipt({ hash });
                 }
