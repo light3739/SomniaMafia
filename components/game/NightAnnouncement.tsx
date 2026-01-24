@@ -10,7 +10,7 @@ interface NightAnnouncementProps {
 export const NightAnnouncement = React.memo(({ show, onComplete }: NightAnnouncementProps) => {
     // Стабилизируем случайные значения для звезд, чтобы они не дергались при перерендере
     const stars = React.useMemo(() => {
-        return [...Array(20)].map((_, i) => ({
+        return [...Array(10)].map((_, i) => ({
             id: i,
             left: `${Math.random() * 100}%`,
             top: `${Math.random() * 100}%`,
@@ -41,7 +41,7 @@ export const NightAnnouncement = React.memo(({ show, onComplete }: NightAnnounce
                     {/* Blurred Background with explicit animation */}
                     <motion.div
                         initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-                        animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
+                        animate={{ opacity: 1, backdropFilter: "blur(4px)" }}
                         exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
                         transition={{ duration: 1, ease: "easeOut" }}
                         className="absolute inset-0 bg-indigo-950/70"
