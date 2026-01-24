@@ -265,6 +265,22 @@ export const DayPhase: React.FC = React.memo(() => {
     }, [isDayPhase, currentRoomId, fetchDiscussionState, discussionState?.finished]);
 
     const votingStartedRef = useRef(false);
+    const [votingAttemptTs, setVotingAttemptTs] = useState<number>(0);
+
+    // Safety Watchdog: If voting started but phase didn't change in 15s -> Reset
+    useEffect(() => {
+        if (votingStartedRef.current && votingAttemptTs > 0 && isDayPhase) {
+            const timer = setTimeout(() => {
+                if (votingStartedRef.current && isDayPhase) {
+                    console.warn("[DayPhase] Watchdog: Voting start stuck. Resetting ref.");
+                    addLog("Transition stuck. Retrying vote start...", "warning");
+                    votingStartedRef.current = false;
+                    setVotingAttemptTs(0);
+                }
+            }, 15000); // 15 seconds timeout
+            return () => clearTimeout(timer);
+        }
+    }, [votingAttemptTs, isDayPhase, addLog]);
 
     // Handle start voting - defined before useEffect to avoid hoisting issues
     const handleStartVoting = useCallback(async () => {
@@ -298,6 +314,7 @@ export const DayPhase: React.FC = React.memo(() => {
             // Host triggers voting
             if (isHost) {
                 votingStartedRef.current = true;
+                setVotingAttemptTs(Date.now());
                 console.log('[DayPhase] Host initiating voting transition...');
                 addLog("All players have spoken. Starting vote...", "warning");
                 const timer = setTimeout(() => {
@@ -311,6 +328,7 @@ export const DayPhase: React.FC = React.memo(() => {
         // Reset the ref if we leave the day phase or discussion is no longer finished
         if (!isDayPhase || !discussionState?.finished) {
             votingStartedRef.current = false;
+            setVotingAttemptTs(0);
         }
     }, [discussionState?.finished, isDayPhase, gameState.players, myPlayer?.address, addLog, handleStartVoting]);
 
