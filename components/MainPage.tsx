@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
@@ -15,10 +16,12 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
 
             {/* Background Image */}
             <div className="absolute inset-0 z-0">
-                <img
+                <Image
                     src={mafiaBg}
                     alt="Background"
-                    className="w-full h-full object-cover opacity-80"
+                    fill
+                    priority
+                    className="object-cover opacity-80"
                 />
             </div>
 
