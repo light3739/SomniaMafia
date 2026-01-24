@@ -31,12 +31,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
             <div className="relative z-10 w-full flex flex-col items-center justify-center p-4">
 
                 {/* Main Title */}
-                <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 1.2, ease: "easeOut" }}
-                    className="w-full max-w-[90vw] md:max-w-[800px]"
-                >
+                <div className="w-full max-w-[90vw] md:max-w-[800px]">
                     <svg viewBox="0 0 600 120" className="w-full h-auto overflow-visible">
                         <text
                             x="50%"
@@ -62,7 +57,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                             Mafia Online
                         </text>
                     </svg>
-                </motion.div>
+                </div>
 
                 {/* Subtitle Row */}
                 <motion.div
