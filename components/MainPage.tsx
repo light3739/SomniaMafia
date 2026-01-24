@@ -14,18 +14,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
     return (
         <div className="relative w-full h-screen overflow-hidden bg-black font-sans flex items-center justify-center">
 
-            {/* Background Image */}
-            <div className="absolute inset-0 z-0">
-                <Image
-                    src={mafiaBg}
-                    alt="Background"
-                    fill
-                    priority
-                    className="object-cover opacity-80"
-                />
-            </div>
 
-            <div className="absolute inset-0 bg-black/30 z-0" />
 
             {/* Content Container */}
             <div className="relative z-10 w-full flex flex-col items-center justify-center p-4">
