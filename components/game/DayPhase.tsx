@@ -537,14 +537,11 @@ export const DayPhase: React.FC = React.memo(() => {
 const VotingTimer: React.FC = React.memo(() => {
     const { gameState, myPlayer, voteOnChain, addLog } = useGameContext();
     const [timeLeft, setTimeLeft] = useState<number>(0);
-    const [isSoftTime, setIsSoftTime] = useState(true);
+    const [timerMode, setTimerMode] = useState<'soft' | 'transition' | 'hard'>('soft');
     const hasAutoVotedRef = useRef(false);
 
-    // Assume contract duration is 3 minutes (180s). We want 1 minute (60s).
-    // Soft deadline is 120s BEFORE the real deadline.
-    const CONTRACT_DURATION = 180;
-    const TARGET_DURATION = 60;
-    const BUFFER = CONTRACT_DURATION - TARGET_DURATION; // 120s
+    // Contract: 180s (3m). Target: 60s (1m). Buffer: 120s.
+    const BUFFER = 120;
 
     useEffect(() => {
         if (!gameState.phaseDeadline) return;
@@ -552,35 +549,35 @@ const VotingTimer: React.FC = React.memo(() => {
         const tick = () => {
             const now = Math.floor(Date.now() / 1000);
             const realRemaining = Math.max(0, gameState.phaseDeadline! - now);
-
-            // Calculate soft remaining time (until the 1-minute mark)
-            // If realRemaining > 120, we are within the first minute.
-            // SoftTime = realRemaining - 120.
             const softRemaining = realRemaining - BUFFER;
 
             if (softRemaining > 0) {
-                // We are in the "Soft" phase (first minute)
+                // --- PHASE 1: SOFT TIMER (0-60s) ---
                 setTimeLeft(softRemaining);
-                setIsSoftTime(true);
+                setTimerMode('soft');
             } else {
-                // We passed the 1 minute mark. Show real remaining time (waiting for contract timeout)
-                // OR show 00:00 to indicate "Time's up!" for the user
-                setTimeLeft(0);
-                setIsSoftTime(false);
+                // --- PHASE 2: DEADLINE REACHED ---
+                const overtimeSeconds = Math.abs(softRemaining);
 
-                // --- AUTO-VOTE LOGIC ---
-                // If soft time expired, AND I haven't voted, AND I haven't tried auto-voting yet
-                if (!hasAutoVotedRef.current && myPlayer && !myPlayer.hasVoted && myPlayer.isAlive) {
-                    hasAutoVotedRef.current = true;
-                    console.log("[AutoVote] Soft deadline reached. Casting self-vote.");
-                    addLog("⏳ 1 minute limit reached. Auto-voting for self...", "warning");
+                if (overtimeSeconds < 5) {
+                    // --- TRANSITION (0-5s after deadline) ---
+                    // Show 0:00 and attempt auto-vote
+                    setTimeLeft(0);
+                    setTimerMode('transition');
 
-                    // Vote for self to unblock the game
-                    voteOnChain(myPlayer.address as `0x${string}`).catch(e => {
-                        console.error("[AutoVote] Failed:", e);
-                        addLog("Auto-vote failed. Please vote manually!", "danger");
-                        hasAutoVotedRef.current = false; // Allow retry if failed?
-                    });
+                    if (!hasAutoVotedRef.current && myPlayer && !myPlayer.hasVoted && myPlayer.isAlive) {
+                        hasAutoVotedRef.current = true;
+                        addLog("⏳ 1 minute limit reached. Auto-voting for self...", "warning");
+                        voteOnChain(myPlayer.address as `0x${string}`).catch(e => {
+                            console.error("[AutoVote] Failed:", e);
+                            addLog("Auto-vote failed. Please vote manually!", "danger");
+                        });
+                    }
+                } else {
+                    // --- PHASE 3: HARD TIMER (Remaining ~115s) ---
+                    // If game is still going, show real contract time
+                    setTimeLeft(realRemaining);
+                    setTimerMode('hard');
                 }
             }
         };
@@ -592,22 +589,36 @@ const VotingTimer: React.FC = React.memo(() => {
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
-    const isLow = timeLeft <= 10 && isSoftTime;
+
+    // Visual styles based on mode
+    // Soft: Normal -> Red at end
+    // Transition: Pulsing 0:00
+    // Hard: Orange/Red indicating long wait
+    const isUrgent = (timerMode === 'soft' && timeLeft <= 10) || timerMode === 'transition';
+    const isHardWait = timerMode === 'hard';
 
     return (
-        <div className={`w-full py-2 text-center rounded-xl border ${isLow ? 'bg-rose-950/20 border-rose-500/30' : 'bg-[#916A47]/10 border-[#916A47]/30'}`}>
+        <div className={`w-full py-2 text-center rounded-xl border transition-colors duration-500
+            ${isUrgent ? 'bg-rose-950/30 border-rose-500/50' :
+                isHardWait ? 'bg-orange-950/20 border-orange-500/30' :
+                    'bg-[#916A47]/10 border-[#916A47]/30'}`}>
+
             <div className="flex items-center justify-center gap-2">
-                <Clock className={`w-4 h-4 ${isLow ? 'text-rose-400' : 'text-[#916A47]'}`} />
-                <span className={`text-2xl font-bold tabular-nums ${isLow ? 'text-rose-400 animate-pulse' : 'text-white'}`}>
+                <Clock className={`w-4 h-4 ${isUrgent ? 'text-rose-400' : isHardWait ? 'text-orange-400' : 'text-[#916A47]'}`} />
+                <span className={`text-2xl font-bold tabular-nums 
+                    ${isUrgent ? 'text-rose-400 animate-pulse' : isHardWait ? 'text-orange-400' : 'text-white'}`}>
                     {minutes}:{String(seconds).padStart(2, '0')}
                 </span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ml-2 ${isLow ? 'text-rose-400/70' : 'text-[#916A47]/50'}`}>
-                    {timeLeft <= 0 ? (isSoftTime ? 'Time Expired' : 'Overtime') : 'Time to Vote'}
+                <span className={`text-[10px] uppercase font-bold tracking-widest ml-2 
+                    ${isUrgent ? 'text-rose-400/70' : isHardWait ? 'text-orange-400/70' : 'text-[#916A47]/50'}`}>
+                    {timerMode === 'soft' ? 'Voting Time' :
+                        timerMode === 'transition' ? 'Auto-Voting...' : 'Waiting for AFK'}
                 </span>
             </div>
-            {timeLeft <= 0 && !isSoftTime && (
-                <div className="text-[10px] text-white/30 mt-1">
-                    Waiting for server timeout...
+
+            {timerMode === 'hard' && (
+                <div className="text-[10px] text-orange-300/50 mt-1 animate-pulse">
+                    Some players are AFK. Waiting full timeout...
                 </div>
             )}
         </div>
