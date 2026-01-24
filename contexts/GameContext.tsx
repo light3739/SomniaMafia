@@ -1960,21 +1960,35 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         address: MAFIA_CONTRACT_ADDRESS,
         abi: MAFIA_ABI,
         eventName: 'VoteCast',
+        poll: true, // Force eth_getLogs polling - required for Somnia HTTP RPC
+        pollingInterval: 3000, // Poll every 3 seconds
         onLogs: (logs: any) => {
+            console.log("[VoteCast Event] Raw logs received:", logs);
             const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                const voter = logs[0].args.voter;
-                const target = logs[0].args.target;
-                // Use playersRef to get current players, avoiding stale closure
-                const currentPlayers = playersRef.current;
-                const voterPlayer = currentPlayers.find(p => p.address.toLowerCase() === voter.toLowerCase());
-                const targetPlayer = currentPlayers.find(p => p.address.toLowerCase() === target.toLowerCase());
-                const voterLabel = voterPlayer ? (voterPlayer.name || `Player ${currentPlayers.indexOf(voterPlayer) + 1}`) : voter.slice(0, 6);
-                const targetLabel = targetPlayer ? (targetPlayer.name || `Player ${currentPlayers.indexOf(targetPlayer) + 1}`) : target.slice(0, 6);
-                addLog(`🗳️ ${voterLabel} voted for ${targetLabel}`, "warning");
+            console.log("[VoteCast Event] Current room ID:", roomId);
+            if (!roomId) {
+                console.log("[VoteCast Event] No room ID, skipping");
+                return;
             }
+
+            // Handle all logs in batch, not just first one
+            logs.forEach((log: any) => {
+                if (BigInt(log.args.roomId) === roomId) {
+                    const voter = log.args.voter;
+                    const target = log.args.target;
+                    // Use playersRef to get current players, avoiding stale closure
+                    const currentPlayers = playersRef.current;
+                    console.log("[VoteCast Event] Current players:", currentPlayers.length);
+                    const voterPlayer = currentPlayers.find(p => p.address.toLowerCase() === voter.toLowerCase());
+                    const targetPlayer = currentPlayers.find(p => p.address.toLowerCase() === target.toLowerCase());
+                    const voterLabel = voterPlayer ? (voterPlayer.name || `Player ${currentPlayers.indexOf(voterPlayer) + 1}`) : voter.slice(0, 6);
+                    const targetLabel = targetPlayer ? (targetPlayer.name || `Player ${currentPlayers.indexOf(targetPlayer) + 1}`) : target.slice(0, 6);
+                    console.log(`[VoteCast Event] Adding log: ${voterLabel} voted for ${targetLabel}`);
+                    addLog(`🗳️ ${voterLabel} voted for ${targetLabel}`, "warning");
+                } else {
+                    console.log("[VoteCast Event] Room ID mismatch, skipping");
+                }
+            });
         }
     });
 
