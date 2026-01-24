@@ -3,6 +3,7 @@ import { Providers } from "./providers";
 import "./globals.css";
 import { BackgroundMusic } from "@/components/ui/BackgroundMusic";
 import { SoundEffects } from "@/components/ui/SoundEffects";
+import Image from "next/image";
 
 const playfair = Playfair_Display({
   subsets: ["latin", "cyrillic"],
@@ -60,6 +61,16 @@ export default function RootLayout({
         <Providers>
           <BackgroundMusic />
           <SoundEffects />
+          <div className="fixed inset-0 z-[-1]">
+            <Image
+              src="/assets/lobby_background.webp"
+              alt="Lobby Background"
+              fill
+              priority
+              className="object-cover opacity-80"
+            />
+            <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
+          </div>
           {children}
         </Providers>
       </body>
