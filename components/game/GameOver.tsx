@@ -1,5 +1,5 @@
 // components/game/GameOver.tsx
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useGameContext } from '../../contexts/GameContext';
@@ -36,6 +36,17 @@ const RoleBgColors: Record<Role, string> = {
     [Role.UNKNOWN]: 'bg-gray-900/50'
 };
 
+// Convert contract Role enum (0-4) to frontend Role
+const contractRoleToRole = (contractRole: number): Role => {
+    switch (contractRole) {
+        case 1: return Role.MAFIA;
+        case 2: return Role.DOCTOR;
+        case 3: return Role.DETECTIVE;
+        case 4: return Role.CIVILIAN;
+        default: return Role.UNKNOWN; // 0 = NONE
+    }
+};
+
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = () => {
@@ -44,9 +55,12 @@ export const GameOver: React.FC = () => {
     const { address } = useAccount();
     const router = useRouter();
     const [revealedRoles, setRevealedRoles] = useState<Map<string, Role>>(new Map());
+    const [onChainRoles, setOnChainRoles] = useState<Map<string, Role>>(new Map());
     const [isRevealing, setIsRevealing] = useState(false);
     const [winner, setWinner] = useState<Winner>((gameState.winner as Winner) || 'DRAW');
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
+    const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
 
     // Расшифровать все роли в конце игры
     const revealAllRoles = useCallback(async () => {
@@ -131,15 +145,68 @@ export const GameOver: React.FC = () => {
                 }))
             }));
 
-            // Определяем победителя
-            determineWinner(roles);
+            // Fetch on-chain roles and merge (they take priority)
+            await fetchOnChainRoles(roles);
 
         } catch (e) {
             console.error("Failed to reveal roles:", e);
+            // Still try to fetch on-chain roles even if local decryption failed
+            await fetchOnChainRoles(new Map());
         } finally {
             setIsRevealing(false);
         }
     }, [publicClient, currentRoomId, gameState.players, address, setGameState, isRevealing]);
+
+    // Fetch roles revealed on-chain (trustless source)
+    const fetchOnChainRoles = useCallback(async (localRoles: Map<string, Role>) => {
+        if (!publicClient || !currentRoomId) return;
+
+        try {
+            const roles = new Map<string, Role>();
+
+            for (const player of gameState.players) {
+                try {
+                    const contractRole = await publicClient.readContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'playerRoles',
+                        args: [currentRoomId, player.address],
+                    }) as number;
+
+                    const role = contractRoleToRole(Number(contractRole));
+                    if (role !== Role.UNKNOWN) {
+                        roles.set(player.address.toLowerCase(), role);
+                    }
+                } catch { }
+            }
+
+            setOnChainRoles(roles);
+
+            // Merge: on-chain > local > existing
+            const merged = new Map<string, Role>();
+            for (const player of gameState.players) {
+                const addr = player.address.toLowerCase();
+                const onChain = roles.get(addr);
+                const local = localRoles.get(addr);
+                merged.set(addr, onChain || local || player.role);
+            }
+
+            // Update game state with merged roles
+            setGameState(prev => ({
+                ...prev,
+                players: prev.players.map(p => ({
+                    ...p,
+                    role: merged.get(p.address.toLowerCase()) || p.role
+                }))
+            }));
+
+            // Determine winner based on merged roles
+            determineWinner(merged);
+
+        } catch (e) {
+            console.error("Failed to fetch on-chain roles:", e);
+        }
+    }, [publicClient, currentRoomId, gameState.players, setGameState]);
 
     // Определяем победителя на основе раскрытых ролей
     const determineWinner = (roles: Map<string, Role>) => {
@@ -175,6 +242,34 @@ export const GameOver: React.FC = () => {
     useEffect(() => {
         revealAllRoles();
     }, [revealAllRoles]);
+
+    // Poll for late on-chain reveals (other players may reveal after us)
+    useEffect(() => {
+        // Start polling for 30 seconds
+        let pollCount = 0;
+        const maxPolls = 10; // 10 polls * 3 seconds = 30 seconds
+
+        pollIntervalRef.current = setInterval(async () => {
+            pollCount++;
+            if (pollCount > maxPolls) {
+                if (pollIntervalRef.current) {
+                    clearInterval(pollIntervalRef.current);
+                    pollIntervalRef.current = null;
+                }
+                return;
+            }
+
+            // Re-fetch on-chain roles to catch late reveals
+            await fetchOnChainRoles(revealedRoles);
+        }, 3000);
+
+        return () => {
+            if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+            }
+        };
+    }, [fetchOnChainRoles, revealedRoles]);
 
     // Музыка победы
     useEffect(() => {
@@ -312,8 +407,11 @@ export const GameOver: React.FC = () => {
                             {gameState.players.map((player, index) => {
                                 const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
                                 const isDead = !player.isAlive;
-                                const role = revealedRoles.get(player.address.toLowerCase()) || player.role;
+                                const onChainRole = onChainRoles.get(player.address.toLowerCase());
+                                const localRole = revealedRoles.get(player.address.toLowerCase());
+                                const role = onChainRole || localRole || player.role;
                                 const roleKnown = role !== Role.UNKNOWN;
+                                const isOnChain = !!onChainRole;
 
                                 return (
                                     <motion.div
@@ -345,9 +443,14 @@ export const GameOver: React.FC = () => {
                                                 <p className={`font-medium truncate ${isMe ? 'text-[#916A47]' : 'text-white'}`}>
                                                     {player.name} {isMe && '(You)'}
                                                 </p>
-                                                <p className={`text-xs ${roleKnown ? RoleColors[role] : 'text-gray-500'}`}>
-                                                    {roleKnown ? role : '🔒 Encrypted'}
-                                                </p>
+                                                <div className="flex items-center gap-1">
+                                                    <p className={`text-xs ${roleKnown ? RoleColors[role] : 'text-gray-500'}`}>
+                                                        {roleKnown ? role : '🔒 Encrypted'}
+                                                    </p>
+                                                    {isOnChain && (
+                                                        <span className="text-[10px] text-white/40">✓</span>
+                                                    )}
+                                                </div>
                                             </div>
                                             {isDead && (
                                                 <Skull className="w-4 h-4 text-rose-400/50" />
