@@ -219,7 +219,6 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                             fill
                             sizes="64px"
                             className="object-cover"
-                            unoptimized={player.avatarUrl.startsWith('http')}
                         />
                     ) : (
                         <div className="w-full h-full bg-[#19130D]" />

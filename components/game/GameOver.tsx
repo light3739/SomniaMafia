@@ -439,7 +439,6 @@ export const GameOver: React.FC = () => {
                                                         fill
                                                         sizes="40px"
                                                         className="object-cover"
-                                                        unoptimized={player.avatarUrl.startsWith('http')}
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center">
