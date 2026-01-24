@@ -29,7 +29,7 @@ export const VotingAnnouncement = React.memo(({ show, onComplete }: VotingAnnoun
                     {/* Blurred Background with explicit animation */}
                     <motion.div
                         initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-                        animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
+                        animate={{ opacity: 1, backdropFilter: "blur(4px)" }}
                         exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
                         transition={{ duration: 1, ease: "easeOut" }}
                         className="absolute inset-0 bg-black/60"

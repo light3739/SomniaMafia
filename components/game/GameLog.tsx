@@ -26,7 +26,7 @@ export const GameLog: React.FC = React.memo(() => {
     const getLogColor = useCallback((type: string) => logColorMap[type] || logColorMap.default, []);
 
     return (
-        <div className="flex flex-col h-full bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+        <div className="flex flex-col h-full bg-[#0a0a0a]/80 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
             {/* Заголовок лога */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/[0.02]">
                 <div className="flex items-center gap-2">

@@ -101,7 +101,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                 e.stopPropagation();
                                 setPlayerMark(player.address, null);
                             }}
-                            className="w-7 h-7 rounded-full border border-white/20 bg-black/60 backdrop-blur-md flex items-center justify-center transition-all duration-300 hover:scale-110 hover:border-white/40 z-30 shadow-lg"
+                            className="w-7 h-7 rounded-full border border-white/20 bg-black/60 backdrop-blur-sm flex items-center justify-center transition-all duration-300 hover:scale-110 hover:border-white/40 z-30 shadow-lg"
                         >
                             <AnimatePresence mode="wait">
                                 {isHoveringMarks ? (
