@@ -24,20 +24,20 @@ interface RevealState {
 const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; description: string }> = {
     [Role.MAFIA]: {
         icon: <Skull className="w-16 h-16" />,
-        color: 'text-red-500',
-        bgColor: 'from-red-950/50 to-red-900/30',
+        color: 'text-rose-400',
+        bgColor: 'from-rose-950/50 to-rose-900/30',
         description: 'Eliminate all civilians to win. Vote by day, kill by night.'
     },
     [Role.DOCTOR]: {
         icon: <Shield className="w-16 h-16" />,
-        color: 'text-green-500',
-        bgColor: 'from-green-950/50 to-green-900/30',
+        color: 'text-teal-400',
+        bgColor: 'from-teal-950/50 to-teal-900/30',
         description: 'Save one player each night from the mafia attack.'
     },
     [Role.DETECTIVE]: {
         icon: <Search className="w-16 h-16" />,
-        color: 'text-blue-500',
-        bgColor: 'from-blue-950/50 to-blue-900/30',
+        color: 'text-sky-400',
+        bgColor: 'from-sky-950/50 to-sky-900/30',
         description: 'Investigate one player each night to reveal their alignment.'
     },
     [Role.CIVILIAN]: {
@@ -581,9 +581,9 @@ export const RoleReveal: React.FC = () => {
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: 0.9 }}
-                                        className="mb-6 p-4 bg-red-950/30 border border-red-500/30 rounded-xl"
+                                        className="mb-6 p-4 bg-rose-950/30 border border-rose-400/30 rounded-xl"
                                     >
-                                        <p className="text-red-400 text-xs uppercase tracking-wider mb-2 flex items-center justify-center gap-2">
+                                        <p className="text-rose-400 text-xs uppercase tracking-wider mb-2 flex items-center justify-center gap-2">
                                             <Skull className="w-4 h-4" />
                                             Your Fellow Mafia
                                         </p>
@@ -593,7 +593,7 @@ export const RoleReveal: React.FC = () => {
                                                 return (
                                                     <span
                                                         key={addr}
-                                                        className="px-3 py-1 bg-red-500/20 border border-red-500/40 rounded-full text-red-300 text-sm"
+                                                        className="px-3 py-1 bg-rose-500/20 border border-rose-400/40 rounded-full text-rose-300 text-sm"
                                                     >
                                                         {player?.name || addr.slice(0, 8)}
                                                     </span>

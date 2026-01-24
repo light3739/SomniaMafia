@@ -13,25 +13,25 @@ import { useSoundEffects } from '../ui/SoundEffects';
 import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye } from 'lucide-react';
 
 const RoleIcons: Record<Role, React.ReactNode> = {
-    [Role.MAFIA]: <Skull className="w-5 h-5 text-red-500" />,
-    [Role.DOCTOR]: <Shield className="w-5 h-5 text-green-500" />,
-    [Role.DETECTIVE]: <Search className="w-5 h-5 text-blue-500" />,
+    [Role.MAFIA]: <Skull className="w-5 h-5 text-rose-400" />,
+    [Role.DOCTOR]: <Shield className="w-5 h-5 text-teal-400" />,
+    [Role.DETECTIVE]: <Search className="w-5 h-5 text-sky-400" />,
     [Role.CIVILIAN]: <Users className="w-5 h-5 text-amber-500" />,
     [Role.UNKNOWN]: <Users className="w-5 h-5 text-gray-500" />
 };
 
 const RoleColors: Record<Role, string> = {
-    [Role.MAFIA]: 'text-red-400',
-    [Role.DOCTOR]: 'text-green-400',
-    [Role.DETECTIVE]: 'text-blue-400',
+    [Role.MAFIA]: 'text-rose-400',
+    [Role.DOCTOR]: 'text-teal-400',
+    [Role.DETECTIVE]: 'text-sky-400',
     [Role.CIVILIAN]: 'text-amber-400',
     [Role.UNKNOWN]: 'text-gray-400'
 };
 
 const RoleBgColors: Record<Role, string> = {
-    [Role.MAFIA]: 'bg-red-900/50',
-    [Role.DOCTOR]: 'bg-green-900/50',
-    [Role.DETECTIVE]: 'bg-blue-900/50',
+    [Role.MAFIA]: 'bg-rose-900/50',
+    [Role.DOCTOR]: 'bg-teal-900/50',
+    [Role.DETECTIVE]: 'bg-sky-900/50',
     [Role.CIVILIAN]: 'bg-amber-900/50',
     [Role.UNKNOWN]: 'bg-gray-900/50'
 };
@@ -39,18 +39,29 @@ const RoleBgColors: Record<Role, string> = {
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = () => {
-    const { gameState, myPlayer, currentRoomId, setGameState } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const router = useRouter();
     const [revealedRoles, setRevealedRoles] = useState<Map<string, Role>>(new Map());
     const [isRevealing, setIsRevealing] = useState(false);
-    const [winner, setWinner] = useState<Winner>('DRAW');
+    const [winner, setWinner] = useState<Winner>((gameState.winner as Winner) || 'DRAW');
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
 
     // Расшифровать все роли в конце игры
     const revealAllRoles = useCallback(async () => {
         if (!publicClient || !currentRoomId || isRevealing) return;
+
+        if (isTestMode) {
+            console.log('[GameOver] Test mode role reveal');
+            const roles = new Map<string, Role>();
+            gameState.players.forEach(p => {
+                roles.set(p.address.toLowerCase(), p.role);
+            });
+            setRevealedRoles(roles);
+            determineWinner(roles);
+            return;
+        }
 
         setIsRevealing(true);
         try {
@@ -187,9 +198,9 @@ export const GameOver: React.FC = () => {
         'MAFIA': {
             title: 'Mafia Wins!',
             description: 'The mafia has taken control of the town...',
-            color: 'text-red-400',
-            bg: 'from-red-950/50 to-red-900/30 border-red-500/30',
-            trophy: 'text-red-500'
+            color: 'text-rose-400',
+            bg: 'from-rose-950/50 to-rose-900/30 border-rose-400/30',
+            trophy: 'text-rose-400'
         },
         'TOWN': {
             title: 'Town Wins!',
@@ -274,24 +285,12 @@ export const GameOver: React.FC = () => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 1 }}
-                            className={`
-                            mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full
-                            ${didIWin
-                                    ? 'bg-green-900/30 text-green-400 border border-green-500/30'
-                                    : 'bg-gray-900/30 text-gray-400 border border-gray-500/30'
-                                }
-                        `}
+                            className={`mt-6 flex flex-col items-center justify-center gap-0 ${didIWin ? 'text-green-400' : 'text-gray-400'}`}
                         >
                             {didIWin ? (
-                                <>
-                                    <Trophy className="w-4 h-4" />
-                                    <span className="font-medium">You Won!</span>
-                                </>
+                                <span className="font-medium">You Won!</span>
                             ) : (
-                                <>
-                                    <Skull className="w-4 h-4" />
-                                    <span className="font-medium">You Lost</span>
-                                </>
+                                <span className="font-medium">You Lost</span>
                             )}
                             <span className="text-white/40">as {myRole}</span>
                         </motion.div>
@@ -305,7 +304,6 @@ export const GameOver: React.FC = () => {
                         className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 p-6 mb-6"
                     >
                         <div className="flex items-center gap-2 mb-4">
-                            <Eye className="w-5 h-5 text-[#916A47]" />
                             <h3 className="text-white/50 text-sm uppercase tracking-wider">All Roles Revealed</h3>
                             {isRevealing && <span className="text-xs text-white/30">(decrypting...)</span>}
                         </div>
@@ -334,8 +332,14 @@ export const GameOver: React.FC = () => {
                                     `}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${RoleBgColors[role]}`}>
-                                                {RoleIcons[role]}
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden border border-white/10 ${RoleBgColors[role]}`}>
+                                                {player.avatarUrl ? (
+                                                    <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center">
+                                                        <Users className="w-5 h-5 text-white/20" />
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className={`font-medium truncate ${isMe ? 'text-[#916A47]' : 'text-white'}`}>
@@ -346,7 +350,7 @@ export const GameOver: React.FC = () => {
                                                 </p>
                                             </div>
                                             {isDead && (
-                                                <Skull className="w-4 h-4 text-red-500/50" />
+                                                <Skull className="w-4 h-4 text-rose-400/50" />
                                             )}
                                         </div>
                                     </motion.div>

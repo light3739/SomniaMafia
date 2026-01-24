@@ -53,7 +53,7 @@ const BASE_WIDTH = 1488;
 const BASE_HEIGHT = 1024;
 
 export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNightState }) => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending } = useGameContext();
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const players = gameState.players || [];
     const [scale, setScale] = useState(1);
@@ -399,10 +399,50 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
                 </div>
             )}
 
-            {/* Mobile Fallback/Warning? 
-                The scaled view should work on mobile in landscape. In portrait it will be very small. 
-                We might want to force landscape or just let it be small.
-            */}
+            {/* Test Controls - Bottom Right */}
+            {(window as any).isTestMode && (
+                <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 p-4 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 text-white pointer-events-auto">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">Dev Tools</div>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px]"
+                            onClick={() => {
+                                setGameState(prev => ({
+                                    ...prev,
+                                    phase: GamePhase.ENDED,
+                                    players: prev.players.map(p => {
+                                        if (p.role === Role.MAFIA) return { ...p, isAlive: true };
+                                        if (p.role === Role.CIVILIAN) return { ...p, isAlive: false };
+                                        return p;
+                                    })
+                                }));
+                                addLog("[Test] Simulating Mafia Victory", "danger");
+                            }}
+                        >
+                            Win: Mafia
+                        </Button>
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px]"
+                            onClick={() => {
+                                setGameState(prev => ({
+                                    ...prev,
+                                    phase: GamePhase.ENDED,
+                                    players: prev.players.map(p => {
+                                        if (p.role === Role.MAFIA) return { ...p, isAlive: false };
+                                        if (p.role === Role.CIVILIAN) return { ...p, isAlive: true };
+                                        return p;
+                                    })
+                                }));
+                                addLog("[Test] Simulating Town Victory", "success");
+                            }}
+                        >
+                            Win: Town
+                        </Button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
