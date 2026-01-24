@@ -1956,41 +1956,90 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     });
 
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'VoteCast',
-        poll: true, // Force eth_getLogs polling - required for Somnia HTTP RPC
-        pollingInterval: 3000, // Poll every 3 seconds
-        onLogs: (logs: any) => {
-            console.log("[VoteCast Event] Raw logs received:", logs);
-            const roomId = currentRoomIdRef.current;
-            console.log("[VoteCast Event] Current room ID:", roomId);
-            if (!roomId) {
-                console.log("[VoteCast Event] No room ID, skipping");
-                return;
-            }
+    // VoteCast event - using manual getLogs polling because:
+    // 1. Somnia produces ~3000 blocks/min, so watchContractEvent misses events
+    // 2. We need to track fromBlock ourselves
+    const processedVotesRef = useRef<Set<string>>(new Set());
+    const votePollStartBlockRef = useRef<bigint | null>(null);
 
-            // Handle all logs in batch, not just first one
-            logs.forEach((log: any) => {
-                if (BigInt(log.args.roomId) === roomId) {
+    useEffect(() => {
+        if (!publicClient || !currentRoomId) {
+            console.log("[VoteCast Poll] Not polling - no publicClient or roomId");
+            return;
+        }
+
+        // Get starting block on mount
+        publicClient.getBlockNumber().then(block => {
+            votePollStartBlockRef.current = block;
+            console.log("[VoteCast Poll] Starting from block", block.toString(), "for room", currentRoomId.toString());
+        });
+
+        const pollVotes = async () => {
+            if (!votePollStartBlockRef.current) return;
+
+            try {
+                const currentBlock = await publicClient.getBlockNumber();
+
+                // Get all VoteCast events from start block to now, filtered by roomId
+                const logs = await publicClient.getLogs({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    event: {
+                        type: 'event',
+                        name: 'VoteCast',
+                        inputs: [
+                            { indexed: true, name: 'roomId', type: 'uint256' },
+                            { indexed: false, name: 'voter', type: 'address' },
+                            { indexed: false, name: 'target', type: 'address' }
+                        ]
+                    },
+                    args: {
+                        roomId: currentRoomId // RPC-level filtering
+                    },
+                    fromBlock: votePollStartBlockRef.current,
+                    toBlock: currentBlock
+                });
+
+                logs.forEach((log: any) => {
+                    const txHash = log.transactionHash;
+                    // Skip already processed
+                    if (processedVotesRef.current.has(txHash)) return;
+
+                    // Already filtered by roomId at RPC level, but double check doesn't hurt
+                    const eventRoomId = BigInt(log.args.roomId);
+                    if (eventRoomId !== currentRoomId) return;
+
+                    // Mark as processed
+                    processedVotesRef.current.add(txHash);
+
                     const voter = log.args.voter;
                     const target = log.args.target;
-                    // Use playersRef to get current players, avoiding stale closure
                     const currentPlayers = playersRef.current;
-                    console.log("[VoteCast Event] Current players:", currentPlayers.length);
+
                     const voterPlayer = currentPlayers.find(p => p.address.toLowerCase() === voter.toLowerCase());
                     const targetPlayer = currentPlayers.find(p => p.address.toLowerCase() === target.toLowerCase());
                     const voterLabel = voterPlayer ? (voterPlayer.name || `Player ${currentPlayers.indexOf(voterPlayer) + 1}`) : voter.slice(0, 6);
                     const targetLabel = targetPlayer ? (targetPlayer.name || `Player ${currentPlayers.indexOf(targetPlayer) + 1}`) : target.slice(0, 6);
-                    console.log(`[VoteCast Event] Adding log: ${voterLabel} voted for ${targetLabel}`);
+
+                    console.log(`[VoteCast Poll] Found vote: ${voterLabel} -> ${targetLabel}`);
                     addLog(`🗳️ ${voterLabel} voted for ${targetLabel}`, "warning");
-                } else {
-                    console.log("[VoteCast Event] Room ID mismatch, skipping");
-                }
-            });
-        }
-    });
+                });
+            } catch (e) {
+                console.error("[VoteCast Poll] Error:", e);
+            }
+        };
+
+        // Poll every 2 seconds
+        const interval = setInterval(pollVotes, 2000);
+        // Also poll immediately
+        pollVotes();
+
+        return () => {
+            console.log("[VoteCast Poll] Cleaning up");
+            clearInterval(interval);
+            processedVotesRef.current.clear();
+            votePollStartBlockRef.current = null;
+        };
+    }, [publicClient, currentRoomId, addLog]);
 
     useWatchContractEvent({
         address: MAFIA_CONTRACT_ADDRESS,
