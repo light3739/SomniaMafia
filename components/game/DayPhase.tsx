@@ -273,7 +273,8 @@ export const DayPhase: React.FC = React.memo(() => {
             await startVotingOnChain();
         } catch (e) {
             console.error('[DayPhase] Failed to start voting:', e);
-            addLog("Failed to start voting on-chain", "danger");
+            addLog("Failed to start voting on-chain. Retrying...", "danger");
+            votingStartedRef.current = false; // Allow retry on next poll
         } finally {
             setIsProcessing(false);
         }
