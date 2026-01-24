@@ -1,3 +1,4 @@
+import { DynamicBackground } from '@/components/ui/DynamicBackground';
 import { Playfair_Display, Inter, Montserrat } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -61,16 +62,7 @@ export default function RootLayout({
         <Providers>
           <BackgroundMusic />
           <SoundEffects />
-          <div className="fixed inset-0 z-0">
-            <Image
-              src="/assets/mafia1.jpg"
-              alt="Lobby Background"
-              fill
-              priority
-              sizes="100vw"
-              className="object-cover"
-            />
-          </div>
+          <DynamicBackground />
           {children}
         </Providers>
       </body>
