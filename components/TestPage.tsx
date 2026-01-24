@@ -3,7 +3,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { BackButton } from './ui/BackButton';
 import { PlayerCard } from './PlayerCard';
-import { GameControls } from './GameControls';
+
 import { SystemLog } from './Narrator';
 import { MainPage } from './MainPage';
 import { SetupProfile } from './lobby_flow/SetupProfile';
@@ -440,7 +440,7 @@ const TestPage: React.FC = () => {
 
         // Game Components
         { name: 'PlayerCard', group: 'Game Components', component: <div className="w-60"><PlayerCard player={mockPlayer as any} isMe={false} onAction={() => { }} canAct={true} actionLabel="VOTE" /></div> },
-        { name: 'GameControls', group: 'Game Components', component: <GameControls phase={GamePhase.DAY} myRole={Role.CIVILIAN} dayCount={1} onNextPhase={() => console.log('next phase')} /> },
+
         { name: 'SystemLog', group: 'Game Components', component: <div className="h-60"><SystemLog logs={mockLogs as any} /></div> },
         { name: 'VotingAnnouncement', group: 'Game Components', component: <VotingAnnouncementWrapper /> },
         { name: 'NightAnnouncement', group: 'Game Components', component: <NightAnnouncementWrapper /> },
