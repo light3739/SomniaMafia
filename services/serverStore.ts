@@ -157,31 +157,75 @@ export class ServerStore {
     }
 
     /**
-     * Advance to the next speaker. Returns updated state or null if finished.
+     * Advance discussion state. Handles transitions between phases.
+     * Flow: initial_delay -> speaking -> between_delay -> speaking -> ... -> final_delay -> finished
      */
     static async advanceSpeaker(roomId: string, dayCount: number, totalAlivePlayers: number): Promise<DiscussionState | null> {
         const state = await this.getDiscussionState(roomId, dayCount);
         if (!state || state.finished) return state;
 
-        const nextIndex = state.currentSpeakerIndex + 1;
-        if (nextIndex >= totalAlivePlayers) {
-            // All players have spoken
+        const DELAY_BETWEEN_SPEAKERS = 5; // seconds
+        const DELAY_BEFORE_VOTING = 3; // seconds
+
+        // Handle different phase transitions
+        if (state.phase === 'initial_delay' || state.phase === 'between_delay') {
+            // Delay finished -> start speaking
+            const newState: DiscussionState = {
+                currentSpeakerIndex: state.currentSpeakerIndex,
+                speakerStartTime: Date.now(),
+                speakerDuration: state.speakerDuration,
+                finished: false,
+                phase: 'speaking'
+            };
+            await this.setDiscussionState(roomId, dayCount, newState);
+            return newState;
+        }
+
+        if (state.phase === 'speaking') {
+            // Speaker finished -> check if more speakers
+            const nextIndex = state.currentSpeakerIndex + 1;
+
+            if (nextIndex >= totalAlivePlayers) {
+                // Last speaker finished -> go to final_delay before voting
+                const finalDelayState: DiscussionState = {
+                    currentSpeakerIndex: state.currentSpeakerIndex,
+                    speakerStartTime: state.speakerStartTime,
+                    speakerDuration: state.speakerDuration,
+                    finished: false,
+                    phase: 'final_delay',
+                    delayStartTime: Date.now(),
+                    delayDuration: DELAY_BEFORE_VOTING
+                };
+                await this.setDiscussionState(roomId, dayCount, finalDelayState);
+                return finalDelayState;
+            }
+
+            // More speakers -> go to between_delay
+            const betweenDelayState: DiscussionState = {
+                currentSpeakerIndex: nextIndex,
+                speakerStartTime: state.speakerStartTime,
+                speakerDuration: state.speakerDuration,
+                finished: false,
+                phase: 'between_delay',
+                delayStartTime: Date.now(),
+                delayDuration: DELAY_BETWEEN_SPEAKERS
+            };
+            await this.setDiscussionState(roomId, dayCount, betweenDelayState);
+            return betweenDelayState;
+        }
+
+        if (state.phase === 'final_delay') {
+            // Final delay finished -> discussion complete
             const finishedState: DiscussionState = {
                 ...state,
-                finished: true
+                finished: true,
+                phase: 'finished'
             };
             await this.setDiscussionState(roomId, dayCount, finishedState);
             return finishedState;
         }
 
-        const newState: DiscussionState = {
-            currentSpeakerIndex: nextIndex,
-            speakerStartTime: Date.now(),
-            speakerDuration: state.speakerDuration,
-            finished: false
-        };
-        await this.setDiscussionState(roomId, dayCount, newState);
-        return newState;
+        return state;
     }
 
     /**
@@ -212,4 +256,8 @@ export interface DiscussionState {
     speakerStartTime: number; // Unix timestamp (ms)
     speakerDuration: number;  // Seconds per speaker (default: 60)
     finished: boolean;
+    // NEW: Delay phase support
+    phase: 'initial_delay' | 'speaking' | 'between_delay' | 'final_delay' | 'finished';
+    delayStartTime?: number;  // Unix timestamp (ms) when delay started
+    delayDuration?: number;   // Duration of current delay in seconds
 }

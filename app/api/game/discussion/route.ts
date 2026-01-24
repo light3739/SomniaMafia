@@ -10,6 +10,9 @@ const publicClient = createPublicClient({
 
 const FLAG_ACTIVE = 2;
 const SPEAKER_DURATION = 60; // seconds per speaker
+const DELAY_INITIAL = 5; // seconds before first speaker
+const DELAY_BETWEEN = 5; // seconds between speakers
+const DELAY_FINAL = 3; // seconds before voting
 
 /**
  * Deterministic shuffle using roomId as seed (must match frontend GameLayout.tsx logic)
@@ -84,12 +87,23 @@ export async function GET(request: Request) {
         alivePlayers = shufflePlayers(alivePlayers, roomId);
         const totalSpeakers = alivePlayers.length;
 
-        // Auto-advance if time expired
-        const elapsed = (Date.now() - state.speakerStartTime) / 1000;
-        if (!state.finished && elapsed >= state.speakerDuration) {
-            const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
-            if (newState) {
-                state = newState; // Update state for buildResponse
+        // Auto-advance based on current phase
+        if (!state.finished) {
+            if (state.phase === 'speaking') {
+                // Check if speaker time expired
+                const elapsed = (Date.now() - state.speakerStartTime) / 1000;
+                if (elapsed >= state.speakerDuration) {
+                    const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
+                    if (newState) state = newState;
+                }
+            } else if (state.phase === 'initial_delay' || state.phase === 'between_delay' || state.phase === 'final_delay') {
+                // Check if delay time expired
+                const delayElapsed = (Date.now() - (state.delayStartTime || 0)) / 1000;
+                const delayDuration = state.delayDuration || 5;
+                if (delayElapsed >= delayDuration) {
+                    const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
+                    if (newState) state = newState;
+                }
             }
         }
 
@@ -151,15 +165,18 @@ export async function POST(request: Request) {
         const totalSpeakers = alivePlayers.length;
 
         if (action === 'start') {
-            // Initialize discussion state
+            // Initialize discussion state with initial delay
             const newState: DiscussionState = {
                 currentSpeakerIndex: 0,
                 speakerStartTime: Date.now(),
                 speakerDuration: SPEAKER_DURATION,
-                finished: false
+                finished: false,
+                phase: 'initial_delay',
+                delayStartTime: Date.now(),
+                delayDuration: DELAY_INITIAL
             };
             await ServerStore.setDiscussionState(roomId, dayCount, newState);
-            console.log(`[API/Discussion] Started discussion for Room #${roomId} Day ${dayCount}`);
+            console.log(`[API/Discussion] Started discussion for Room #${roomId} Day ${dayCount} (initial delay: ${DELAY_INITIAL}s)`);
             return buildResponse(newState, alivePlayers, playerAddress);
         }
 
@@ -199,25 +216,35 @@ export async function POST(request: Request) {
 
 function buildResponse(state: DiscussionState | null, alivePlayers: any[], playerAddress?: string | null) {
     if (!state) {
-        return NextResponse.json({ active: false, finished: true });
+        return NextResponse.json({ active: false, finished: true, phase: 'finished' });
     }
 
     const currentSpeaker = alivePlayers[state.currentSpeakerIndex];
-    const elapsed = (Date.now() - state.speakerStartTime) / 1000;
-    const timeRemaining = Math.max(0, Math.floor(state.speakerDuration - elapsed));
 
-    const isMyTurn = playerAddress
+    // Calculate time remaining based on current phase
+    let timeRemaining = 0;
+    if (state.phase === 'speaking') {
+        const elapsed = (Date.now() - state.speakerStartTime) / 1000;
+        timeRemaining = Math.max(0, Math.floor(state.speakerDuration - elapsed));
+    } else if (state.phase === 'initial_delay' || state.phase === 'between_delay' || state.phase === 'final_delay') {
+        const elapsed = (Date.now() - (state.delayStartTime || 0)) / 1000;
+        timeRemaining = Math.max(0, Math.ceil((state.delayDuration || 5) - elapsed));
+    }
+
+    const isMyTurn = playerAddress && state.phase === 'speaking'
         ? currentSpeaker?.wallet.toLowerCase() === playerAddress.toLowerCase()
         : false;
 
     return NextResponse.json({
         active: !state.finished,
         finished: state.finished,
+        phase: state.phase || 'speaking',
         currentSpeakerIndex: state.currentSpeakerIndex,
         currentSpeakerAddress: currentSpeaker?.wallet || null,
         totalSpeakers: alivePlayers.length,
         timeRemaining,
         speakerDuration: state.speakerDuration,
+        delayDuration: state.delayDuration,
         isMyTurn
     });
 }

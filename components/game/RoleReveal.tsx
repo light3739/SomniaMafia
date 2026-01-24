@@ -24,19 +24,19 @@ interface RevealState {
 const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; description: string }> = {
     [Role.MAFIA]: {
         icon: <Skull className="w-16 h-16" />,
-        color: 'text-rose-400',
+        color: 'text-rose-500',
         bgColor: 'from-rose-950/50 to-rose-900/30',
         description: 'Eliminate all civilians to win. Vote by day, kill by night.'
     },
     [Role.DOCTOR]: {
         icon: <Shield className="w-16 h-16" />,
-        color: 'text-teal-400',
+        color: 'text-teal-500',
         bgColor: 'from-teal-950/50 to-teal-900/30',
         description: 'Save one player each night from the mafia attack.'
     },
     [Role.DETECTIVE]: {
         icon: <Search className="w-16 h-16" />,
-        color: 'text-sky-400',
+        color: 'text-sky-500',
         bgColor: 'from-sky-950/50 to-sky-900/30',
         description: 'Investigate one player each night to reveal their alignment.'
     },
@@ -449,7 +449,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                                             className={`
                                                 flex items-center justify-between p-3 rounded-xl border transition-all h-12 relative overflow-hidden
                                                 ${hasKey || (isMe && revealState.hasSharedKeys)
-                                                    ? 'bg-green-900/10 border-green-500/20 shadow-[0_0_10px_rgba(34,197,94,0.05)]'
+                                                    ? 'bg-[#916A47]/15 border-[#916A47]/30 shadow-[0_0_10px_rgba(145,106,71,0.1)]'
                                                     : isMe
                                                         ? 'bg-[#916A47]/20 border-[#916A47]/40'
                                                         : 'bg-white/5 border-white/10'
@@ -468,7 +468,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                                             <div className="flex items-center gap-3 relative z-10">
                                                 <div className={`
                                                     w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold
-                                                    ${isMe && !revealState.hasSharedKeys ? 'bg-[#916A47] text-black' : (hasKey || (isMe && revealState.hasSharedKeys)) ? 'bg-green-600 text-white' : 'bg-white/10 text-white/40'}
+                                                    ${isMe && !revealState.hasSharedKeys ? 'bg-[#916A47] text-black' : (hasKey || (isMe && revealState.hasSharedKeys)) ? 'bg-[#916A47] text-white' : 'bg-white/10 text-white/40'}
                                                 `}>
                                                     {(hasKey || (isMe && revealState.hasSharedKeys)) ? <Check className="w-3 h-3" /> : index + 1}
                                                 </div>
@@ -478,7 +478,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                                             </div>
                                             <div className="text-[10px] relative z-10 font-mono">
                                                 {(hasKey || (isMe && revealState.hasSharedKeys)) ? (
-                                                    <span className="text-green-400 font-bold uppercase tracking-wider">Ready</span>
+                                                    <span className="text-[#916A47] font-bold uppercase tracking-wider">Ready</span>
                                                 ) : isProcessingMe ? (
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[#916A47] font-bold">Sharing...</span>
@@ -542,82 +542,31 @@ export const RoleReveal: React.FC = React.memo(() => {
                             initial={{ opacity: 0, rotateY: 90 }}
                             animate={{ opacity: 1, rotateY: 0 }}
                             transition={{ type: "spring", duration: 0.8 }}
-                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-8 shadow-2xl pointer-events-auto`}
+                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-10 shadow-2xl pointer-events-auto w-[360px] min-h-[320px] flex flex-col justify-between`}
                         >
-                            <div className="text-center">
-                                {/* Role Icon */}
-                                <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    transition={{ delay: 0.3, type: "spring" }}
-                                    className={`${roleConfig.color} mb-6`}
-                                >
-                                    {showRole ? roleConfig.icon : <EyeOff className="w-16 h-16 mx-auto text-white/30" />}
-                                </motion.div>
-
+                            <div className="text-center flex-1 flex flex-col justify-center">
                                 {/* Role Name */}
                                 <motion.h2
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.5 }}
-                                    className={`text-4xl font-['Playfair_Display'] mb-4 ${showRole ? roleConfig.color : 'text-white/30'}`}
+                                    transition={{ delay: 0.3 }}
+                                    className={`text-4xl font-['Playfair_Display'] mb-6 ${roleConfig.color}`}
                                 >
-                                    {showRole ? revealState.myRole : '???'}
+                                    {revealState.myRole}
                                 </motion.h2>
 
                                 {/* Description */}
-                                {showRole && (
-                                    <motion.p
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        transition={{ delay: 0.7 }}
-                                        className="text-white/60 text-sm mb-4 max-w-xs mx-auto"
-                                    >
-                                        {roleConfig.description}
-                                    </motion.p>
-                                )}
-
-                                {/* Mafia Teammates - shown only to mafia members */}
-                                {showRole && revealState.myRole === Role.MAFIA && revealState.teammates.length > 0 && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: 0.9 }}
-                                        className="mb-6 p-4 bg-rose-950/30 border border-rose-400/30 rounded-xl"
-                                    >
-                                        <p className="text-rose-400 text-xs uppercase tracking-wider mb-2 flex items-center justify-center gap-2">
-                                            <Skull className="w-4 h-4" />
-                                            Your Fellow Mafia
-                                        </p>
-                                        <div className="flex flex-wrap justify-center gap-2">
-                                            {revealState.teammates.map(addr => {
-                                                const player = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
-                                                return (
-                                                    <span
-                                                        key={addr}
-                                                        className="px-3 py-1 bg-rose-500/20 border border-rose-400/40 rounded-full text-rose-300 text-sm"
-                                                    >
-                                                        {player?.name || addr.slice(0, 8)}
-                                                    </span>
-                                                );
-                                            })}
-                                        </div>
-                                    </motion.div>
-                                )}
-
-                                {/* Toggle visibility */}
-                                <Button
-                                    onClick={() => setShowRole(!showRole)}
-                                    variant="outline-gold"
-                                    className="mb-4"
+                                <motion.p
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ delay: 0.5 }}
+                                    className="text-white/60 text-sm max-w-xs mx-auto"
                                 >
-                                    {showRole ? (
-                                        <><EyeOff className="w-4 h-4 mr-2" /> Hide Role</>
-                                    ) : (
-                                        <><Eye className="w-4 h-4 mr-2" /> Show Role</>
-                                    )}
-                                </Button>
+                                    {roleConfig.description}
+                                </motion.p>
+                            </div>
 
+                            <div className="space-y-3 mt-6">
                                 {/* Confirm Button */}
                                 {!revealState.hasConfirmed ? (
                                     <Button
@@ -629,14 +578,14 @@ export const RoleReveal: React.FC = React.memo(() => {
                                         {isProcessing ? 'Auto-confirming role...' : 'I Understand My Role'}
                                     </Button>
                                 ) : (
-                                    <div className="flex items-center justify-center gap-2 text-green-400 py-4">
+                                    <div className="flex items-center justify-center gap-2 text-[#916A47] py-4">
                                         <Check className="w-5 h-5" />
                                         <span>Role Confirmed! Waiting for others...</span>
                                     </div>
                                 )}
 
                                 {/* Confirmation count */}
-                                <div className="mt-4 text-xs text-white/30">
+                                <div className="text-xs text-white/30 text-center">
                                     {gameState.players.filter(p => p.hasConfirmedRole).length} / {gameState.players.length} confirmed
                                 </div>
                             </div>

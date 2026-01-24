@@ -40,19 +40,19 @@ const RoleActions: Record<Role, { action: NightActionType; label: string; icon: 
         action: NightActionType.KILL,
         label: 'Kill',
         icon: <Skull className="w-5 h-5" />,
-        color: 'text-rose-400'
+        color: 'text-rose-500'
     },
     [Role.DOCTOR]: {
         action: NightActionType.HEAL,
         label: 'Protect',
         icon: <Shield className="w-5 h-5" />,
-        color: 'text-teal-400'
+        color: 'text-teal-500'
     },
     [Role.DETECTIVE]: {
         action: NightActionType.CHECK,
         label: 'Investigate',
         icon: <Search className="w-5 h-5" />,
-        color: 'text-sky-400'
+        color: 'text-sky-500'
     },
     [Role.CIVILIAN]: {
         action: NightActionType.NONE,
@@ -336,6 +336,66 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             setNightState(prev => ({ ...prev, hasCommitted: true, hasRevealed: true }));
         }
     }, [myPlayer?.hasNightCommitted, myPlayer?.hasNightRevealed, nightState.hasCommitted, nightState.hasRevealed, NIGHT_COMMIT_KEY, addLog]);
+
+    // ========== AUTO-TIMEOUT: Force day transition when night timer expires ==========
+    const timeoutTriggeredRef = useRef(false);
+    const TIMEOUT_BUFFER_SECONDS = 5; // Wait 5 seconds after deadline to allow last-second actions
+
+    useEffect(() => {
+        // Skip in test mode
+        if (isTestMode) return;
+
+        // Only host triggers timeout to avoid duplicate transactions
+        const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+        if (!isHost) return;
+
+        // Check if we have a valid deadline
+        const deadline = gameState.phaseDeadline;
+        if (!deadline || deadline === 0) return;
+
+        // Check if already triggered
+        if (timeoutTriggeredRef.current) return;
+
+        // Don't trigger if transaction is pending
+        if (isProcessing || isTxPending) return;
+
+        const checkTimeout = () => {
+            const now = Math.floor(Date.now() / 1000);
+            const secondsPastDeadline = now - deadline;
+
+            // If we're past the deadline + buffer, trigger timeout
+            if (secondsPastDeadline >= TIMEOUT_BUFFER_SECONDS) {
+                console.log('[NightPhase] Timer expired. Host initiating forcePhaseTimeout...', {
+                    deadline,
+                    now,
+                    secondsPastDeadline,
+                    buffer: TIMEOUT_BUFFER_SECONDS
+                });
+
+                timeoutTriggeredRef.current = true;
+                addLog("Night time expired. Transitioning to day...", "warning");
+
+                forcePhaseTimeoutOnChain().catch(err => {
+                    console.error('[NightPhase] forcePhaseTimeout failed:', err);
+                    // Reset flag to allow retry
+                    timeoutTriggeredRef.current = false;
+                });
+            }
+        };
+
+        // Check immediately
+        checkTimeout();
+
+        // And poll every 2 seconds
+        const interval = setInterval(checkTimeout, 2000);
+        return () => clearInterval(interval);
+    }, [gameState.phaseDeadline, gameState.players, myPlayer?.address, isTestMode, isProcessing, isTxPending, forcePhaseTimeoutOnChain, addLog]);
+
+    // Reset timeout flag when phase changes (new night phase)
+    useEffect(() => {
+        timeoutTriggeredRef.current = false;
+    }, [gameState.dayCount]);
+
 
     const handleCommit = useCallback(async () => {
         if (!selectedTarget || nightState.hasCommitted || commitStartedRef.current) return;
@@ -644,7 +704,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="mb-4 p-4 bg-rose-950/30 border border-rose-400/30 rounded-2xl"
+                        className="mb-4 p-4 bg-rose-950/30 rounded-2xl"
                     >
                         <div className="flex items-center gap-2 mb-2">
                             <span className="text-rose-400 text-sm font-medium">Your Fellow Mafia</span>
@@ -653,7 +713,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                             {nightState.teammates.map(addr => {
                                 const teammate = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
                                 return (
-                                    <span key={addr} className={`px-3 py-1 rounded-full text-sm ${teammate?.isAlive ? 'bg-rose-900/50 text-rose-300 border border-rose-400/30' : 'bg-gray-900/50 text-gray-500 border border-gray-500/30 line-through'}`}>
+                                    <span key={addr} className={`px-3 py-1 rounded-full text-sm ${teammate?.isAlive ? 'bg-rose-900/50 text-rose-300' : 'bg-gray-900/50 text-gray-500 line-through'}`}>
                                         {teammate?.name || addr.slice(0, 8)}
                                     </span>
                                 );
@@ -690,25 +750,25 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                 <div className="w-full">
                                     {/* Mafia Consensus */}
                                     {myRole === Role.MAFIA && (
-                                        <div className="mb-4 p-4 bg-rose-950/20 border border-rose-400/20 rounded-2xl w-full">
+                                        <div className="mb-4 p-4 bg-rose-950/20 rounded-2xl w-full">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <span className="text-rose-300 text-sm font-medium">Mafia Consensus</span>
                                             </div>
-                                            <div className="h-px w-full bg-rose-400/30 mb-3" />
+                                            <div className="h-px w-full bg-rose-500/20 mb-3" />
                                             <div className="flex justify-between text-sm mb-3">
                                                 <span className="text-rose-200/60">Committed: {nightState.mafiaCommitted}</span>
                                                 <span className="text-rose-200/60">Revealed: {nightState.mafiaRevealed}</span>
                                             </div>
                                             {nightState.mafiaRevealed < nightState.mafiaCommitted && (
-                                                <div className="p-3 bg-rose-900/20 rounded-lg border border-rose-400/10">
+                                                <div className="p-3 bg-rose-900/20 rounded-lg">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-3 h-3 rounded-full bg-rose-400 animate-pulse" />
+                                                        <div className="w-3 h-3 rounded-full bg-rose-500 animate-pulse" />
                                                         <span className="text-rose-300 text-sm">Waiting for other Mafia...</span>
                                                     </div>
                                                 </div>
                                             )}
                                             {nightState.mafiaRevealed > 0 && nightState.mafiaRevealed === nightState.mafiaCommitted && (
-                                                <div className="p-4 bg-rose-900/40 rounded-xl border border-rose-400/30">
+                                                <div className="p-4 bg-rose-900/40 rounded-xl">
                                                     {nightState.mafiaConsensusTarget ? (
                                                         <>
                                                             <p className="text-xs uppercase tracking-wider mb-2 text-rose-400">Kill Confirmed</p>
@@ -731,13 +791,13 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
 
                                     {/* Role Specific Results & Pending Status */}
                                     {(myRole === Role.DOCTOR || myRole === Role.DETECTIVE) && (
-                                        <div className={`mb-4 p-4 ${myRole === Role.DOCTOR ? 'bg-teal-950/20 border-teal-500/20' : 'bg-sky-950/20 border-sky-500/20'} rounded-2xl w-full`}>
+                                        <div className={`mb-4 p-4 ${myRole === Role.DOCTOR ? 'bg-teal-950/20' : 'bg-sky-950/20'} rounded-2xl w-full`}>
                                             <div className="flex items-center gap-2 mb-1">
                                                 <span className={`${myRole === Role.DOCTOR ? 'text-teal-300' : 'text-sky-300'} text-sm font-medium`}>
                                                     {myRole === Role.DOCTOR ? 'Doctor Status' : 'Detective Status'}
                                                 </span>
                                             </div>
-                                            <div className={`h-px w-full ${myRole === Role.DOCTOR ? 'bg-teal-500/30' : 'bg-sky-500/30'} mb-3`} />
+                                            <div className={`h-px w-full ${myRole === Role.DOCTOR ? 'bg-teal-500/20' : 'bg-sky-500/20'} mb-3`} />
 
                                             <AnimatePresence mode="wait">
                                                 {!nightState.hasRevealed || (myRole === Role.DETECTIVE && nightState.investigationResult === null) ? (
@@ -747,7 +807,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                                         animate={{ opacity: 1, y: 0 }}
                                                         exit={{ opacity: 0, y: -5 }}
                                                         transition={{ duration: 0.3 }}
-                                                        className={`p-3 ${myRole === Role.DOCTOR ? 'bg-teal-900/20 border-teal-500/10' : 'bg-sky-900/20 border-sky-500/10'} rounded-lg border border-white/5`}
+                                                        className={`p-3 ${myRole === Role.DOCTOR ? 'bg-teal-900/20' : 'bg-sky-900/20'} rounded-lg`}
                                                     >
                                                         <div className="flex items-center gap-2">
                                                             <div className={`w-3 h-3 rounded-full ${myRole === Role.DOCTOR ? 'bg-teal-500' : 'bg-sky-500'} animate-pulse`} />
@@ -765,7 +825,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                                         className="w-full space-y-4"
                                                     >
                                                         {myRole === Role.DOCTOR && nightState.committedTarget && (
-                                                            <div className="p-4 rounded-xl border bg-teal-900/40 border-teal-500/30 text-center">
+                                                            <div className="p-4 rounded-xl bg-teal-900/40 text-center">
                                                                 <p className="text-xs uppercase tracking-wider mb-2 text-teal-400/70">Protection Active</p>
                                                                 <p className="text-xl font-bold text-teal-200">
                                                                     {gameState.players.find(p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase())?.name} is protected
@@ -773,11 +833,11 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                                             </div>
                                                         )}
                                                         {myRole === Role.DETECTIVE && nightState.investigationResult !== null && (
-                                                            <div className="p-4 rounded-xl border bg-sky-900/40 border-sky-500/30 text-center">
+                                                            <div className="p-4 rounded-xl bg-sky-900/40 text-center">
                                                                 <p className="text-xs uppercase tracking-wider mb-2 text-sky-400/70">Investigation Result</p>
-                                                                <p className="text-xl font-bold">
-                                                                    <span className="text-sky-200">{gameState.players.find(p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase())?.name} is </span>
-                                                                    <span className={nightState.investigationResult === Role.MAFIA ? 'text-rose-400' : 'text-teal-400'}>
+                                                                <p className="text-xl font-bold text-white">
+                                                                    {gameState.players.find(p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase())?.name} is{' '}
+                                                                    <span className={nightState.investigationResult === Role.MAFIA ? 'text-rose-500' : 'text-white/70'}>
                                                                         {nightState.investigationResult === Role.MAFIA ? 'MAFIA' : 'INNOCENT'}
                                                                     </span>
                                                                 </p>
@@ -812,9 +872,9 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                 <motion.div
                                     initial={{ scale: 0.95, opacity: 0 }}
                                     animate={{ scale: 1, opacity: 1 }}
-                                    className={`p-3 rounded-xl border-2 mb-4 w-full ${myRole === Role.MAFIA ? 'bg-rose-900/15 border-rose-400/60 shadow-[0_0_20px_rgba(251,113,133,0.15)]' :
-                                        myRole === Role.DOCTOR ? 'bg-teal-900/15 border-teal-400/60 shadow-[0_0_20px_rgba(45,212,191,0.15)]' :
-                                            'bg-sky-900/15 border-sky-400/60 shadow-[0_0_20px_rgba(56,189,248,0.15)]'
+                                    className={`p-3 rounded-xl border mb-4 w-full ${myRole === Role.MAFIA ? 'bg-rose-900/15 border-rose-500/40' :
+                                        myRole === Role.DOCTOR ? 'bg-teal-900/15 border-teal-500/40' :
+                                            'bg-sky-900/15 border-sky-500/40'
                                         }`}
                                 >
                                     <div className="flex items-center justify-between">
@@ -849,8 +909,6 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                         </motion.div>
                     )}
                 </AnimatePresence>
-
-
             </motion.div>
         </div>
     );

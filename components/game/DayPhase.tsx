@@ -23,6 +23,7 @@ export const DayPhase: React.FC = React.memo(() => {
         myPlayer,
         startVotingOnChain,
         voteOnChain,
+        forcePhaseTimeoutOnChain,
         addLog,
         isTxPending,
         selectedTarget,
@@ -51,10 +52,12 @@ export const DayPhase: React.FC = React.memo(() => {
     const [discussionState, setDiscussionState] = useState<{
         active: boolean;
         finished: boolean;
+        phase: 'initial_delay' | 'speaking' | 'between_delay' | 'final_delay' | 'finished';
         currentSpeakerIndex: number;
         currentSpeakerAddress: string | null;
         totalSpeakers: number;
         timeRemaining: number;
+        delayDuration?: number;
         isMyTurn: boolean;
     } | null>(null);
 
@@ -69,6 +72,54 @@ export const DayPhase: React.FC = React.memo(() => {
     const lastLoggedPhase = useRef<GamePhase | null>(null);
     const lastSpeakerRef = useRef<string | null>(null);
     const discussionStartedRef = useRef(false);
+    const votingTimeoutRef = useRef(false);
+
+    // Voting phase timeout - auto-end voting when timer expires
+    useEffect(() => {
+        if (!isVotingPhase || isTestMode) return;
+
+        const deadline = gameState.phaseDeadline;
+        if (!deadline) return;
+
+        // Only host triggers the timeout
+        const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+        if (!isHost) return;
+
+        // Already triggered
+        if (votingTimeoutRef.current) return;
+
+        // Don't trigger if we're in a TX
+        if (isProcessing || isTxPending) return;
+
+        const TIMEOUT_BUFFER_SECONDS = 5;
+
+        const checkTimeout = () => {
+            const now = Math.floor(Date.now() / 1000);
+            const secondsPastDeadline = now - deadline;
+
+            if (secondsPastDeadline >= TIMEOUT_BUFFER_SECONDS) {
+                console.log('[DayPhase] Voting timer expired. Host initiating forcePhaseTimeout...');
+                votingTimeoutRef.current = true;
+                addLog("Voting time expired. Counting votes...", "warning");
+
+                forcePhaseTimeoutOnChain().catch(err => {
+                    console.error('[DayPhase] forcePhaseTimeout failed:', err);
+                    votingTimeoutRef.current = false;
+                });
+            }
+        };
+
+        checkTimeout();
+        const interval = setInterval(checkTimeout, 2000);
+        return () => clearInterval(interval);
+    }, [isVotingPhase, gameState.phaseDeadline, gameState.players, myPlayer?.address, isTestMode, isProcessing, isTxPending, forcePhaseTimeoutOnChain, addLog]);
+
+    // Reset timeout flag when phase changes
+    useEffect(() => {
+        if (!isVotingPhase) {
+            votingTimeoutRef.current = false;
+        }
+    }, [isVotingPhase]);
 
     // Логируем начало речи каждого игрока
     useEffect(() => {
@@ -123,6 +174,7 @@ export const DayPhase: React.FC = React.memo(() => {
                 setDiscussionState({
                     active: true,
                     finished: false,
+                    phase: 'speaking',
                     currentSpeakerIndex: 0,
                     currentSpeakerAddress: gameState.players[0]?.address || null,
                     totalSpeakers: gameState.players.filter(p => p.isAlive).length,
@@ -367,50 +419,75 @@ export const DayPhase: React.FC = React.memo(() => {
                             >
                                 {discussionState?.active ? (
                                     <>
-                                        {/* Ultra-compact timer display */}
-                                        <div className="w-full py-1 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Clock className="w-4 h-4 text-[#916A47]" />
-                                                <span className="text-xl font-bold text-white tabular-nums">
-                                                    {Math.floor((discussionState?.timeRemaining || 0) / 60)}:{String((discussionState?.timeRemaining || 0) % 60).padStart(2, '0')}
-                                                </span>
-                                                <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
-                                                    {discussionState?.isMyTurn ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
-                                                </span>
-                                            </div>
-                                        </div>
+                                        {/* Delay Phase UI - Countdown before speaker */}
+                                        {(discussionState?.phase === 'initial_delay' ||
+                                            discussionState?.phase === 'between_delay' ||
+                                            discussionState?.phase === 'final_delay') && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, scale: 0.9 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    className="w-full py-6 text-center bg-[#916A47]/10 rounded-xl border border-[#916A47]/30"
+                                                >
+                                                    <div className="text-5xl font-bold text-[#916A47] mb-2">
+                                                        {discussionState?.timeRemaining || 0}
+                                                    </div>
+                                                    <div className="text-white/60 text-sm">
+                                                        {discussionState?.phase === 'initial_delay' && 'Discussion starting...'}
+                                                        {discussionState?.phase === 'between_delay' && `Next: ${gameState.players.find(p => p.address.toLowerCase() === discussionState?.currentSpeakerAddress?.toLowerCase())?.name || 'Next Speaker'}`}
+                                                        {discussionState?.phase === 'final_delay' && 'Voting starts soon...'}
+                                                    </div>
+                                                </motion.div>
+                                            )}
 
-                                        {/* Skip button (only for current speaker) */}
-                                        {discussionState?.isMyTurn && (
-                                            <Button
-                                                onClick={skipSpeech}
-                                                disabled={isProcessing}
-                                                isLoading={isProcessing}
-                                                variant="outline-gold"
-                                                className="w-full h-[50px]"
-                                            >
-                                                <ChevronRight className="w-5 h-5 mr-2" />
-                                                Finish Speech Early
-                                            </Button>
-                                        )}
+                                        {/* Speaking Phase UI */}
+                                        {discussionState?.phase === 'speaking' && (
+                                            <>
+                                                {/* Ultra-compact timer display */}
+                                                <div className="w-full py-1 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <Clock className="w-4 h-4 text-[#916A47]" />
+                                                        <span className="text-xl font-bold text-white tabular-nums">
+                                                            {Math.floor((discussionState?.timeRemaining || 0) / 60)}:{String((discussionState?.timeRemaining || 0) % 60).padStart(2, '0')}
+                                                        </span>
+                                                        <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
+                                                            {discussionState?.isMyTurn ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
+                                                        </span>
+                                                    </div>
+                                                </div>
 
-                                        {/* Host Force Skip (if not speaker) */}
-                                        {!discussionState?.isMyTurn && gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase() && (
-                                            <Button
-                                                onClick={skipSpeech}
-                                                disabled={isProcessing}
-                                                isLoading={isProcessing}
-                                                variant="secondary"
-                                                className="w-full h-[50px] mt-2 bg-red-900/40 hover:bg-red-900/60 border-red-500/30 text-red-200"
-                                            >
-                                                <ChevronRight className="w-5 h-5 mr-2" />
-                                                Force Skip (Host)
-                                            </Button>
+                                                {/* Skip button (only for current speaker) */}
+                                                {discussionState?.isMyTurn && (
+                                                    <Button
+                                                        onClick={skipSpeech}
+                                                        disabled={isProcessing}
+                                                        isLoading={isProcessing}
+                                                        variant="outline-gold"
+                                                        className="w-full h-[50px]"
+                                                    >
+                                                        <ChevronRight className="w-5 h-5 mr-2" />
+                                                        Finish Speech Early
+                                                    </Button>
+                                                )}
+
+                                                {/* Host Force Skip (if not speaker) */}
+                                                {!discussionState?.isMyTurn && gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase() && (
+                                                    <Button
+                                                        onClick={skipSpeech}
+                                                        disabled={isProcessing}
+                                                        isLoading={isProcessing}
+                                                        variant="secondary"
+                                                        className="w-full h-[44px] mt-2 bg-amber-900/30 hover:bg-amber-900/50 border-amber-500/30 text-amber-200"
+                                                    >
+                                                        <ChevronRight className="w-5 h-5 mr-2" />
+                                                        Force Skip (Host)
+                                                    </Button>
+                                                )}
+                                            </>
                                         )}
                                     </>
                                 ) : discussionState?.finished ? (
-                                    <div className="w-full py-6 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
-                                        <p className="text-[#916A47] font-bold text-xl animate-pulse">
+                                    <div className="w-full py-3 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                        <p className="text-[#916A47] font-bold text-base animate-pulse">
                                             Starting Vote...
                                         </p>
                                     </div>
@@ -432,6 +509,9 @@ export const DayPhase: React.FC = React.memo(() => {
                                 exit={{ opacity: 0, y: -10 }}
                                 className="space-y-3"
                             >
+                                {/* Voting Timer */}
+                                <VotingTimer />
+
                                 <Button
                                     onClick={handleVote}
                                     data-custom-sound
@@ -457,6 +537,46 @@ export const DayPhase: React.FC = React.memo(() => {
                     </AnimatePresence>
                 </div>
             </motion.div>
+        </div>
+    );
+});
+
+/**
+ * VotingTimer component - shows countdown timer during voting phase
+ */
+const VotingTimer: React.FC = React.memo(() => {
+    const { gameState } = useGameContext();
+    const [timeLeft, setTimeLeft] = useState<number>(0);
+
+    useEffect(() => {
+        if (!gameState.phaseDeadline) return;
+
+        const tick = () => {
+            const now = Math.floor(Date.now() / 1000);
+            const remaining = Math.max(0, gameState.phaseDeadline! - now);
+            setTimeLeft(remaining);
+        };
+
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [gameState.phaseDeadline]);
+
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+    const isLow = timeLeft <= 10;
+
+    return (
+        <div className={`w-full py-2 text-center rounded-xl border ${isLow ? 'bg-rose-950/20 border-rose-500/30' : 'bg-[#916A47]/10 border-[#916A47]/30'}`}>
+            <div className="flex items-center justify-center gap-2">
+                <Clock className={`w-4 h-4 ${isLow ? 'text-rose-400' : 'text-[#916A47]'}`} />
+                <span className={`text-2xl font-bold tabular-nums ${isLow ? 'text-rose-400 animate-pulse' : 'text-white'}`}>
+                    {minutes}:{String(seconds).padStart(2, '0')}
+                </span>
+                <span className={`text-[10px] uppercase font-bold tracking-widest ml-2 ${isLow ? 'text-rose-400/70' : 'text-[#916A47]/50'}`}>
+                    Time to Vote
+                </span>
+            </div>
         </div>
     );
 });

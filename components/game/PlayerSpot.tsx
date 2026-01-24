@@ -41,11 +41,11 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
         if (isNight && myRole) {
             switch (myRole) {
                 case Role.MAFIA:
-                    return 'bg-rose-400/30 border border-rose-400 ring-2 ring-rose-400 shadow-[0_0_20px_rgba(251,113,133,0.5)]';
+                    return 'bg-rose-500/30 border border-rose-500 ring-2 ring-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.5)]';
                 case Role.DOCTOR:
-                    return 'bg-teal-400/30 border border-teal-400 ring-2 ring-teal-400 shadow-[0_0_20px_rgba(45,212,191,0.5)]';
+                    return 'bg-teal-500/30 border border-teal-500 ring-2 ring-teal-500 shadow-[0_0_20px_rgba(20,184,166,0.5)]';
                 case Role.DETECTIVE:
-                    return 'bg-sky-400/30 border border-sky-400 ring-2 ring-sky-400 shadow-[0_0_20px_rgba(56,189,248,0.5)]';
+                    return 'bg-sky-500/30 border border-sky-500 ring-2 ring-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.5)]';
                 default:
                     return 'bg-[#916A47]/50 border border-[#916A47] ring-2 ring-[#916A47] shadow-[0_0_20px_rgba(145,106,71,0.5)]';
             }
@@ -60,8 +60,8 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
     const renderMarkIcon = (mark: string | null, size: number = 3) => {
         const className = `w-${size} h-${size}`;
         switch (mark) {
-            case 'mafia': return <Skull className={`${className} text-rose-400`} />;
-            case 'civilian': return <User className={`${className} text-teal-400`} />;
+            case 'mafia': return <Skull className={`${className} text-rose-500`} />;
+            case 'civilian': return <User className={`${className} text-teal-500`} />;
             case 'question': return <HelpCircle className={`${className} text-amber-500`} />;
             default: return null;
         }
@@ -149,7 +149,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                         data-custom-sound="true"
                                         className="absolute p-2 hover:scale-110 transition-transform z-20"
                                     >
-                                        <User className="w-6 h-6 text-teal-400 drop-shadow-[0_0_8px_rgba(45,212,191,0.6)]" />
+                                        <User className="w-6 h-6 text-teal-500 drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]" />
                                     </motion.button>
 
                                     {/* Question - Diagonal Right Up */}
@@ -187,7 +187,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                         data-custom-sound="true"
                                         className="absolute p-2 hover:scale-110 transition-transform z-20"
                                     >
-                                        <Skull className="w-6 h-6 text-rose-400 drop-shadow-[0_0_8px_rgba(251,113,133,0.6)]" />
+                                        <Skull className="w-6 h-6 text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
                                     </motion.button>
                                 </>
                             )}
@@ -243,7 +243,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
             {/* Text Info */}
             <div className="flex flex-col items-start min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1 w-full">
-                    <span className={`text-sm md:text-base font-bold truncate block max-w-full ${isMafiaVisible ? 'text-rose-400' : 'text-[#916A47]'}`}>
+                    <span className={`text-sm md:text-base font-bold truncate block max-w-full ${isMafiaVisible ? 'text-rose-500' : 'text-[#916A47]'}`}>
                         {player.name}
                     </span>
                 </div>
