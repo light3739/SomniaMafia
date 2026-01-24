@@ -1,5 +1,6 @@
 // components/game/NightPhase.tsx
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
@@ -822,9 +823,9 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                 >
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-gray-800">
+                                            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-gray-800">
                                                 {selectedPlayer.avatarUrl ? (
-                                                    <img src={selectedPlayer.avatarUrl} alt={selectedPlayer.name} className="w-full h-full object-cover" />
+                                                    <Image src={selectedPlayer.avatarUrl} alt={selectedPlayer.name} fill sizes="40px" className="object-cover" />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center bg-indigo-950/50">
                                                         <User className="w-5 h-5 text-white/20" />
