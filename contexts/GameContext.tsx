@@ -988,7 +988,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const hash = await sendGameTransaction('vote', [currentRoomId, targetAddress]);
             const targetPlayer = gameState.players.find(p => p.address.toLowerCase() === targetAddress.toLowerCase());
             const targetName = targetPlayer ? (targetPlayer.name || `Player ${gameState.players.indexOf(targetPlayer) + 1}`) : targetAddress.slice(0, 6);
-            addLog(`🗳️ You voted for ${targetName}`, "warning");
+            // addLog(`🗳️ You voted for ${targetName}`, "warning");
             await publicClient?.waitForTransactionReceipt({ hash });
             // V3: auto-finalize when all voted - just refresh
             await refreshPlayersList(currentRoomId);
@@ -1008,7 +1008,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             const txHash = await sendGameTransaction('commitNightAction', [currentRoomId, hash as `0x${string}`]);
-            addLog("Night action committed!", "info");
+            // addLog("Night action committed!", "info");
             await publicClient?.waitForTransactionReceipt({ hash: txHash });
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
@@ -1033,7 +1033,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             const hash = await sendGameTransaction('revealNightAction', [currentRoomId, action, target, salt]);
-            addLog("Night action revealed!", "success");
+            // addLog("Night action revealed!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
             // V3: auto-finalize when all revealed - just refresh
             await refreshPlayersList(currentRoomId);
@@ -1051,7 +1051,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('commitMafiaTarget', [currentRoomId, targetHash as `0x${string}`]);
-            addLog("Mafia target committed!", "info");
+            // addLog("Mafia target committed!", "info");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
@@ -1067,7 +1067,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('revealMafiaTarget', [currentRoomId, target, salt]);
-            addLog("Mafia target revealed!", "success");
+            // addLog("Mafia target revealed!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
@@ -1746,7 +1746,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!roomId) return;
 
             if (BigInt(logs[0].args.roomId) === roomId) {
-                addLog(`Day ${logs[0].args.dayNumber} has begun!`, "phase");
+                addLog(`Day ${logs[0].args.dayNumber} has begun`, "phase");
                 refreshPlayersList(roomId);
             }
         }
@@ -1791,9 +1791,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!roomId) return;
 
             if (BigInt(logs[0].args.roomId) === roomId) {
-                const victim = logs[0].args.player;
-                const reason = logs[0].args.reason;
-                addLog(`${victim.slice(0, 6)}... ${reason}!`, "danger");
+                // const victim = logs[0].args.player;
+                // const reason = logs[0].args.reason;
+                // addLog(`${victim.slice(0, 6)}... ${reason}!`, "danger");
                 refreshPlayersList(roomId);
                 // Trigger win check in case the Mafia was eliminated
                 triggerAutoWinCheck();
@@ -1811,7 +1811,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (BigInt(logs[0].args.roomId) === roomId) {
                 const kicked = logs[0].args.player;
-                addLog(`${kicked.slice(0, 6)}... was kicked (AFK)!`, "danger");
+                const kPlayer = gameState.players.find(p => p.address.toLowerCase() === kicked.toLowerCase());
+                const name = kPlayer ? (kPlayer.name || `Player ${gameState.players.indexOf(kPlayer) + 1}`) : kicked.slice(0, 6);
+                addLog(`${name} was kicked (AFK)`, "danger");
                 refreshPlayersList(roomId);
                 // Trigger win check in case the kicked player was Mafia
                 triggerAutoWinCheck();
@@ -2006,14 +2008,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const healed = logs[0].args.healed;
                 if (killed !== '0x0000000000000000000000000000000000000000') {
                     if (killed === healed) {
-                        // addLog(`🛡️ Someone was saved by the doctor!`, "success");
+                        addLog("The night passes peacefully... No one was killed.", "info");
                     } else {
                         const kPlayer = gameState.players.find(p => p.address.toLowerCase() === killed.toLowerCase());
                         const name = kPlayer ? (kPlayer.name || `Player ${gameState.players.indexOf(kPlayer) + 1}`) : killed.slice(0, 6);
                         addLog(`Tragedy: ${name} was killed during the night!`, "danger");
                     }
                 } else {
-                    addLog("The night passes peacefully...", "info");
+                    addLog("The night passes peacefully... No one was killed.", "info");
                 }
                 refreshPlayersList(roomId);
                 // Trigger auto-win check because a night kill might end the game
