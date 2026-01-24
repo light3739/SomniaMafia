@@ -12,7 +12,7 @@ interface MainPageProps {
 
 export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
     return (
-        <div className="relative w-full h-screen overflow-hidden bg-black font-sans flex items-center justify-center">
+        <div className="relative w-full h-screen overflow-hidden font-sans flex items-center justify-center">
 
 
 
