@@ -70,7 +70,8 @@ export async function GET(request: Request) {
                 functionName: 'getPlayers',
                 args: [BigInt(roomId)],
             });
-            alivePlayers = players.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
+            const allShuffled = shufflePlayers(players, roomId);
+            alivePlayers = allShuffled.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
         } catch (e) {
             if (roomId === '999') {
                 alivePlayers = Array(10).fill(null).map((_, i) => ({
@@ -78,11 +79,12 @@ export async function GET(request: Request) {
                     nickname: `Player ${i + 1}`,
                     flags: FLAG_ACTIVE
                 }));
+                alivePlayers = shufflePlayers(alivePlayers, roomId);
             } else throw e;
         }
 
-        // Apply deterministic shuffle
-        alivePlayers = shufflePlayers(alivePlayers, roomId);
+        // Shuffle moved inside try/catch to ensure stability
+        // alivePlayers = shufflePlayers(alivePlayers, roomId);
         const totalSpeakers = alivePlayers.length;
 
         // Auto-advance based on current phase
@@ -138,7 +140,8 @@ export async function POST(request: Request) {
                 functionName: 'getPlayers',
                 args: [BigInt(roomId)],
             });
-            alivePlayers = players.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
+            const allShuffled = shufflePlayers(players, roomId);
+            alivePlayers = allShuffled.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
 
             const roomData = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
@@ -154,12 +157,13 @@ export async function POST(request: Request) {
                     nickname: i === 0 ? 'Tester' : `Player ${i + 1}`,
                     flags: FLAG_ACTIVE
                 }));
+                alivePlayers = shufflePlayers(alivePlayers, roomId);
                 hostAddress = playerAddress || '0xhost';
             } else throw e;
         }
 
-        // Apply deterministic shuffle
-        alivePlayers = shufflePlayers(alivePlayers, roomId);
+        // Shuffle moved inside try/catch
+        // alivePlayers = shufflePlayers(alivePlayers, roomId);
         const totalSpeakers = alivePlayers.length;
 
         if (action === 'start') {
