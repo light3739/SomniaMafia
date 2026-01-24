@@ -532,28 +532,67 @@ export const DayPhase: React.FC = React.memo(() => {
 
 /**
  * VotingTimer component - shows countdown timer during voting phase
+ * Implements "Soft Deadline" logic (1 minute target vs 3 minute contract limit)
  */
 const VotingTimer: React.FC = React.memo(() => {
-    const { gameState } = useGameContext();
+    const { gameState, myPlayer, voteOnChain, addLog } = useGameContext();
     const [timeLeft, setTimeLeft] = useState<number>(0);
+    const [isSoftTime, setIsSoftTime] = useState(true);
+    const hasAutoVotedRef = useRef(false);
+
+    // Assume contract duration is 3 minutes (180s). We want 1 minute (60s).
+    // Soft deadline is 120s BEFORE the real deadline.
+    const CONTRACT_DURATION = 180;
+    const TARGET_DURATION = 60;
+    const BUFFER = CONTRACT_DURATION - TARGET_DURATION; // 120s
 
     useEffect(() => {
         if (!gameState.phaseDeadline) return;
 
         const tick = () => {
             const now = Math.floor(Date.now() / 1000);
-            const remaining = Math.max(0, gameState.phaseDeadline! - now);
-            setTimeLeft(remaining);
+            const realRemaining = Math.max(0, gameState.phaseDeadline! - now);
+
+            // Calculate soft remaining time (until the 1-minute mark)
+            // If realRemaining > 120, we are within the first minute.
+            // SoftTime = realRemaining - 120.
+            const softRemaining = realRemaining - BUFFER;
+
+            if (softRemaining > 0) {
+                // We are in the "Soft" phase (first minute)
+                setTimeLeft(softRemaining);
+                setIsSoftTime(true);
+            } else {
+                // We passed the 1 minute mark. Show real remaining time (waiting for contract timeout)
+                // OR show 00:00 to indicate "Time's up!" for the user
+                setTimeLeft(0);
+                setIsSoftTime(false);
+
+                // --- AUTO-VOTE LOGIC ---
+                // If soft time expired, AND I haven't voted, AND I haven't tried auto-voting yet
+                if (!hasAutoVotedRef.current && myPlayer && !myPlayer.hasVoted && myPlayer.isAlive) {
+                    hasAutoVotedRef.current = true;
+                    console.log("[AutoVote] Soft deadline reached. Casting self-vote.");
+                    addLog("⏳ 1 minute limit reached. Auto-voting for self...", "warning");
+
+                    // Vote for self to unblock the game
+                    voteOnChain(myPlayer.address as `0x${string}`).catch(e => {
+                        console.error("[AutoVote] Failed:", e);
+                        addLog("Auto-vote failed. Please vote manually!", "danger");
+                        hasAutoVotedRef.current = false; // Allow retry if failed?
+                    });
+                }
+            }
         };
 
         tick();
         const interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
-    }, [gameState.phaseDeadline]);
+    }, [gameState.phaseDeadline, myPlayer, myPlayer?.hasVoted, voteOnChain, addLog]);
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
-    const isLow = timeLeft <= 10;
+    const isLow = timeLeft <= 10 && isSoftTime;
 
     return (
         <div className={`w-full py-2 text-center rounded-xl border ${isLow ? 'bg-rose-950/20 border-rose-500/30' : 'bg-[#916A47]/10 border-[#916A47]/30'}`}>
@@ -563,9 +602,14 @@ const VotingTimer: React.FC = React.memo(() => {
                     {minutes}:{String(seconds).padStart(2, '0')}
                 </span>
                 <span className={`text-[10px] uppercase font-bold tracking-widest ml-2 ${isLow ? 'text-rose-400/70' : 'text-[#916A47]/50'}`}>
-                    {timeLeft <= 0 ? 'Voting Closed' : 'Time to Vote'}
+                    {timeLeft <= 0 ? (isSoftTime ? 'Time Expired' : 'Overtime') : 'Time to Vote'}
                 </span>
             </div>
+            {timeLeft <= 0 && !isSoftTime && (
+                <div className="text-[10px] text-white/30 mt-1">
+                    Waiting for server timeout...
+                </div>
+            )}
         </div>
     );
 });
