@@ -213,14 +213,41 @@ export const DayPhase: React.FC = React.memo(() => {
 
     const votingStartedRef = useRef(false);
 
+    // Handle start voting - defined before useEffect to avoid hoisting issues
+    const handleStartVoting = useCallback(async () => {
+        console.log('[DayPhase] handleStartVoting called');
+        setIsProcessing(true);
+        try {
+            await startVotingOnChain();
+        } catch (e) {
+            console.error('[DayPhase] Failed to start voting:', e);
+            addLog("Failed to start voting on-chain", "danger");
+        } finally {
+            setIsProcessing(false);
+        }
+    }, [startVotingOnChain, addLog]);
+
     // Auto-transition to voting when discussion finished
     useEffect(() => {
+        const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+
+        console.log('[DayPhase] Auto-voting check:', {
+            finished: discussionState?.finished,
+            isDayPhase,
+            votingStarted: votingStartedRef.current,
+            isHost,
+            myAddress: myPlayer?.address,
+            hostAddress: gameState.players[0]?.address
+        });
+
         if (discussionState?.finished && isDayPhase && !votingStartedRef.current) {
             // Host triggers voting
-            if (gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase()) {
+            if (isHost) {
                 votingStartedRef.current = true;
+                console.log('[DayPhase] Host initiating voting transition...');
                 addLog("All players have spoken. Starting vote...", "warning");
                 const timer = setTimeout(() => {
+                    console.log('[DayPhase] Calling handleStartVoting...');
                     handleStartVoting();
                 }, 2000);
                 return () => clearTimeout(timer);
@@ -231,7 +258,7 @@ export const DayPhase: React.FC = React.memo(() => {
         if (!isDayPhase || !discussionState?.finished) {
             votingStartedRef.current = false;
         }
-    }, [discussionState?.finished, isDayPhase, gameState.players, myPlayer?.address, addLog]);
+    }, [discussionState?.finished, isDayPhase, gameState.players, myPlayer?.address, addLog, handleStartVoting]);
 
     // Voting Logic (Polling)
     const fetchVoteCounts = useCallback(async () => {
@@ -277,16 +304,7 @@ export const DayPhase: React.FC = React.memo(() => {
         }
     }, [fetchVoteCounts, isVotingPhase]);
 
-    const handleStartVoting = async () => {
-        setIsProcessing(true);
-        try {
-            await startVotingOnChain();
-        } catch (e) {
-            addLog("Failed to start voting on-chain", "danger");
-        } finally {
-            setIsProcessing(false);
-        }
-    };
+
 
     const handleVote = async () => {
         if (!selectedTarget) return;
