@@ -166,6 +166,18 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
         }
     }, [gameState.phase, gameState.dayCount, lastNightDay, playNightTransition]);
 
+    // Calculate last voting result from logs for the announcement
+    const votingResult = useMemo(() => {
+        if (gameState.phase !== GamePhase.NIGHT) return null;
+        // Search for relevant voting outcome logs
+        const reversedLogs = [...gameState.logs].reverse();
+        const voteLog = reversedLogs.find(l =>
+            (l.type === 'danger' && l.message.includes('eliminated')) ||
+            (l.type === 'warning' && l.message.includes('No one was eliminated'))
+        );
+        return voteLog ? voteLog.message : null;
+    }, [gameState.logs, gameState.phase]);
+
     const handleCloseNightAnnouncement = useCallback(() => setShowNightAnnouncement(false), []);
     const handleCloseMorningAnnouncement = useCallback(() => setShowMorningAnnouncement(false), []);
     const handleCloseVotingAnnouncement = useCallback(() => setShowVotingAnnouncement(false), []);
@@ -274,6 +286,7 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
             <NightAnnouncement
                 show={showNightAnnouncement}
                 onComplete={handleCloseNightAnnouncement}
+                votingResult={votingResult}
             />
             <MorningAnnouncement
                 show={showMorningAnnouncement}

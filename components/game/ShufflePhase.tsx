@@ -255,7 +255,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 if (shuffleState.deck.length > 0) {
                     console.warn("Host sees existing deck, resetting...");
                 }
-                addLog("Generating initial deck...", "info");
+                // addLog("Generating initial deck...", "info");
                 const initialDeck = ShuffleService.generateInitialDeck(gameState.players.length);
                 const shuffled = shuffleService.shuffleArray(initialDeck);
                 newDeck = shuffleService.encryptDeck(shuffled);
@@ -264,7 +264,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 if (shuffleState.deck.length === 0) {
                     throw new Error("Deck is empty! Sync error.");
                 }
-                addLog("Shuffling and re-encrypting deck...", "info");
+                // addLog("Shuffling and re-encrypting deck...", "info");
                 const shuffled = shuffleService.shuffleArray(shuffleState.deck);
                 newDeck = shuffleService.encryptDeck(shuffled);
             }
@@ -282,7 +282,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
             // V4 Fix: Save keys immediately
             shuffleService.saveKeys(currentRoomId.toString(), myPlayer.address);
 
-            addLog("Committing deck hash...", "info");
+            // addLog("Committing deck hash...", "info");
             await commitDeckOnChain(deckHash);
 
             // Update to committed=true
@@ -301,7 +301,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 isMyTurn: true
             }));
 
-            addLog("Commit successful! Click Reveal to complete.", "success");
+            // addLog("Commit successful! Click Reveal to complete.", "success");
 
         } catch (e: any) {
             console.error("Commit failed:", e);
@@ -316,7 +316,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
 
         setIsProcessing(true);
         try {
-            addLog("Revealing deck...", "info");
+            // addLog("Revealing deck...", "info");
             await revealDeckOnChain(pendingDeck, pendingSalt);
 
             localStorage.removeItem(SHUFFLE_COMMIT_KEY);
@@ -329,7 +329,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 currentShufflerIndex: prev.currentShufflerIndex + 1
             }));
 
-            addLog("Deck revealed successfully!", "success");
+            // addLog("Deck revealed successfully!", "success");
             setTimeout(fetchShuffleData, 1000); // Trigger immediate update
 
         } catch (e: any) {
