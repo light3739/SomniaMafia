@@ -16,7 +16,7 @@ export const DynamicBackground = () => {
     }, [pathname]);
 
     return (
-        <div className="fixed inset-0 z-0">
+        <div className="fixed inset-0 z-0 bg-black">
             <AnimatePresence mode="popLayout">
                 <motion.div
                     key={backgroundImage}
