@@ -1,5 +1,6 @@
 // components/game/GameOver.tsx
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useGameContext } from '../../contexts/GameContext';
@@ -430,9 +431,16 @@ export const GameOver: React.FC = () => {
                                     `}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden border border-white/10 ${RoleBgColors[role]}`}>
+                                            <div className={`relative w-10 h-10 rounded-full flex items-center justify-center overflow-hidden border border-white/10 ${RoleBgColors[role]}`}>
                                                 {player.avatarUrl ? (
-                                                    <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
+                                                    <Image
+                                                        src={player.avatarUrl}
+                                                        alt={player.name}
+                                                        fill
+                                                        sizes="40px"
+                                                        className="object-cover"
+                                                        unoptimized={player.avatarUrl.startsWith('http')}
+                                                    />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center">
                                                         <Users className="w-5 h-5 text-white/20" />
