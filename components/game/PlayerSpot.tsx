@@ -1,5 +1,6 @@
 // components/game/PlayerSpot.tsx
 import React, { memo, useState } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Player, Role } from '../../types';
 import { Skull, HelpCircle, User, X } from 'lucide-react';
@@ -212,7 +213,14 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                     bg-[#D9D9D9] relative
                 `}>
                     {player.avatarUrl ? (
-                        <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
+                        <Image
+                            src={player.avatarUrl}
+                            alt={player.name}
+                            fill
+                            sizes="64px"
+                            className="object-cover"
+                            unoptimized={player.avatarUrl.startsWith('http')}
+                        />
                     ) : (
                         <div className="w-full h-full bg-[#19130D]" />
                     )}
