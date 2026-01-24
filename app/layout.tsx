@@ -58,7 +58,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${playfair.variable} ${inter.variable} ${montserrat.variable} antialiased text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden`}>
+      <body className={`${playfair.variable} ${inter.variable} ${montserrat.variable} antialiased bg-black text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden`}>
         <Providers>
           <BackgroundMusic />
           <SoundEffects />
