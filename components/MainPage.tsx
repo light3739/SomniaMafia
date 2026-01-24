@@ -85,9 +85,11 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         On Somnia Network
                     </p>
 
-                    <img
+                    <Image
                         src={somniaLogo}
                         alt="Somnia"
+                        width={45}
+                        height={40}
                         className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md"
                     />
                 </motion.div>
