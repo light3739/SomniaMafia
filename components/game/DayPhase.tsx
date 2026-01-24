@@ -27,6 +27,7 @@ export const DayPhase: React.FC = React.memo(() => {
         isTxPending,
         selectedTarget,
         setSelectedTarget,
+        isTestMode
     } = useGameContext();
     const {
         playClickSound,
@@ -106,21 +107,34 @@ export const DayPhase: React.FC = React.memo(() => {
         if (!currentRoomId || discussionStartedRef.current) return;
         discussionStartedRef.current = true;
         try {
-            await fetch('/api/game/discussion', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    roomId: currentRoomId.toString(),
-                    dayCount: gameState.dayCount,
-                    action: 'start',
-                    playerAddress: myPlayer?.address
-                })
-            });
+            if (!isTestMode) {
+                await fetch('/api/game/discussion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId: currentRoomId.toString(),
+                        dayCount: gameState.dayCount,
+                        action: 'start',
+                        playerAddress: myPlayer?.address
+                    })
+                });
+            } else {
+                // Mock discussion state immediately for test mode
+                setDiscussionState({
+                    active: true,
+                    finished: false,
+                    currentSpeakerIndex: 0,
+                    currentSpeakerAddress: gameState.players[0]?.address || null,
+                    totalSpeakers: gameState.players.filter(p => p.isAlive).length,
+                    timeRemaining: 60,
+                    isMyTurn: true
+                });
+            }
             addLog("Discussion Phase: Players speak in turns (60s each).", "info");
         } catch (e) {
             console.error("Failed to start discussion:", e);
         }
-    }, [currentRoomId, myPlayer?.address, addLog]);
+    }, [currentRoomId, myPlayer?.address, addLog, isTestMode, gameState.dayCount, gameState.players]);
 
     // Skip speech (current speaker only)
     const skipSpeech = useCallback(async () => {
@@ -143,7 +157,7 @@ export const DayPhase: React.FC = React.memo(() => {
         } finally {
             setIsProcessing(false);
         }
-    }, [currentRoomId, myPlayer?.address, fetchDiscussionState]);
+    }, [currentRoomId, myPlayer?.address, fetchDiscussionState, gameState.dayCount]);
 
     // Initial phase log and discussion start
     useEffect(() => {
@@ -151,7 +165,7 @@ export const DayPhase: React.FC = React.memo(() => {
             if (isDayPhase) {
                 discussionStartedRef.current = false;
                 // Host starts discussion
-                if (gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase()) {
+                if (gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase() || isTestMode) {
                     startDiscussion();
                 } else {
                     addLog("Day Phase: Discussion starting...", "info");
@@ -163,7 +177,7 @@ export const DayPhase: React.FC = React.memo(() => {
             }
             lastLoggedPhase.current = gameState.phase;
         }
-    }, [gameState.phase, isDayPhase, isVotingPhase, alivePlayers.length, addLog, gameState.players, myPlayer?.address, startDiscussion]);
+    }, [gameState.phase, isDayPhase, isVotingPhase, alivePlayers.length, addLog, gameState.players, myPlayer?.address, startDiscussion, isTestMode, playVotingStart]);
 
     // Poll discussion state
     // Poll discussion state (Adaptive)
@@ -410,12 +424,10 @@ export const DayPhase: React.FC = React.memo(() => {
                                 >
                                     {selectedTarget ? (
                                         <>
-                                            <Vote className="w-6 h-6 mr-2" />
                                             Vote for {gameState.players.find(p => p.address.toLowerCase() === selectedTarget.toLowerCase())?.name}
                                         </>
                                     ) : voteState.hasVoted ? (
                                         <>
-                                            <Check className="w-6 h-6 mr-2" />
                                             Vote Committed
                                         </>
                                     ) : (
