@@ -14,19 +14,19 @@ import { useSoundEffects } from '../ui/SoundEffects';
 import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye } from 'lucide-react';
 
 const RoleIcons: Record<Role, React.ReactNode> = {
-    [Role.MAFIA]: <Skull className="w-5 h-5 text-rose-400" />,
-    [Role.DOCTOR]: <Shield className="w-5 h-5 text-teal-400" />,
-    [Role.DETECTIVE]: <Search className="w-5 h-5 text-sky-400" />,
+    [Role.MAFIA]: <Skull className="w-5 h-5 text-rose-500" />,
+    [Role.DOCTOR]: <Shield className="w-5 h-5 text-teal-500" />,
+    [Role.DETECTIVE]: <Search className="w-5 h-5 text-sky-500" />,
     [Role.CIVILIAN]: <Users className="w-5 h-5 text-amber-500" />,
     [Role.UNKNOWN]: <Users className="w-5 h-5 text-gray-500" />
 };
 
 const RoleColors: Record<Role, string> = {
-    [Role.MAFIA]: 'text-rose-400',
-    [Role.DOCTOR]: 'text-teal-400',
-    [Role.DETECTIVE]: 'text-sky-400',
-    [Role.CIVILIAN]: 'text-amber-400',
-    [Role.UNKNOWN]: 'text-gray-400'
+    [Role.MAFIA]: 'text-rose-500',
+    [Role.DOCTOR]: 'text-teal-500',
+    [Role.DETECTIVE]: 'text-sky-500',
+    [Role.CIVILIAN]: 'text-amber-500',
+    [Role.UNKNOWN]: 'text-gray-500'
 };
 
 const RoleBgColors: Record<Role, string> = {

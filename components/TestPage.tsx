@@ -11,11 +11,15 @@ import { CreateLobby } from './lobby_flow/CreateLobby';
 import { JoinLobby } from './lobby_flow/JoinLobby';
 import { WaitingRoom } from './lobby_flow/WaitingRoom';
 import { GameLayout } from './game/GameLayout';
+import { ShufflePhase } from './game/ShufflePhase';
+import { RoleReveal } from './game/RoleReveal';
+import { PlayerSpot } from './game/PlayerSpot';
 import { GamePhase, Role, Player, MafiaChatMessage } from '../types';
 import { VotingAnnouncement } from './game/VotingAnnouncement';
 import { NightAnnouncement } from './game/NightAnnouncement';
 import { MafiaChat } from './game/MafiaChat';
 import { useGameContext } from '../contexts/GameContext';
+import { Skull, Shield, Search, Users, EyeOff } from 'lucide-react';
 
 // Wrapper for testing VotingAnnouncement state
 const VotingAnnouncementWrapper = () => {
@@ -422,6 +426,413 @@ const GameOverTestWrapper: React.FC<{ winner: 'MAFIA' | 'TOWN' }> = ({ winner })
     return <GameLayout />;
 };
 
+// === TEST WRAPPERS FOR EARLY GAME PHASES ===
+
+// Animated Shuffle Phase - simulates players shuffling one by one
+const ShufflePhaseAnimatedTest: React.FC = () => {
+    const { setGameState, gameState } = useGameContext();
+    const [currentShuffler, setCurrentShuffler] = useState(0);
+    const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+
+    const players = generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS);
+
+    useEffect(() => {
+        setGameState({
+            phase: GamePhase.SHUFFLING,
+            dayCount: 0,
+            myPlayerId: TEST_ADDRESS,
+            players: players.map((p, idx) => ({
+                ...p,
+                hasDeckCommitted: idx < currentShuffler,
+            })),
+            logs: [
+                { id: '1', timestamp: '12:00:00', message: 'Shuffling deck...', type: 'phase' }
+            ],
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 120,
+            winner: null,
+            mafiaMessages: []
+        });
+    }, [setGameState, currentShuffler]);
+
+    // Auto-play simulation
+    useEffect(() => {
+        if (!isAutoPlaying) return;
+        if (currentShuffler >= players.length) {
+            setIsAutoPlaying(false);
+            return;
+        }
+        const timer = setTimeout(() => {
+            setCurrentShuffler(prev => prev + 1);
+        }, 1500);
+        return () => clearTimeout(timer);
+    }, [isAutoPlaying, currentShuffler, players.length]);
+
+    return (
+        <div className="w-full flex flex-col items-center gap-4">
+            <div className="flex gap-2 mb-4">
+                <button
+                    onClick={() => { setCurrentShuffler(0); setIsAutoPlaying(true); }}
+                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500"
+                >
+                    ▶ Play Animation
+                </button>
+                <button
+                    onClick={() => setCurrentShuffler(prev => Math.min(prev + 1, players.length))}
+                    className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20"
+                >
+                    Next Player →
+                </button>
+                <button
+                    onClick={() => setCurrentShuffler(0)}
+                    className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20"
+                >
+                    Reset
+                </button>
+            </div>
+            <p className="text-white/50 text-sm">Player {currentShuffler} of {players.length} completed</p>
+            <div className="w-full max-w-xl">
+                <ShufflePhase />
+            </div>
+        </div>
+    );
+};
+
+// Animated Role Reveal - simulates the key collection and role reveal flow  
+const RoleRevealAnimatedTest: React.FC = () => {
+    const { setGameState } = useGameContext();
+    const [keysCollected, setKeysCollected] = useState(0);
+    const [isRevealed, setIsRevealed] = useState(false);
+    const [selectedRole, setSelectedRole] = useState<Role>(Role.MAFIA);
+    const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+
+    const players = generateMockPlayers(selectedRole, TEST_ADDRESS);
+    const totalKeys = players.length;
+
+    useEffect(() => {
+        setGameState({
+            phase: GamePhase.REVEAL,
+            dayCount: 0,
+            myPlayerId: TEST_ADDRESS,
+            players: players.map((p, idx) => ({
+                ...p,
+                hasConfirmedRole: isRevealed && idx < keysCollected,
+            })),
+            logs: [
+                { id: '1', timestamp: '12:00:00', message: 'Revealing roles...', type: 'phase' }
+            ],
+            revealedCount: keysCollected,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 120,
+            winner: null,
+            mafiaMessages: []
+        });
+    }, [setGameState, keysCollected, isRevealed, selectedRole]);
+
+    // Auto-play simulation
+    useEffect(() => {
+        if (!isAutoPlaying) return;
+        if (keysCollected < totalKeys) {
+            const timer = setTimeout(() => {
+                setKeysCollected(prev => prev + 1);
+            }, 800);
+            return () => clearTimeout(timer);
+        } else if (!isRevealed) {
+            const timer = setTimeout(() => {
+                setIsRevealed(true);
+                setIsAutoPlaying(false);
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [isAutoPlaying, keysCollected, totalKeys, isRevealed]);
+
+    const startAnimation = () => {
+        setKeysCollected(0);
+        setIsRevealed(false);
+        setIsAutoPlaying(true);
+    };
+
+    return (
+        <div className="w-full flex flex-col items-center gap-4">
+            <div className="flex gap-2 mb-2 flex-wrap justify-center">
+                <button
+                    onClick={startAnimation}
+                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500"
+                >
+                    ▶ Play Animation
+                </button>
+                <button
+                    onClick={() => setKeysCollected(prev => Math.min(prev + 1, totalKeys))}
+                    className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20"
+                >
+                    Add Key
+                </button>
+                <button
+                    onClick={() => setIsRevealed(true)}
+                    disabled={keysCollected < totalKeys}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 disabled:opacity-50"
+                >
+                    Reveal Role
+                </button>
+                <button
+                    onClick={() => { setKeysCollected(0); setIsRevealed(false); }}
+                    className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20"
+                >
+                    Reset
+                </button>
+            </div>
+            <div className="flex gap-2">
+                {[Role.MAFIA, Role.DETECTIVE, Role.DOCTOR, Role.CIVILIAN].map(role => (
+                    <button
+                        key={role}
+                        onClick={() => { setSelectedRole(role); setKeysCollected(0); setIsRevealed(false); }}
+                        className={`px-3 py-1 rounded text-sm ${selectedRole === role ? 'bg-amber-600 text-white' : 'bg-white/10 text-white/70'}`}
+                    >
+                        {role}
+                    </button>
+                ))}
+            </div>
+            <p className="text-white/50 text-sm">Keys: {keysCollected}/{totalKeys} | Revealed: {isRevealed ? 'Yes' : 'No'}</p>
+            <div className="w-full max-w-2xl">
+                <RoleReveal />
+            </div>
+        </div>
+    );
+};
+
+// Role Card Showcase - shows the role card moment (when player sees their role)
+const RoleCardShowcaseTest: React.FC = () => {
+    const [selectedRole, setSelectedRole] = useState<Role>(Role.MAFIA);
+    const [countdown, setCountdown] = useState(10);
+    const [isCountingDown, setIsCountingDown] = useState(false);
+
+    // Role configurations using Lucide icons (matching RoleReveal.tsx)
+    const roleConfigs: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; description: string }> = {
+        [Role.MAFIA]: {
+            icon: <Skull className="w-16 h-16" />,
+            color: 'text-rose-500',
+            bgColor: 'from-rose-950/50 to-rose-900/30',
+            description: 'Eliminate all civilians to win. Vote by day, kill by night.'
+        },
+        [Role.DOCTOR]: {
+            icon: <Shield className="w-16 h-16" />,
+            color: 'text-teal-500',
+            bgColor: 'from-teal-950/50 to-teal-900/30',
+            description: 'Save one player each night from the mafia attack.'
+        },
+        [Role.DETECTIVE]: {
+            icon: <Search className="w-16 h-16" />,
+            color: 'text-sky-500',
+            bgColor: 'from-sky-950/50 to-sky-900/30',
+            description: 'Investigate one player each night to reveal their alignment.'
+        },
+        [Role.CIVILIAN]: {
+            icon: <Users className="w-16 h-16" />,
+            color: 'text-amber-500',
+            bgColor: 'from-amber-950/50 to-amber-900/30',
+            description: 'Find and vote out the mafia during the day to survive.'
+        },
+        [Role.UNKNOWN]: {
+            icon: <EyeOff className="w-16 h-16" />,
+            color: 'text-gray-500',
+            bgColor: 'from-gray-950/50 to-gray-900/30',
+            description: 'Role unknown'
+        }
+    };
+
+    const config = roleConfigs[selectedRole];
+
+    // Countdown timer
+    useEffect(() => {
+        if (!isCountingDown || countdown <= 0) return;
+        const timer = setTimeout(() => setCountdown(prev => prev - 1), 1000);
+        return () => clearTimeout(timer);
+    }, [isCountingDown, countdown]);
+
+    const startCountdown = () => {
+        setCountdown(10);
+        setIsCountingDown(true);
+    };
+
+    return (
+        <div className="w-full flex flex-col items-center gap-6">
+            {/* Controls */}
+            <div className="flex gap-2 flex-wrap justify-center">
+                {[Role.MAFIA, Role.DETECTIVE, Role.DOCTOR, Role.CIVILIAN].map(role => (
+                    <button
+                        key={role}
+                        onClick={() => setSelectedRole(role)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedRole === role
+                            ? `${roleConfigs[role].color} bg-white/20 border border-current`
+                            : 'bg-white/10 text-white/70 hover:bg-white/20'}`}
+                    >
+                        {role}
+                    </button>
+                ))}
+            </div>
+
+            <button
+                onClick={startCountdown}
+                className="px-4 py-2 bg-[#916A47] text-white rounded-lg hover:bg-[#a67b52]"
+            >
+                Start 10s Timer
+            </button>
+
+            {/* Timer */}
+            {isCountingDown && countdown > 0 && (
+                <div className="text-4xl font-bold text-[#916A47]">{countdown}s</div>
+            )}
+
+            {/* Role Card */}
+            <div className={`bg-gradient-to-br ${config.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-10 shadow-2xl w-[360px] min-h-[320px] flex flex-col justify-between`}>
+                <div className="text-center flex-1 flex flex-col justify-center">
+                    {/* Role Name */}
+                    <h2 className={`text-5xl font-['Playfair_Display'] mb-6 ${config.color}`}>
+                        {selectedRole}
+                    </h2>
+
+                    {/* Description */}
+                    <p className="text-white/60 text-sm max-w-xs mx-auto">
+                        {config.description}
+                    </p>
+                </div>
+
+                <div className="space-y-3 mt-6">
+                    {/* Confirm Button Mock */}
+                    <button className="w-full px-6 py-3 bg-gradient-to-r from-[#916A47] to-[#7a5a3c] text-white rounded-xl font-medium hover:from-[#a67b52] hover:to-[#916A47] transition-all">
+                        I Understand My Role
+                    </button>
+
+                    <div className="text-xs text-white/30 text-center">
+                        3 / 6 confirmed
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Wrapper for testing ShufflePhase visual (static)
+const ShufflePhaseTestWrapper: React.FC = () => {
+    const { setGameState } = useGameContext();
+    const [isReady, setIsReady] = useState(false);
+
+    useEffect(() => {
+        setGameState({
+            phase: GamePhase.SHUFFLING,
+            dayCount: 0,
+            myPlayerId: TEST_ADDRESS,
+            players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS).map((p, idx) => ({
+                ...p,
+                hasDeckCommitted: idx < 2,
+            })),
+            logs: [
+                { id: '1', timestamp: '12:00:00', message: 'Shuffling deck...', type: 'phase' }
+            ],
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 120,
+            winner: null,
+            mafiaMessages: []
+        });
+        setTimeout(() => setIsReady(true), 50);
+    }, [setGameState]);
+
+    if (!isReady) return <div className="text-white">Loading Shuffle Phase...</div>;
+
+    return (
+        <div className="w-full max-w-xl">
+            <ShufflePhase />
+        </div>
+    );
+};
+
+// Wrapper for testing RoleReveal visual (static)
+const RoleRevealTestWrapper: React.FC = () => {
+    const { setGameState } = useGameContext();
+    const [isReady, setIsReady] = useState(false);
+
+    useEffect(() => {
+        setGameState({
+            phase: GamePhase.REVEAL,
+            dayCount: 0,
+            myPlayerId: TEST_ADDRESS,
+            players: generateMockPlayers(Role.MAFIA, TEST_ADDRESS).map((p, idx) => ({
+                ...p,
+                hasConfirmedRole: idx < 3,
+            })),
+            logs: [
+                { id: '1', timestamp: '12:00:00', message: 'Revealing roles...', type: 'phase' }
+            ],
+            revealedCount: 3,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 120,
+            winner: null,
+            mafiaMessages: []
+        });
+        setTimeout(() => setIsReady(true), 50);
+    }, [setGameState]);
+
+    if (!isReady) return <div className="text-white">Loading Role Reveal...</div>;
+
+    return (
+        <div className="w-full max-w-2xl">
+            <RoleReveal />
+        </div>
+    );
+};
+
+// Wrapper for testing PlayerSpot component
+const PlayerSpotTestWrapper: React.FC = () => {
+    const { setGameState, gameState } = useGameContext();
+    const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+
+    useEffect(() => {
+        setGameState({
+            phase: GamePhase.NIGHT,
+            dayCount: 1,
+            myPlayerId: TEST_ADDRESS,
+            players: generateMockPlayers(Role.DETECTIVE, TEST_ADDRESS),
+            logs: [],
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 60,
+            winner: null,
+            mafiaMessages: []
+        });
+    }, [setGameState]);
+
+    const myPlayer = gameState.players.find(p => p.address.toLowerCase() === TEST_ADDRESS.toLowerCase());
+
+    return (
+        <div className="w-full">
+            <p className="text-white/50 text-sm mb-4">Click on player spots to select them. Try marking players as Mafia/Civilian/Question.</p>
+            <div className="grid grid-cols-3 gap-4">
+                {gameState.players.slice(0, 6).map((player) => (
+                    <PlayerSpot
+                        key={player.id}
+                        player={player}
+                        isMe={player.address.toLowerCase() === TEST_ADDRESS.toLowerCase()}
+                        isNight={true}
+                        myRole={Role.DETECTIVE}
+                        isSelected={selectedTarget === player.address}
+                        onAction={() => setSelectedTarget(player.address)}
+                        canAct={player.address.toLowerCase() !== TEST_ADDRESS.toLowerCase()}
+                        mark={null}
+                        onSetMark={() => { }}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+};
+
 const TestPage: React.FC = () => {
     const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
@@ -467,6 +878,14 @@ const TestPage: React.FC = () => {
         { name: 'Victory - Mafia', group: 'Pages', component: <GameOverTestWrapper winner="MAFIA" /> },
         { name: 'Victory - Town', group: 'Pages', component: <GameOverTestWrapper winner="TOWN" /> },
         { name: 'GameLayout (Raw)', group: 'Pages', component: <GameLayout /> },
+
+        // Early Game Phases (Animated)
+        { name: 'Shuffle Phase (Animated)', group: 'Early Game', component: <ShufflePhaseAnimatedTest /> },
+        { name: 'Role Reveal (Animated)', group: 'Early Game', component: <RoleRevealAnimatedTest /> },
+        { name: 'Role Card Showcase', group: 'Early Game', component: <RoleCardShowcaseTest /> },
+        { name: 'Shuffle Phase (Static)', group: 'Early Game', component: <ShufflePhaseTestWrapper /> },
+        { name: 'Role Reveal (Static)', group: 'Early Game', component: <RoleRevealTestWrapper /> },
+        { name: 'Player Spot', group: 'Early Game', component: <PlayerSpotTestWrapper /> },
     ];
 
     const groupedComponents = components.reduce((acc, curr) => {
