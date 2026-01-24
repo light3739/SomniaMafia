@@ -42,8 +42,8 @@ const GameOver = dynamic(() => import('./GameOver').then(m => m.GameOver), {
     ssr: false
 });
 
-const dayBg = "/assets/game_background_light.png";
-const nightBg = "/assets/game_background.png";
+const dayBg = "/assets/game_background_light.webp";
+const nightBg = "/assets/game_background.webp";
 
 // Coordinates for 14 players, clockwise starting from Top-Left
 const PLAYER_POSITIONS = [
