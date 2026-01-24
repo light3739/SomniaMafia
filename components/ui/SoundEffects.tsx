@@ -235,7 +235,7 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
             break;
 
         case 'kill':
-            playAudioFile('/assets/kill.wav', 2, 0.05, 0.12);
+            playAudioFile('/assets/kill.mp3', 2, 0.05, 0.12);
             break;
 
         case 'investigate':
@@ -275,12 +275,12 @@ export const useSoundEffects = () => {
         playTypeSound: () => playSound('keyboard'),
         playVoteSound: () => playSound('vote'), // Звук "печати" при голосовании за кого-то
         playProtectSound: () => playSound('protect'),
-        playKillSound: () => playSound('kill'),
+        playKillSound: () => playSound('kill'), // Keep 'kill' key, actual sound logic is in playSound below
         playInvestigateSound: () => playSound('investigate'),
         playProposeSound: () => playSound('propose'),
         playApproveSound: () => playSound('approve'),
         playRejectSound: () => playSound('reject'),
-        playMarkSound: () => playAudioFile('/assets/note_tick.wav', 1, 0, 0.25),
+        playMarkSound: () => playAudioFile('/assets/note_tick.mp3', 1, 0, 0.25),
 
         // Переход в ночь: длительность 5s, offset 5s, fadeOut 1s
         playNightTransition: () => playAudioFile('/assets/night_sound2.mp3', 5, 0.1, 0.3, 5, 1.0),
