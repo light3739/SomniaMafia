@@ -24,17 +24,7 @@ export const SetupProfile: React.FC = () => {
     return (
         <div className="relative w-full min-h-screen font-montserrat flex items-center justify-center p-4">
             {/* Fixed Background */}
-            {/* Fixed Background */}
-            <div className="fixed inset-0 z-0">
-                <Image
-                    src={lobbyBg}
-                    alt="Lobby Background"
-                    fill
-                    priority
-                    className="object-cover"
-                />
-                <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
-            </div>
+
 
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
