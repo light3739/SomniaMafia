@@ -191,7 +191,7 @@ export async function POST(request: Request) {
 
             // Test Mode: Bypass all checks
             if (roomId === '999') {
-                const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
+                const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, true);
                 return buildResponse(newState, alivePlayers, playerAddress);
             }
 
@@ -204,7 +204,7 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: 'Not your turn to speak (and you are not Host)' }, { status: 403 });
             }
 
-            const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
+            const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, true);
             console.log(`[API/Discussion] Speaker skipped by ${isHost ? 'HOST' : 'PLAYER'} in Room #${roomId} Day ${dayCount}, new index: ${newState?.currentSpeakerIndex}`);
             return buildResponse(newState, alivePlayers, playerAddress);
         }
