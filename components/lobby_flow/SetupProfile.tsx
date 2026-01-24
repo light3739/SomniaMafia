@@ -3,7 +3,7 @@ import { Camera, Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
-const lobbyBg = "/assets/lobby_background.png";
+const lobbyBg = "/assets/lobby_background.webp";
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 
