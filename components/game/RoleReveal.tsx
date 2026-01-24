@@ -542,7 +542,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                             initial={{ opacity: 0, rotateY: 90 }}
                             animate={{ opacity: 1, rotateY: 0 }}
                             transition={{ type: "spring", duration: 0.8 }}
-                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-10 shadow-2xl pointer-events-auto w-[360px] min-h-[320px] flex flex-col justify-between`}
+                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-12 shadow-2xl pointer-events-auto w-[400px] h-[400px] flex flex-col justify-between mx-auto`}
                         >
                             <div className="text-center flex-1 flex flex-col justify-center">
                                 {/* Role Name */}

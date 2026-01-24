@@ -11,8 +11,6 @@ const publicClient = createPublicClient({
 const FLAG_ACTIVE = 2;
 const SPEAKER_DURATION = 60; // seconds per speaker
 const DELAY_INITIAL = 5; // seconds before first speaker
-const DELAY_BETWEEN = 5; // seconds between speakers
-const DELAY_FINAL = 3; // seconds before voting
 
 /**
  * Deterministic shuffle using roomId as seed (must match frontend GameLayout.tsx logic)
@@ -96,7 +94,7 @@ export async function GET(request: Request) {
                     const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
                     if (newState) state = newState;
                 }
-            } else if (state.phase === 'initial_delay' || state.phase === 'between_delay' || state.phase === 'final_delay') {
+            } else if (state.phase === 'initial_delay') {
                 // Check if delay time expired
                 const delayElapsed = (Date.now() - (state.delayStartTime || 0)) / 1000;
                 const delayDuration = state.delayDuration || 5;
@@ -226,7 +224,7 @@ function buildResponse(state: DiscussionState | null, alivePlayers: any[], playe
     if (state.phase === 'speaking') {
         const elapsed = (Date.now() - state.speakerStartTime) / 1000;
         timeRemaining = Math.max(0, Math.floor(state.speakerDuration - elapsed));
-    } else if (state.phase === 'initial_delay' || state.phase === 'between_delay' || state.phase === 'final_delay') {
+    } else if (state.phase === 'initial_delay') {
         const elapsed = (Date.now() - (state.delayStartTime || 0)) / 1000;
         timeRemaining = Math.max(0, Math.ceil((state.delayDuration || 5) - elapsed));
     }
