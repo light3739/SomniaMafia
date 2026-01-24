@@ -11,7 +11,7 @@ import { loadSession, createNewSession, markSessionRegistered } from '../service
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
 
-const shotSound = "/assets/mafia_shot.wav";
+const shotSound = "/assets/mafia_shot.mp3";
 
 interface GameContextType {
     playerName: string;
@@ -2159,11 +2159,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
 
-    const getActionLabel = () => {
+    const getActionLabel = useCallback(() => {
         if (gameState.phase === GamePhase.VOTING) return "VOTE";
         if (gameState.phase === GamePhase.NIGHT) return "TARGET";
         return "SELECT";
-    };
+    }, [gameState.phase]);
 
 
     const contextValue = useMemo(() => ({
