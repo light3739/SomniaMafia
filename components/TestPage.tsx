@@ -380,6 +380,48 @@ const InvestigationResultTestWrapper: React.FC<{ isMafia: boolean }> = ({ isMafi
     return <GameLayout initialNightState={initialNightState} />;
 };
 
+// Wrapper for testing Game Over phase
+const GameOverTestWrapper: React.FC<{ winner: 'MAFIA' | 'TOWN' }> = ({ winner }) => {
+    const { setGameState } = useGameContext();
+    const [isReady, setIsReady] = useState(false);
+
+    useEffect(() => {
+        setGameState({
+            phase: GamePhase.ENDED,
+            dayCount: 3,
+            myPlayerId: TEST_ADDRESS,
+            players: generateMockPlayers(winner === 'MAFIA' ? Role.MAFIA : Role.CIVILIAN, TEST_ADDRESS).map(p => {
+                // Adjust alive status for visual impact
+                if (winner === 'MAFIA') {
+                    if (p.role === Role.CIVILIAN || p.role === Role.DOCTOR || p.role === Role.DETECTIVE) {
+                        return { ...p, isAlive: false };
+                    }
+                } else {
+                    if (p.role === Role.MAFIA) {
+                        return { ...p, isAlive: false };
+                    }
+                }
+                return p;
+            }),
+            logs: [
+                { id: '1', timestamp: '12:00:00', message: 'The game has ended.', type: 'phase' },
+                { id: '2', timestamp: '12:00:01', message: `${winner === 'MAFIA' ? 'Mafia' : 'Town'} has won!`, type: winner === 'MAFIA' ? 'danger' : 'success' }
+            ],
+            revealedCount: 6,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: 0,
+            winner: winner,
+            mafiaMessages: []
+        });
+        setTimeout(() => setIsReady(true), 50);
+    }, [setGameState, winner]);
+
+    if (!isReady) return null;
+
+    return <GameLayout />;
+};
+
 const TestPage: React.FC = () => {
     const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
@@ -422,6 +464,8 @@ const TestPage: React.FC = () => {
         { name: 'CreateLobby', group: 'Pages', component: <CreateLobby /> },
         { name: 'JoinLobby', group: 'Pages', component: <JoinLobby /> },
         { name: 'WaitingRoom', group: 'Pages', component: <WaitingRoom /> },
+        { name: 'Victory - Mafia', group: 'Pages', component: <GameOverTestWrapper winner="MAFIA" /> },
+        { name: 'Victory - Town', group: 'Pages', component: <GameOverTestWrapper winner="TOWN" /> },
         { name: 'GameLayout (Raw)', group: 'Pages', component: <GameLayout /> },
     ];
 
