@@ -100,7 +100,7 @@ export const DayPhase: React.FC = React.memo(() => {
             if (secondsPastDeadline >= TIMEOUT_BUFFER_SECONDS) {
                 console.log('[DayPhase] Voting timer expired. Host initiating forcePhaseTimeout...');
                 votingTimeoutRef.current = true;
-                addLog("Voting time expired. Counting votes...", "warning");
+                addLog("Voting time expired. Auto-finalizing phase...", "warning");
 
                 forcePhaseTimeoutOnChain().catch(err => {
                     console.error('[DayPhase] forcePhaseTimeout failed:', err);
@@ -225,7 +225,8 @@ export const DayPhase: React.FC = React.memo(() => {
             } else if (isVotingPhase) {
                 playVotingStart(); // Play sound for everyone
                 const quorum = Math.floor(alivePlayers.length / 2) + 1;
-                addLog(`Voting Phase Started. Quorum needed: ${quorum}.`, "warning");
+                const duration = Math.max(0, (gameState.phaseDeadline || 0) - Math.floor(Date.now() / 1000));
+                addLog(`Voting Phase Started (${Math.floor(duration / 60)}m ${duration % 60}s). Quorum needed: ${quorum}.`, "warning");
             }
             lastLoggedPhase.current = gameState.phase;
         }
