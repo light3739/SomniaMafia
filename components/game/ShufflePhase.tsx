@@ -1,5 +1,5 @@
 // components/game/ShufflePhase.tsx
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
@@ -19,7 +19,7 @@ interface ShuffleState {
     phaseDeadline: number; // For timeout handling
 }
 
-export const ShufflePhase: React.FC = () => {
+export const ShufflePhase: React.FC = React.memo(() => {
     const {
         gameState,
         currentRoomId,
@@ -83,17 +83,7 @@ export const ShufflePhase: React.FC = () => {
         }
     }, [SHUFFLE_COMMIT_KEY]);
 
-    // Force Sync Function
-    const forceSync = async () => {
-        if (!currentRoomId) return;
-        setIsSyncing(true);
-        try {
-            await fetchShuffleData();
-            await refreshPlayersList(currentRoomId);
-        } finally {
-            setIsSyncing(false);
-        }
-    };
+
 
     // Fetch data from contract
     const fetchShuffleData = useCallback(async () => {
@@ -207,10 +197,22 @@ export const ShufflePhase: React.FC = () => {
         }
     }, [publicClient, currentRoomId, gameState.players, myPlayer]);
 
+    // Force Sync Function
+    const forceSync = useCallback(async () => {
+        if (!currentRoomId) return;
+        setIsSyncing(true);
+        try {
+            await fetchShuffleData();
+            await refreshPlayersList(currentRoomId);
+        } finally {
+            setIsSyncing(false);
+        }
+    }, [currentRoomId, fetchShuffleData, refreshPlayersList]);
+
     // Handle Timeout Kick
     const { writeContractAsync } = useWriteContract();
 
-    const handleTimeoutKick = async () => {
+    const handleTimeoutKick = useCallback(async () => {
         if (!currentRoomId) return;
         setIsProcessing(true);
         try {
@@ -227,7 +229,7 @@ export const ShufflePhase: React.FC = () => {
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, [currentRoomId, writeContractAsync, addLog]);
 
     // Polling
     useEffect(() => {
@@ -238,7 +240,7 @@ export const ShufflePhase: React.FC = () => {
 
 
 
-    const handleMyTurn = async () => {
+    const handleMyTurn = useCallback(async () => {
         if (!currentRoomId || !myPlayer || isProcessing) return;
 
         setIsProcessing(true);
@@ -307,9 +309,9 @@ export const ShufflePhase: React.FC = () => {
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, [currentRoomId, myPlayer, isProcessing, shuffleState.currentShufflerIndex, shuffleState.deck, gameState.players.length, SHUFFLE_COMMIT_KEY, commitDeckOnChain, addLog]);
 
-    const handleReveal = async () => {
+    const handleReveal = useCallback(async () => {
         if (!currentRoomId || !pendingDeck || !pendingSalt || isProcessing) return;
 
         setIsProcessing(true);
@@ -336,7 +338,7 @@ export const ShufflePhase: React.FC = () => {
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, [currentRoomId, pendingDeck, pendingSalt, isProcessing, revealDeckOnChain, SHUFFLE_COMMIT_KEY, fetchShuffleData, addLog]);
 
     const currentShuffler = gameState.players[shuffleState.currentShufflerIndex];
     const totalPlayers = gameState.players.length;
@@ -375,7 +377,7 @@ export const ShufflePhase: React.FC = () => {
         }
     }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, pendingDeck, pendingSalt, handleReveal]);
 
-    return (
+    return useMemo(() => (
         <div className="w-full h-full flex flex-col items-center justify-center p-8">
             <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -523,5 +525,7 @@ export const ShufflePhase: React.FC = () => {
                 </AnimatePresence>
             </motion.div >
         </div >
-    );
-};
+    ), [shuffleState, gameState.players, myPlayer, isProcessing, isTxPending, isSyncing, forceSync, handleMyTurn, handleReveal, handleTimeoutKick, currentShuffler?.name, progress]);
+});
+
+ShufflePhase.displayName = 'ShufflePhase';
