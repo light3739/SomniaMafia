@@ -93,6 +93,7 @@ export async function GET(request: Request) {
                 // Check if speaker time expired
                 const elapsed = (Date.now() - state.speakerStartTime) / 1000;
                 if (elapsed >= state.speakerDuration) {
+                    console.log(`[API/Discussion] Auto-advancing speaker ${state.currentSpeakerIndex} (Timeout). Elapsed: ${elapsed.toFixed(1)}s`);
                     const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
                     if (newState) state = newState;
                 }
