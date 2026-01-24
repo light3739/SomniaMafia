@@ -10,7 +10,7 @@ interface MorningAnnouncementProps {
 export const MorningAnnouncement = React.memo(({ show, onComplete }: MorningAnnouncementProps) => {
     // Стабилизируем случайные значения для частиц, чтобы они не дергались при перерендере
     const rays = React.useMemo(() => {
-        return [...Array(15)].map((_, i) => ({
+        return [...Array(8)].map((_, i) => ({
             id: i,
             left: `${Math.random() * 100}%`,
             top: `${Math.random() * 100}%`,
@@ -41,7 +41,7 @@ export const MorningAnnouncement = React.memo(({ show, onComplete }: MorningAnno
                     {/* Warm Blurred Background */}
                     <motion.div
                         initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-                        animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
+                        animate={{ opacity: 1, backdropFilter: "blur(4px)" }}
                         exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
                         transition={{ duration: 1, ease: "easeOut" }}
                         className="absolute inset-0 bg-yellow-950/40"
