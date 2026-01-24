@@ -1,7 +1,7 @@
 // components/game/MafiaChat.tsx
 // Чат для координации мафии ночью
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Minus, MessageCircle } from 'lucide-react';
 import { Player, MafiaChatMessage } from '../../types';
@@ -19,7 +19,7 @@ interface MafiaChatProps {
     onSendMessage: (content: MafiaChatMessage['content']) => Promise<void>;
 }
 
-export const MafiaChat: React.FC<MafiaChatProps> = ({
+export const MafiaChat = memo<MafiaChatProps>(function MafiaChat({
     myName,
     teammates,
     players,
@@ -27,7 +27,7 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
     onSuggestTarget,
     messages,
     onSendMessage
-}) => {
+}) {
     const [lastSuggestion, setLastSuggestion] = useState<`0x${string}` | null>(null);
     const chatRef = useRef<HTMLDivElement>(null);
     const [isSending, setIsSending] = useState(false);
@@ -211,4 +211,4 @@ export const MafiaChat: React.FC<MafiaChatProps> = ({
             </div>
         </motion.div>
     );
-};
+});

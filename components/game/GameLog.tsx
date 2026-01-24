@@ -1,9 +1,18 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { Activity } from 'lucide-react';
 
-export const GameLog: React.FC = () => {
+const logColorMap: Record<string, string> = {
+    danger: 'text-red-400 border-l-4 border-red-600/60 pl-3 py-3 my-2 bg-red-500/5 rounded-r-lg text-sm md:text-base font-bold shadow-[0_0_20px_rgba(220,38,38,0.1)]',
+    success: 'text-emerald-400 border-l-2 border-emerald-500/50 pl-2',
+    phase: 'text-[#916A47] font-black border-l-4 border-[#916A47] pl-3 py-4 my-4 bg-[#916A47]/10 rounded-r-lg text-base md:text-lg tracking-wide uppercase shadow-[inset_0_0_30px_rgba(145,106,71,0.1)]',
+    warning: 'text-amber-400 border-l-2 border-amber-500/40 pl-2 font-medium bg-amber-500/5 py-1 rounded-r-sm',
+    info: 'text-sky-400/80 border-l-2 border-sky-500/30 pl-2',
+    default: 'text-white/40 pl-2'
+};
+
+export const GameLog: React.FC = React.memo(() => {
     const { gameState } = useGameContext();
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -14,22 +23,7 @@ export const GameLog: React.FC = () => {
         }
     }, [gameState.logs]);
 
-    const getLogColor = (type: string) => {
-        switch (type) {
-            case 'danger':
-                return 'text-red-400 border-l-4 border-red-600/60 pl-3 py-3 my-2 bg-red-500/5 rounded-r-lg text-sm md:text-base font-bold shadow-[0_0_20px_rgba(220,38,38,0.1)]';
-            case 'success':
-                return 'text-emerald-400 border-l-2 border-emerald-500/50 pl-2';
-            case 'phase':
-                return 'text-[#916A47] font-black border-l-4 border-[#916A47] pl-3 py-4 my-4 bg-[#916A47]/10 rounded-r-lg text-base md:text-lg tracking-wide uppercase shadow-[inset_0_0_30px_rgba(145,106,71,0.1)]';
-            case 'warning':
-                return 'text-amber-400 border-l-2 border-amber-500/40 pl-2 font-medium bg-amber-500/5 py-1 rounded-r-sm';
-            case 'info':
-                return 'text-sky-400/80 border-l-2 border-sky-500/30 pl-2';
-            default:
-                return 'text-white/40 pl-2';
-        }
-    };
+    const getLogColor = useCallback((type: string) => logColorMap[type] || logColorMap.default, []);
 
     return (
         <div className="flex flex-col h-full bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
@@ -73,4 +67,6 @@ export const GameLog: React.FC = () => {
             </div>
         </div>
     );
-};
+});
+
+GameLog.displayName = 'GameLog';

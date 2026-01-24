@@ -54,7 +54,7 @@ const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: 
     }
 };
 
-export const RoleReveal: React.FC = () => {
+export const RoleReveal: React.FC = React.memo(() => {
     const {
         gameState,
         currentRoomId,
@@ -207,7 +207,7 @@ export const RoleReveal: React.FC = () => {
     }, [checkIfShared]);
 
     // V3: Поделиться своим ключом со всеми (batch - одна транзакция!)
-    const shareMyKey = async () => {
+    const shareMyKey = useCallback(async () => {
         if (!myPlayer || isProcessing || revealState.hasSharedKeys) return;
 
         setIsProcessing(true);
@@ -236,10 +236,51 @@ export const RoleReveal: React.FC = () => {
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, [gameState.players, myPlayer, isProcessing, revealState.hasSharedKeys, shareKeysToAllOnChain, addLog, stringToHex]);
+
+    // Расшифровать все карты чтобы найти союзников по роли
+    const decryptAllCardsForTeammates = useCallback(async (
+        keys: Map<string, string>,
+        shuffleService: ShuffleService,
+        targetRole: Role
+    ): Promise<string[]> => {
+        const teammates: string[] = [];
+
+        for (let i = 0; i < revealState.deck.length; i++) {
+            // Пропускаем свою карту
+            if (i === revealState.myCardIndex) continue;
+
+            try {
+                let encryptedCard = revealState.deck[i];
+
+                // Расшифровываем своим ключом
+                encryptedCard = shuffleService.decrypt(encryptedCard);
+
+                // Расшифровываем ключами других игроков
+                for (const [_, key] of keys) {
+                    const decryptionKey = hexToString(key);
+                    encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
+                }
+
+                const cardRole = ShuffleService.roleNumberToRole(encryptedCard);
+
+                if (cardRole === targetRole) {
+                    // Находим игрока по индексу
+                    const player = gameState.players[i];
+                    if (player) {
+                        teammates.push(player.address);
+                    }
+                }
+            } catch (e) {
+                console.warn(`Failed to decrypt card ${i}:`, e);
+            }
+        }
+
+        return teammates;
+    }, [revealState.deck, revealState.myCardIndex, gameState.players]);
 
     // Расшифровать мою роль
-    const decryptMyRole = async () => {
+    const decryptMyRole = useCallback(async () => {
         if (revealState.myCardIndex < 0 || revealState.deck.length === 0) return;
 
         setIsProcessing(true);
@@ -316,51 +357,12 @@ export const RoleReveal: React.FC = () => {
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, [revealState.myCardIndex, revealState.deck, gameState.players, myPlayer, collectKeys, addLog, setGameState, decryptAllCardsForTeammates]);
 
-    // Расшифровать все карты чтобы найти союзников по роли
-    const decryptAllCardsForTeammates = async (
-        keys: Map<string, string>,
-        shuffleService: ShuffleService,
-        targetRole: Role
-    ): Promise<string[]> => {
-        const teammates: string[] = [];
 
-        for (let i = 0; i < revealState.deck.length; i++) {
-            // Пропускаем свою карту
-            if (i === revealState.myCardIndex) continue;
-
-            try {
-                let encryptedCard = revealState.deck[i];
-
-                // Расшифровываем своим ключом
-                encryptedCard = shuffleService.decrypt(encryptedCard);
-
-                // Расшифровываем ключами других игроков
-                for (const [_, key] of keys) {
-                    const decryptionKey = hexToString(key);
-                    encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
-                }
-
-                const cardRole = ShuffleService.roleNumberToRole(encryptedCard);
-
-                if (cardRole === targetRole) {
-                    // Находим игрока по индексу
-                    const player = gameState.players[i];
-                    if (player) {
-                        teammates.push(player.address);
-                    }
-                }
-            } catch (e) {
-                console.warn(`Failed to decrypt card ${i}:`, e);
-            }
-        }
-
-        return teammates;
-    };
 
     // Подтвердить роль (с предварительным коммитом)
-    const handleConfirmRole = async () => {
+    const handleConfirmRole = useCallback(async () => {
         // Проверка, что роль расшифрована
         if (revealState.myRole === null) return;
 
@@ -390,7 +392,7 @@ export const RoleReveal: React.FC = () => {
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, [revealState.myRole, commitAndConfirmRoleOnChain]);
 
     // Initial fetch
     useEffect(() => {
@@ -655,7 +657,9 @@ export const RoleReveal: React.FC = () => {
             </motion.div >
         </div >
     );
-};
+});
+
+RoleReveal.displayName = 'RoleReveal';
 
 // Help automation component to avoid dependency issues and keep main component clean
 const RoleRevealAuto: React.FC<{
@@ -667,7 +671,7 @@ const RoleRevealAuto: React.FC<{
     shareMyKey: () => Promise<void>,
     decryptMyRole: () => Promise<void>,
     handleConfirmRole: () => Promise<void>
-}> = ({ revealState, isProcessing, isTxPending, gameState, myPlayer, shareMyKey, decryptMyRole, handleConfirmRole }) => {
+}> = React.memo(({ revealState, isProcessing, isTxPending, gameState, myPlayer, shareMyKey, decryptMyRole, handleConfirmRole }) => {
 
     const keysNeeded = gameState.players.length - 1;
 
@@ -823,4 +827,4 @@ const RoleRevealAuto: React.FC<{
     }
 
     return null;
-};
+});
