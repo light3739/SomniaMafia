@@ -119,16 +119,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
     return (
         <div className="relative w-full min-h-screen font-['Montserrat'] flex items-center justify-center p-4">
-            <div className="fixed inset-0 z-0">
-                <Image
-                    src={lobbyBg}
-                    alt="Lobby Background"
-                    fill
-                    priority
-                    className="object-cover"
-                />
-                <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
-            </div>
+
 
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-6 py-10">
                 <div className="w-full flex items-center justify-between">

@@ -50,11 +50,7 @@ export const WaitingRoom: React.FC = () => {
 
     return (
         <div className="relative w-full min-h-screen font-['Montserrat'] flex items-center justify-center p-4">
-            <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
-                style={{ backgroundImage: `url(${lobbyBg})` }}
-            >
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
-            </div>
+
 
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
