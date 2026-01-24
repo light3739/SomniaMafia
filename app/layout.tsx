@@ -67,6 +67,7 @@ export default function RootLayout({
               alt="Lobby Background"
               fill
               priority
+              sizes="100vw"
               className="object-cover opacity-80"
             />
             <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
