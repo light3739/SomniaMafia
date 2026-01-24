@@ -117,6 +117,7 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
     const [showNightAnnouncement, setShowNightAnnouncement] = useState(false);
     const [lastNightDay, setLastNightDay] = useState<number | null>(null);
     const [lastPhase, setLastPhase] = useState<GamePhase | null>(null);
+    const [nightTransitionDelay, setNightTransitionDelay] = useState<number | null>(null);
 
     // Trigger Morning Announcement (Day start)
     useEffect(() => {
@@ -157,14 +158,71 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
         }
     }, [gameState.phase, gameState.dayCount, lastVotingDay, lastMorningDay, lastPhase]);
 
+    const lastVotingDeadlineRef = useRef<number | null>(null);
+
+    // Track Voting Deadline
+    useEffect(() => {
+        if (gameState.phase === GamePhase.VOTING && gameState.phaseDeadline) {
+            lastVotingDeadlineRef.current = gameState.phaseDeadline;
+        }
+    }, [gameState.phase, gameState.phaseDeadline]);
+
     // Trigger Night Announcement (Night Transition)
     useEffect(() => {
         if (gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDay) {
-            playNightTransition();
-            setShowNightAnnouncement(true);
+
+            // Check if we finished "Early" (Soft Mode) or "Late" (Hard Mode/Timeout)
+            // Contract gives 180s total. Soft mode target is first 60s (remaining = 120s).
+            // So we are "early" if remaining > 120s.
+            let useDelay = true;
+
+            if (lastVotingDeadlineRef.current) {
+                const now = Math.floor(Date.now() / 1000);
+                const remaining = lastVotingDeadlineRef.current - now;
+
+                // If remaining is less than ~115s (giving 5s buffer for tx/reorgs), 
+                // it means we went past the soft deadline into Hard Mode/Timeout territory.
+                console.log("[NightTransition] Checking deadline:", { remaining, buffer: 115 });
+
+                if (remaining < 115) {
+                    console.log("[NightTransition] Skipping delay due to hard timer/timeout.");
+                    useDelay = false;
+                }
+            } else {
+                console.log("[NightTransition] No deadline ref found, defaulting to delay.");
+            }
+
+            if (useDelay) {
+                console.log("[NightTransition] Starting 15s delay.");
+                setNightTransitionDelay(15);
+            } else {
+                // Hard mode / Timeout OR first night -> Instant transition
+                console.log("[NightTransition] Instant transition.");
+                setNightTransitionDelay(null);
+                playNightTransition();
+                setShowNightAnnouncement(true);
+            }
+
             setLastNightDay(gameState.dayCount);
         }
     }, [gameState.phase, gameState.dayCount, lastNightDay, playNightTransition]);
+
+    // Handle Night Delay Countdown
+    useEffect(() => {
+        if (nightTransitionDelay !== null) {
+            if (nightTransitionDelay > 0) {
+                const timer = setTimeout(() => {
+                    setNightTransitionDelay(prev => (prev !== null ? prev - 1 : null));
+                }, 1000);
+                return () => clearTimeout(timer);
+            } else {
+                // Delay finished -> Show Night Announcement
+                setNightTransitionDelay(null);
+                playNightTransition();
+                setShowNightAnnouncement(true);
+            }
+        }
+    }, [nightTransitionDelay, playNightTransition]);
 
     // Calculate last voting result from logs for the announcement
     const votingResult = useMemo(() => {
@@ -219,6 +277,10 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
             case GamePhase.VOTING:
                 return <DayPhase />;
             case GamePhase.NIGHT:
+                if (nightTransitionDelay !== null) {
+                    // Show DayPhase with transition props during delay
+                    return <DayPhase isNightTransition={true} delaySeconds={nightTransitionDelay} />;
+                }
                 return <NightPhase initialNightState={initialNightState} />;
             case GamePhase.ENDED:
                 return <GameOver />;
@@ -369,10 +431,14 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
                         </div>
                     )}
 
-                    {/* Night Phase Content */}
+                    {/* Night Phase Content (Conditionally rendered to handle transition delay) */}
                     {!isOverlayPhase && gameState.phase === GamePhase.NIGHT && (
                         <div className="w-full h-full">
-                            <NightPhase />
+                            {nightTransitionDelay !== null ? (
+                                <DayPhase isNightTransition={true} delaySeconds={nightTransitionDelay} />
+                            ) : (
+                                <NightPhase />
+                            )}
                         </div>
                     )}
 

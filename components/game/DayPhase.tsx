@@ -16,7 +16,12 @@ interface VoteState {
     hasVoted: boolean;
 }
 
-export const DayPhase: React.FC = React.memo(() => {
+interface DayPhaseProps {
+    isNightTransition?: boolean;
+    delaySeconds?: number;
+}
+
+export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition, delaySeconds }) => {
     const {
         gameState,
         currentRoomId,
@@ -428,8 +433,11 @@ export const DayPhase: React.FC = React.memo(() => {
                 {/* Actions */}
                 <div className="space-y-3">
                     <AnimatePresence mode="wait">
+                        {/* Night Transition Delay UI */}
+
+
                         {/* Discussion Phase UI */}
-                        {isDayPhase && (
+                        {isDayPhase && !isNightTransition && (
                             <motion.div
                                 key="day-actions"
                                 initial={{ opacity: 0, y: 10 }}
@@ -508,7 +516,8 @@ export const DayPhase: React.FC = React.memo(() => {
                             </motion.div>
                         )}
 
-                        {isVotingPhase && (
+                        {/* Voting Phase OR Night Transition (Both share the same slot) */}
+                        {(isVotingPhase || isNightTransition) && (
                             <motion.div
                                 key="voting-actions"
                                 initial={{ opacity: 0, y: 10 }}
@@ -516,29 +525,57 @@ export const DayPhase: React.FC = React.memo(() => {
                                 exit={{ opacity: 0, y: -10 }}
                                 className="space-y-3"
                             >
-                                {/* Voting Timer */}
-                                <VotingTimer />
+                                {isNightTransition ? (
+                                    // Night Transition Delay UI (Replaces Timer & Buttons)
+                                    <motion.div
+                                        key="transition-timer"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        className="w-full py-4 text-center bg-indigo-950/40 rounded-xl border border-indigo-500/30 backdrop-blur-sm"
+                                    >
+                                        <div className="flex flex-col items-center justify-center gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <Clock className="w-5 h-5 text-indigo-400 animate-pulse" />
+                                                <span className="text-2xl font-bold text-indigo-100 tabular-nums">
+                                                    {delaySeconds}s
+                                                </span>
+                                            </div>
+                                            <p className="text-indigo-300/70 text-sm uppercase font-bold tracking-widest">
+                                                Night Phase Starting...
+                                            </p>
+                                            <p className="text-white/50 text-xs mt-1">
+                                                Check game logs for results
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                ) : (
+                                    // Standard Voting UI
+                                    <>
+                                        {/* Voting Timer */}
+                                        <VotingTimer />
 
-                                <Button
-                                    onClick={handleVote}
-                                    data-custom-sound
-                                    isLoading={isProcessing || isTxPending}
-                                    disabled={!selectedTarget || isProcessing || isTxPending || voteState.hasVoted}
-                                    variant={selectedTarget ? 'primary' : 'outline-gold'}
-                                    className="w-full h-[60px] text-lg"
-                                >
-                                    {selectedTarget ? (
-                                        <>
-                                            Vote for {gameState.players.find(p => p.address.toLowerCase() === selectedTarget.toLowerCase())?.name}
-                                        </>
-                                    ) : voteState.hasVoted ? (
-                                        <>
-                                            Vote Committed
-                                        </>
-                                    ) : (
-                                        'Select a target on the board'
-                                    )}
-                                </Button>
+                                        <Button
+                                            onClick={handleVote}
+                                            data-custom-sound
+                                            isLoading={isProcessing || isTxPending}
+                                            disabled={!selectedTarget || isProcessing || isTxPending || voteState.hasVoted}
+                                            variant={selectedTarget ? 'primary' : 'outline-gold'}
+                                            className="w-full h-[60px] text-lg"
+                                        >
+                                            {selectedTarget ? (
+                                                <>
+                                                    Vote for {gameState.players.find(p => p.address.toLowerCase() === selectedTarget.toLowerCase())?.name}
+                                                </>
+                                            ) : voteState.hasVoted ? (
+                                                <>
+                                                    Vote Committed
+                                                </>
+                                            ) : (
+                                                'Select a target on the board'
+                                            )}
+                                        </Button>
+                                    </>
+                                )}
                             </motion.div>
                         )}
                     </AnimatePresence>
