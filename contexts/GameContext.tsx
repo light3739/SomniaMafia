@@ -586,7 +586,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'createAndJoin',
                     args: [lobbyName, 16, playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('0.05'),
+                    value: parseEther('1.0'),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -606,7 +606,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     pubKeyHex as `0x${string}`,      // bytes publicKey
                     sessionAddress as `0x${string}`  // address sessionAddress
                 ],
-                value: parseEther('0.05'),
+                value: parseEther('1.0'),
                 gas: gasLimit,
             });
 
@@ -646,7 +646,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('0.05'),
+                    value: parseEther('1.0'),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -660,7 +660,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
-                value: parseEther('0.05'),
+                value: parseEther('1.0'),
                 gas: gasLimit,
             });
             addLog("Joining with auto-sign...", "info");
@@ -1273,6 +1273,39 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
+    // Automatically reveal my role on-chain after game ends (for trustless verification)
+    const revealMyRoleAfterGameEnd = useCallback(async () => {
+        if (!currentRoomId || !myPlayer || !address) return;
+
+        try {
+            // Get saved salt from localStorage (set during commitRole phase)
+            const salt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+            if (!salt) {
+                console.warn("[RoleReveal] No salt found in localStorage, skipping reveal");
+                return;
+            }
+
+            // Get role from myPlayer (locally decrypted)
+            const roleNum = getRoleNumber(myPlayer.role);
+            if (roleNum === 0) {
+                console.warn("[RoleReveal] Unknown role, skipping reveal");
+                return;
+            }
+
+            addLog("Revealing your role on-chain...", "info");
+            await revealRoleOnChain(roleNum, salt);
+            addLog(`Role revealed: ${myPlayer.role}`, "success");
+
+        } catch (e: any) {
+            // Ignore "already revealed" errors - might have been revealed before
+            if (e.message?.includes("RoleAlreadyRevealed")) {
+                console.log("[RoleReveal] Already revealed, skipping");
+                return;
+            }
+            console.warn("[RoleReveal] Failed:", e);
+        }
+    }, [currentRoomId, myPlayer, address, revealRoleOnChain, addLog]);
+
 
     // V4: ZK End Game (Client generates proof of win)
     // V4: ZK End Game (Client generates proof of win via Server API)
@@ -1377,13 +1410,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await publicClient.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
 
+            // Auto-reveal my role on-chain for trustless verification
+            await revealMyRoleAfterGameEnd();
+
         } catch (txErr: any) {
             console.error("[ZK] Transaction Failed:", txErr);
             addLog(`ZK Error: ${txErr.shortMessage || txErr.message}`, "danger");
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList, address, myPlayer?.address]);
+    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList, address, myPlayer?.address, revealMyRoleAfterGameEnd]);
 
     /**
      * TRIGGER AUTO WIN: A silent background check that pings the server
@@ -1475,6 +1511,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     await publicClient.waitForTransactionReceipt({ hash });
                     addLog("Game ended automatically via Server ZK!", "phase");
                     await refreshPlayersList(roomId);
+
+                    // Auto-reveal my role on-chain for trustless verification
+                    await revealMyRoleAfterGameEnd();
                 } catch (txErr: any) {
                     console.error("[AutoWin ZK Debug] Transaction FAILED:", txErr);
                     addLog(`Auto-Win Failed: ${txErr.shortMessage || txErr.message}`, "danger");
@@ -1488,7 +1527,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.warn("[AutoWin] Silent check failed:", e);
         }
-    }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, isTxPending, address]);
+    }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, isTxPending, address, revealMyRoleAfterGameEnd]);
 
     // Manual triggers for victory claim (reveals role + checks win condition)
     const claimVictory = useCallback(async () => {
