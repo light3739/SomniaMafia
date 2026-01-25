@@ -600,17 +600,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }) as bigint;
             const newRoomId = Number(nextId);
             const balance = await publicClient.getBalance({ address });
-            const isPaused = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'paused',
-            }) as boolean;
 
-            console.log(`[Diagnostic] RoomID: ${newRoomId}, Balance: ${Number(balance) / 1e18} SOMI, Paused: ${isPaused}`);
-            if (isPaused) {
-                setIsTxPending(false);
-                return addLog("Contract is currently PAUSED by admin.", "danger");
-            }
+            console.log(`[Diagnostic] RoomID: ${newRoomId}, Balance: ${Number(balance) / 1e18} SOMI`);
+
             if (balance < parseEther('0.11')) {
                 console.warn(`[Diagnostic] Low balance: ${Number(balance) / 1e18} SOMI. Need ~0.11`);
                 // We proceed but warn
@@ -657,7 +649,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     sessionAddress as `0x${string}`  // address sessionAddress
                 ],
                 value: parseEther('0.05'),
-                gas: gasLimit,
+                gas: 50_000_000n, // Standard limit for mainnet
                 type: 'legacy',
             });
 
@@ -711,8 +703,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
-                value: parseEther('0.1'),
-                gas: gasLimit,
+                value: parseEther('0.05'),
+                gas: 50_000_000n,
                 type: 'legacy',
             });
             // addLog("Joining with auto-sign...", "info");
