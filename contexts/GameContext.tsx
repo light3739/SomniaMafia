@@ -820,7 +820,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const txHash = await sendGameTransaction('commitRole', [currentRoomId, roleHash]);
                     addLog("Role committed!", "success");
                     await publicClient?.waitForTransactionReceipt({ hash: txHash });
-                    localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, saltToUse);
+                    if (address) localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, saltToUse);
                 } catch (txErr: any) {
                     if (txErr.message?.includes("AlreadyCommitted") || txErr.message?.includes("AlreadyConfirmed")) {
                         console.log("Role already on-chain, proceeding to server sync.");
@@ -1359,7 +1359,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             .filter(p => p.isAlive)
             .sort((a, b) => a.address.localeCompare(b.address));
 
-        const myIndex = activePlayers.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+        const myIndex = activePlayers.findIndex(p => p.address.toLowerCase() === myPlayer?.address?.toLowerCase());
 
         // If I am not found (shouldn't happen if alive), default to 0
         const delayIndex = myIndex >= 0 ? myIndex : 0;
@@ -1663,7 +1663,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.log("[tryEndGame] Win condition detected!", { mafiaWins, townWins, aliveMafia, aliveTown });
 
         // Try to reveal our role on-chain (required for contract to verify)
-        const myRole = gameState.players.find(p => p.address.toLowerCase() === address.toLowerCase())?.role;
+        const myRole = address ? gameState.players.find(p => p.address.toLowerCase() === address.toLowerCase())?.role : Role.UNKNOWN;
         const savedSalt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
 
         if (myRole && myRole !== Role.UNKNOWN && savedSalt) {
