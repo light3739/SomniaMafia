@@ -26,6 +26,8 @@ interface GameContextType {
     currentRoomId: bigint | null;
     selectedTarget: `0x${string}` | null;
     setSelectedTarget: (target: `0x${string}` | null) => void;
+    showVotingResults: boolean;
+    setShowVotingResults: (val: boolean) => void;
 
     // Lobby
     createLobbyOnChain: () => Promise<void>;
@@ -99,13 +101,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     const [currentRoomId, setCurrentRoomId] = useState<bigint | null>(() => {
         if (typeof window !== 'undefined') {
-            const stored = sessionStorage.getItem('currentRoomId');
-            return stored ? BigInt(stored) : null;
+            const saved = sessionStorage.getItem('currentRoomId');
+            return saved ? BigInt(saved) : null;
         }
         return null;
     });
-    const [keys, setKeys] = useState<CryptoKeyPair | null>(null);
     const [selectedTarget, setSelectedTarget] = useState<`0x${string}` | null>(null);
+    const [showVotingResults, setShowVotingResults] = useState(false);
+    const [keys, setKeys] = useState<CryptoKeyPair | null>(null);
 
     // Ref для currentRoomId чтобы избежать проблем с замыканием в callbacks
     const currentRoomIdRef = useRef<bigint | null>(currentRoomId);
@@ -520,7 +523,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         hasNightCommitted: (flags & 8) !== 0,  // Night phase commit
                         hasNightRevealed: (flags & 16) !== 0,  // Night phase reveal
                         avatarUrl: playerAvatar,
-                        votesReceived: 0,
+                        votesReceived: Number(p.votesReceived || 0),
                         status: (flags & FLAG_ACTIVE) !== 0 ? 'connected' : 'slashed'
                     };
                 });
@@ -1823,13 +1826,44 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         refreshPlayersList(currentRoomId);
                         break;
 
+                    case 'NightFinalized':
+                        if (args.killed && args.killed !== '0x0000000000000000000000000000000000000000') {
+                            const killedPlayer = gameState.players.find(p => p.address.toLowerCase() === (args.killed as string).toLowerCase());
+                            const name = killedPlayer?.name || args.killed.slice(0, 6);
+                            addLog(`Night Result: ${name} was killed by Mafia!`, "danger");
+                        } else {
+                            addLog("Night Result: No one died last night.", "success");
+                        }
+                        if (args.healed && args.healed !== '0x0000000000000000000000000000000000000000') {
+                            addLog("Doctor successfully saved the target!", "success");
+                        }
+                        refreshPlayersList(currentRoomId);
+                        break;
+
+                    case 'PlayerEliminated':
+                        const elimPlayer = gameState.players.find(p => p.address.toLowerCase() === (args.player as string).toLowerCase());
+                        const elimName = elimPlayer?.name || args.player?.slice(0, 6) || "Unknown";
+                        addLog(`${elimName} eliminated: ${args.reason}`, "danger");
+                        refreshPlayersList(currentRoomId);
+                        break;
+
                     case 'GameEnded':
                         // Handle game end
                         refreshPlayersList(currentRoomId);
                         break;
 
                     case 'VoteCast':
-                        // refreshPlayersList is enough as it fetches vote counts
+                        try {
+                            const voter = gameState.players.find(p => p.address.toLowerCase() === (args.voter as string).toLowerCase());
+                            const target = gameState.players.find(p => p.address.toLowerCase() === (args.target as string).toLowerCase());
+                            const voterName = voter?.name || args.voter.slice(0, 6);
+                            const targetName = target?.name || args.target.slice(0, 6);
+                            addLog(`${voterName} voted for ${targetName}`, "info");
+                        } catch (e) {
+                            console.error("[VoteCast] Error logging:", e);
+                        }
+                        // Still refresh players to update counts (if supported)
+                        refreshPlayersList(currentRoomId);
                         break;
 
                     case 'VotingFinalized':
@@ -1839,6 +1873,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             addLog(`Voting Finalized: No one was eliminated.`, "warning");
                         }
                         refreshPlayersList(currentRoomId);
+
+                        // NEW: Trigger Voting Results Phase (10s delay)
+                        console.log("[VotingFinalized] Triggering 10s results phase...");
+                        setShowVotingResults(true);
+                        setTimeout(() => {
+                            console.log("[VotingFinalized] Results phase ended. Proceeding to Night.");
+                            setShowVotingResults(false);
+                        }, 10000); // 10 seconds
+
                         break;
                 }
             }
@@ -1987,6 +2030,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         kickStalledPlayerOnChain, refreshPlayersList,
         addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         selectedTarget, setSelectedTarget,
+        showVotingResults, setShowVotingResults,
         isTestMode, setIsTestMode,
         setIsTxPending,
         playerMarks, setPlayerMark,
@@ -2004,6 +2048,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         isTestMode, setIsTestMode,
         selectedTarget,
+        showVotingResults, setShowVotingResults,
+        playerMarks, setPlayerMark,
         playerMarks, setPlayerMark,
         setCurrentRoomId
     ]);

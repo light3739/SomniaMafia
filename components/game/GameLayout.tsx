@@ -41,6 +41,9 @@ const GameOver = dynamic(() => import('./GameOver').then(m => m.GameOver), {
     loading: () => <div className="text-white/50 animate-pulse">Loading...</div>,
     ssr: false
 });
+const PostVotingTransition = dynamic(() => import('./PostVotingTransition').then(m => m.PostVotingTransition), {
+    ssr: false
+});
 
 const dayBg = "/assets/game_background_light.webp";
 const nightBg = "/assets/game_background.webp";
@@ -74,7 +77,7 @@ const BASE_WIDTH = 1488;
 const BASE_HEIGHT = 1024;
 
 export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNightState }) => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark } = useGameContext();
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const players = gameState.players || [];
     const [scale, setScale] = useState(1);
@@ -392,21 +395,24 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
                 {/* CENTER CONTENT (Day Phase, Vote, Logs etc) */}
                 {/* CENTER CONTENT (Day/Night/Voting) */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] flex items-center justify-center z-10">
+                    {/* Voting Results Transition - High Priority */}
+                    {showVotingResults && (
+                        <div className="w-full h-full z-20">
+                            <PostVotingTransition />
+                        </div>
+                    )}
+
                     {/* Day/Voting Phase Content */}
-                    {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) && (
+                    {!showVotingResults && !isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) && (
                         <div className="w-full h-full">
                             <DayPhase />
                         </div>
                     )}
 
-                    {/* Night Phase Content (Conditionally rendered to handle transition delay) */}
-                    {!isOverlayPhase && gameState.phase === GamePhase.NIGHT && (
+                    {/* Night Phase Content */}
+                    {!showVotingResults && !isOverlayPhase && gameState.phase === GamePhase.NIGHT && (
                         <div className="w-full h-full">
-                            {nightTransitionDelay !== null ? (
-                                <DayPhase isNightTransition={true} delaySeconds={nightTransitionDelay} />
-                            ) : (
-                                <NightPhase />
-                            )}
+                            <NightPhase />
                         </div>
                     )}
 
