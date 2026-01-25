@@ -11,8 +11,8 @@ export const somniaChain = {
     nativeCurrency: { name: 'SOMI', symbol: 'SOMI', decimals: 18 },
     rpcUrls: {
         default: {
-            http: ['https://api.infra.mainnet.somnia.network'],
-            webSocket: ['wss://dream-rpc.somnia.network/ws'],
+            http: ['https://somnia-rpc.publicnode.com'],
+            webSocket: ['wss://somnia-rpc.publicnode.com'],
         },
     },
     blockExplorers: {
