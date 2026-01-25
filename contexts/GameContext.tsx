@@ -607,7 +607,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const { sessionAddress } = createNewSession(address, newRoomId);
 
             // 4. Оценка газа с буфером
-            let gasLimit = 5_000_000n;
+            let gasLimit = 30_000_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -667,7 +667,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const { sessionAddress } = createNewSession(address, roomId);
 
             // 3. Оценка газа с буфером
-            let gasLimit = 5_000_000n;
+            let gasLimit = 30_000_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -715,7 +715,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             // Оценка газа с буфером
-            let gasLimit = 2_000_000n;
+            let gasLimit = 30_000_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: MAFIA_CONTRACT_ADDRESS,
