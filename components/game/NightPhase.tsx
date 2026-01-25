@@ -260,7 +260,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
     const selectedPlayer = gameState.players.find(p => p.address.toLowerCase() === selectedTarget?.toLowerCase());
 
     // Storage key for night commit data
-    const NIGHT_COMMIT_KEY = `mafia_night_commit_${currentRoomId}_${address}`;
+    const NIGHT_COMMIT_KEY = `mafia_night_commit_${currentRoomId}_${address ? address.toLowerCase() : ''}`;
 
     // Load mafia teammates on mount (only for mafia role)
     const loadMafiaTeammates = useCallback(async () => {
