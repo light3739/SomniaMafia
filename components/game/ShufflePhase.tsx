@@ -49,7 +49,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
     const [pendingDeck, setPendingDeck] = useState<string[] | null>(null);
     const [pendingSalt, setPendingSalt] = useState<string | null>(null);
 
-    const SHUFFLE_COMMIT_KEY = `mafia_shuffle_commit_${currentRoomId}_${myPlayer?.address}`;
+    const SHUFFLE_COMMIT_KEY = `mafia_shuffle_commit_${currentRoomId}_${myPlayer?.address?.toLowerCase() || ''}`;
 
     // Restore state from local storage on mount
     useEffect(() => {

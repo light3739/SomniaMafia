@@ -504,8 +504,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     // NEW: Recovery of role from localStorage on refresh
                     let resolvedRole = existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN;
 
-                    if (isMe && resolvedRole === Role.UNKNOWN) {
-                        const savedRole = localStorage.getItem(`my_role_${roomId}_${address}`);
+                    if (isMe && resolvedRole === Role.UNKNOWN && address) {
+                        const savedRole = localStorage.getItem(`my_role_${roomId}_${address.toLowerCase()}`);
                         if (savedRole && Object.values(Role).includes(savedRole as Role)) {
                             resolvedRole = savedRole as Role;
                         }
@@ -802,7 +802,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const commitRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
 
-        const existingSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+        const existingSalt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
         let saltToUse = salt;
         let shouldCommitOnChain = !existingSalt;
 
@@ -820,18 +820,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const txHash = await sendGameTransaction('commitRole', [currentRoomId, roleHash]);
                     addLog("Role committed!", "success");
                     await publicClient?.waitForTransactionReceipt({ hash: txHash });
-                    localStorage.setItem(`role_salt_${currentRoomId}_${address}`, saltToUse);
-
-                    // NEW: Save role assumption to localStorage so we survive page refreshes
-                    let roleEnumStr = "";
-                    if (role === 1) roleEnumStr = Role.MAFIA;
-                    else if (role === 2) roleEnumStr = Role.DOCTOR;
-                    else if (role === 3) roleEnumStr = Role.DETECTIVE;
-                    else if (role === 4) roleEnumStr = Role.CIVILIAN;
-
-                    if (roleEnumStr) {
-                        localStorage.setItem(`my_role_${currentRoomId}_${address}`, roleEnumStr);
-                    }
+                    localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, saltToUse);
                 } catch (txErr: any) {
                     if (txErr.message?.includes("AlreadyCommitted") || txErr.message?.includes("AlreadyConfirmed")) {
                         console.log("Role already on-chain, proceeding to server sync.");
@@ -839,6 +828,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         throw txErr;
                     }
                 }
+            }
+
+            // ALWAYS save role to localStorage if known, even if we skipped on-chain commit (e.g. recovery)
+            let roleEnumStr = "";
+            if (role === 1) roleEnumStr = Role.MAFIA;
+            else if (role === 2) roleEnumStr = Role.DOCTOR;
+            else if (role === 3) roleEnumStr = Role.DETECTIVE;
+            else if (role === 4) roleEnumStr = Role.CIVILIAN;
+
+            if (roleEnumStr && address) {
+                console.log(`[GameContext] Persisting role ${roleEnumStr} for ${address.toLowerCase()}`);
+                localStorage.setItem(`my_role_${currentRoomId}_${address.toLowerCase()}`, roleEnumStr);
             }
 
             // SYNC WITH SERVER-SIDE DB (for automated win-checking)
@@ -885,7 +886,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const commitAndConfirmRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
 
-        const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+        const savedSalt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
         let saltToUse = salt;
 
         // Check if we are already confirmed on chain to avoid redundant txs
@@ -924,7 +925,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const txHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
                     addLog("Role committed & confirmed on-chain!", "success");
                     await publicClient?.waitForTransactionReceipt({ hash: txHash });
-                    localStorage.setItem(`role_salt_${currentRoomId}_${address}`, saltToUse);
+                    if (address) localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, saltToUse);
                 } catch (txErr: any) {
                     const errMsg = (txErr.message || "").toLowerCase();
                     const shortMsg = (txErr.shortMessage || "").toLowerCase();
@@ -1319,7 +1320,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             // Get saved salt from localStorage (set during commitRole phase)
-            const salt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+            const salt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
             if (!salt) {
                 console.warn("[RoleReveal] No salt found in localStorage, skipping reveal");
                 return;
@@ -1574,7 +1575,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!currentRoomId || !myPlayer) return;
 
         try {
-            const salt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+            const salt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
             if (salt) {
                 try {
                     const roleNum = getRoleNumber(myPlayer.role);
@@ -1663,7 +1664,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Try to reveal our role on-chain (required for contract to verify)
         const myRole = gameState.players.find(p => p.address.toLowerCase() === address.toLowerCase())?.role;
-        const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address}`);
+        const savedSalt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
 
         if (myRole && myRole !== Role.UNKNOWN && savedSalt) {
             const roleMap: Record<string, number> = {
