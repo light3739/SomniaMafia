@@ -974,9 +974,9 @@ const TestPage: React.FC = () => {
     };
 
     return (
-        <div className="flex h-screen w-full bg-black text-white">
+        <div className="flex h-screen w-full bg-black text-white relative z-[200]">
             {/* Sidebar */}
-            <div className="w-64 border-r border-green-500/20 flex flex-col h-full bg-gray-900/20">
+            <div className="w-64 border-r border-green-500/20 flex flex-col h-full bg-gray-900/90 backdrop-blur-md relative z-[201]">
                 <div className="p-4 border-b border-green-500/20">
                     <h1 className="text-xl font-bold text-green-500 tracking-wider">COMPONENT TEST</h1>
                 </div>
@@ -1004,7 +1004,7 @@ const TestPage: React.FC = () => {
             </div>
 
             {/* Main Area */}
-            <div className="flex-1 flex flex-col h-full overflow-hidden">
+            <div className="flex-1 flex flex-col h-full overflow-hidden relative z-[200]">
                 {renderSelected()}
             </div>
         </div>

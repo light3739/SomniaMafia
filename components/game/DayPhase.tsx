@@ -433,8 +433,6 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                 {/* Actions */}
                 <div className="space-y-3">
                     <AnimatePresence mode="wait">
-                        {/* Night Transition Delay UI */}
-
 
                         {/* Discussion Phase UI */}
                         {isDayPhase && !isNightTransition && (
