@@ -12,6 +12,7 @@ export const somniaChain = {
     rpcUrls: {
         default: {
             http: ['https://api.infra.mainnet.somnia.network'],
+            webSocket: ['wss://dream-rpc.somnia.network/ws'],
         },
     },
     blockExplorers: {

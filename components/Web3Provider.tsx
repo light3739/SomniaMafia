@@ -21,7 +21,10 @@ const somniaMainnet = defineChain({
     symbol: 'SOMI',
   },
   rpcUrls: {
-    default: { http: ['https://api.infra.mainnet.somnia.network'] },
+    default: {
+      http: ['https://api.infra.mainnet.somnia.network'],
+      webSocket: ['wss://dream-rpc.somnia.network/ws'],
+    },
   },
   blockExplorers: {
     default: { name: 'Somnia Explorer', url: 'https://explorer.somnia.network' },
