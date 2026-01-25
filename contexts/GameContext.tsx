@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
-import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
+import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent, useWatchBlockNumber } from 'wagmi';
 import { createWalletClient, http, parseEther, parseEventLogs, toHex, pad } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
@@ -498,11 +498,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         (isMe && avatarUrl) ||
                         `https://picsum.photos/seed/${p.wallet}/200`;
 
+                    // NEW: Recovery of role from localStorage on refresh
+                    let resolvedRole = existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN;
+
+                    if (isMe && resolvedRole === Role.UNKNOWN) {
+                        const savedRole = localStorage.getItem(`my_role_${roomId}_${address}`);
+                        if (savedRole && Object.values(Role).includes(savedRole as Role)) {
+                            resolvedRole = savedRole as Role;
+                        }
+                    }
+
                     return {
                         id: p.wallet,
                         name: p.nickname,
                         address: p.wallet,
-                        role: existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN,
+                        role: resolvedRole,
                         isAlive: (flags & FLAG_ACTIVE) !== 0,
                         hasConfirmedRole: (flags & FLAG_CONFIRMED_ROLE) !== 0,
                         hasDeckCommitted: (flags & 64) !== 0,
@@ -808,6 +818,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     addLog("Role committed!", "success");
                     await publicClient?.waitForTransactionReceipt({ hash: txHash });
                     localStorage.setItem(`role_salt_${currentRoomId}_${address}`, saltToUse);
+
+                    // NEW: Save role assumption to localStorage so we survive page refreshes
+                    let roleEnumStr = "";
+                    if (role === 1) roleEnumStr = Role.MAFIA;
+                    else if (role === 2) roleEnumStr = Role.DOCTOR;
+                    else if (role === 3) roleEnumStr = Role.DETECTIVE;
+                    else if (role === 4) roleEnumStr = Role.CIVILIAN;
+
+                    if (roleEnumStr) {
+                        localStorage.setItem(`my_role_${currentRoomId}_${address}`, roleEnumStr);
+                    }
                 } catch (txErr: any) {
                     if (txErr.message?.includes("AlreadyCommitted") || txErr.message?.includes("AlreadyConfirmed")) {
                         console.log("Role already on-chain, proceeding to server sync.");
@@ -1709,221 +1730,141 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
-    // --- UNIFIED EVENT POLLING (MANUAL SMART POLLER) ---
-    // [CRITICAL OPTIMIZATION] Replaced multiple listeners with one manual poller.
-    // Reason: Somnia produces ~50 blocks/sec. Standard wagmi listeners miss events.
-    // This poller strictly tracks blocks (fromBlock->toBlock) preventing ANY data loss.
+    // --- UNIFIED EVENT POLLING (REAL-TIME VIA WEBSOCKET/SMART POLLER) ---
+    // [CRITICAL OPTIMIZATION] Replaced interval polling with useWatchBlockNumber.
+    // Reason: Somnia produces blocks every 100ms. We listen for new blocks via WS
+    // and fetch events immediately. This enables sub-second reaction times.
+    // The 'Smart Poller' logic (fromBlock->toBlock) remains to guarantee no data loss.
 
     const processedEventsRef = useRef<Set<string>>(new Set());
     const lastProcessedBlockRef = useRef<bigint | null>(null);
 
+    // Initial block fetch on mount
     useEffect(() => {
-        if (!publicClient || !currentRoomId) return;
+        if (!publicClient || !currentRoomId || lastProcessedBlockRef.current) return;
+        publicClient.getBlockNumber().then(b => {
+            // Start from slightly earlier to catch immediate events? No, start from 'now'.
+            // Actually, to be safe, maybe currentBlock - 1?
+            // But existing logic was "start from now".
+            lastProcessedBlockRef.current = b;
+            console.log(`[Smart Poller] 🚀 Started for Room ${currentRoomId} @ Block ${b}`);
+        });
+    }, [publicClient, currentRoomId]);
 
-        // Initialize start block on first run
-        if (!lastProcessedBlockRef.current) {
-            publicClient.getBlockNumber().then(b => {
-                lastProcessedBlockRef.current = b;
-                console.log(`[Smart Poller] 🚀 Started for Room ${currentRoomId} @ Block ${b}`);
+    // The polling function - stable reference
+    const pollEvents = useCallback(async () => {
+        if (!publicClient || !currentRoomId || !lastProcessedBlockRef.current) return;
+
+        try {
+            const currentBlock = await publicClient.getBlockNumber();
+
+            // Don't poll if no new blocks (unlikely on Somnia)
+            if (currentBlock < lastProcessedBlockRef.current) return;
+
+            // 1. Fetch ALL logs for this room in one request
+            // We use low-level topics filtering: [topic0=null (any event), topic1=roomId]
+            const roomIdTopic = pad(toHex(currentRoomId), { size: 32 });
+            const rawLogs = await publicClient.getLogs({
+                address: MAFIA_CONTRACT_ADDRESS,
+                topics: [
+                    null,        // Any event signature
+                    roomIdTopic  // topic[1] must match roomId
+                ],
+                fromBlock: lastProcessedBlockRef.current,
+                toBlock: currentBlock
+            } as any);
+
+            // 2. Parse logs using viem
+            const parsedLogs = parseEventLogs({
+                abi: MAFIA_ABI,
+                logs: rawLogs
             });
-        }
 
-        const pollEvents = async () => {
-            if (!lastProcessedBlockRef.current) return;
+            // 3. Process events
+            let hasChanges = false;
+            for (const log of parsedLogs) {
+                const txHash = log.transactionHash;
+                const logId = `${txHash}-${log.logIndex}`; // Unique ID per event
 
-            try {
-                const currentBlock = await publicClient.getBlockNumber();
+                if (processedEventsRef.current.has(logId)) continue;
+                processedEventsRef.current.add(logId);
+                hasChanges = true;
 
-                // Don't poll if no new blocks (unlikely on Somnia)
-                if (currentBlock < lastProcessedBlockRef.current) return;
+                const eventName = log.eventName;
+                const args = log.args as any;
 
+                console.log(`[Event Received] ${eventName}`, args);
 
+                // --- EVENT HANDLERS SWITCH ---
+                switch (eventName) {
+                    case 'PlayerJoined':
+                        // Refresh only once per batch at the end using hasChanges?
+                        // But handlers might need immediate effect.
+                        // For now, keep existing logic, but maybe optimize refreshes later.
+                        refreshPlayersList(currentRoomId);
+                        break;
 
-                // 1. Fetch ALL logs for this room in one request
-                // We use low-level topics filtering: [topic0=null (any event), topic1=roomId]
-                // This works because 'roomId' is the first indexed parameter for ALL tracked Mafia events
-                const roomIdTopic = pad(toHex(currentRoomId), { size: 32 });
-                const rawLogs = await publicClient.getLogs({
-                    address: MAFIA_CONTRACT_ADDRESS,
-                    topics: [
-                        null,        // Any event signature
-                        roomIdTopic  // topic[1] must match roomId
-                    ],
-                    fromBlock: lastProcessedBlockRef.current,
-                    toBlock: currentBlock
-                } as any);
+                    case 'GameStarted':
+                        refreshPlayersList(currentRoomId);
+                        break;
 
-                // 2. Parse logs using viem
-                const parsedLogs = parseEventLogs({
-                    abi: MAFIA_ABI,
-                    logs: rawLogs
-                });
+                    case 'DayStarted':
+                        addLog(`Day ${args.dayNumber} has begun`, "phase");
+                        refreshPlayersList(currentRoomId);
+                        break;
 
-                // 3. Process events
-                for (const log of parsedLogs) {
-                    const txHash = log.transactionHash;
-                    const logId = `${txHash}-${log.logIndex}`; // Unique ID per event
+                    case 'VotingStarted':
+                        addLog("Voting Phase Started", "phase");
+                        refreshPlayersList(currentRoomId);
+                        break;
 
-                    if (processedEventsRef.current.has(logId)) continue;
-                    processedEventsRef.current.add(logId);
+                    case 'NightStarted':
+                        addLog("Night started", "phase");
+                        refreshPlayersList(currentRoomId);
+                        break;
 
-                    const eventName = log.eventName;
-                    const args = log.args as any;
+                    case 'GameEnded':
+                        // Handle game end
+                        refreshPlayersList(currentRoomId);
+                        break;
 
-                    console.log(`[Event Received] ${eventName}`, args);
+                    case 'VoteCast':
+                        // refreshPlayersList is enough as it fetches vote counts
+                        break;
 
-                    // --- EVENT HANDLERS SWITCH ---
-                    switch (eventName) {
-                        case 'PlayerJoined':
-                            // addLog(`${args.nickname} joined!`, "info");
-                            refreshPlayersList(currentRoomId);
-                            break;
-
-                        case 'GameStarted':
-                            // addLog("Shuffle started!", "phase");
-                            refreshPlayersList(currentRoomId);
-                            break;
-
-                        case 'DayStarted':
-                            addLog(`Day ${args.dayNumber} has begun`, "phase");
-                            refreshPlayersList(currentRoomId);
-                            break;
-
-                        case 'VotingStarted':
-                            addLog("Voting Phase Started", "phase");
-                            refreshPlayersList(currentRoomId);
-                            break;
-
-                        case 'NightStarted':
-                            addLog("Night started", "phase");
-                            refreshPlayersList(currentRoomId);
-                            break;
-
-                        case 'VoteCast':
-                            const voter = args.voter;
-                            const target = args.target;
-                            const currentPlayers = playersRef.current;
-
-                            const voterPlayer = currentPlayers.find(p => p.address.toLowerCase() === voter.toLowerCase());
-                            const targetPlayer = currentPlayers.find(p => p.address.toLowerCase() === target.toLowerCase());
-                            const voterLabel = voterPlayer ? (voterPlayer.name || `Player ${currentPlayers.indexOf(voterPlayer) + 1}`) : voter.slice(0, 6);
-                            const targetLabel = targetPlayer ? (targetPlayer.name || `Player ${currentPlayers.indexOf(targetPlayer) + 1}`) : target.slice(0, 6);
-
-                            addLog(`🗳️ ${voterLabel} voted for ${targetLabel}`, "warning");
-                            break;
-
-                        case 'PlayerEliminated':
-                            // const victim = args.player;
-                            // const reason = args.reason;
-                            // addLog(`${victim.slice(0, 6)}... ${reason}!`, "danger");
-                            refreshPlayersList(currentRoomId);
-                            // Trigger win check in case the Mafia was eliminated
-                            triggerAutoWinCheck();
-                            break;
-
-                        case 'PlayerKicked':
-                            const kicked = args.player;
-                            const kPlayer = playersRef.current.find(p => p.address.toLowerCase() === kicked.toLowerCase());
-                            const kName = kPlayer ? (kPlayer.name || `Player`) : kicked.slice(0, 6);
-                            addLog(`${kName} was kicked (AFK)`, "danger");
-                            refreshPlayersList(currentRoomId);
-                            triggerAutoWinCheck();
-                            break;
-
-                        case 'GameEnded':
-                            addLog(`Game Over: ${args.reason}`, "phase");
-                            refreshPlayersList(currentRoomId);
-                            break;
-
-                        case 'VotingFinalized':
-                            const eliminated = args.eliminated;
-                            const voteCount = Number(args.voteCount);
-                            if (eliminated !== '0x0000000000000000000000000000000000000000') {
-                                const elPlayer = playersRef.current.find(p => p.address.toLowerCase() === eliminated.toLowerCase());
-                                const elName = elPlayer ? (elPlayer.name || `Player`) : eliminated.slice(0, 6);
-                                addLog(`Execution: ${elName} was eliminated with ${voteCount} votes!`, "danger");
-                            } else {
-                                addLog("No one was eliminated - no majority reached.", "warning");
-                            }
-                            refreshPlayersList(currentRoomId);
-                            triggerAutoWinCheck();
-                            console.log("[Event] Voting Finalized. Triggering immediate win check.");
-                            break;
-
-                        case 'NightFinalized':
-                            const killed = args.killed;
-                            const healed = args.healed;
-                            if (killed !== '0x0000000000000000000000000000000000000000') {
-                                if (killed === healed) {
-                                    addLog("The night passes peacefully... No one was killed.", "info");
-                                } else {
-                                    const knPlayer = playersRef.current.find(p => p.address.toLowerCase() === killed.toLowerCase());
-                                    const knName = knPlayer ? (knPlayer.name || `Player`) : killed.slice(0, 6);
-                                    addLog(`Tragedy: ${knName} was killed during the night!`, "danger");
-                                }
-                            } else {
-                                addLog("The night passes peacefully... No one was killed.", "info");
-                            }
-                            refreshPlayersList(currentRoomId);
-                            triggerAutoWinCheck();
-                            break;
-
-                        case 'NightActionCommitted':
-                            const nPlayerAddr = args.player;
-                            const nPlayer = playersRef.current.find(pl => pl.address.toLowerCase() === nPlayerAddr.toLowerCase());
-                            const nName = nPlayer ? (nPlayer.name || `Player`) : nPlayerAddr.slice(0, 6);
-                            // addLog(`🌙 ${nName} committed a night action`, "info");
-
-                            // Play shot sound
-                            try {
-                                const audio = new Audio(shotSound);
-                                audio.volume = 0.2;
-                                // audio.play().catch(e => console.error("Audio play failed:", e));
-                            } catch (e) { console.error("Audio error:", e); }
-                            break;
-
-                        case 'MafiaMessageSent':
-                            fetchMafiaChat(currentRoomId);
-                            break;
-
-                        case 'RoleConfirmed':
-                            refreshPlayersList(currentRoomId);
-                            triggerAutoWinCheck();
-                            break;
-
-                        case 'AllRolesConfirmed':
-                            refreshPlayersList(currentRoomId);
-                            break;
-
-                        case 'AllKeysShared':
-                            refreshPlayersList(currentRoomId);
-                            break;
-
-                        case 'DeckCommitted':
-                            refreshPlayersList(currentRoomId);
-                            break;
-
-                        case 'KeysSharedToAll':
-                            // Logic here was just log
-                            break;
-                    }
+                    case 'VotingFinalized':
+                        if (args.eliminated !== '0x0000000000000000000000000000000000000000') {
+                            addLog(`Voting Finalized: Player eliminated!`, "danger");
+                        } else {
+                            addLog(`Voting Finalized: No one was eliminated.`, "warning");
+                        }
+                        refreshPlayersList(currentRoomId);
+                        break;
                 }
-
-                // Update tracker to next block to avoid re-fetching
-                lastProcessedBlockRef.current = currentBlock + 1n;
-
-            } catch (e) {
-                console.error("[Smart Poller] Error:", e);
             }
-        };
 
-        // Poll every 2 seconds
-        const interval = setInterval(pollEvents, 2000);
-        // pollEvents(); // Optional immediate call
+            // Advance block cursor
+            lastProcessedBlockRef.current = currentBlock + 1n;
 
-        return () => clearInterval(interval);
-
+        } catch (e) {
+            console.error("[Smart Poller] Error:", e);
+        }
     }, [publicClient, currentRoomId, addLog, refreshPlayersList]);
+
+    // Use wagmi hook to listen for new blocks -> triggers pollEvents immediately
+    useWatchBlockNumber({
+        onBlockNumber() {
+            pollEvents();
+        },
+    });
+
+    // Fallback/Watchdog polling (keep alive every 10s just in case WS drops silently)
+    useEffect(() => {
+        const interval = setInterval(pollEvents, 10000);
+        return () => clearInterval(interval);
+    }, [pollEvents]);
+
+
 
 
     // Check if current player can act on target

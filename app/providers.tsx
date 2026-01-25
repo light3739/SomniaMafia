@@ -16,9 +16,9 @@ import {
     QueryClient,
     QueryClientProvider,
 } from '@tanstack/react-query';
-import { WagmiProvider } from 'wagmi';
+import { WagmiProvider, http, webSocket, fallback } from 'wagmi';
 import { somniaChain } from '../contracts/config';
-import { GameProvider } from '../contexts/GameContext'; // Adjust path if needed
+import { GameProvider } from '../contexts/GameContext';
 import { AudioProvider } from '../contexts/AudioContext';
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -37,6 +37,12 @@ const config = getDefaultConfig({
     chains: [
         somniaChain,
     ],
+    transports: {
+        [somniaChain.id]: fallback([
+            webSocket(somniaChain.rpcUrls.default.webSocket![0]),
+            http(somniaChain.rpcUrls.default.http[0])
+        ])
+    },
     ssr: true,
 });
 
