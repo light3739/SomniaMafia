@@ -530,16 +530,16 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                         key="transition-timer"
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className="w-full py-4 text-center bg-[#916A47]/10 rounded-xl border border-[#916A47]/30 backdrop-blur-sm"
+                                        className="w-full py-4 text-center bg-orange-950/20 rounded-xl border border-orange-500/30 backdrop-blur-sm"
                                     >
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <div className="flex items-center gap-2">
-                                                <Clock className="w-5 h-5 text-[#916A47] animate-pulse" />
-                                                <span className="text-2xl font-bold text-white tabular-nums">
+                                                <Clock className="w-5 h-5 text-orange-400 animate-pulse" />
+                                                <span className="text-2xl font-bold text-orange-400 tabular-nums">
                                                     {delaySeconds}s
                                                 </span>
                                             </div>
-                                            <p className="text-[#916A47] text-sm uppercase font-bold tracking-widest">
+                                            <p className="text-orange-400/70 text-sm uppercase font-bold tracking-widest">
                                                 Voting Results
                                             </p>
                                             <p className="text-white/50 text-xs mt-1">
