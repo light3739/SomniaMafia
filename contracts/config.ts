@@ -1,18 +1,20 @@
 import { MafiaABI as MafiaArtifact } from './MafiaPortal';
 
-export const MAFIA_CONTRACT_ADDRESS = "0xa962880aceeaf638c597d78d324dab6fab5981b1" as `0x${string}`;
-export const VERIFIER_CONTRACT_ADDRESS = "0x13467da1c154c4e0e8674744edf734985d66b4c9" as `0x${string}`;
+export const MAFIA_CONTRACT_ADDRESS = "0x3C1Bd1923F8318247e2B60E41B0F280391c4e1E1" as `0x${string}`;
+export const VERIFIER_CONTRACT_ADDRESS = "0x32D3612009c2d30C71C19d2548822E1EECb8D165" as `0x${string}`;
 export const MAFIA_ABI = MafiaArtifact.abi;
 
-// Somnia testnet chain config - centralized here to avoid duplication
+// Somnia Mainnet chain config
 export const somniaChain = {
-    id: 50312,
-    name: 'Somnia Testnet',
-    nativeCurrency: { name: 'STT', symbol: 'STT', decimals: 18 },
+    id: 5031,
+    name: 'Somnia Mainnet',
+    nativeCurrency: { name: 'SOMI', symbol: 'SOMI', decimals: 18 },
     rpcUrls: {
         default: {
-            http: ['https://dream-rpc.somnia.network'],
-            webSocket: ['wss://dream-rpc.somnia.network/ws']
+            http: ['https://api.infra.mainnet.somnia.network'],
         },
+    },
+    blockExplorers: {
+        default: { name: 'Somnia Explorer', url: 'https://explorer.somnia.network' },
     },
 } as const;

@@ -12,27 +12,27 @@ import {
 } from "@tanstack/react-query";
 import { defineChain } from 'viem';
 
-const somniaTestnet = defineChain({
-  id: 50312,
-  name: 'Somnia Testnet',
+const somniaMainnet = defineChain({
+  id: 5031,
+  name: 'Somnia Mainnet',
   nativeCurrency: {
     decimals: 18,
-    name: 'Somnia Testnet Token',
-    symbol: 'STT',
+    name: 'Somnia Token',
+    symbol: 'SOMI',
   },
   rpcUrls: {
-    default: { http: ['https://dream-rpc.somnia.network'] },
+    default: { http: ['https://api.infra.mainnet.somnia.network'] },
   },
   blockExplorers: {
-    default: { name: 'Somnia Explorer', url: 'https://somnia-testnet.socialscan.io' },
+    default: { name: 'Somnia Explorer', url: 'https://explorer.somnia.network' },
   },
-  testnet: true,
+  testnet: false,
 });
 
 const config = getDefaultConfig({
   appName: 'Somnia Mafia',
   projectId: 'YOUR_PROJECT_ID',
-  chains: [somniaTestnet],
+  chains: [somniaMainnet],
   ssr: false,
 });
 
