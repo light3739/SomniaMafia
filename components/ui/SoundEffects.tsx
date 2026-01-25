@@ -127,6 +127,18 @@ const playAudioFile = async (url: string, duration: number = 5, fadeIn: number =
 
 // Функция для плавного проигрывания бесконечного (победного) трека
 const playVictoryMusic = async (url: string, duration: number, volume: number) => {
+    // PREVENT ECHO: Immediately stop any currently playing victory music
+    if (victorySource) {
+        try {
+            victorySource.stop();
+        } catch (e) { }
+        victorySource = null;
+    }
+    if (victoryGainNode) {
+        victoryGainNode.disconnect();
+        victoryGainNode = null;
+    }
+
     const ctx = initCtx();
     if (!ctx) return;
 
