@@ -599,6 +599,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'nextRoomId',
             }) as bigint;
             const newRoomId = Number(nextId);
+            const balance = await publicClient.getBalance({ address });
+            const isPaused = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'paused',
+            }) as boolean;
+
+            console.log(`[Diagnostic] RoomID: ${newRoomId}, Balance: ${Number(balance) / 1e18} SOMI, Paused: ${isPaused}`);
+            if (isPaused) {
+                setIsTxPending(false);
+                return addLog("Contract is currently PAUSED by admin.", "danger");
+            }
+            if (balance < parseEther('0.11')) {
+                console.warn(`[Diagnostic] Low balance: ${Number(balance) / 1e18} SOMI. Need ~0.11`);
+                // We proceed but warn
+            }
 
             // 2. Генерируем ключи
             const keyPair = await generateKeyPair();
@@ -615,14 +631,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
-                    args: [lobbyName, 16, playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
+                    args: [lobbyName, 10, playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('0.1'),
+                    value: parseEther('0.05'),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
-            } catch (e) {
-                console.warn('[Gas] createAndJoin estimation failed, using fallback', e);
+            } catch (e: any) {
+                console.error('[Gas] createAndJoin estimation CRITICAL failure:', e);
+                console.log('[Gas] Revert data:', e.data || e.cause?.data || 'No data');
+                addLog(`Simulation Error: ${e.shortMessage || 'Reverted'}`, "danger");
+                console.warn('[Gas] Using fallback 50M gas limit');
             }
 
             // 5. АТОМАРНАЯ ТРАНЗАКЦИЯ (Create + Join + Fund)
@@ -632,12 +651,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'createAndJoin',
                 args: [
                     lobbyName,      // string roomName
-                    16,             // uint8 maxPlayers
+                    10,             // uint8 maxPlayers
                     playerName,     // string nickname
                     pubKeyHex as `0x${string}`,      // bytes publicKey
                     sessionAddress as `0x${string}`  // address sessionAddress
                 ],
-                value: parseEther('0.1'),
+                value: parseEther('0.05'),
                 gas: gasLimit,
                 type: 'legacy',
             });
