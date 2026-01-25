@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent } from 'wagmi';
-import { createWalletClient, http, parseEther } from 'viem';
+import { createWalletClient, http, parseEther, parseEventLogs, toHex, pad } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../contracts/config';
@@ -1709,434 +1709,221 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
 
-    // --- EVENTS (используем ref чтобы избежать проблем с замыканием) ---
+    // --- UNIFIED EVENT POLLING (MANUAL SMART POLLER) ---
+    // [CRITICAL OPTIMIZATION] Replaced multiple listeners with one manual poller.
+    // Reason: Somnia produces ~50 blocks/sec. Standard wagmi listeners miss events.
+    // This poller strictly tracks blocks (fromBlock->toBlock) preventing ANY data loss.
 
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'PlayerJoined',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            logs.forEach((log: any) => {
-                if (BigInt(log.args.roomId) === roomId) {
-                    // addLog(`${log.args.nickname} joined!`, "info");
-                    refreshPlayersList(roomId);
-                }
-            });
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'GameStarted',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                // addLog("Shuffle started!", "phase");
-                refreshPlayersList(roomId);
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'DayStarted',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                addLog(`Day ${logs[0].args.dayNumber} has begun`, "phase");
-                refreshPlayersList(roomId);
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'VotingStarted',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                addLog("Voting Phase Started", "phase");
-                refreshPlayersList(roomId);
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'NightStarted',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                addLog("Night started", "phase");
-                refreshPlayersList(roomId);
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'PlayerEliminated',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                // const victim = logs[0].args.player;
-                // const reason = logs[0].args.reason;
-                // addLog(`${victim.slice(0, 6)}... ${reason}!`, "danger");
-                refreshPlayersList(roomId);
-                // Trigger win check in case the Mafia was eliminated
-                triggerAutoWinCheck();
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'PlayerKicked',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                const kicked = logs[0].args.player;
-                const kPlayer = gameState.players.find(p => p.address.toLowerCase() === kicked.toLowerCase());
-                const name = kPlayer ? (kPlayer.name || `Player ${gameState.players.indexOf(kPlayer) + 1}`) : kicked.slice(0, 6);
-                addLog(`${name} was kicked (AFK)`, "danger");
-                refreshPlayersList(roomId);
-                // Trigger win check in case the kicked player was Mafia
-                triggerAutoWinCheck();
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'GameEnded',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                addLog(`Game Over: ${logs[0].args.reason}`, "phase");
-                refreshPlayersList(roomId);
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'VotingFinalized',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                console.log("[Event] Voting Finalized. Triggering immediate win check.");
-                refreshPlayersList(roomId);
-                triggerAutoWinCheck();
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'NightFinalized',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                console.log("[Event] Night Finalized. Triggering immediate win check.");
-                refreshPlayersList(roomId);
-                triggerAutoWinCheck();
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'RoleConfirmed',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                const player = logs[0].args.player;
-                // addLog(`${player.slice(0, 6)}... confirmed role`, "info");
-                refreshPlayersList(roomId);
-                // Trigger auto-win check because this might be the last reveal needed
-                triggerAutoWinCheck();
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'AllRolesConfirmed',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                // addLog("All roles confirmed! Day begins...", "phase");
-                refreshPlayersList(roomId);
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'AllKeysShared',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                // addLog("All players shared keys! Decrypt your role.", "success");
-                refreshPlayersList(roomId);
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'DeckCommitted',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                const player = logs[0].args.byPlayer;
-                const nextIndex = Number(logs[0].args.nextIndex);
-                // addLog(`${player.slice(0, 6)}... shuffled the deck`, "info");
-                refreshPlayersList(roomId);
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'KeysSharedToAll',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                const from = logs[0].args.from;
-                const fromPlayer = gameState.players.find(p => p.address.toLowerCase() === from.toLowerCase());
-                const name = fromPlayer ? (fromPlayer.name || `Player ${gameState.players.indexOf(fromPlayer) + 1}`) : from.slice(0, 6);
-                // addLog(`🔑 ${name} shared decryption keys`, "success");
-            }
-        }
-    });
-
-    // VoteCast event - using manual getLogs polling because:
-    // 1. Somnia produces ~3000 blocks/min, so watchContractEvent misses events
-    // 2. We need to track fromBlock ourselves
-    const processedVotesRef = useRef<Set<string>>(new Set());
-    const votePollStartBlockRef = useRef<bigint | null>(null);
+    const processedEventsRef = useRef<Set<string>>(new Set());
+    const lastProcessedBlockRef = useRef<bigint | null>(null);
 
     useEffect(() => {
-        if (!publicClient || !currentRoomId) {
-            console.log("[VoteCast Poll] Not polling - no publicClient or roomId");
-            return;
+        if (!publicClient || !currentRoomId) return;
+
+        // Initialize start block on first run
+        if (!lastProcessedBlockRef.current) {
+            publicClient.getBlockNumber().then(b => {
+                lastProcessedBlockRef.current = b;
+                console.log(`[Smart Poller] 🚀 Started for Room ${currentRoomId} @ Block ${b}`);
+            });
         }
 
-        // Get starting block on mount
-        publicClient.getBlockNumber().then(block => {
-            votePollStartBlockRef.current = block;
-            console.log("[VoteCast Poll] Starting from block", block.toString(), "for room", currentRoomId.toString());
-        });
-
-        const pollVotes = async () => {
-            if (!votePollStartBlockRef.current) return;
+        const pollEvents = async () => {
+            if (!lastProcessedBlockRef.current) return;
 
             try {
                 const currentBlock = await publicClient.getBlockNumber();
 
-                // Get all VoteCast events from start block to now, filtered by roomId
-                const logs = await publicClient.getLogs({
+                // Don't poll if no new blocks (unlikely on Somnia)
+                if (currentBlock < lastProcessedBlockRef.current) return;
+
+
+
+                // 1. Fetch ALL logs for this room in one request
+                // We use low-level topics filtering: [topic0=null (any event), topic1=roomId]
+                // This works because 'roomId' is the first indexed parameter for ALL tracked Mafia events
+                const roomIdTopic = pad(toHex(currentRoomId), { size: 32 });
+                const rawLogs = await publicClient.getLogs({
                     address: MAFIA_CONTRACT_ADDRESS,
-                    event: {
-                        type: 'event',
-                        name: 'VoteCast',
-                        inputs: [
-                            { indexed: true, name: 'roomId', type: 'uint256' },
-                            { indexed: false, name: 'voter', type: 'address' },
-                            { indexed: false, name: 'target', type: 'address' }
-                        ]
-                    },
-                    args: {
-                        roomId: currentRoomId // RPC-level filtering
-                    },
-                    fromBlock: votePollStartBlockRef.current,
+                    topics: [
+                        null,        // Any event signature
+                        roomIdTopic  // topic[1] must match roomId
+                    ],
+                    fromBlock: lastProcessedBlockRef.current,
                     toBlock: currentBlock
+                } as any);
+
+                // 2. Parse logs using viem
+                const parsedLogs = parseEventLogs({
+                    abi: MAFIA_ABI,
+                    logs: rawLogs
                 });
 
-                logs.forEach((log: any) => {
+                // 3. Process events
+                for (const log of parsedLogs) {
                     const txHash = log.transactionHash;
-                    // Skip already processed
-                    if (processedVotesRef.current.has(txHash)) return;
+                    const logId = `${txHash}-${log.logIndex}`; // Unique ID per event
 
-                    // Already filtered by roomId at RPC level, but double check doesn't hurt
-                    const eventRoomId = BigInt(log.args.roomId);
-                    if (eventRoomId !== currentRoomId) return;
+                    if (processedEventsRef.current.has(logId)) continue;
+                    processedEventsRef.current.add(logId);
 
-                    // Mark as processed
-                    processedVotesRef.current.add(txHash);
+                    const eventName = log.eventName;
+                    const args = log.args as any;
 
-                    const voter = log.args.voter;
-                    const target = log.args.target;
-                    const currentPlayers = playersRef.current;
+                    console.log(`[Event Received] ${eventName}`, args);
 
-                    const voterPlayer = currentPlayers.find(p => p.address.toLowerCase() === voter.toLowerCase());
-                    const targetPlayer = currentPlayers.find(p => p.address.toLowerCase() === target.toLowerCase());
-                    const voterLabel = voterPlayer ? (voterPlayer.name || `Player ${currentPlayers.indexOf(voterPlayer) + 1}`) : voter.slice(0, 6);
-                    const targetLabel = targetPlayer ? (targetPlayer.name || `Player ${currentPlayers.indexOf(targetPlayer) + 1}`) : target.slice(0, 6);
+                    // --- EVENT HANDLERS SWITCH ---
+                    switch (eventName) {
+                        case 'PlayerJoined':
+                            // addLog(`${args.nickname} joined!`, "info");
+                            refreshPlayersList(currentRoomId);
+                            break;
 
-                    console.log(`[VoteCast Poll] Found vote: ${voterLabel} -> ${targetLabel}`);
-                    addLog(`🗳️ ${voterLabel} voted for ${targetLabel}`, "warning");
-                });
+                        case 'GameStarted':
+                            // addLog("Shuffle started!", "phase");
+                            refreshPlayersList(currentRoomId);
+                            break;
+
+                        case 'DayStarted':
+                            addLog(`Day ${args.dayNumber} has begun`, "phase");
+                            refreshPlayersList(currentRoomId);
+                            break;
+
+                        case 'VotingStarted':
+                            addLog("Voting Phase Started", "phase");
+                            refreshPlayersList(currentRoomId);
+                            break;
+
+                        case 'NightStarted':
+                            addLog("Night started", "phase");
+                            refreshPlayersList(currentRoomId);
+                            break;
+
+                        case 'VoteCast':
+                            const voter = args.voter;
+                            const target = args.target;
+                            const currentPlayers = playersRef.current;
+
+                            const voterPlayer = currentPlayers.find(p => p.address.toLowerCase() === voter.toLowerCase());
+                            const targetPlayer = currentPlayers.find(p => p.address.toLowerCase() === target.toLowerCase());
+                            const voterLabel = voterPlayer ? (voterPlayer.name || `Player ${currentPlayers.indexOf(voterPlayer) + 1}`) : voter.slice(0, 6);
+                            const targetLabel = targetPlayer ? (targetPlayer.name || `Player ${currentPlayers.indexOf(targetPlayer) + 1}`) : target.slice(0, 6);
+
+                            addLog(`🗳️ ${voterLabel} voted for ${targetLabel}`, "warning");
+                            break;
+
+                        case 'PlayerEliminated':
+                            // const victim = args.player;
+                            // const reason = args.reason;
+                            // addLog(`${victim.slice(0, 6)}... ${reason}!`, "danger");
+                            refreshPlayersList(currentRoomId);
+                            // Trigger win check in case the Mafia was eliminated
+                            triggerAutoWinCheck();
+                            break;
+
+                        case 'PlayerKicked':
+                            const kicked = args.player;
+                            const kPlayer = playersRef.current.find(p => p.address.toLowerCase() === kicked.toLowerCase());
+                            const kName = kPlayer ? (kPlayer.name || `Player`) : kicked.slice(0, 6);
+                            addLog(`${kName} was kicked (AFK)`, "danger");
+                            refreshPlayersList(currentRoomId);
+                            triggerAutoWinCheck();
+                            break;
+
+                        case 'GameEnded':
+                            addLog(`Game Over: ${args.reason}`, "phase");
+                            refreshPlayersList(currentRoomId);
+                            break;
+
+                        case 'VotingFinalized':
+                            const eliminated = args.eliminated;
+                            const voteCount = Number(args.voteCount);
+                            if (eliminated !== '0x0000000000000000000000000000000000000000') {
+                                const elPlayer = playersRef.current.find(p => p.address.toLowerCase() === eliminated.toLowerCase());
+                                const elName = elPlayer ? (elPlayer.name || `Player`) : eliminated.slice(0, 6);
+                                addLog(`Execution: ${elName} was eliminated with ${voteCount} votes!`, "danger");
+                            } else {
+                                addLog("No one was eliminated - no majority reached.", "warning");
+                            }
+                            refreshPlayersList(currentRoomId);
+                            triggerAutoWinCheck();
+                            console.log("[Event] Voting Finalized. Triggering immediate win check.");
+                            break;
+
+                        case 'NightFinalized':
+                            const killed = args.killed;
+                            const healed = args.healed;
+                            if (killed !== '0x0000000000000000000000000000000000000000') {
+                                if (killed === healed) {
+                                    addLog("The night passes peacefully... No one was killed.", "info");
+                                } else {
+                                    const knPlayer = playersRef.current.find(p => p.address.toLowerCase() === killed.toLowerCase());
+                                    const knName = knPlayer ? (knPlayer.name || `Player`) : killed.slice(0, 6);
+                                    addLog(`Tragedy: ${knName} was killed during the night!`, "danger");
+                                }
+                            } else {
+                                addLog("The night passes peacefully... No one was killed.", "info");
+                            }
+                            refreshPlayersList(currentRoomId);
+                            triggerAutoWinCheck();
+                            break;
+
+                        case 'NightActionCommitted':
+                            const nPlayerAddr = args.player;
+                            const nPlayer = playersRef.current.find(pl => pl.address.toLowerCase() === nPlayerAddr.toLowerCase());
+                            const nName = nPlayer ? (nPlayer.name || `Player`) : nPlayerAddr.slice(0, 6);
+                            // addLog(`🌙 ${nName} committed a night action`, "info");
+
+                            // Play shot sound
+                            try {
+                                const audio = new Audio(shotSound);
+                                audio.volume = 0.2;
+                                // audio.play().catch(e => console.error("Audio play failed:", e));
+                            } catch (e) { console.error("Audio error:", e); }
+                            break;
+
+                        case 'MafiaMessageSent':
+                            fetchMafiaChat(currentRoomId);
+                            break;
+
+                        case 'RoleConfirmed':
+                            refreshPlayersList(currentRoomId);
+                            triggerAutoWinCheck();
+                            break;
+
+                        case 'AllRolesConfirmed':
+                            refreshPlayersList(currentRoomId);
+                            break;
+
+                        case 'AllKeysShared':
+                            refreshPlayersList(currentRoomId);
+                            break;
+
+                        case 'DeckCommitted':
+                            refreshPlayersList(currentRoomId);
+                            break;
+
+                        case 'KeysSharedToAll':
+                            // Logic here was just log
+                            break;
+                    }
+                }
+
+                // Update tracker to next block to avoid re-fetching
+                lastProcessedBlockRef.current = currentBlock + 1n;
+
             } catch (e) {
-                console.error("[VoteCast Poll] Error:", e);
+                console.error("[Smart Poller] Error:", e);
             }
         };
 
         // Poll every 2 seconds
-        const interval = setInterval(pollVotes, 2000);
-        // Also poll immediately
-        pollVotes();
+        const interval = setInterval(pollEvents, 2000);
+        // pollEvents(); // Optional immediate call
 
-        return () => {
-            console.log("[VoteCast Poll] Cleaning up");
-            clearInterval(interval);
-            processedVotesRef.current.clear();
-            votePollStartBlockRef.current = null;
-        };
-    }, [publicClient, currentRoomId, addLog]);
+        return () => clearInterval(interval);
 
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'VotingFinalized',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                const eliminated = logs[0].args.eliminated;
-                const voteCount = Number(logs[0].args.voteCount);
-                if (eliminated !== '0x0000000000000000000000000000000000000000') {
-                    const elPlayer = gameState.players.find(p => p.address.toLowerCase() === eliminated.toLowerCase());
-                    const name = elPlayer ? (elPlayer.name || `Player ${gameState.players.indexOf(elPlayer) + 1}`) : eliminated.slice(0, 6);
-                    addLog(`Execution: ${name} was eliminated with ${voteCount} votes!`, "danger");
-                } else {
-                    addLog("No one was eliminated - no majority reached.", "warning");
-                }
-                refreshPlayersList(roomId);
-                // Trigger auto-win check because an elimination might end the game
-                triggerAutoWinCheck();
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'NightFinalized',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                const killed = logs[0].args.killed;
-                const healed = logs[0].args.healed;
-                if (killed !== '0x0000000000000000000000000000000000000000') {
-                    if (killed === healed) {
-                        addLog("The night passes peacefully... No one was killed.", "info");
-                    } else {
-                        const kPlayer = gameState.players.find(p => p.address.toLowerCase() === killed.toLowerCase());
-                        const name = kPlayer ? (kPlayer.name || `Player ${gameState.players.indexOf(kPlayer) + 1}`) : killed.slice(0, 6);
-                        addLog(`Tragedy: ${name} was killed during the night!`, "danger");
-                    }
-                } else {
-                    addLog("The night passes peacefully... No one was killed.", "info");
-                }
-                refreshPlayersList(roomId);
-                // Trigger auto-win check because a night kill might end the game
-                triggerAutoWinCheck();
-            }
-        }
-    });
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'NightActionCommitted',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                const player = logs[0].args.player;
-                const p = gameState.players.find(pl => pl.address.toLowerCase() === player.toLowerCase());
-                const name = p ? (p.name || `Player ${gameState.players.indexOf(p) + 1}`) : player.slice(0, 6);
-                // addLog(`🌙 ${name} committed a night action`, "info");
-
-                // Play shot sound
-                try {
-                    const audio = new Audio(shotSound);
-                    audio.volume = 0.2;
-                    // audio.play().catch(e => console.error("Audio play failed:", e));
-                } catch (e) {
-                    console.error("Audio error:", e);
-                }
-            }
-        }
-    });
-
-
-
-    useWatchContractEvent({
-        address: MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        eventName: 'MafiaMessageSent',
-        onLogs: (logs: any) => {
-            const roomId = currentRoomIdRef.current;
-            if (!roomId) return;
-
-            if (BigInt(logs[0].args.roomId) === roomId) {
-                // Refresh chat when new message arrives
-                fetchMafiaChat(roomId);
-            }
-        }
-    });
+    }, [publicClient, currentRoomId, addLog, refreshPlayersList]);
 
 
     // Check if current player can act on target
