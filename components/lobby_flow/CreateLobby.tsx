@@ -26,6 +26,13 @@ export const CreateLobby: React.FC = () => {
         }
     }, [currentRoomId, router]);
 
+    // Generate unique default name
+    useEffect(() => {
+        if (!lobbyName) {
+            setLobbyName(`Mafia_${Math.floor(Math.random() * 10000)}`);
+        }
+    }, []);
+
     const handleCreate = async () => {
         if (!lobbyName.trim() || isTxPending) return;
         await createLobbyOnChain();

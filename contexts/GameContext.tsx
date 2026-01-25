@@ -201,11 +201,45 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             throw new Error("Cannot estimate gas: account or publicClient missing.");
         }
 
+        // === АВТОМАТИЧЕСКИЙ РАСЧЕТ ГАЗА ===
+        let calculatedGas = 1_000_000n; // Fallback на случай сбоя оценки
 
+        try {
+            console.log(`[Gas] Estimating for ${functionName}...`);
+
+            // 1. Спрашиваем у ноды, сколько нужно газа
+            const gasEstimate = await publicClient.estimateContractGas({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: functionName as any,
+                args: args as any,
+                account: accountToUse,
+            });
+
+            // 2. Добавляем буфер безопасности +50% (x1.5)
+            calculatedGas = (gasEstimate * 150n) / 100n;
+
+            // 3. Safety cap - if gas is crazy (revert symptom), don't scare MetaMask
+            const safetyCap = functionName === 'endGameZK' ? 150_000_000n : 30_000_000n;
+            if (calculatedGas > safetyCap) {
+                console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at ${safetyCap} to avoid balance error (likely contract revert).`);
+                calculatedGas = safetyCap;
+            }
+
+            console.log(`[Gas] Estimated for ${functionName}: ${gasEstimate}, With Buffer: ${calculatedGas}`);
+        } catch (e) {
+            console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
+            // Если оценка упала, используем высокий лимит для тяжелых функций
+            if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK', 'commitAndConfirmRole'].includes(functionName)) {
+                calculatedGas = functionName === 'endGameZK' ? 100_000_000n : 50_000_000n;
+            } else {
+                calculatedGas = 10_000_000n;
+            }
+        }
 
         // === ОТПРАВКА ТРАНЗАКЦИИ ===
         if (canUseSession && sessionClient) {
-            console.log(`[Session TX] Sending ${functionName}...`);
+            console.log(`[Session TX] Sending ${functionName} with gas ${calculatedGas}...`);
 
             const attemptSend = async (retry: boolean = true): Promise<`0x${string}`> => {
                 try {
@@ -214,6 +248,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         abi: MAFIA_ABI as any,
                         functionName: functionName as any,
                         args: args as any,
+                        gas: calculatedGas,
+                        type: 'legacy',
                     });
                     console.log(`[Session TX] Success! Hash: ${hash}`);
                     return hash;
@@ -237,12 +273,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return attemptSend();
         } else {
             // Fallback на основной кошелек (MetaMask)
-            console.log(`[Main Wallet TX] ${functionName} - requires signature`);
+            console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas}`);
             return writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: functionName as any,
                 args: args as any,
+                gas: calculatedGas,
+                type: 'legacy',
             });
         }
     }, [getSessionWalletClient, writeContractAsync, publicClient, address, isTestMode]);
@@ -567,10 +605,50 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setKeys(keyPair);
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
+            // 2.5. ОТЗЫВАЕМ СТАРУЮ СЕССИЮ (если есть)
+            // Это решает проблему SessionAlreadyRegistered на мейннете
+            try {
+                console.log('[Session] Revoking old session if exists...');
+                const revokeHash = await writeContractAsync({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'revokeSessionKey',
+                    args: [],
+                    gas: 2_000_000n, // Increased from 500k to prevent OUT_OF_GAS
+                });
+                console.log('[Session] Revoke tx:', revokeHash);
+                // Ждем подтверждения
+                await publicClient.waitForTransactionReceipt({ hash: revokeHash });
+                console.log('[Session] Old session revoked successfully');
+            } catch (revokeError: any) {
+                // Игнорируем ошибку если сессии не было
+                console.log('[Session] No session to revoke or revoke failed (this is OK):', revokeError.shortMessage || revokeError.message);
+            }
+
             // 3. Сессия
             const { sessionAddress } = createNewSession(address, newRoomId);
 
+            // Sanitize nickname (allow alphanumeric only, fallback to Player_XXXX)
+            // Cyrillic/Special chars can cause contract reverts if validation exists
+            const safeName = /^[a-zA-Z0-9_ ]+$/.test(playerName) ? playerName : `Player_${Math.floor(Math.random() * 1000)}`;
+            console.log(`[SafeName] Original: "${playerName}", Used: "${safeName}"`);
 
+            // 4. Оценка газа с буфером
+            let gasLimit = 50_000_000n;
+            try {
+                const gasEstimate = await publicClient.estimateContractGas({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'createAndJoin',
+                    args: [lobbyName, 4, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
+                    account: address,
+                    value: parseEther('0.1'),
+                });
+                gasLimit = (gasEstimate * 150n) / 100n;
+                console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
+            } catch (e) {
+                console.warn('[Gas] createAndJoin estimation failed, using fallback', e);
+            }
 
             // 5. АТОМАРНАЯ ТРАНЗАКЦИЯ (Create + Join + Fund)
             const hash = await writeContractAsync({
@@ -579,12 +657,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'createAndJoin',
                 args: [
                     lobbyName,      // string roomName
-                    10,             // uint8 maxPlayers
-                    playerName,     // string nickname
+                    4,              // uint8 maxPlayers - REDUCED to 4 (min)
+                    safeName,       // string nickname (SANITIZED)
                     pubKeyHex as `0x${string}`,      // bytes publicKey
                     sessionAddress as `0x${string}`  // address sessionAddress
                 ],
-                value: parseEther('0.05'),
+                value: parseEther('0.1'),
+                gas: gasLimit,
+                type: 'legacy',
             });
 
             addLog(`Creating room "${lobbyName}"...`, "info");
@@ -614,7 +694,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 2. Generate session key
             const { sessionAddress } = createNewSession(address, roomId);
 
-
+            // 3. Оценка газа с буфером
+            let gasLimit = 50_000_000n;
+            try {
+                const gasEstimate = await publicClient.estimateContractGas({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'joinRoom',
+                    args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
+                    account: address,
+                    value: parseEther('0.1'),
+                });
+                gasLimit = (gasEstimate * 150n) / 100n;
+                console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
+            } catch (e) {
+                console.warn('[Gas] joinRoom estimation failed, using fallback', e);
+            }
 
             // 4. Join room with session key + fund it
             const hash = await writeContractAsync({
@@ -622,7 +717,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
-                value: parseEther('0.05'),
+                value: parseEther('0.1'),
+                gas: gasLimit,
+                type: 'legacy',
             });
             // addLog("Joining with auto-sign...", "info");
             await publicClient?.waitForTransactionReceipt({ hash });
@@ -646,13 +743,29 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!currentRoomId || !publicClient || !address) return;
         setIsTxPending(true);
         try {
-
+            // Оценка газа с буфером
+            let gasLimit = 50_000_000n;
+            try {
+                const gasEstimate = await publicClient.estimateContractGas({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'startGame',
+                    args: [currentRoomId],
+                    account: address,
+                });
+                gasLimit = (gasEstimate * 150n) / 100n;
+                console.log(`[Gas] startGame estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
+            } catch (e) {
+                console.warn('[Gas] startGame estimation failed, using fallback', e);
+            }
 
             const hash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'startGame',
                 args: [currentRoomId],
+                gas: gasLimit,
+                type: 'legacy',
             });
             addLog("Starting game...", "phase");
             await publicClient?.waitForTransactionReceipt({ hash });
