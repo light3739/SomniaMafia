@@ -237,7 +237,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return attemptSend();
         } else {
             // Fallback на основной кошелек (MetaMask)
-            console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas}`);
+            console.log(`[Main Wallet TX] ${functionName} - requires signature`);
             return writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
