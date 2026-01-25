@@ -230,10 +230,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
             // Если оценка упала, используем высокий лимит для тяжелых функций
-            if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK'].includes(functionName)) {
-                calculatedGas = functionName === 'endGameZK' ? 100_000_000n : 30_000_000n;
+            if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK', 'commitAndConfirmRole'].includes(functionName)) {
+                calculatedGas = functionName === 'endGameZK' ? 100_000_000n : 50_000_000n;
             } else {
-                calculatedGas = 5_000_000n;
+                calculatedGas = 10_000_000n;
             }
         }
 
@@ -249,6 +249,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         functionName: functionName as any,
                         args: args as any,
                         gas: calculatedGas,
+                        type: 'legacy',
                     });
                     console.log(`[Session TX] Success! Hash: ${hash}`);
                     return hash;
@@ -279,6 +280,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: functionName as any,
                 args: args as any,
                 gas: calculatedGas,
+                type: 'legacy',
             });
         }
     }, [getSessionWalletClient, writeContractAsync, publicClient, address, isTestMode]);
@@ -607,7 +609,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const { sessionAddress } = createNewSession(address, newRoomId);
 
             // 4. Оценка газа с буфером
-            let gasLimit = 30_000_000n;
+            let gasLimit = 50_000_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -637,6 +639,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 ],
                 value: parseEther('0.1'),
                 gas: gasLimit,
+                type: 'legacy',
             });
 
             addLog(`Creating room "${lobbyName}"...`, "info");
@@ -667,7 +670,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const { sessionAddress } = createNewSession(address, roomId);
 
             // 3. Оценка газа с буфером
-            let gasLimit = 30_000_000n;
+            let gasLimit = 50_000_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -691,6 +694,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                 value: parseEther('0.1'),
                 gas: gasLimit,
+                type: 'legacy',
             });
             // addLog("Joining with auto-sign...", "info");
             await publicClient?.waitForTransactionReceipt({ hash });
@@ -715,7 +719,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             // Оценка газа с буфером
-            let gasLimit = 30_000_000n;
+            let gasLimit = 50_000_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -736,6 +740,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'startGame',
                 args: [currentRoomId],
                 gas: gasLimit,
+                type: 'legacy',
             });
             addLog("Starting game...", "phase");
             await publicClient?.waitForTransactionReceipt({ hash });
