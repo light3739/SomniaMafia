@@ -182,34 +182,12 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
     // Trigger Night Announcement (Night Transition)
     useEffect(() => {
         if (gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDay) {
-
-            // Adaptive Logic: Check if we finished "Early"
-            let useDelay = true;
-
-            if (lastVotingDeadlineRef.current) {
-                const now = Math.floor(Date.now() / 1000);
-                const remaining = lastVotingDeadlineRef.current - now;
-
-                // If remaining < 115s, skip delay
-                if (remaining < 115) {
-                    console.log("[NightTransition] Skipping delay due to hard timer.");
-                    useDelay = false;
-                }
-            }
-
-            if (useDelay) {
-                // Start 15s delay (shown on board)
-                setNightTransitionDelay(15);
-            } else {
-                // Hard Mode -> Instant Transition
-                setNightTransitionDelay(null);
-                playNightTransition();
-                setShowNightAnnouncement(true);
-            }
-
+            // Always start 10s delay to allow players to read voting results
+            console.log("[NightTransition] Starting 10s post-voting delay.");
+            setNightTransitionDelay(10);
             setLastNightDay(gameState.dayCount);
         }
-    }, [gameState.phase, gameState.dayCount, lastNightDay, playNightTransition]);
+    }, [gameState.phase, gameState.dayCount, lastNightDay]);
 
     // Handle Night Delay Countdown
     useEffect(() => {
