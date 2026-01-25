@@ -820,7 +820,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const txHash = await sendGameTransaction('commitRole', [currentRoomId, roleHash]);
                     addLog("Role committed!", "success");
                     await publicClient?.waitForTransactionReceipt({ hash: txHash });
-                    localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, saltToUse);
+                    if (address) {
+                        localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, saltToUse);
+                    }
                 } catch (txErr: any) {
                     if (txErr.message?.includes("AlreadyCommitted") || txErr.message?.includes("AlreadyConfirmed")) {
                         console.log("Role already on-chain, proceeding to server sync.");
