@@ -221,25 +221,50 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
     }, [currentRoomId, myPlayer?.address, fetchDiscussionState, gameState.dayCount]);
 
     // Initial phase log and discussion start
+    // Initial phase log and discussion start
     useEffect(() => {
         if (gameState.phase !== lastLoggedPhase.current) {
             if (isDayPhase) {
                 discussionStartedRef.current = false;
-                // Host starts discussion
-                if (gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase() || isTestMode) {
-                    startDiscussion();
-                } else {
-                    addLog("Day Phase: Discussion starting...", "info");
-                }
+                addLog("Day Phase: Discussion starting...", "info");
             } else if (isVotingPhase) {
                 playVotingStart(); // Play sound for everyone
                 const quorum = Math.floor(alivePlayers.length / 2) + 1;
-                const duration = Math.max(0, (gameState.phaseDeadline || 0) - Math.floor(Date.now() / 1000));
                 addLog(`Voting Phase Started. Quorum needed: ${quorum}.`, "warning");
             }
             lastLoggedPhase.current = gameState.phase;
         }
-    }, [gameState.phase, isDayPhase, isVotingPhase, alivePlayers.length, addLog, gameState.players, myPlayer?.address, startDiscussion, isTestMode, playVotingStart]);
+    }, [gameState.phase, isDayPhase, isVotingPhase, alivePlayers.length, addLog, playVotingStart]);
+
+    // Waterfall: Auto-start discussion (Decentralized)
+    useEffect(() => {
+        // If not day, or already active, or I locally started it, skip
+        if (!isDayPhase || discussionState?.active || discussionStartedRef.current) return;
+
+        // Sort alive players (or all players if day 1? No, usually alive for gas reasons, but API is free. 
+        // Use all players for index consistency, or alive? 
+        // Logic: "Host" is usually player 0. If player 0 is dead, they might not be rendering? 
+        // Actually, dead players still view the game. 
+        // But let's stick to ALIVE players for game actions usually.
+        // However, startDiscussion API is off-chain, so gas doesn't matter. 
+        // But dead players might leave. Alive players are usually present.
+        const sortedSurvivors = [...gameState.players]
+            .filter(p => p.isAlive)
+            .sort((a, b) => a.address.localeCompare(b.address));
+
+        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+        if (myIndex === -1) return;
+
+        // Delay: 0s for 1st, 3s for 2nd, etc.
+        const delay = myIndex * 3000;
+
+        const timer = setTimeout(() => {
+            console.log(`[DayPhase] Waterfall: Starting discussion (Index ${myIndex})...`);
+            startDiscussion();
+        }, delay);
+
+        return () => clearTimeout(timer);
+    }, [isDayPhase, discussionState?.active, gameState.players, myPlayer?.address, startDiscussion]);
 
     // Poll discussion state
     // Poll discussion state (Adaptive)
@@ -272,6 +297,38 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [isDayPhase, currentRoomId, fetchDiscussionState, discussionState?.finished]);
+
+    // --- SMOOTH TIMER INTERPOLATION ---
+    const [smoothTimeRemaining, setSmoothTimeRemaining] = useState<number>(0);
+    const lastServerTimeRef = useRef<number>(0);
+    const lastUpdateTsRef = useRef<number>(0);
+
+    // 1. Sync state when backend updates
+    useEffect(() => {
+        if (discussionState) {
+            const serverTime = discussionState.timeRemaining;
+            // Only update refs if time changed significantly or it's a new phase
+            if (serverTime !== lastServerTimeRef.current) {
+                lastServerTimeRef.current = serverTime;
+                lastUpdateTsRef.current = Date.now();
+                setSmoothTimeRemaining(serverTime);
+            }
+        }
+    }, [discussionState]);
+
+    // 2. Local ticker (every 100ms for smoothness, though 1s is fine for text)
+    useEffect(() => {
+        if (!discussionState?.active || discussionState?.finished) return;
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const elapsedSeconds = Math.floor((now - lastUpdateTsRef.current) / 1000);
+            const calculatedTime = Math.max(0, lastServerTimeRef.current - elapsedSeconds);
+            setSmoothTimeRemaining(calculatedTime);
+        }, 300); // Update frequently to catch the second change close to reality
+
+        return () => clearInterval(interval);
+    }, [discussionState?.active, discussionState?.finished]);
 
     const votingStartedRef = useRef(false);
     const [votingAttemptTs, setVotingAttemptTs] = useState<number>(0);
@@ -447,7 +504,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                                 <div className="flex items-center justify-center gap-2">
                                                     <Clock className="w-4 h-4 text-[#916A47]" />
                                                     <span className="text-xl font-bold text-white tabular-nums">
-                                                        {discussionState?.timeRemaining}s
+                                                        {smoothTimeRemaining}s
                                                     </span>
                                                     <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
                                                         Starting Discussion...
@@ -457,7 +514,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                                 <div className="flex items-center justify-center gap-2">
                                                     <Clock className="w-4 h-4 text-[#916A47]" />
                                                     <span className="text-xl font-bold text-white tabular-nums">
-                                                        {Math.floor((discussionState?.timeRemaining || 0) / 60)}:{String((discussionState?.timeRemaining || 0) % 60).padStart(2, '0')}
+                                                        {Math.floor(smoothTimeRemaining / 60)}:{String(smoothTimeRemaining % 60).padStart(2, '0')}
                                                     </span>
                                                     <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
                                                         {discussionState?.isMyTurn ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
@@ -593,12 +650,18 @@ const VotingTimer: React.FC = React.memo(() => {
     // Contract: 180s (3m). Target: 60s (1m). Buffer: 120s.
     const BUFFER = 120;
 
+    // Primitives for dependency array stability
+    const phaseDeadline = gameState.phaseDeadline;
+    const myAddress = myPlayer?.address;
+    const hasVoted = myPlayer?.hasVoted;
+    const isAlive = myPlayer?.isAlive;
+
     useEffect(() => {
-        if (!gameState.phaseDeadline) return;
+        if (!phaseDeadline) return;
 
         const tick = () => {
             const now = Math.floor(Date.now() / 1000);
-            const realRemaining = Math.max(0, gameState.phaseDeadline! - now);
+            const realRemaining = Math.max(0, phaseDeadline - now);
             const softRemaining = realRemaining - BUFFER;
 
             if (softRemaining > 0) {
@@ -615,10 +678,10 @@ const VotingTimer: React.FC = React.memo(() => {
                     setTimeLeft(0);
                     setTimerMode('transition');
 
-                    if (!hasAutoVotedRef.current && myPlayer && !myPlayer.hasVoted && myPlayer.isAlive) {
+                    if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive) {
                         hasAutoVotedRef.current = true;
                         addLog("1 minute limit reached. Auto-voting for self...", "warning");
-                        voteOnChain(myPlayer.address as `0x${string}`).catch(e => {
+                        voteOnChain(myAddress as `0x${string}`).catch(e => {
                             console.error("[AutoVote] Failed:", e);
                             addLog("Auto-vote failed. Please vote manually!", "danger");
                         });
@@ -630,10 +693,10 @@ const VotingTimer: React.FC = React.memo(() => {
                     setTimerMode('hard');
 
                     // LATE JOINER PROTECTION: Auto-vote if in Hard Mode
-                    if (!hasAutoVotedRef.current && myPlayer && !myPlayer.hasVoted && myPlayer.isAlive) {
+                    if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive) {
                         hasAutoVotedRef.current = true;
                         addLog("Late join during hard timer. Auto-voting for self...", "warning");
-                        voteOnChain(myPlayer.address as `0x${string}`).catch(e => {
+                        voteOnChain(myAddress as `0x${string}`).catch(e => {
                             console.error("[AutoVote] Failed:", e);
                             addLog("Auto-vote failed.", "danger");
                         });
@@ -645,7 +708,7 @@ const VotingTimer: React.FC = React.memo(() => {
         tick();
         const interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
-    }, [gameState.phaseDeadline, myPlayer, myPlayer?.hasVoted, voteOnChain, addLog]);
+    }, [phaseDeadline, myAddress, hasVoted, isAlive, voteOnChain, addLog]);
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;

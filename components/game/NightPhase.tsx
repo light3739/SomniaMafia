@@ -921,19 +921,22 @@ export const NightPhaseTimer: React.FC<{ isTxPending?: boolean }> = React.memo((
     const { gameState } = useGameContext();
     const [timeLeft, setTimeLeft] = useState<number>(0);
 
+    // Primitive dependency for stability
+    const phaseDeadline = gameState.phaseDeadline;
+
     useEffect(() => {
-        if (!gameState.phaseDeadline) return;
+        if (!phaseDeadline) return;
 
         const tick = () => {
             const now = Math.floor(Date.now() / 1000);
-            const diff = Math.max(0, gameState.phaseDeadline - now);
+            const diff = Math.max(0, phaseDeadline - now);
             setTimeLeft(diff);
         };
 
         tick();
         const timer = setInterval(tick, 1000);
         return () => clearInterval(timer);
-    }, [gameState.phaseDeadline]);
+    }, [phaseDeadline]);
 
     if (timeLeft <= 0 && !isTxPending) return null;
 
