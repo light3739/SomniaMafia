@@ -86,26 +86,29 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         const deadline = gameState.phaseDeadline;
         if (!deadline) return;
 
-        // Only host triggers the timeout
-        const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
-        if (!isHost) return;
+        // Waterfall Logic: Any alive player can trigger, but staggered by index
+        const sortedSurvivors = [...gameState.players]
+            .filter(p => p.isAlive)
+            .sort((a, b) => a.address.localeCompare(b.address));
 
-        // Already triggered
-        if (votingTimeoutRef.current) return;
+        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
 
-        // Don't trigger if we're in a TX
-        if (isProcessing || isTxPending) return;
-
-        const TIMEOUT_BUFFER_SECONDS = 5;
+        // If I'm not alive/found, I shouldn't trigger (unless I'm ghost host? No, only survivors pay gas)
+        if (myIndex === -1) return;
 
         const checkTimeout = () => {
+            if (votingTimeoutRef.current) return;
+
             const now = Math.floor(Date.now() / 1000);
             const secondsPastDeadline = now - deadline;
+            const TIMEOUT_BUFFER_SECONDS = 5;
+            // Base buffer 5s, plus 5s per index position
+            const myTriggerTime = TIMEOUT_BUFFER_SECONDS + (myIndex * 5);
 
-            if (secondsPastDeadline >= TIMEOUT_BUFFER_SECONDS) {
-                console.log('[DayPhase] Voting timer expired. Host initiating forcePhaseTimeout...');
+            if (secondsPastDeadline >= myTriggerTime) {
+                console.log(`[DayPhase] Voting timer expired. Waterfall Trigger (Index ${myIndex})...`);
                 votingTimeoutRef.current = true;
-                addLog("Voting time expired. Auto-finalizing phase...", "warning");
+                addLog(`Voting time expired. Auto-finalizing (Node ${myIndex})...`, "warning");
 
                 forcePhaseTimeoutOnChain().catch(err => {
                     console.error('[DayPhase] forcePhaseTimeout failed:', err);
@@ -115,6 +118,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         };
 
         checkTimeout();
+        // Check frequently to hit the window precicely
         const interval = setInterval(checkTimeout, 2000);
         return () => clearInterval(interval);
     }, [isVotingPhase, gameState.phaseDeadline, gameState.players, myPlayer?.address, isTestMode, isProcessing, isTxPending, forcePhaseTimeoutOnChain, addLog]);
@@ -304,36 +308,28 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
 
     // Auto-transition to voting when discussion finished
     useEffect(() => {
-        const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+        // Waterfall Logic for Voting Start
+        const sortedSurvivors = [...gameState.players]
+            .filter(p => p.isAlive)
+            .sort((a, b) => a.address.localeCompare(b.address));
+        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
 
-        console.log('[DayPhase] Auto-voting check:', {
-            finished: discussionState?.finished,
-            isDayPhase,
-            votingStarted: votingStartedRef.current,
-            isHost,
-            myAddress: myPlayer?.address,
-            hostAddress: gameState.players[0]?.address
-        });
+        if (discussionState?.finished && isDayPhase && !votingStartedRef.current && myIndex !== -1) {
+            // Delay based on index
+            const myDelay = myIndex * 3000; // 3 seconds spacing
 
-        if (discussionState?.finished && isDayPhase && !votingStartedRef.current) {
-            // Host triggers voting
-            if (isHost) {
-                votingStartedRef.current = true;
-                setVotingAttemptTs(Date.now());
-                console.log('[DayPhase] Host initiating voting transition...');
-                addLog("All players have spoken. Starting vote...", "warning");
-                const timer = setTimeout(() => {
-                    console.log('[DayPhase] Calling handleStartVoting...');
+            const timer = setTimeout(() => {
+                // Re-check conditions after delay
+                if (discussionState?.finished && isDayPhase && !votingStartedRef.current) {
+                    votingStartedRef.current = true;
+                    setVotingAttemptTs(Date.now());
+                    console.log(`[DayPhase] Discussion finished. Waterfall Trigger (Index ${myIndex})...`);
+                    addLog("All players have spoken. Starting vote...", "warning");
+
                     handleStartVoting();
-                }, 2000); // Small buffer before starting voting
-                return () => clearTimeout(timer);
-            }
-        }
-
-        // Reset the ref if we leave the day phase or discussion is no longer finished
-        if (!isDayPhase || !discussionState?.finished) {
-            votingStartedRef.current = false;
-            setVotingAttemptTs(0);
+                }
+            }, myDelay + 1000); // Base 1s + staggered delay
+            return () => clearTimeout(timer);
         }
     }, [discussionState?.finished, isDayPhase, gameState.players, myPlayer?.address, addLog, handleStartVoting]);
 
