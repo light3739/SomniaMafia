@@ -428,13 +428,19 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         // Skip in test mode
         if (isTestMode) return;
 
-        // Only host triggers timeout to avoid duplicate transactions
-        const isHost = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
-        if (!isHost) return;
-
         // Check if we have a valid deadline
         const deadline = gameState.phaseDeadline;
         if (!deadline || deadline === 0) return;
+
+        // Waterfall Logic: Any alive player can trigger, but staggered by index
+        const sortedSurvivors = [...gameState.players]
+            .filter(p => p.isAlive)
+            .sort((a, b) => a.address.localeCompare(b.address));
+
+        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+
+        // If I'm not alive/found, I shouldn't trigger
+        if (myIndex === -1) return;
 
         // Check if already triggered
         if (timeoutTriggeredRef.current) return;
@@ -446,13 +452,16 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             const now = Math.floor(Date.now() / 1000);
             const secondsPastDeadline = now - deadline;
 
-            // If we're past the deadline + buffer, trigger timeout
-            if (secondsPastDeadline >= TIMEOUT_BUFFER_SECONDS) {
-                console.log('[NightPhase] Timer expired. Host initiating forcePhaseTimeout...', {
+            // Base buffer 5s, plus 5s per index position
+            const myTriggerTime = TIMEOUT_BUFFER_SECONDS + (myIndex * 5);
+
+            // If we're past the deadline + buffer + index delay, trigger timeout
+            if (secondsPastDeadline >= myTriggerTime) {
+                console.log(`[NightPhase] Timer expired. Waterfall Trigger (Index ${myIndex})...`, {
                     deadline,
                     now,
                     secondsPastDeadline,
-                    buffer: TIMEOUT_BUFFER_SECONDS
+                    buffer: myTriggerTime
                 });
 
                 timeoutTriggeredRef.current = true;
