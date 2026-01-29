@@ -1645,21 +1645,39 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
     // === SMART POLLING ===
+    // === SMART POLLING (Auto-Win Check) ===
     useEffect(() => {
-        if (isTestMode || !currentRoomId || !publicClient) return;
+        if (isTestMode || !currentRoomId || !publicClient || !myPlayer) return;
+        // Only run during active gameplay (Day/Night)
         if (gameState.phase < GamePhase.DAY || gameState.phase === GamePhase.ENDED) return;
 
-        const interval = setInterval(() => {
-            // Check if a transaction is already in progress to avoid double popups
-            if (isTxPending) return;
+        // Waterfall Logic: Any ALIVE player can trigger, but staggered by index to save gas
+        // Dead players should NOT trigger expensive chain interactions
+        const sortedSurvivors = [...gameState.players]
+            .filter(p => p.isAlive)
+            .sort((a, b) => a.address.localeCompare(b.address));
 
+        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer.address.toLowerCase());
+
+        // If I'm dead, I don't pay gas for the win check transaction (someone else will)
+        if (myIndex === -1) return;
+
+        // Base interval 5s, staggered by 3s per index
+        // Index 0: 5s, 10s, 15s...
+        // Index 1: 8s, 13s, 18s...
+        // This ensures they don't overlap exactly
+        const delay = 5000 + (myIndex * 3000);
+
+        const checkWin = () => {
+            if (isTxPending) return;
             triggerAutoWinCheck().catch(err =>
                 console.warn("[AutoWin] Check failed silently:", err)
             );
-        }, 5000); // Check every 5 seconds
+        };
 
+        const interval = setInterval(checkWin, delay);
         return () => clearInterval(interval);
-    }, [currentRoomId, publicClient, isTestMode, gameState.phase, isTxPending, triggerAutoWinCheck]);
+    }, [currentRoomId, publicClient, isTestMode, gameState.phase, isTxPending, triggerAutoWinCheck, gameState.players, myPlayer]);
 
     // Try to end the game by first revealing our role on-chain, then calling endGameAutomatically
     const tryEndGame = useCallback(async () => {
