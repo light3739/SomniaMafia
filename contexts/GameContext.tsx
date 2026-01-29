@@ -644,7 +644,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'createAndJoin',
                     args: [lobbyName, 4, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('0.1'),
+                    value: parseEther('0.5'),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -664,7 +664,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     pubKeyHex as `0x${string}`,      // bytes publicKey
                     sessionAddress as `0x${string}`  // address sessionAddress
                 ],
-                value: parseEther('0.1'),
+                value: parseEther('0.5'),
                 gas: gasLimit,
                 type: 'legacy',
             });
@@ -705,7 +705,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('0.1'),
+                    value: parseEther('0.5'),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -719,7 +719,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
-                value: parseEther('0.1'),
+                value: parseEther('0.5'),
                 gas: gasLimit,
                 type: 'legacy',
             });
