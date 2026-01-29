@@ -67,7 +67,7 @@ interface GameContextType {
 
     // Utility
     kickStalledPlayerOnChain: () => Promise<void>;
-    refreshPlayersList: (roomId: bigint) => Promise<void>;
+    refreshPlayersList: (roomId: bigint) => Promise<any>;
     // Mafia Chat
 
     addLog: (message: string, type?: LogEntry['type']) => void;
