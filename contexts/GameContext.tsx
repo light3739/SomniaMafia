@@ -230,10 +230,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
             // Если оценка упала, используем высокий лимит для тяжелых функций
-            if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK'].includes(functionName)) {
-                calculatedGas = functionName === 'endGameZK' ? 100_000_000n : 30_000_000n;
+            if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK', 'commitAndConfirmRole'].includes(functionName)) {
+                calculatedGas = functionName === 'endGameZK' ? 100_000_000n : 50_000_000n;
             } else {
-                calculatedGas = 5_000_000n;
+                calculatedGas = 10_000_000n;
             }
         }
 
@@ -249,6 +249,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         functionName: functionName as any,
                         args: args as any,
                         gas: calculatedGas,
+                        type: 'legacy',
                     });
                     console.log(`[Session TX] Success! Hash: ${hash}`);
                     return hash;
@@ -603,19 +604,45 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setKeys(keyPair);
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
+            // 2.5. ОТЗЫВАЕМ СТАРУЮ СЕССИЮ (если есть)
+            // Это решает проблему SessionAlreadyRegistered на мейннете
+            try {
+                console.log('[Session] Revoking old session if exists...');
+                const revokeHash = await writeContractAsync({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'revokeSessionKey',
+                    args: [],
+                    gas: 2_000_000n, // Increased from 500k to prevent OUT_OF_GAS
+                    type: 'legacy',
+                });
+                console.log('[Session] Revoke tx:', revokeHash);
+                // Ждем подтверждения
+                await publicClient.waitForTransactionReceipt({ hash: revokeHash });
+                console.log('[Session] Old session revoked successfully');
+            } catch (revokeError: any) {
+                // Игнорируем ошибку если сессии не было
+                console.log('[Session] No session to revoke or revoke failed (this is OK):', revokeError.shortMessage || revokeError.message);
+            }
+
             // 3. Сессия
             const { sessionAddress } = createNewSession(address, newRoomId);
 
+            // Sanitize nickname (allow alphanumeric only, fallback to Player_XXXX)
+            // Cyrillic/Special chars can cause contract reverts if validation exists
+            const safeName = /^[a-zA-Z0-9_ ]+$/.test(playerName) ? playerName : `Player_${Math.floor(Math.random() * 1000)}`;
+            console.log(`[SafeName] Original: "${playerName}", Used: "${safeName}"`);
+
             // 4. Оценка газа с буфером
-            let gasLimit = 5_000_000n;
+            let gasLimit = 50_000_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
-                    args: [lobbyName, 16, playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
+                    args: [lobbyName, 4, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('1'),
+                    value: parseEther('0.1'),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -630,13 +657,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'createAndJoin',
                 args: [
                     lobbyName,      // string roomName
-                    16,             // uint8 maxPlayers
-                    playerName,     // string nickname
+                    4,              // uint8 maxPlayers - REDUCED to 4 (min)
+                    safeName,       // string nickname (SANITIZED)
                     pubKeyHex as `0x${string}`,      // bytes publicKey
                     sessionAddress as `0x${string}`  // address sessionAddress
                 ],
-                value: parseEther('1'),
+                value: parseEther('0.1'),
                 gas: gasLimit,
+                type: 'legacy',
             });
 
             addLog(`Creating room "${lobbyName}"...`, "info");
@@ -667,7 +695,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const { sessionAddress } = createNewSession(address, roomId);
 
             // 3. Оценка газа с буфером
-            let gasLimit = 5_000_000n;
+            let gasLimit = 50_000_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -675,7 +703,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('1'),
+                    value: parseEther('0.1'),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -689,8 +717,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
-                value: parseEther('1'),
+                value: parseEther('0.1'),
                 gas: gasLimit,
+                type: 'legacy',
             });
             // addLog("Joining with auto-sign...", "info");
             await publicClient?.waitForTransactionReceipt({ hash });
@@ -715,7 +744,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             // Оценка газа с буфером
-            let gasLimit = 2_000_000n;
+            let gasLimit = 50_000_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -736,6 +765,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'startGame',
                 args: [currentRoomId],
                 gas: gasLimit,
+                type: 'legacy',
             });
             addLog("Starting game...", "phase");
             await publicClient?.waitForTransactionReceipt({ hash });
