@@ -122,6 +122,46 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
     const [lastPhase, setLastPhase] = useState<GamePhase | null>(null);
     const [nightTransitionDelay, setNightTransitionDelay] = useState<number | null>(null);
 
+    // Discussion state for tracking current speaker (for player card glow effect)
+    const [discussionState, setDiscussionState] = useState<{
+        currentSpeakerAddress: string | null;
+        timeRemaining: number;
+    } | null>(null);
+
+    // Fetch discussion state for player card highlighting
+    const fetchDiscussionState = useCallback(async () => {
+        if (!currentRoomId || gameState.phase !== GamePhase.DAY) return;
+        try {
+            const response = await fetch(
+                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}`
+            );
+            const data = await response.json();
+            if (data && data.active) {
+                setDiscussionState({
+                    currentSpeakerAddress: data.currentSpeakerAddress,
+                    timeRemaining: data.timeRemaining
+                });
+            } else {
+                setDiscussionState(null);
+            }
+        } catch (e) {
+            console.error("GameLayout: Failed to fetch discussion state:", e);
+        }
+    }, [currentRoomId, gameState.phase, gameState.dayCount, myPlayer?.address]);
+
+    // Poll discussion state during DAY phase
+    useEffect(() => {
+        if (gameState.phase !== GamePhase.DAY || !currentRoomId) {
+            setDiscussionState(null);
+            return;
+        }
+
+        fetchDiscussionState();
+        const interval = setInterval(fetchDiscussionState, 1000); // Poll every second for accurate time
+
+        return () => clearInterval(interval);
+    }, [gameState.phase, currentRoomId, fetchDiscussionState]);
+
     // Trigger Morning Announcement (Day start)
     useEffect(() => {
         const isDayStart = gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING;
@@ -386,6 +426,8 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
                                 myRole={myPlayer?.role}
                                 mark={playerMarks[player.address.toLowerCase()] || null}
                                 onSetMark={setPlayerMark}
+                                isSpeaking={discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase()}
+                                speechTimeRemaining={discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase() ? discussionState.timeRemaining : 0}
                             />
                         </div>
                     );
