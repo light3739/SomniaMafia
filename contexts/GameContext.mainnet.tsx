@@ -476,7 +476,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!gameData) return;
 
         const {
-            rawPlayers, phase, dayCount, revealedCount,
+            rawPlayers, phase, dayCount, aliveCount, committedCount, revealedCount,
             mafiaCommittedCount, mafiaRevealedCount, phaseDeadline
         } = gameData;
 
