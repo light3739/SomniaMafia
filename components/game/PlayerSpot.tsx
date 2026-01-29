@@ -17,9 +17,11 @@ interface PlayerSpotProps {
     myRole?: Role; // Role of the current player (for night selection colors)
     mark: 'mafia' | 'civilian' | 'question' | null;
     onSetMark: (address: string, mark: 'mafia' | 'civilian' | 'question' | null) => void;
+    isSpeaking?: boolean; // Whether this player is currently speaking
+    speechTimeRemaining?: number; // Seconds remaining in their speech
 }
 
-export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAct, isSelected, isNight = false, myRole, mark: currentMark, onSetMark: setPlayerMark }) => {
+export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAct, isSelected, isNight = false, myRole, mark: currentMark, onSetMark: setPlayerMark, isSpeaking = false, speechTimeRemaining = 0 }) => {
     const { playClickSound, playMarkSound } = useSoundEffects();
     const [isHoveringMarks, setIsHoveringMarks] = useState(false);
 
@@ -87,6 +89,55 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                 ${isMe && !isSelected ? 'ring-1 ring-[#916A47]/50' : ''}
             `}
         >
+            {/* Speech Time Indicator - Shows when player is speaking */}
+            {/* Glow effect - shows entire speech time */}
+            {isSpeaking && speechTimeRemaining > 0 && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{
+                        opacity: [0.4, 1, 0.4],
+                    }}
+                    transition={{
+                        duration: 0.8,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                    className="absolute inset-0 rounded-xl pointer-events-none"
+                    style={{
+                        // Soft glow effect
+                        boxShadow: `
+                            inset 0 0 8px rgba(255, 250, 235, 0.4),
+                            0 0 8px rgba(255, 250, 235, 0.6),
+                            0 0 16px rgba(255, 250, 235, 0.5),
+                            0 0 28px rgba(255, 250, 235, 0.4),
+                            0 0 45px rgba(255, 250, 235, 0.25)
+                        `,
+                    }}
+                />
+            )}
+
+            {/* Centered Timer Overlay - only shows at ≤10 seconds */}
+            {isSpeaking && speechTimeRemaining <= 10 && speechTimeRemaining > 0 && (
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none"
+                >
+                    <div
+                        className="flex items-center justify-center rounded-lg"
+                        style={{
+                            width: 56,
+                            height: 40,
+                            backgroundColor: 'rgba(0, 0, 0, 0.3)'
+                        }}
+                    >
+                        <span className="text-2xl font-bold text-white font-['Montserrat'] tabular-nums">
+                            {speechTimeRemaining}
+                        </span>
+                    </div>
+                </motion.div>
+            )}
+
             {/* Suspicion Marks (Only for others and ONLY for Town roles: Civilian, Doctor, Detective) */}
             {!isMe && player.isAlive && myRole !== Role.MAFIA && myRole !== Role.UNKNOWN && (
                 <div

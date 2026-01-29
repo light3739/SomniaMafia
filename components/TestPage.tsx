@@ -894,6 +894,128 @@ const PlayerSpotTestWrapper: React.FC = () => {
     );
 };
 
+// Wrapper for testing Speech Time Warning Glow effect
+const SpeechWarningGlowTestWrapper: React.FC = () => {
+    const [timeRemaining, setTimeRemaining] = useState(15);
+    const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+
+    const mockPlayer: Player = {
+        id: '1',
+        name: 'Speaking Player',
+        role: Role.CIVILIAN,
+        isAlive: true,
+        address: '0x1234567890123456789012345678901234567890' as `0x${string}`,
+        avatarUrl: '',
+        votesReceived: 0,
+        status: 'connected',
+        hasConfirmedRole: true,
+        hasDeckCommitted: false,
+        hasVoted: false,
+        hasNightCommitted: false,
+        hasNightRevealed: false
+    };
+
+    // Auto countdown
+    useEffect(() => {
+        if (!isAutoPlaying || timeRemaining <= 0) {
+            if (timeRemaining <= 0) setIsAutoPlaying(false);
+            return;
+        }
+        const timer = setTimeout(() => {
+            setTimeRemaining(prev => prev - 1);
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [isAutoPlaying, timeRemaining]);
+
+    const startCountdown = () => {
+        setTimeRemaining(15);
+        setIsAutoPlaying(true);
+    };
+
+    const glowActive = timeRemaining > 0;
+    const timerVisible = timeRemaining <= 10 && timeRemaining > 0;
+
+    return (
+        <div className="w-full flex flex-col items-center gap-6">
+            {/* Controls */}
+            <div className="flex gap-2 flex-wrap justify-center">
+                <button
+                    onClick={startCountdown}
+                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500"
+                >
+                    ▶ Start Countdown (15s)
+                </button>
+                <button
+                    onClick={() => setTimeRemaining(10)}
+                    className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-500"
+                >
+                    Jump to 10s
+                </button>
+                <button
+                    onClick={() => setTimeRemaining(5)}
+                    className="px-4 py-2 bg-rose-800 text-white rounded-lg hover:bg-rose-700"
+                >
+                    Jump to 5s
+                </button>
+                <button
+                    onClick={() => { setTimeRemaining(15); setIsAutoPlaying(false); }}
+                    className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20"
+                >
+                    Reset
+                </button>
+            </div>
+
+            {/* Status */}
+            <div className="text-center">
+                <div className={`text-4xl font-bold tabular-nums mb-2 ${timeRemaining <= 10 ? 'text-rose-400' : 'text-white'}`}>
+                    {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}
+                </div>
+                <div className="text-sm font-medium space-y-1">
+                    <div className={glowActive ? 'text-amber-400' : 'text-white/50'}>
+                        {glowActive ? '✨ GLOW ACTIVE (entire speech)' : 'Glow shows during speech'}
+                    </div>
+                    <div className={timerVisible ? 'text-rose-400 animate-pulse' : 'text-white/50'}>
+                        {timerVisible ? '⏱️ TIMER VISIBLE (≤10s)' : 'Timer appears at ≤10 seconds'}
+                    </div>
+                </div>
+            </div>
+
+            {/* Player Card with Glow */}
+            <div className="p-8 bg-black/40 rounded-2xl border border-white/10">
+                <PlayerSpot
+                    player={mockPlayer}
+                    isMe={false}
+                    canAct={false}
+                    isNight={false}
+                    myRole={Role.CIVILIAN}
+                    isSelected={false}
+                    mark={null}
+                    onSetMark={() => { }}
+                    isSpeaking={true}
+                    speechTimeRemaining={timeRemaining}
+                />
+            </div>
+
+            {/* Comparison: Non-speaking player */}
+            <div className="text-white/40 text-sm mb-2">Comparison: Non-speaking player</div>
+            <div className="p-8 bg-black/40 rounded-2xl border border-white/10 opacity-60">
+                <PlayerSpot
+                    player={{ ...mockPlayer, name: 'Waiting Player', address: '0x999' as `0x${string}` }}
+                    isMe={false}
+                    canAct={false}
+                    isNight={false}
+                    myRole={Role.CIVILIAN}
+                    isSelected={false}
+                    mark={null}
+                    onSetMark={() => { }}
+                    isSpeaking={false}
+                    speechTimeRemaining={0}
+                />
+            </div>
+        </div>
+    );
+};
+
 const TestPage: React.FC = () => {
     const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
@@ -947,6 +1069,7 @@ const TestPage: React.FC = () => {
         { name: 'Shuffle Phase (Static)', group: 'Early Game', component: <ShufflePhaseTestWrapper /> },
         { name: 'Role Reveal (Static)', group: 'Early Game', component: <RoleRevealTestWrapper /> },
         { name: 'Player Spot', group: 'Early Game', component: <PlayerSpotTestWrapper /> },
+        { name: 'Speech Warning Glow', group: 'Game Components', component: <SpeechWarningGlowTestWrapper /> },
     ];
 
     const groupedComponents = components.reduce((acc, curr) => {
