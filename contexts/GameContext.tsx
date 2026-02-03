@@ -80,6 +80,9 @@ interface GameContextType {
     setIsTxPending: (val: boolean) => void;
     playerMarks: Record<string, 'mafia' | 'civilian' | 'question' | null>;
     setPlayerMark: (address: string, mark: 'mafia' | 'civilian' | 'question' | null) => void;
+    // Vote visualization: voter address -> target address
+    voteMap: Record<string, string>;
+    setVoteMap: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -123,6 +126,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isTxPending, setIsTxPending] = useState(false);
     const [isTestMode, setIsTestMode] = useState(false);
     const [playerMarks, setPlayerMarks] = useState<Record<string, 'mafia' | 'civilian' | 'question' | null>>({});
+    // Vote map: stores who voted for whom (voter address -> target address)
+    const [voteMap, setVoteMap] = useState<Record<string, string>>({});
 
     const setPlayerMark = useCallback((address: string, mark: 'mafia' | 'civilian' | 'question' | null) => {
         setPlayerMarks(prev => ({
@@ -2085,6 +2090,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isTestMode, setIsTestMode,
         setIsTxPending,
         playerMarks, setPlayerMark,
+        voteMap, setVoteMap,
         setCurrentRoomId
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, currentRoomId,
@@ -2101,7 +2107,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         selectedTarget,
         showVotingResults, setShowVotingResults,
         playerMarks, setPlayerMark,
-        playerMarks, setPlayerMark,
+        voteMap,
         setCurrentRoomId
     ]);
 

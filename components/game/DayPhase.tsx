@@ -33,7 +33,8 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         isTxPending,
         selectedTarget,
         setSelectedTarget,
-        isTestMode
+        isTestMode,
+        setVoteMap
     } = useGameContext();
     const {
         playClickSound,
@@ -395,8 +396,13 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         if (!publicClient || !currentRoomId) return;
         try {
             const counts = new Map<string, number>();
+            const newVoteMap: Record<string, string> = {};
+
+            // Fetch votes for all alive players
             for (const player of gameState.players) {
                 if (!player.isAlive) continue;
+
+                // Get vote count for this player
                 const count = await publicClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
@@ -404,35 +410,52 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     args: [BigInt(String(currentRoomId || 0)), player.address as `0x${string}`],
                 }) as unknown as bigint;
                 counts.set(player.address.toLowerCase(), Number(count));
-            }
-            if (isProcessing || isTxPending) return;
-            if (myPlayer) {
-                const myVote = await publicClient.readContract({
+
+                // Get who this player voted for
+                const vote = await publicClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'votes',
-                    args: [BigInt(String(currentRoomId || 0)), myPlayer.address as `0x${string}`],
+                    args: [BigInt(String(currentRoomId || 0)), player.address as `0x${string}`],
                 }) as `0x${string}`;
-                const hasVoted = myVote !== '0x0000000000000000000000000000000000000000';
+
+                if (vote && vote !== '0x0000000000000000000000000000000000000000') {
+                    newVoteMap[player.address.toLowerCase()] = vote.toLowerCase();
+                }
+            }
+
+            // Update voteMap in context
+            setVoteMap(newVoteMap);
+
+            if (isProcessing || isTxPending) return;
+            if (myPlayer) {
+                const myVote = newVoteMap[myPlayer.address.toLowerCase()];
+                const hasVoted = !!myVote;
                 setVoteState(prev => ({
                     ...prev,
                     voteCounts: counts,
-                    myVote: (hasVoted ? myVote : null) || prev.myVote,
+                    myVote: myVote || prev.myVote,
                     hasVoted: prev.hasVoted || hasVoted
                 }));
             }
         } catch (e) {
             console.error("Failed to fetch votes:", e);
         }
-    }, [publicClient, currentRoomId, gameState.players, myPlayer, isProcessing, isTxPending]);
+    }, [publicClient, currentRoomId, gameState.players, myPlayer, isProcessing, isTxPending, setVoteMap]);
 
     useEffect(() => {
+        // Skip vote fetching in test mode - let manual votes persist
+        if (isTestMode) return;
+
         if (isVotingPhase) {
             fetchVoteCounts();
             const interval = setInterval(fetchVoteCounts, 3000);
             return () => clearInterval(interval);
+        } else {
+            // Clear vote map when leaving voting phase
+            setVoteMap({});
         }
-    }, [fetchVoteCounts, isVotingPhase]);
+    }, [fetchVoteCounts, isVotingPhase, setVoteMap, isTestMode]);
 
 
 
