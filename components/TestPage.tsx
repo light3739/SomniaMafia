@@ -49,13 +49,35 @@ const NightAnnouncementWrapper = () => {
 // Generate mock players for testing
 const generateMockPlayers = (myRole: Role, myAddress: `0x${string}`): Player[] => {
     return [
-        { id: '1', name: 'You (Test)', role: myRole, isAlive: true, address: myAddress, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '2', name: 'Alice (Civilian)', role: Role.CIVILIAN, isAlive: true, address: '0x2222222222222222222222222222222222222222' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: true, hasNightRevealed: true },
-        { id: '3', name: 'Bob (Civilian)', role: Role.CIVILIAN, isAlive: true, address: '0x3333333333333333333333333333333333333333' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
-        { id: '4', name: 'Charlie (Mafia)', role: Role.MAFIA, isAlive: true, address: '0x4444444444444444444444444444444444444444' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: true, hasNightRevealed: true },
-        { id: '5', name: 'Diana (Doctor)', role: Role.DOCTOR, isAlive: true, address: '0x5555555555555555555555555555555555555555' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: true, hasNightRevealed: true },
-        { id: '6', name: 'Eve (Detective)', role: Role.DETECTIVE, isAlive: true, address: '0x6666666666666666666666666666666666666666' as `0x${string}`, avatarUrl: '', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '1', name: 'You (Test)', role: myRole, isAlive: true, address: myAddress, avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=you', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '2', name: 'Alice', role: Role.CIVILIAN, isAlive: true, address: '0x2222222222222222222222222222222222222222' as `0x${string}`, avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=alice', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: true, hasNightRevealed: true },
+        { id: '3', name: 'Bob', role: Role.CIVILIAN, isAlive: true, address: '0x3333333333333333333333333333333333333333' as `0x${string}`, avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=bob', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
+        { id: '4', name: 'Charlie', role: Role.MAFIA, isAlive: true, address: '0x4444444444444444444444444444444444444444' as `0x${string}`, avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=charlie', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: true, hasNightRevealed: true },
+        { id: '5', name: 'Diana', role: Role.DOCTOR, isAlive: true, address: '0x5555555555555555555555555555555555555555' as `0x${string}`, avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=diana', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: true, hasNightRevealed: true },
+        { id: '6', name: 'Eve', role: Role.DETECTIVE, isAlive: true, address: '0x6666666666666666666666666666666666666666' as `0x${string}`, avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=eve', votesReceived: 0, status: 'connected', hasConfirmedRole: true, hasDeckCommitted: false, hasVoted: false, hasNightCommitted: false, hasNightRevealed: false },
     ];
+};
+
+// Generate 16 mock players for voting visualization test
+const generateMock16Players = (myAddress: `0x${string}`): Player[] => {
+    const names = ['You', 'Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry', 'Ivy', 'Jack', 'Kate', 'Leo', 'Mia', 'Nick', 'Olivia'];
+    const roles = [Role.CIVILIAN, Role.CIVILIAN, Role.CIVILIAN, Role.CIVILIAN, Role.CIVILIAN, Role.CIVILIAN, Role.CIVILIAN, Role.CIVILIAN, Role.CIVILIAN, Role.CIVILIAN, Role.MAFIA, Role.MAFIA, Role.MAFIA, Role.DOCTOR, Role.DETECTIVE, Role.CIVILIAN];
+
+    return names.map((name, i) => ({
+        id: String(i + 1),
+        name: name,
+        role: roles[i],
+        isAlive: true,
+        address: (i === 0 ? myAddress : `0x${(i + 1).toString().padStart(2, '0').repeat(20)}`) as `0x${string}`,
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name.toLowerCase()}`,
+        votesReceived: 0,
+        status: 'connected' as const,
+        hasConfirmedRole: true,
+        hasDeckCommitted: false,
+        hasVoted: false,
+        hasNightCommitted: false,
+        hasNightRevealed: false,
+    }));
 };
 
 const TEST_ADDRESS: `0x${string}` = '0x1111111111111111111111111111111111111111';
@@ -145,7 +167,7 @@ const DayPhaseTestWrapper: React.FC = () => {
 
 // Wrapper for Voting phase testing
 const VotingPhaseTestWrapper: React.FC = () => {
-    const { setGameState } = useGameContext();
+    const { setGameState, setVoteMap } = useGameContext();
     const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
@@ -164,14 +186,232 @@ const VotingPhaseTestWrapper: React.FC = () => {
             winner: null,
             mafiaMessages: []
         });
+        // Clear any existing votes
+        setVoteMap({});
         setTimeout(() => setIsReady(true), 50);
-    }, [setGameState]);
+    }, [setGameState, setVoteMap]);
 
     if (!isReady) {
         return <div className="w-full h-full flex items-center justify-center text-white">Loading Voting Phase...</div>;
     }
 
     return <GameLayout />;
+};
+
+// Interactive Voting Visualization Test - allows adding/removing votes to see avatars on cards
+const VotingVisualizationTestWrapper: React.FC = () => {
+    const { setGameState, setVoteMap, voteMap, setCurrentRoomId } = useGameContext();
+    const [isReady, setIsReady] = useState(false);
+    const [isAnimating, setIsAnimating] = useState(false);
+    const [showPanel, setShowPanel] = useState(true);
+
+    const players = generateMock16Players(TEST_ADDRESS);
+
+    useEffect(() => {
+        // Set a mock room ID for the test
+        setCurrentRoomId(BigInt(12345));
+
+        setGameState({
+            phase: GamePhase.VOTING,
+            dayCount: 1,
+            myPlayerId: TEST_ADDRESS,
+            players: players,
+            logs: [
+                { id: '1', timestamp: '12:00:00', message: 'Voting Visualization Test', type: 'phase' }
+            ],
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 600,
+            winner: null,
+            mafiaMessages: []
+        });
+        setVoteMap({});
+        setTimeout(() => setIsReady(true), 50);
+    }, [setGameState, setVoteMap, setCurrentRoomId]);
+
+    const handleVote = (voterAddr: string, targetAddr: string) => {
+        // Если уже голосовал за этого - убираем голос
+        if (voteMap[voterAddr.toLowerCase()] === targetAddr.toLowerCase()) {
+            setVoteMap(prev => {
+                const newMap = { ...prev };
+                delete newMap[voterAddr.toLowerCase()];
+                return newMap;
+            });
+        } else {
+            // Иначе - добавляем/меняем голос
+            setVoteMap(prev => ({
+                ...prev,
+                [voterAddr.toLowerCase()]: targetAddr.toLowerCase()
+            }));
+        }
+    };
+
+    const handleClearAllVotes = () => {
+        setVoteMap({});
+    };
+
+    // Анимированное добавление всех голосов за одного игрока
+    const animateAllVotesFor = async (targetAddr: string) => {
+        if (isAnimating) return;
+        setIsAnimating(true);
+        setVoteMap({});
+
+        const voters = players.filter(p => p.address.toLowerCase() !== targetAddr.toLowerCase());
+
+        for (let i = 0; i < voters.length; i++) {
+            await new Promise(resolve => setTimeout(resolve, 400)); // 400ms delay between each vote
+            setVoteMap(prev => ({
+                ...prev,
+                [voters[i].address.toLowerCase()]: targetAddr.toLowerCase()
+            }));
+        }
+        setIsAnimating(false);
+    };
+
+    // Быстро все голосуют за одного
+    const allVoteFor = (targetAddr: string) => {
+        const newVotes: Record<string, string> = {};
+        players.forEach(voter => {
+            if (voter.address.toLowerCase() !== targetAddr.toLowerCase()) {
+                newVotes[voter.address.toLowerCase()] = targetAddr.toLowerCase();
+            }
+        });
+        setVoteMap(newVotes);
+    };
+
+    if (!isReady) {
+        return <div className="w-full h-full flex items-center justify-center text-white">Loading...</div>;
+    }
+
+    const getPlayerShortName = (p: typeof players[0]) => p.name.split(' ')[0];
+
+    return (
+        <div className="w-full h-full relative">
+            {/* Toggle Button - Always visible */}
+            <button
+                onClick={() => setShowPanel(!showPanel)}
+                className="fixed top-4 right-4 z-[1000] px-4 py-2 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-500 shadow-xl"
+            >
+                {showPanel ? '✕ Hide Panel' : '🗳️ Show Vote Panel'}
+            </button>
+
+            {/* Floating Control Panel */}
+            {showPanel && (
+                <div className="fixed top-16 right-4 z-[999] bg-black/95 p-4 rounded-xl border border-[#916A47]/50 flex flex-col gap-3 max-w-[400px] shadow-2xl max-h-[80vh] overflow-y-auto">
+                    <h3 className="text-[#916A47] font-bold text-sm">🗳️ Vote Controls (No TX)</h3>
+
+                    {/* Quick Actions */}
+                    <div className="flex gap-2 flex-wrap">
+                        <button
+                            onClick={handleClearAllVotes}
+                            className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs hover:bg-red-500"
+                        >
+                            🗑️ Clear
+                        </button>
+                    </div>
+
+                    {/* Animated Vote All buttons */}
+                    <div className="flex flex-col gap-1">
+                        <span className="text-white/50 text-[10px]">🎬 Animate votes (one by one):</span>
+                        <div className="flex flex-wrap gap-1">
+                            {players.map(target => (
+                                <button
+                                    key={`anim-${target.id}`}
+                                    onClick={() => animateAllVotesFor(target.address)}
+                                    disabled={isAnimating}
+                                    className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${isAnimating
+                                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                        : 'bg-purple-600 text-white hover:bg-purple-500'
+                                        }`}
+                                >
+                                    ▶ {getPlayerShortName(target)}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Instant Vote All buttons */}
+                    <div className="flex flex-col gap-1">
+                        <span className="text-white/50 text-[10px]">⚡ Instant all votes:</span>
+                        <div className="flex flex-wrap gap-1">
+                            {players.map(target => (
+                                <button
+                                    key={`instant-${target.id}`}
+                                    onClick={() => allVoteFor(target.address)}
+                                    className="px-2 py-1 bg-amber-600 text-white rounded text-[10px] font-medium hover:bg-amber-500"
+                                >
+                                    All → {getPlayerShortName(target)}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Voting Matrix */}
+                    <div className="flex flex-col gap-1">
+                        <span className="text-white/50 text-[10px]">📊 Click to toggle vote:</span>
+                        <div className="overflow-x-auto">
+                            <table className="border-collapse text-[10px]">
+                                <thead>
+                                    <tr>
+                                        <th className="p-1 text-white/40 text-left">→</th>
+                                        {players.map(target => (
+                                            <th key={target.id} className="p-1 text-center text-[#916A47] font-medium">
+                                                {getPlayerShortName(target).slice(0, 3)}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {players.map(voter => (
+                                        <tr key={voter.id} className="border-t border-white/10">
+                                            <td className="p-1 text-white/70 font-medium">{getPlayerShortName(voter).slice(0, 3)}</td>
+                                            {players.map(target => {
+                                                const isVoted = voteMap[voter.address.toLowerCase()] === target.address.toLowerCase();
+                                                const isSelf = voter.address === target.address;
+                                                return (
+                                                    <td key={`${voter.id}-${target.id}`} className="p-0.5 text-center">
+                                                        <button
+                                                            onClick={() => !isSelf && handleVote(voter.address, target.address)}
+                                                            disabled={isSelf}
+                                                            className={`w-5 h-5 rounded-full text-[8px] transition-all ${isSelf
+                                                                ? 'bg-gray-800 cursor-not-allowed'
+                                                                : isVoted
+                                                                    ? 'bg-green-500 text-white'
+                                                                    : 'bg-white/10 hover:bg-white/20 text-white/40'
+                                                                }`}
+                                                        >
+                                                            {isSelf ? '—' : isVoted ? '✓' : '○'}
+                                                        </button>
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Current votes count per player */}
+                    <div className="flex flex-wrap gap-1 text-[10px]">
+                        <span className="text-white/40 w-full">Votes:</span>
+                        {players.map(target => {
+                            const votesCount = Object.values(voteMap).filter(t => t === target.address.toLowerCase()).length;
+                            return (
+                                <span key={target.id} className={`px-1.5 py-0.5 rounded ${votesCount > 0 ? 'bg-[#916A47]/30 text-[#916A47]' : 'bg-white/5 text-white/30'}`}>
+                                    {getPlayerShortName(target).slice(0, 3)}: {votesCount}
+                                </span>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Game Layout */}
+            <GameLayout />
+        </div>
+    );
 };
 
 // Mock Props
@@ -1051,6 +1291,7 @@ const TestPage: React.FC = () => {
         { name: 'Night - Civilian', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.CIVILIAN} /> },
         { name: 'Day Phase', group: 'Game Phases', component: <DayPhaseTestWrapper /> },
         { name: 'Voting Phase', group: 'Game Phases', component: <VotingPhaseTestWrapper /> },
+        { name: 'Voting Visualization', group: 'Game Phases', component: <VotingVisualizationTestWrapper /> },
 
         // Pages
         { name: 'MainPage', group: 'Pages', component: <MainPage onStart={() => console.log('Start')} /> },
