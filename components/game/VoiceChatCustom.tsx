@@ -116,10 +116,11 @@ export function VoiceChat({ roomId, userName, isActive, label = 'Voice Chat' }: 
         setError(null);
 
         const newSocket = io(SFU_URL, {
-            transports: ['websocket'],
+            transports: ['polling', 'websocket'], // Try polling first, then upgrade to websocket
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
+            timeout: 10000,
         });
 
         newSocket.on('connect', () => {
