@@ -759,7 +759,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
 
                     {/* Waiting indicator - matching other roles */}
                     <div className="text-center">
-                        <p className="text-white/60 text-[8px] tracking-[0.4em] uppercase animate-pulse">
+                        <p className="text-white/60 text-xs tracking-[0.4em] uppercase animate-pulse">
                             Waiting for dawn
                         </p>
                     </div>
@@ -874,7 +874,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                     {/* Waiting Message - Absolute at the bottom of the content area */}
                                     {nightState.hasRevealed && (
                                         <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 whitespace-nowrap">
-                                            <p className="text-white/60 text-[8px] tracking-[0.4em] uppercase animate-pulse">Waiting for dawn</p>
+                                            <p className="text-white/60 text-xs tracking-[0.4em] uppercase animate-pulse">Waiting for dawn</p>
                                         </div>
                                     )}
                                 </div>
