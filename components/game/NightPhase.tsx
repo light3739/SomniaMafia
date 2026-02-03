@@ -718,28 +718,136 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         return (
             <div className="w-full h-full flex flex-col items-center justify-center p-8">
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="max-w-md w-full bg-indigo-950/30 backdrop-blur-xl rounded-3xl border border-indigo-500/20 p-8 text-center"
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                    className="max-w-md w-full relative"
                 >
-                    <motion.div
-                        animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                        className="relative mx-auto mb-6 w-fit"
-                    >
-                        <Moon className="w-16 h-16 text-indigo-400" />
-                        <div className="absolute -bottom-1 -right-1 bg-indigo-900/80 rounded-full p-1">
-                            <Lock className="w-5 h-5 text-indigo-300" />
+                    {/* Atmospheric background glow */}
+                    <div className="absolute -inset-8 bg-gradient-to-b from-indigo-500/5 via-purple-500/10 to-transparent rounded-[60px] blur-3xl" />
+
+                    {/* Main card */}
+                    <div className="relative bg-gradient-to-b from-[#1a1235]/90 to-[#0d0a1a]/95 backdrop-blur-xl rounded-3xl border border-indigo-500/30 p-8 text-center overflow-hidden">
+                        {/* Stars decoration */}
+                        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                            {[...Array(12)].map((_, i) => (
+                                <motion.div
+                                    key={i}
+                                    className="absolute w-1 h-1 bg-white/60 rounded-full"
+                                    style={{
+                                        left: `${10 + (i * 7) % 80}%`,
+                                        top: `${10 + (i * 13) % 70}%`,
+                                    }}
+                                    animate={{
+                                        opacity: [0.2, 0.8, 0.2],
+                                        scale: [0.8, 1.2, 0.8],
+                                    }}
+                                    transition={{
+                                        duration: 2 + (i % 3),
+                                        repeat: Infinity,
+                                        delay: i * 0.2,
+                                    }}
+                                />
+                            ))}
                         </div>
-                    </motion.div>
-                    <h2 className="text-2xl font-['Playfair_Display'] text-white mb-2">Night Phase</h2>
-                    <p className="text-white/50 text-sm mb-4">You are a <span className="text-indigo-300 font-medium">{myRole}</span>. You have no night abilities.</p>
-                    <div className="bg-indigo-900/30 rounded-xl p-4 border border-indigo-500/20 mb-4">
-                        <div className="flex items-center justify-center gap-2 text-indigo-300 mb-2">
-                            <Lock className="w-4 h-4" />
-                            <span className="text-sm font-medium">Actions locked</span>
-                        </div>
-                        <p className="text-indigo-200/50 text-xs">Close your eyes and wait for dawn</p>
+
+                        {/* Animated Moon with glow */}
+                        <motion.div
+                            className="relative mx-auto mb-6 w-fit"
+                        >
+                            {/* Moon glow layers */}
+                            <motion.div
+                                animate={{
+                                    scale: [1, 1.3, 1],
+                                    opacity: [0.15, 0.25, 0.15]
+                                }}
+                                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                                className="absolute inset-0 bg-indigo-400 rounded-full blur-3xl"
+                            />
+                            <motion.div
+                                animate={{
+                                    scale: [1, 1.15, 1],
+                                    opacity: [0.3, 0.5, 0.3]
+                                }}
+                                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+                                className="absolute inset-0 bg-purple-400 rounded-full blur-xl"
+                            />
+
+                            {/* Moon icon container */}
+                            <motion.div
+                                animate={{
+                                    rotate: [0, 5, 0, -5, 0],
+                                    scale: [1, 1.02, 1]
+                                }}
+                                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                                className="relative p-6 rounded-full bg-gradient-to-br from-indigo-900/50 to-purple-900/30 border border-indigo-400/20"
+                            >
+                                <Moon className="w-16 h-16 text-indigo-300" strokeWidth={1.5} />
+                            </motion.div>
+
+                            {/* Lock badge */}
+                            <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ delay: 0.3, type: "spring" }}
+                                className="absolute -bottom-1 -right-1 bg-indigo-900/90 rounded-full p-2 border border-indigo-400/30 shadow-lg shadow-indigo-500/20"
+                            >
+                                <Lock className="w-4 h-4 text-indigo-300" />
+                            </motion.div>
+                        </motion.div>
+
+                        {/* Title */}
+                        <motion.h2
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.2 }}
+                            className="text-2xl font-['Playfair_Display'] text-white mb-2 tracking-wide"
+                        >
+                            Night Has Fallen
+                        </motion.h2>
+
+                        {/* Role badge */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.3 }}
+                            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-400/20 mb-4"
+                        >
+                            <User className="w-3.5 h-3.5 text-indigo-300" />
+                            <span className="text-indigo-200 text-sm font-medium">Civilian</span>
+                        </motion.div>
+
+                        {/* Status message */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.4 }}
+                            className="bg-gradient-to-r from-indigo-900/30 via-purple-900/30 to-indigo-900/30 rounded-2xl p-5 border border-indigo-500/20 mb-4"
+                        >
+                            <div className="flex items-center justify-center gap-3 text-indigo-200 mb-3">
+                                <motion.div
+                                    animate={{ opacity: [0.5, 1, 0.5] }}
+                                    transition={{ duration: 2, repeat: Infinity }}
+                                >
+                                    <Lock className="w-5 h-5" />
+                                </motion.div>
+                                <span className="text-base font-medium tracking-wide">Your actions are locked</span>
+                            </div>
+                            <p className="text-indigo-300/60 text-sm leading-relaxed">
+                                As a peaceful villager, you have no night abilities.<br />
+                                Close your eyes and wait for the dawn.
+                            </p>
+                        </motion.div>
+
+                        {/* Footer hint */}
+                        <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.6 }}
+                            className="text-white/30 text-xs"
+                        >
+                            Stay vigilant. Trust no one.
+                        </motion.p>
                     </div>
                 </motion.div>
             </div>
