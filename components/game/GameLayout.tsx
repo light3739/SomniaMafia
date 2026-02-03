@@ -77,7 +77,7 @@ const BASE_WIDTH = 1488;
 const BASE_HEIGHT = 1024;
 
 export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNightState }) => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults } = useGameContext();
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const players = gameState.players || [];
     const [scale, setScale] = useState(1);
@@ -406,6 +406,12 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
                     const player = visualPlayers[index];
                     if (!player) return null; // Slot empty
 
+                    // Compute voters: players who voted for this player
+                    const voters = Object.entries(voteMap)
+                        .filter(([_, target]) => target === player.address.toLowerCase())
+                        .map(([voterAddr]) => players.find(p => p.address.toLowerCase() === voterAddr))
+                        .filter((p): p is typeof players[0] => !!p);
+
                     return (
                         <div
                             key={player.id}
@@ -428,6 +434,7 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
                                 onSetMark={setPlayerMark}
                                 isSpeaking={discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase()}
                                 speechTimeRemaining={discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase() ? discussionState.timeRemaining : 0}
+                                voters={voters}
                             />
                         </div>
                     );
