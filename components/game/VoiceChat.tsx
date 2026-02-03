@@ -141,10 +141,13 @@ export function VoiceChat({
                                 <iframe
                                     ref={iframeRef}
                                     src={joinUrl}
-                                    className="w-full h-[400px] rounded-lg border border-purple-500/20"
+                                    className="w-full h-[300px] rounded-lg border border-purple-500/20 bg-black"
                                     allow="camera; microphone; display-capture; autoplay; clipboard-write"
                                     allowFullScreen
                                     title="Voice Chat"
+                                    style={{
+                                        colorScheme: 'dark'
+                                    }}
                                 />
 
                                 <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
