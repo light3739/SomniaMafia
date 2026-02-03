@@ -67,7 +67,7 @@ interface GameContextType {
 
     // Utility
     kickStalledPlayerOnChain: () => Promise<void>;
-    refreshPlayersList: (roomId: bigint) => Promise<void>;
+    refreshPlayersList: (roomId: bigint) => Promise<any>;
     // Mafia Chat
 
     addLog: (message: string, type?: LogEntry['type']) => void;
@@ -408,8 +408,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return null; // Game continues
     }, []);
 
-    const refreshPlayersList = useCallback(async (roomId: bigint) => {
-        if (isTestMode || !publicClient) return;
+    // Helper to fetch data without updating state (for synchronous checks)
+    const fetchGameData = useCallback(async (roomId: bigint) => {
+        if (isTestMode || !publicClient) return null;
         try {
             const data = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
@@ -425,10 +426,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [roomId],
             }) as any;
 
-            // DEBUG: Log entire raw structure to debug alignment
-            console.log('[Phase Sync] Raw RoomData:', roomData);
+            // Fetch Mafia Consensus counts
+            const [mafiaCommitted, mafiaRevealed] = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'getMafiaConsensus',
+                args: [roomId],
+            }) as [number, number, string];
 
-            // ROBUST PARSING: Handle Array vs Object return
+            // Parse Room Data
             let phase: GamePhase;
             let dayCount: number;
             let aliveCount: number;
@@ -437,12 +443,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let phaseDeadline: number;
 
             if (Array.isArray(roomData)) {
-                // [id, host, roomName, phase, maxPlayers, playersCount, aliveCount, dayCount, currentShufflerIndex, ...]
-                // phase is index 3
-                // aliveCount is index 6
-                // dayCount is index 7
-                // committedCount is index 13
-                // revealedCount is index 14
                 phase = Number(roomData[3]) as GamePhase;
                 aliveCount = Number(roomData[6]);
                 dayCount = Number(roomData[7]);
@@ -458,110 +458,112 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 phaseDeadline = Number(roomData.phaseDeadline);
             }
 
-            // Fetch Mafia Consensus counts
-            const [mafiaCommitted, mafiaRevealed] = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'getMafiaConsensus',
-                args: [roomId],
-            }) as [number, number, string];
-
-            const mafiaCommittedCount = Number(mafiaCommitted);
-            const mafiaRevealedCount = Number(mafiaRevealed);
-
-            // DEBUG: Log current phase from contract
-            console.log('[Phase Sync]', {
-                contractPhase: phase,
-                phaseName: GamePhase[phase],
+            return {
+                rawPlayers: data,
+                phase,
                 dayCount,
                 aliveCount,
                 committedCount,
-                revealedCount
+                revealedCount,
+                phaseDeadline,
+                mafiaCommittedCount: Number(mafiaCommitted),
+                mafiaRevealedCount: Number(mafiaRevealed)
+            };
+        } catch (e) {
+            console.error("Fetch Game Data Error:", e);
+            return null;
+        }
+    }, [publicClient, isTestMode]);
+
+    const refreshPlayersList = useCallback(async (roomId: bigint) => {
+        const gameData = await fetchGameData(roomId);
+        if (!gameData) return;
+
+        const {
+            rawPlayers, phase, dayCount, revealedCount,
+            mafiaCommittedCount, mafiaRevealedCount, phaseDeadline
+        } = gameData;
+
+        // DEBUG: Log current phase from contract
+        console.log('[Phase Sync]', {
+            contractPhase: phase,
+            phaseName: GamePhase[phase],
+            dayCount
+        });
+
+        setGameState(prev => {
+            const existingRoles = new Map<string, Role>();
+            prev.players.forEach(p => {
+                if (p.role !== Role.UNKNOWN) {
+                    existingRoles.set(p.address.toLowerCase(), p.role);
+                }
             });
 
-            setGameState(prev => {
-                // Сохраняем текущие роли игроков (они известны только локально после расшифровки)
-                const existingRoles = new Map<string, Role>();
-                prev.players.forEach(p => {
-                    if (p.role !== Role.UNKNOWN) {
-                        existingRoles.set(p.address.toLowerCase(), p.role);
+            const formattedPlayers: Player[] = rawPlayers.map((p: any) => {
+                const flags = Number(p.flags);
+                const existingPlayer = prev.players.find(
+                    ep => ep.address.toLowerCase() === p.wallet.toLowerCase()
+                );
+                const isMe = p.wallet.toLowerCase() === address?.toLowerCase();
+                const playerAvatar = existingPlayer?.avatarUrl ||
+                    (isMe && avatarUrl) ||
+                    `https://picsum.photos/seed/${p.wallet}/200`;
+
+                let resolvedRole = existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN;
+
+                if (isMe && resolvedRole === Role.UNKNOWN && address) {
+                    const savedRole = localStorage.getItem(`my_role_${roomId}_${address.toLowerCase()}`);
+                    if (savedRole && Object.values(Role).includes(savedRole as Role)) {
+                        resolvedRole = savedRole as Role;
                     }
-                });
-
-                // V4: Player struct has flags instead of separate bools
-                const formattedPlayers: Player[] = data.map((p: any) => {
-                    const flags = Number(p.flags);
-
-                    // Битовые маски из контракта (см. SomniaMafiaV4.sol):
-                    // FLAG_CONFIRMED_ROLE = 1, FLAG_ACTIVE = 2, FLAG_HAS_VOTED = 4,
-                    // FLAG_HAS_COMMITTED = 8, FLAG_HAS_REVEALED = 16, FLAG_HAS_SHARED_KEYS = 32,
-                    // FLAG_DECK_COMMITTED = 64, FLAG_CLAIMED_MAFIA = 128
-
-                    // Preserve existing avatar or use uploaded one for current player
-                    const existingPlayer = gameState.players.find(
-                        ep => ep.address.toLowerCase() === p.wallet.toLowerCase()
-                    );
-                    const isMe = p.wallet.toLowerCase() === address?.toLowerCase();
-                    // Priority: 1. Existing avatar, 2. Uploaded avatar (for me), 3. Picsum fallback
-                    const playerAvatar = existingPlayer?.avatarUrl ||
-                        (isMe && avatarUrl) ||
-                        `https://picsum.photos/seed/${p.wallet}/200`;
-
-                    // NEW: Recovery of role from localStorage on refresh
-                    let resolvedRole = existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN;
-
-                    if (isMe && resolvedRole === Role.UNKNOWN && address) {
-                        const savedRole = localStorage.getItem(`my_role_${roomId}_${address.toLowerCase()}`);
-                        if (savedRole && Object.values(Role).includes(savedRole as Role)) {
-                            resolvedRole = savedRole as Role;
-                        }
-                    }
-
-                    return {
-                        id: p.wallet,
-                        name: p.nickname,
-                        address: p.wallet,
-                        role: resolvedRole,
-                        isAlive: (flags & FLAG_ACTIVE) !== 0,
-                        hasConfirmedRole: (flags & FLAG_CONFIRMED_ROLE) !== 0,
-                        hasDeckCommitted: (flags & 64) !== 0,
-                        hasVoted: (flags & 4) !== 0,           // Voting phase
-                        hasNightCommitted: (flags & 8) !== 0,  // Night phase commit
-                        hasNightRevealed: (flags & 16) !== 0,  // Night phase reveal
-                        avatarUrl: playerAvatar,
-                        votesReceived: Number(p.votesReceived || 0),
-                        status: (flags & FLAG_ACTIVE) !== 0 ? 'connected' : 'slashed'
-                    };
-                });
-
-                // Check win condition on frontend (contract doesn't know roles)
-                const winner = checkWinCondition(formattedPlayers, phase);
-
-                // ВАЖНО: Верим контракту. Переходим в ENDED только если контракт сказал ENDED,
-                // ЛИБО если мы на 100% уверены в победе (но лучше верить контракту).
-                let finalPhase = phase;
-
-                if (winner && phase !== GamePhase.ENDED) {
-                    console.log('[Win Condition Calculated Local]', winner);
-                    finalPhase = GamePhase.ENDED;
                 }
 
+                // FLAG Constants
+                const FLAG_CONFIRMED_ROLE = 1;
+                const FLAG_ACTIVE = 2;
+                const FLAG_HAS_VOTED = 4;
+                const FLAG_HAS_COMMITTED = 8;
+                const FLAG_HAS_REVEALED = 16;
+                const FLAG_DECK_COMMITTED = 64;
+
                 return {
-                    ...prev,
-                    players: formattedPlayers,
-                    phase: finalPhase,
-                    dayCount,
-                    revealedCount,
-                    mafiaCommittedCount,
-                    mafiaRevealedCount,
-                    phaseDeadline,
-                    winner: winner || prev.winner
+                    id: p.wallet,
+                    name: p.nickname,
+                    address: p.wallet,
+                    role: resolvedRole,
+                    isAlive: (flags & FLAG_ACTIVE) !== 0,
+                    hasConfirmedRole: (flags & FLAG_CONFIRMED_ROLE) !== 0,
+                    hasDeckCommitted: (flags & FLAG_DECK_COMMITTED) !== 0,
+                    hasVoted: (flags & FLAG_HAS_VOTED) !== 0,
+                    hasNightCommitted: (flags & FLAG_HAS_COMMITTED) !== 0,
+                    hasNightRevealed: (flags & FLAG_HAS_REVEALED) !== 0,
+                    avatarUrl: playerAvatar,
+                    votesReceived: Number(p.votesReceived || 0),
+                    status: (flags & FLAG_ACTIVE) !== 0 ? 'connected' : 'slashed'
                 };
             });
-        } catch (e) {
-            console.error("Sync error:", e);
-        }
-    }, [publicClient, checkWinCondition]);
+
+            const winner = checkWinCondition(formattedPlayers, phase);
+            let finalPhase = phase;
+            if (winner && phase !== GamePhase.ENDED) {
+                console.log('[Win Condition Calculated Local]', winner);
+                finalPhase = GamePhase.ENDED;
+            }
+
+            return {
+                ...prev,
+                players: formattedPlayers,
+                phase: finalPhase,
+                dayCount,
+                revealedCount,
+                mafiaCommittedCount,
+                mafiaRevealedCount,
+                phaseDeadline,
+                winner: winner || prev.winner
+            };
+        });
+        return gameData;
+    }, [fetchGameData, checkWinCondition, address, avatarUrl]);
 
     // Initial load
     useEffect(() => {
@@ -647,7 +649,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'createAndJoin',
                     args: [lobbyName, 4, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('0.1'),
+                    value: parseEther('0.5'),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -667,7 +669,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     pubKeyHex as `0x${string}`,      // bytes publicKey
                     sessionAddress as `0x${string}`  // address sessionAddress
                 ],
-                value: parseEther('0.1'),
+                value: parseEther('0.5'),
                 gas: gasLimit,
                 type: 'legacy',
             });
@@ -708,7 +710,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('0.1'),
+                    value: parseEther('0.5'),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -722,7 +724,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
-                value: parseEther('0.1'),
+                value: parseEther('0.5'),
                 gas: gasLimit,
                 type: 'legacy',
             });
@@ -1884,7 +1886,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     case 'NightFinalized':
                         if (args.killed && args.killed !== '0x0000000000000000000000000000000000000000') {
-                            const killedPlayer = gameState.players.find(p => p.address.toLowerCase() === (args.killed as string).toLowerCase());
+                            const killedStr = (args.killed as string).toLowerCase();
+                            let killedPlayer = gameState.players.find(p => p.address.toLowerCase() === killedStr);
+
+                            if (!killedPlayer) {
+                                console.warn("[NightFinalized] Killed player missing locally. Fetching fresh data...");
+                                const freshData = await refreshPlayersList(currentRoomId);
+                                if (freshData && freshData.rawPlayers) {
+                                    const rawKilled = freshData.rawPlayers.find((p: any) => p.wallet.toLowerCase() === killedStr);
+                                    if (rawKilled) killedPlayer = { name: rawKilled.nickname } as any;
+                                }
+                            }
+
                             const name = killedPlayer?.name || args.killed.slice(0, 6);
                             addLog(`Night Result: ${name} was killed by Mafia!`, "danger");
                         } else {
@@ -1897,7 +1910,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         break;
 
                     case 'PlayerEliminated':
-                        const elimPlayer = gameState.players.find(p => p.address.toLowerCase() === (args.player as string).toLowerCase());
+                        const elimStr = (args.player as string).toLowerCase();
+                        let elimPlayer = gameState.players.find(p => p.address.toLowerCase() === elimStr);
+
+                        if (!elimPlayer) {
+                            console.warn("[PlayerEliminated] Player missing locally. Fetching fresh data...");
+                            const freshData = await refreshPlayersList(currentRoomId);
+                            if (freshData && freshData.rawPlayers) {
+                                const rawElim = freshData.rawPlayers.find((p: any) => p.wallet.toLowerCase() === elimStr);
+                                if (rawElim) elimPlayer = { name: rawElim.nickname } as any;
+                            }
+                        }
+
                         const elimName = elimPlayer?.name || args.player?.slice(0, 6) || "Unknown";
                         addLog(`${elimName} eliminated: ${args.reason}`, "danger");
                         refreshPlayersList(currentRoomId);
@@ -1910,15 +1934,34 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     case 'VoteCast':
                         try {
-                            const voter = gameState.players.find(p => p.address.toLowerCase() === (args.voter as string).toLowerCase());
-                            const target = gameState.players.find(p => p.address.toLowerCase() === (args.target as string).toLowerCase());
+                            const voterStr = (args.voter as string).toLowerCase();
+                            const targetStr = (args.target as string).toLowerCase();
+
+                            // Try Local Lookup
+                            let voter = gameState.players.find(p => p.address.toLowerCase() === voterStr);
+                            let target = gameState.players.find(p => p.address.toLowerCase() === targetStr);
+
+                            // ROBUST FIX: If race condition (player missing), fetch fresh data IMMEDIATELY
+                            if (!voter || !target) {
+                                console.warn("[VoteCast] Player missing locally (race condition). Fetching fresh data...");
+                                const freshData = await refreshPlayersList(currentRoomId);
+                                if (freshData && freshData.rawPlayers) {
+                                    const rawVoter = freshData.rawPlayers.find((p: any) => p.wallet.toLowerCase() === voterStr);
+                                    const rawTarget = freshData.rawPlayers.find((p: any) => p.wallet.toLowerCase() === targetStr);
+
+                                    if (rawVoter) voter = { name: rawVoter.nickname } as any;
+                                    if (rawTarget) target = { name: rawTarget.nickname } as any;
+                                }
+                            }
+
                             const voterName = voter?.name || args.voter.slice(0, 6);
                             const targetName = target?.name || args.target.slice(0, 6);
+
                             addLog(`${voterName} voted for ${targetName}`, "info");
                         } catch (e) {
                             console.error("[VoteCast] Error logging:", e);
                         }
-                        // Still refresh players to update counts (if supported)
+                        // Refresh to ensure UI counts are correct
                         refreshPlayersList(currentRoomId);
                         break;
 

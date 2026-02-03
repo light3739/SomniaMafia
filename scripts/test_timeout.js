@@ -1,14 +1,14 @@
 /**
- * Test script to verify Night Phase Auto-Timeout
+ * Test script to verify Night Phase Auto-Timeout (Decentralized)
  * 
  * This simulates:
  * 1. Setting phaseDeadline to 10 seconds in the future
  * 2. Waiting for timeout to expire
- * 3. Checking if forcePhaseTimeout is called automatically
+ * 3. Checking if forcePhaseTimeout is called automatically by a RANDOM funded wallet
  */
 
-const { createPublicClient, createWalletClient, http, keccak256, encodeAbiParameters, parseAbiParameters } = require('viem');
-const { privateKeyToAccount } = require('viem/accounts');
+const { createPublicClient, createWalletClient, http, keccak256, encodeAbiParameters, parseAbiParameters, parseEther } = require('viem');
+const { privateKeyToAccount, generatePrivateKey } = require('viem/accounts');
 
 const MAFIA_CONTRACT_ADDRESS = "0xa962880aceeaf638c597d78d324dab6fab5981b1";
 const somniaChain = {
@@ -26,15 +26,32 @@ const MAFIA_ABI = [
 const PHASE_NAMES = ["LOBBY", "SHUFFLING", "REVEAL", "DAY", "VOTING", "NIGHT", "ENDED"];
 
 async function testTimeout() {
-    console.log("=== Night Phase Auto-Timeout Test ===\n");
+    console.log("=== Night Phase Auto-Timeout Test (Decentralized) ===\n");
 
     const hostPk = "0x031ccbb22faed61b423cb8d25f531a37934303ffb4293b7d17a041fbef1863ff";
     const client = createPublicClient({ chain: somniaChain, transport: http() });
     const hostAccount = privateKeyToAccount(hostPk);
     const hostWallet = createWalletClient({ account: hostAccount, chain: somniaChain, transport: http() });
 
-    // Use the room from the previous test (Room ID 2)
-    const roomId = 2n;
+    // 1. Setup "Good Samaritan" (Random player)
+    const samaritanPk = generatePrivateKey();
+    const samaritanAccount = privateKeyToAccount(samaritanPk);
+    const samaritanWallet = createWalletClient({ account: samaritanAccount, chain: somniaChain, transport: http() });
+
+    console.log(`Host: ${hostAccount.address}`);
+    console.log(`Samaritan (Random): ${samaritanAccount.address}`);
+
+    // Fund Samaritan
+    console.log("Funding Samaritan with 0.1 STT...");
+    const fundHash = await hostWallet.sendTransaction({
+        to: samaritanAccount.address,
+        value: parseEther("0.1")
+    });
+    await client.waitForTransactionReceipt({ hash: fundHash });
+    console.log("Funded! ✅");
+
+    // Use Room 35
+    const roomId = 35n;
 
     console.log(`[1] Checking Room #${roomId} state...`);
     const room = await client.readContract({
@@ -53,8 +70,6 @@ async function testTimeout() {
 
     if (phase !== 5) { // NIGHT = 5
         console.log(`\n⚠️  Room is not in NIGHT phase. Current phase: ${PHASE_NAMES[phase]}`);
-        console.log(`This test requires the room to be in NIGHT phase.`);
-        console.log(`Please run verify_live.js first to get a room to NIGHT phase.`);
         return;
     }
 
@@ -65,54 +80,10 @@ async function testTimeout() {
 
     const remaining = Math.max(0, phaseDeadline - now);
 
-    if (remaining > 0) {
-        console.log(`\n[2] Waiting ${remaining} seconds for timeout...`);
-        console.log(`   (You can also test frontend by opening http://localhost:3000/test)`);
-        console.log(`   (Select "Night - Timeout" from the sidebar)\n`);
-
-        // Wait for deadline
-        const interval = setInterval(async () => {
-            const nowTick = Math.floor(Date.now() / 1000);
-            const remainingTick = Math.max(0, phaseDeadline - nowTick);
-            process.stdout.write(`\r   Time remaining: ${remainingTick}s...`);
-
-            if (remainingTick === 0) {
-                clearInterval(interval);
-                console.log(`\n\n[3] Timeout reached! Triggering forcePhaseTimeout...`);
-
-                try {
-                    const tx = await hostWallet.writeContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MAFIA_ABI,
-                        functionName: 'forcePhaseTimeout',
-                        args: [roomId]
-                    });
-
-                    console.log(`   Transaction sent: ${tx}`);
-                    await client.waitForTransactionReceipt({ hash: tx });
-
-                    console.log(`\n✅ SUCCESS! Phase timeout executed.`);
-
-                    // Check new phase
-                    const newRoom = await client.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MAFIA_ABI,
-                        functionName: 'rooms',
-                        args: [roomId]
-                    });
-
-                    console.log(`\n[RESULT] New Phase: ${PHASE_NAMES[newRoom[3]]}`);
-                    console.log(`Game advanced automatically when timeout expired! ✅`);
-                } catch (e) {
-                    console.error(`\n❌ Error calling forcePhaseTimeout:`, e.message);
-                }
-            }
-        }, 1000);
-    } else {
-        console.log(`\n[2] Timeout already expired. Calling forcePhaseTimeout immediately...`);
-
+    const performTimeout = async () => {
+        console.log(`\n[3] Triggering forcePhaseTimeout as SAMARITAN (Not Host)...`);
         try {
-            const tx = await hostWallet.writeContract({
+            const tx = await samaritanWallet.writeContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'forcePhaseTimeout',
@@ -122,9 +93,9 @@ async function testTimeout() {
             console.log(`   Transaction sent: ${tx}`);
             await client.waitForTransactionReceipt({ hash: tx });
 
-            console.log(`\n✅ SUCCESS! Phase timeout executed.`);
+            console.log(`\n✅ SUCCESS! Phase timeout executed by NON-HOST.`);
 
-            // Check new phase  
+            // Check new phase
             const newRoom = await client.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
@@ -133,10 +104,26 @@ async function testTimeout() {
             });
 
             console.log(`\n[RESULT] New Phase: ${PHASE_NAMES[newRoom[3]]}`);
-            console.log(`Game advanced when timeout was triggered! ✅`);
         } catch (e) {
             console.error(`\n❌ Error calling forcePhaseTimeout:`, e.message);
         }
+    };
+
+    if (remaining > 0) {
+        console.log(`\n[2] Waiting ${remaining} seconds for timeout...`);
+        const interval = setInterval(async () => {
+            const nowTick = Math.floor(Date.now() / 1000);
+            const remainingTick = Math.max(0, phaseDeadline - nowTick);
+            process.stdout.write(`\r   Time remaining: ${remainingTick}s...`);
+
+            if (remainingTick === 0) {
+                clearInterval(interval);
+                await performTimeout();
+            }
+        }, 1000);
+    } else {
+        console.log(`\n[2] Timeout already expired.`);
+        await performTimeout();
     }
 }
 

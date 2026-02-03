@@ -2,7 +2,7 @@ const { createPublicClient, createWalletClient, http, parseEther, formatEther, k
 const { privateKeyToAccount, generatePrivateKey } = require('viem/accounts');
 
 // Configuration
-const MAFIA_CONTRACT_ADDRESS = "0xb58130d6183844b3bfb28ff1ffc96825eee82be3";
+const MAFIA_CONTRACT_ADDRESS = "0xa962880aceeaf638c597d78d324dab6fab5981b1";
 const somniaChain = {
     id: 50312,
     name: 'Somnia Testnet',
@@ -23,7 +23,8 @@ const MAFIA_ABI = [
     { "inputs": [{ "internalType": "uint256", "name": "roomId", "type": "uint256" }], "name": "startVoting", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
     { "inputs": [{ "internalType": "uint256", "name": "roomId", "type": "uint256" }, { "internalType": "address", "name": "target", "type": "address" }], "name": "vote", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
     { "inputs": [{ "internalType": "uint256", "name": "roomId", "type": "uint256" }, { "internalType": "bytes", "name": "encryptedMessage", "type": "bytes" }], "name": "sendMafiaMessage", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-    { "inputs": [{ "internalType": "uint256", "name": "roomId", "type": "uint256" }], "name": "rooms", "outputs": [{ "internalType": "uint64", "name": "id", "type": "uint64" }, { "internalType": "address", "name": "host", "type": "address" }, { "internalType": "string", "name": "name", "type": "string" }, { "internalType": "uint8", "name": "phase", "type": "uint8" }], "stateMutability": "view", "type": "function" }
+    { "inputs": [{ "internalType": "uint256", "name": "roomId", "type": "uint256" }], "name": "rooms", "outputs": [{ "internalType": "uint64", "name": "id", "type": "uint64" }, { "internalType": "address", "name": "host", "type": "address" }, { "internalType": "string", "name": "name", "type": "string" }, { "internalType": "uint8", "name": "phase", "type": "uint8" }, { "internalType": "uint32", "name": "phaseDeadline", "type": "uint32" }], "stateMutability": "view", "type": "function" },
+    { "inputs": [{ "internalType": "uint256", "name": "roomId", "type": "uint256" }], "name": "forcePhaseTimeout", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
 ];
 
 async function run() {
@@ -184,6 +185,45 @@ async function run() {
         args: [roomId]
     });
     console.log(`\nFinal Room Phase: ${history[3]}`);
+
+    // === NEW: Verify Decentralized Timeout ===
+    console.log("\n=== 7. Verified Decentralized Timeout ===");
+    const phaseDeadline = Number(history[10]);
+    const now = Math.floor(Date.now() / 1000);
+    const waitTime = phaseDeadline - now;
+
+    if (waitTime > 0) {
+        console.log(`Waiting ${waitTime}s + 30s buffer for Night Timeout (Time drift safety)...`);
+        await new Promise(r => setTimeout(r, (waitTime + 30) * 1000));
+    } else {
+        console.log(`Wait time calculated as ${waitTime}s. Waiting 60s just in case...`);
+        await new Promise(r => setTimeout(r, 60000));
+    }
+
+    // Use Bot 1 (bots[1]) because Bot 0 (bots[0]) was voted out!
+    console.log("Attempting to trigger timeout using BOT 1 (Non-Host, Alive)...");
+    try {
+        const timeoutTx = await bots[1].wal.writeContract({
+            address: MAFIA_CONTRACT_ADDRESS,
+            abi: MAFIA_ABI,
+            functionName: 'forcePhaseTimeout', // Note: ABI needs this function added if missing
+            args: [roomId]
+        });
+        console.log(`Timeout TX sent: ${timeoutTx}`);
+        await client.waitForTransactionReceipt({ hash: timeoutTx });
+        console.log("✅ SUCCESS! Bot 1 triggered timeout.");
+
+        const newHistory = await client.readContract({
+            address: MAFIA_CONTRACT_ADDRESS,
+            abi: MAFIA_ABI,
+            functionName: 'rooms',
+            args: [roomId]
+        });
+        console.log(`New Phase after Timeout: ${newHistory[3]} (Should be DAY/6=ENDED depending on logic)`);
+
+    } catch (e) {
+        console.error("❌ FAILED to trigger timeout:", e.message);
+    }
 }
 
 run();
