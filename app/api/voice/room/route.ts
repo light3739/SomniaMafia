@@ -28,7 +28,9 @@ export async function POST(request: NextRequest) {
                 audio: true,
                 video: false,
                 screen: false,
-                chat: true,
+                chat: false,
+                hide: false, // Don't hide user from room view
+                notify: false, // No join/leave notifications
                 token: {
                     username: userName || 'anonymous',
                     password: '',
