@@ -9,7 +9,7 @@ import { GamePhase, Player } from '../../types';
 import { Button } from '../ui/Button';
 import { Sun, Vote, Check, Clock, User, Skull, Mic, MicOff, ChevronRight } from 'lucide-react';
 import { GameLog } from './GameLog';
-import { VoiceChat } from './VoiceChatCustom';
+import { VoiceChat } from './VoiceChat';
 
 interface VoteState {
     myVote: string | null;
