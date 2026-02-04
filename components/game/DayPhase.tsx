@@ -515,7 +515,10 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                             userName={myPlayer.name}
                             isActive={true}
                             label="Day Phase Voice Chat"
+                            showTextChat={true}
                         />
+
+
                     </div>
                 )}
 

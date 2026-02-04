@@ -1,6 +1,6 @@
 "use client";
 
-import { LiveKitRoom, RoomAudioRenderer, ControlBar } from "@livekit/components-react";
+import { LiveKitRoom, RoomAudioRenderer, ControlBar, Chat } from "@livekit/components-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Volume2, VolumeX, X, Loader2, Users } from 'lucide-react';
@@ -12,6 +12,7 @@ interface LiveKitVoiceChatProps {
     label?: string;
     className?: string;
     onClose?: () => void;
+    showTextChat?: boolean; // Show text chat alongside voice
 }
 
 export function LiveKitVoiceChat({
@@ -21,6 +22,7 @@ export function LiveKitVoiceChat({
     label = 'Voice Chat',
     className = '',
     onClose,
+    showTextChat = false,
 }: LiveKitVoiceChatProps) {
     const [token, setToken] = useState("");
     const [error, setError] = useState<string | null>(null);
@@ -144,6 +146,22 @@ export function LiveKitVoiceChat({
                                         }}
                                         className="bg-gray-800/50 rounded-lg"
                                     />
+
+                                    {/* Text Chat */}
+                                    {showTextChat && (
+                                        <div className="mt-4 bg-purple-950/20 border border-purple-500/20 rounded-lg overflow-hidden">
+                                            <div className="flex items-center gap-2 p-2 border-b border-purple-500/20 bg-purple-950/30">
+                                                <span className="text-purple-400 text-xs font-medium">Text Chat</span>
+                                            </div>
+                                            <Chat
+                                                style={{
+                                                    height: '200px',
+                                                    background: 'transparent',
+                                                }}
+                                                className="livekit-chat-custom"
+                                            />
+                                        </div>
+                                    )}
                                 </LiveKitRoom>
 
                                 <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
@@ -153,6 +171,62 @@ export function LiveKitVoiceChat({
                             </div>
                         )}
                     </div>
+                )}
+
+                {/* Custom Styles for Chat */}
+                {showTextChat && (
+                    <style jsx global>{`
+                        .livekit-chat-custom {
+                            font-family: inherit;
+                        }
+                        
+                        .livekit-chat-custom input {
+                            background: rgba(0, 0, 0, 0.4) !important;
+                            border: 1px solid rgba(168, 85, 247, 0.3) !important;
+                            border-radius: 8px !important;
+                            color: white !important;
+                            padding: 8px 12px !important;
+                            font-size: 13px !important;
+                        }
+                        
+                        .livekit-chat-custom input::placeholder {
+                            color: rgba(255, 255, 255, 0.3) !important;
+                        }
+                        
+                        .livekit-chat-custom input:focus {
+                            outline: none !important;
+                            border-color: rgba(168, 85, 247, 0.5) !important;
+                        }
+                        
+                        .livekit-chat-custom button {
+                            background: rgba(168, 85, 247, 0.3) !important;
+                            border-radius: 8px !important;
+                            color: rgba(168, 85, 247, 1) !important;
+                            transition: all 0.2s !important;
+                        }
+                        
+                        .livekit-chat-custom button:hover {
+                            background: rgba(168, 85, 247, 0.4) !important;
+                        }
+                        
+                        .livekit-chat-custom [data-lk-message] {
+                            padding: 6px 12px !important;
+                            margin: 4px 0 !important;
+                            border-radius: 8px !important;
+                            background: rgba(168, 85, 247, 0.05) !important;
+                            font-size: 13px !important;
+                        }
+                        
+                        .livekit-chat-custom [data-lk-message-body] {
+                            color: rgba(255, 255, 255, 0.9) !important;
+                        }
+                        
+                        .livekit-chat-custom [data-lk-message-sender] {
+                            color: rgba(168, 85, 247, 0.8) !important;
+                            font-weight: 600 !important;
+                            font-size: 12px !important;
+                        }
+                    `}</style>
                 )}
             </motion.div>
         </AnimatePresence>

@@ -94,6 +94,7 @@ export default function TestVoicePage() {
                                     <li>Click "Join Voice Chat"</li>
                                     <li>Allow microphone access when prompted</li>
                                     <li>Your friend should do the same from another device/browser</li>
+                                    <li>Test the text chat below the voice controls!</li>
                                 </ol>
                             </div>
                         </div>
@@ -106,6 +107,7 @@ export default function TestVoicePage() {
                                 isActive={isActive}
                                 label={`Voice Room: ${roomId}`}
                                 className="w-full"
+                                showTextChat={true}
                             />
 
                             {/* Stop Button */}
@@ -123,7 +125,7 @@ export default function TestVoicePage() {
                                     ✓ Connected to room: <span className="font-bold">{roomId}</span>
                                 </p>
                                 <p className="text-xs text-gray-400 text-center mt-1">
-                                    Share this room name with your friend to test together
+                                    Try both voice and text chat!
                                 </p>
                             </div>
                         </div>
