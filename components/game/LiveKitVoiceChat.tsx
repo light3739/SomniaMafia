@@ -1,11 +1,11 @@
-// components/game/VoiceChat.tsx
-'use client';
+"use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import { LiveKitRoom, RoomAudioRenderer, ControlBar } from "@livekit/components-react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, Volume2, VolumeX, X, Loader2, Users } from 'lucide-react';
+import { Volume2, VolumeX, X, Loader2, Users } from 'lucide-react';
 
-interface VoiceChatProps {
+interface LiveKitVoiceChatProps {
     roomId: string;
     userName?: string;
     isActive: boolean;
@@ -14,65 +14,50 @@ interface VoiceChatProps {
     onClose?: () => void;
 }
 
-export function VoiceChat({
+export function LiveKitVoiceChat({
     roomId,
     userName = 'Player',
     isActive,
     label = 'Voice Chat',
     className = '',
     onClose,
-}: VoiceChatProps) {
-    const [joinUrl, setJoinUrl] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+}: LiveKitVoiceChatProps) {
+    const [token, setToken] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
-    const iframeRef = useRef<HTMLIFrameElement>(null);
 
-    // Fetch join URL from our API
     useEffect(() => {
-        if (!isActive || !roomId) return;
+        if (!isActive || !roomId) {
+            setToken("");
+            return;
+        }
 
-        const fetchJoinUrl = async () => {
-            setLoading(true);
-            setError(null);
-
+        (async () => {
             try {
-                const response = await fetch('/api/voice/room', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ roomId, userName }),
+                setError(null);
+                const resp = await fetch("/api/token", {
+                    method: "POST",
+                    body: JSON.stringify({ room: roomId, username: userName }),
+                    headers: { "Content-Type": "application/json" },
                 });
 
-                if (!response.ok) {
-                    throw new Error('Failed to create voice room');
+                if (!resp.ok) {
+                    throw new Error(`Failed to get token: ${resp.status}`);
                 }
 
-                const data = await response.json();
+                const data = await resp.json();
 
-                if (data.success && data.joinUrl) {
-                    setJoinUrl(data.joinUrl);
-                } else {
-                    throw new Error(data.error || 'Unknown error');
+                if (data.error) {
+                    throw new Error(data.error);
                 }
-            } catch (err) {
-                console.error('[VoiceChat] Error:', err);
-                setError(err instanceof Error ? err.message : 'Failed to connect');
-            } finally {
-                setLoading(false);
-            }
-        };
 
-        fetchJoinUrl();
-    }, [roomId, userName, isActive]);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (iframeRef.current) {
-                iframeRef.current.src = 'about:blank';
+                setToken(data.token);
+            } catch (e) {
+                console.error('[LiveKitVoiceChat] Error:', e);
+                setError(e instanceof Error ? e.message : 'Failed to connect');
             }
-        };
-    }, []);
+        })();
+    }, [isActive, roomId, userName]);
 
     if (!isActive) return null;
 
@@ -117,7 +102,7 @@ export function VoiceChat({
                 {/* Content */}
                 {!isMinimized && (
                     <div className="p-4">
-                        {loading && (
+                        {!token && !error && (
                             <div className="flex flex-col items-center justify-center py-8 gap-3">
                                 <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
                                 <p className="text-gray-400 text-sm">Connecting to voice...</p>
@@ -136,19 +121,30 @@ export function VoiceChat({
                             </div>
                         )}
 
-                        {joinUrl && !loading && !error && (
+                        {token && !error && (
                             <div className="relative">
-                                <iframe
-                                    ref={iframeRef}
-                                    src={joinUrl}
-                                    className="w-full h-[300px] rounded-lg border border-purple-500/20 bg-black"
-                                    allow="camera; microphone; display-capture; autoplay; clipboard-write"
-                                    allowFullScreen
-                                    title="Voice Chat"
+                                <LiveKitRoom
+                                    video={false}
+                                    audio={true}
+                                    token={token}
+                                    serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
+                                    data-lk-theme="default"
                                     style={{
-                                        colorScheme: 'dark'
+                                        minHeight: '200px',
+                                        background: 'transparent',
                                     }}
-                                />
+                                    className="livekit-room-custom"
+                                >
+                                    <RoomAudioRenderer />
+                                    <ControlBar
+                                        controls={{
+                                            camera: false,
+                                            screenShare: false,
+                                            chat: false,
+                                        }}
+                                        className="bg-gray-800/50 rounded-lg"
+                                    />
+                                </LiveKitRoom>
 
                                 <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
                                     <Users className="w-3 h-3" />
