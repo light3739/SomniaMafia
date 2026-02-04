@@ -1,126 +1,144 @@
-// app/test-voice/page.tsx
 'use client';
 
-import React, { useState } from 'react';
-import { VoiceChat } from '@/components/game/VoiceChat';
-import { Mic, Users, Settings } from 'lucide-react';
+import { useState } from 'react';
+import { LiveKitVoiceChat } from '@/components/game/LiveKitVoiceChat';
+import { Button } from '@/components/ui/Button';
+import { ArrowLeft, Volume2 } from 'lucide-react';
+import Link from 'next/link';
 
 export default function TestVoicePage() {
-    const [roomId, setRoomId] = useState('test-room-' + Math.random().toString(36).substring(7));
-    const [userName, setUserName] = useState('TestUser');
+    const [roomId, setRoomId] = useState('');
+    const [userName, setUserName] = useState('');
     const [isActive, setIsActive] = useState(false);
 
+    const handleStart = () => {
+        if (roomId.trim() && userName.trim()) {
+            setIsActive(true);
+        }
+    };
+
+    const handleStop = () => {
+        setIsActive(false);
+    };
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-8">
-            <div className="max-w-4xl mx-auto">
+        <div className="min-h-screen bg-gradient-to-b from-black via-[#0a0a0a] to-black flex flex-col items-center justify-center p-4">
+            <div className="max-w-2xl w-full">
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <h1 className="text-4xl font-bold text-white mb-2 flex items-center justify-center gap-3">
-                        <Mic className="w-10 h-10 text-purple-400" />
-                        Voice Chat Test
-                    </h1>
-                    <p className="text-gray-400">Test голосового чата для Somnia Mafia</p>
+                    <div className="flex items-center justify-center gap-3 mb-4">
+                        <Volume2 className="w-8 h-8 text-purple-400" />
+                        <h1 className="text-4xl font-['Playfair_Display'] text-white">
+                            Voice Chat Test
+                        </h1>
+                    </div>
+                    <p className="text-gray-400">
+                        Test LiveKit voice chat with your friends
+                    </p>
                 </div>
 
-                {/* Settings Panel */}
-                <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl border border-purple-500/30 p-6 mb-6">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Settings className="w-5 h-5 text-purple-400" />
-                        <h2 className="text-xl font-semibold text-white">Настройки</h2>
-                    </div>
+                {/* Main Content */}
+                <div className="bg-gray-900/50 border border-purple-500/30 rounded-lg p-6 backdrop-blur-sm">
+                    {!isActive ? (
+                        <div className="space-y-4">
+                            {/* Room ID Input */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Room Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={roomId}
+                                    onChange={(e) => setRoomId(e.target.value)}
+                                    placeholder="Enter room name (e.g., test-room-123)"
+                                    className="w-full px-4 py-3 bg-black/40 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 transition-colors"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Share this room name with your friend to join the same voice chat
+                                </p>
+                            </div>
 
-                    <div className="space-y-4">
-                        {/* Room ID */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Room ID
-                            </label>
-                            <input
-                                type="text"
-                                value={roomId}
-                                onChange={(e) => setRoomId(e.target.value)}
-                                className="w-full px-4 py-2 bg-gray-700/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                                placeholder="test-room-123"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                                Несколько пользователей с одинаковым Room ID попадут в одну комнату
-                            </p>
+                            {/* Username Input */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Your Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={userName}
+                                    onChange={(e) => setUserName(e.target.value)}
+                                    placeholder="Enter your name"
+                                    className="w-full px-4 py-3 bg-black/40 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 transition-colors"
+                                />
+                            </div>
+
+                            {/* Start Button */}
+                            <Button
+                                onClick={handleStart}
+                                disabled={!roomId.trim() || !userName.trim()}
+                                variant="primary"
+                                className="w-full h-12 text-lg"
+                            >
+                                <Volume2 className="w-5 h-5 mr-2" />
+                                Join Voice Chat
+                            </Button>
+
+                            {/* Instructions */}
+                            <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4 mt-6">
+                                <h3 className="text-sm font-semibold text-purple-300 mb-2">
+                                    How to test:
+                                </h3>
+                                <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
+                                    <li>Enter a room name (both you and your friend should use the same name)</li>
+                                    <li>Enter your name</li>
+                                    <li>Click "Join Voice Chat"</li>
+                                    <li>Allow microphone access when prompted</li>
+                                    <li>Your friend should do the same from another device/browser</li>
+                                </ol>
+                            </div>
                         </div>
-
-                        {/* User Name */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Your Name
-                            </label>
-                            <input
-                                type="text"
-                                value={userName}
-                                onChange={(e) => setUserName(e.target.value)}
-                                className="w-full px-4 py-2 bg-gray-700/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                                placeholder="Player1"
+                    ) : (
+                        <div className="space-y-4">
+                            {/* Active Voice Chat */}
+                            <LiveKitVoiceChat
+                                roomId={roomId}
+                                userName={userName}
+                                isActive={isActive}
+                                label={`Voice Room: ${roomId}`}
+                                className="w-full"
                             />
+
+                            {/* Stop Button */}
+                            <Button
+                                onClick={handleStop}
+                                variant="secondary"
+                                className="w-full h-12"
+                            >
+                                Leave Voice Chat
+                            </Button>
+
+                            {/* Info */}
+                            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
+                                <p className="text-sm text-green-300 text-center">
+                                    ✓ Connected to room: <span className="font-bold">{roomId}</span>
+                                </p>
+                                <p className="text-xs text-gray-400 text-center mt-1">
+                                    Share this room name with your friend to test together
+                                </p>
+                            </div>
                         </div>
-
-                        {/* Connect Button */}
-                        <button
-                            onClick={() => setIsActive(!isActive)}
-                            className={`w-full py-3 px-6 rounded-lg font-semibold transition-all ${isActive
-                                    ? 'bg-red-500 hover:bg-red-600 text-white'
-                                    : 'bg-purple-500 hover:bg-purple-600 text-white'
-                                }`}
-                        >
-                            {isActive ? '🔴 Disconnect' : '🎙️ Connect to Voice Chat'}
-                        </button>
-                    </div>
+                    )}
                 </div>
 
-                {/* Instructions */}
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-6 mb-6">
-                    <h3 className="text-lg font-semibold text-blue-300 mb-3 flex items-center gap-2">
-                        <Users className="w-5 h-5" />
-                        Как тестировать:
-                    </h3>
-                    <ol className="space-y-2 text-gray-300 text-sm">
-                        <li className="flex gap-2">
-                            <span className="text-purple-400 font-bold">1.</span>
-                            <span>Откройте эту страницу в нескольких вкладках/окнах (или на разных устройствах)</span>
-                        </li>
-                        <li className="flex gap-2">
-                            <span className="text-purple-400 font-bold">2.</span>
-                            <span>Используйте одинаковый <code className="bg-gray-700 px-1 rounded">Room ID</code> во всех вкладках</span>
-                        </li>
-                        <li className="flex gap-2">
-                            <span className="text-purple-400 font-bold">3.</span>
-                            <span>Нажмите "Connect to Voice Chat" в каждой вкладке</span>
-                        </li>
-                        <li className="flex gap-2">
-                            <span className="text-purple-400 font-bold">4.</span>
-                            <span>Разрешите доступ к микрофону когда браузер спросит</span>
-                        </li>
-                        <li className="flex gap-2">
-                            <span className="text-purple-400 font-bold">5.</span>
-                            <span>Говорите в одной вкладке и слушайте в другой!</span>
-                        </li>
-                    </ol>
-                </div>
-
-                {/* Voice Chat Component */}
-                {isActive && (
-                    <div className="animate-fadeIn">
-                        <VoiceChat
-                            roomId={roomId}
-                            userName={userName}
-                            isActive={isActive}
-                            label="Test Voice Room"
-                            className="w-full"
-                        />
-                    </div>
-                )}
-
-                {/* Stats */}
-                <div className="mt-6 text-center text-sm text-gray-500">
-                    <p>Status: {isActive ? '🟢 Active' : '⚫ Inactive'}</p>
-                    <p className="mt-1">Room: {roomId}</p>
+                {/* Back Link */}
+                <div className="mt-6 text-center">
+                    <Link
+                        href="/"
+                        className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back to Home
+                    </Link>
                 </div>
             </div>
         </div>

@@ -9,7 +9,7 @@ import { GamePhase, Player } from '../../types';
 import { Button } from '../ui/Button';
 import { Sun, Vote, Check, Clock, User, Skull, Mic, MicOff, ChevronRight } from 'lucide-react';
 import { GameLog } from './GameLog';
-import { VoiceChat } from './VoiceChat';
+import { LiveKitVoiceChat } from './LiveKitVoiceChat';
 
 interface VoteState {
     myVote: string | null;
@@ -510,7 +510,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                 {/* Voice Chat - Active during discussion or voting */}
                 {(isDayPhase || isVotingPhase) && currentRoomId && myPlayer && (
                     <div className="mb-4">
-                        <VoiceChat
+                        <LiveKitVoiceChat
                             roomId={`${currentRoomId}-day`}
                             userName={myPlayer.name}
                             isActive={true}
