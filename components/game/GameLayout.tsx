@@ -76,7 +76,7 @@ const PLAYER_POSITIONS = [
 const BASE_WIDTH = 1488;
 const BASE_HEIGHT = 1024;
 
-export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNightState }) => {
+export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionState?: any }> = ({ initialNightState, initialDiscussionState }) => {
     const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const players = gameState.players || [];
@@ -454,7 +454,7 @@ export const GameLayout: React.FC<{ initialNightState?: any }> = ({ initialNight
                     {/* Day/Voting Phase Content */}
                     {!showVotingResults && !isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) && (
                         <div className="w-full h-full">
-                            <DayPhase />
+                            <DayPhase initialDiscussionState={initialDiscussionState} />
                         </div>
                     )}
 

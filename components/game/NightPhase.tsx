@@ -872,16 +872,20 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                     />
 
                                     {/* Waiting Message - Absolute at the bottom of the content area, delayed after Action Completed */}
-                                    {nightState.hasRevealed && (
-                                        <motion.div
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            transition={{ delay: 1.5, duration: 0.5 }}
-                                            className="absolute top-full left-1/2 -translate-x-1/2 mt-4 whitespace-nowrap"
-                                        >
-                                            <p className="text-white/60 text-xs tracking-[0.4em] uppercase animate-pulse">Waiting for dawn</p>
-                                        </motion.div>
-                                    )}
+                                    {/* For Detective: wait until investigationResult is available (same condition as Action Completed badge) */}
+                                    <AnimatePresence>
+                                        {nightState.hasRevealed && (myRole !== Role.DETECTIVE || nightState.investigationResult !== null) && (
+                                            <motion.div
+                                                key="waiting-for-dawn"
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                transition={{ delay: 0.5, duration: 0.5 }}
+                                                className="absolute top-full left-1/2 -translate-x-1/2 mt-4 whitespace-nowrap"
+                                            >
+                                                <p className="text-white/60 text-xs tracking-[0.4em] uppercase animate-pulse">Waiting for dawn</p>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                             </motion.div>
                         ) : null}
