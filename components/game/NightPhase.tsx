@@ -871,11 +871,16 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                         gameState={gameState}
                                     />
 
-                                    {/* Waiting Message - Absolute at the bottom of the content area */}
+                                    {/* Waiting Message - Absolute at the bottom of the content area, delayed after Action Completed */}
                                     {nightState.hasRevealed && (
-                                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 whitespace-nowrap">
+                                        <motion.div
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            transition={{ delay: 1.5, duration: 0.5 }}
+                                            className="absolute top-full left-1/2 -translate-x-1/2 mt-4 whitespace-nowrap"
+                                        >
                                             <p className="text-white/60 text-xs tracking-[0.4em] uppercase animate-pulse">Waiting for dawn</p>
-                                        </div>
+                                        </motion.div>
                                     )}
                                 </div>
                             </motion.div>
