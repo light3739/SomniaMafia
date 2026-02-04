@@ -21,6 +21,7 @@ import { MafiaChat } from './game/MafiaChat';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../contexts/GameContext';
 import { Skull, Shield, Search, Users, EyeOff } from 'lucide-react';
+import { MicButton } from './game/MicButton';
 
 // Wrapper for testing VotingAnnouncement state
 const VotingAnnouncementWrapper = () => {
@@ -134,35 +135,87 @@ const NightPhaseTestWrapper: React.FC<{ testRole: Role }> = ({ testRole }) => {
     return <GameLayout />;
 };
 
-// Wrapper for Day phase testing
+// Wrapper for Day phase testing with discussion simulation
 const DayPhaseTestWrapper: React.FC = () => {
-    const { setGameState } = useGameContext();
+    const { setGameState, setCurrentRoomId, setIsTestMode } = useGameContext();
     const [isReady, setIsReady] = useState(false);
+    const [isMyTurn, setIsMyTurn] = useState(true);
+    const [speakerIndex, setSpeakerIndex] = useState(0);
+
+    const players = generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS);
 
     useEffect(() => {
+        setIsTestMode(true);
+        setCurrentRoomId(BigInt(12345));
         setGameState({
             phase: GamePhase.DAY,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
-            players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS),
+            players: players,
             logs: [
-                { id: '1', timestamp: '12:00:00', message: 'Day 1 begins!', type: 'phase' }
+                { id: '1', timestamp: '12:00:00', message: 'Day 1 begins!', type: 'phase' },
+                { id: '2', timestamp: '12:00:05', message: 'Discussion phase started.', type: 'info' }
             ],
             revealedCount: 0,
             mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
-            phaseDeadline: Math.floor(Date.now() / 1000) + 60,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 120,
             winner: null,
             mafiaMessages: []
         });
         setTimeout(() => setIsReady(true), 50);
-    }, [setGameState]);
+    }, [setGameState, setCurrentRoomId, setIsTestMode]);
 
     if (!isReady) {
         return <div className="w-full h-full flex items-center justify-center text-white">Loading Day Phase...</div>;
     }
 
-    return <GameLayout />;
+    return (
+        <div className="w-full h-full relative">
+            {/* Control Panel */}
+            <div className="fixed top-4 right-4 z-[1000] bg-black/90 p-4 rounded-xl border border-[#916A47]/50 space-y-3">
+                <h4 className="text-[#916A47] font-bold text-sm">🎤 Mic Test Controls</h4>
+                <button
+                    onClick={() => setIsMyTurn(!isMyTurn)}
+                    className={`w-full px-4 py-2 rounded-lg font-medium text-sm ${isMyTurn ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'
+                        }`}
+                >
+                    {isMyTurn ? '✓ My Turn to Speak' : '✗ Not My Turn'}
+                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setSpeakerIndex(prev => Math.max(0, prev - 1))}
+                        className="px-3 py-1 bg-white/10 text-white rounded text-xs"
+                    >
+                        ← Prev
+                    </button>
+                    <span className="text-white/70 text-xs flex-1 text-center py-1">
+                        Speaker {speakerIndex + 1}/{players.length}
+                    </span>
+                    <button
+                        onClick={() => setSpeakerIndex(prev => Math.min(players.length - 1, prev + 1))}
+                        className="px-3 py-1 bg-white/10 text-white rounded text-xs"
+                    >
+                        Next →
+                    </button>
+                </div>
+            </div>
+
+            {/* GameLayout with discussion state override */}
+            <GameLayout
+                initialDiscussionState={{
+                    active: true,
+                    finished: false,
+                    phase: 'speaking' as const,
+                    currentSpeakerIndex: speakerIndex,
+                    currentSpeakerAddress: players[speakerIndex]?.address || null,
+                    totalSpeakers: players.length,
+                    timeRemaining: 45,
+                    isMyTurn: isMyTurn
+                }}
+            />
+        </div>
+    );
 };
 
 // Wrapper for Voting phase testing
@@ -1256,6 +1309,78 @@ const SpeechWarningGlowTestWrapper: React.FC = () => {
     );
 };
 
+// Test wrapper for MicButton component
+const MicButtonTestWrapper: React.FC = () => {
+    const [isMyTurn, setIsMyTurn] = useState(false);
+
+    return (
+        <div className="flex flex-col items-center gap-6 p-8">
+            {/* Header */}
+            <div className="text-center">
+                <h3 className="text-xl font-bold text-white mb-2">Microphone Button</h3>
+                <p className="text-white/50 text-sm">For voice chat during discussion phase</p>
+            </div>
+
+            {/* Controls */}
+            <div className="flex gap-4">
+                <button
+                    onClick={() => setIsMyTurn(!isMyTurn)}
+                    className={`px-6 py-3 rounded-xl font-medium transition-all ${isMyTurn
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-300'
+                        }`}
+                >
+                    {isMyTurn ? '✓ My Turn' : '✗ Not My Turn'}
+                </button>
+            </div>
+
+            {/* Status Display */}
+            <div className="text-center space-y-2">
+                <div className={`text-sm font-medium ${isMyTurn ? 'text-green-400' : 'text-gray-500'}`}>
+                    {isMyTurn ? '🎤 You can speak now!' : '🔇 Wait for your turn...'}
+                </div>
+            </div>
+
+            {/* Main Button Display */}
+            <div className="p-8 bg-black/40 rounded-2xl border border-white/10">
+                <MicButton
+                    roomId="test-room-123"
+                    userName="Test Player"
+                    isMyTurn={isMyTurn}
+                />
+            </div>
+
+            {/* Legend */}
+            <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-gray-800/50 border border-gray-600/30 flex items-center justify-center opacity-50">
+                        <span className="text-gray-500">🔇</span>
+                    </div>
+                    <span className="text-white/50">Not your turn</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-gray-800/80 border-2 border-gray-500/50 flex items-center justify-center">
+                        <span className="text-gray-300">🔇</span>
+                    </div>
+                    <span className="text-white/50">Your turn (muted)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-green-600 border-2 border-green-400/70 flex items-center justify-center shadow-[0_0_15px_rgba(34,197,94,0.4)]">
+                        <span className="text-white">🎤</span>
+                    </div>
+                    <span className="text-white/50">Speaking</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-gray-800/50 flex items-center justify-center animate-pulse">
+                        <span className="text-[#916A47]">⟳</span>
+                    </div>
+                    <span className="text-white/50">Connecting</span>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const TestPage: React.FC = () => {
     const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
@@ -1280,6 +1405,7 @@ const TestPage: React.FC = () => {
         { name: 'NightAnnouncement', group: 'Game Components', component: <NightAnnouncementWrapper /> },
         { name: 'Mafia Chat', group: 'Game Components', component: <MafiaChatTestWrapper /> },
         { name: 'Mafia Consensus', group: 'Game Components', component: <MafiaConsensusTestWrapper /> },
+        { name: 'Mic Button', group: 'Game Components', component: <MicButtonTestWrapper /> },
 
         // Game Phases (Test different phases and roles)
         { name: 'Night - Mafia', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.MAFIA} /> },
