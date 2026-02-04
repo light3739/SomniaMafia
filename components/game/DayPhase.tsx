@@ -9,7 +9,7 @@ import { GamePhase, Player } from '../../types';
 import { Button } from '../ui/Button';
 import { Sun, Vote, Check, Clock, User, Skull, Mic, MicOff, ChevronRight } from 'lucide-react';
 import { GameLog } from './GameLog';
-import { LiveKitVoiceChat } from './LiveKitVoiceChat';
+import { MicButton } from './MicButton';
 
 interface VoteState {
     myVote: string | null;
@@ -20,9 +20,20 @@ interface VoteState {
 interface DayPhaseProps {
     isNightTransition?: boolean;
     delaySeconds?: number;
+    initialDiscussionState?: {
+        active: boolean;
+        finished: boolean;
+        phase: 'initial_delay' | 'speaking' | 'finished';
+        currentSpeakerIndex: number;
+        currentSpeakerAddress: string | null;
+        totalSpeakers: number;
+        timeRemaining: number;
+        delayDuration?: number;
+        isMyTurn: boolean;
+    };
 }
 
-export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition, delaySeconds }) => {
+export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition, delaySeconds, initialDiscussionState }) => {
     const {
         gameState,
         currentRoomId,
@@ -55,7 +66,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
     });
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // Discussion Speech Logic (synced with backend)
+    // Discussion Speech Logic (synced with backend or from initialDiscussionState)
     const [discussionState, setDiscussionState] = useState<{
         active: boolean;
         finished: boolean;
@@ -66,7 +77,14 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         timeRemaining: number;
         delayDuration?: number;
         isMyTurn: boolean;
-    } | null>(null);
+    } | null>(initialDiscussionState || null);
+
+    // Update discussionState when initialDiscussionState changes (for test mode)
+    useEffect(() => {
+        if (initialDiscussionState) {
+            setDiscussionState(initialDiscussionState);
+        }
+    }, [initialDiscussionState]);
 
     const isVotingPhase = gameState.phase === GamePhase.VOTING;
     const isDayPhase = gameState.phase === GamePhase.DAY;
@@ -498,6 +516,17 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     )}
                 </div>
 
+                {/* Microphone Button - Only during active discussion */}
+                {isDayPhase && discussionState?.active && currentRoomId && myPlayer && (
+                    <div className="flex justify-center mb-4">
+                        <MicButton
+                            roomId={`${currentRoomId}-day`}
+                            userName={myPlayer.name}
+                            isMyTurn={discussionState?.isMyTurn || false}
+                        />
+                    </div>
+                )}
+
                 {/* Event Feed - Restored height */}
                 <div className="mb-4 h-[360px] w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
                     <div className="absolute top-2 right-3 z-10 flex gap-1">
@@ -506,21 +535,6 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     </div>
                     <GameLog />
                 </div>
-
-                {/* Voice Chat - Active during discussion or voting */}
-                {(isDayPhase || isVotingPhase) && currentRoomId && myPlayer && (
-                    <div className="mb-4">
-                        <LiveKitVoiceChat
-                            roomId={`${currentRoomId}-day`}
-                            userName={myPlayer.name}
-                            isActive={true}
-                            label="Day Phase Voice Chat"
-                            showTextChat={true}
-                        />
-
-
-                    </div>
-                )}
 
                 {/* Actions */}
                 <div className="space-y-3">
