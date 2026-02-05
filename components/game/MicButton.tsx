@@ -192,7 +192,7 @@ export function MicButton({
                 audioContainerRef.current.innerHTML = '';
             }
         };
-    }, [roomId, userName, attachRemoteAudio, detachRemoteAudio]);
+    }, [roomId]); // Only reconnect if roomId changes
 
     // Toggle microphone
     const toggleMic = useCallback(async () => {

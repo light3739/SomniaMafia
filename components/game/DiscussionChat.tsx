@@ -76,7 +76,8 @@ export const DiscussionChat: React.FC<DiscussionChatProps> = ({ isExpanded, onTo
 
     // Connect to LiveKit room for data channel
     useEffect(() => {
-        if (!isExpanded || !currentRoomId || gameState.phase !== GamePhase.DAY) {
+        // Connect in background regardless of isExpanded state
+        if (!currentRoomId || gameState.phase !== GamePhase.DAY) {
             return;
         }
 
@@ -151,10 +152,12 @@ export const DiscussionChat: React.FC<DiscussionChatProps> = ({ isExpanded, onTo
 
         return () => {
             cancelled = true;
-            // Don't disconnect - MicButton might be using the same room
-            // roomRef.current?.disconnect();
+            if (roomRef.current) {
+                roomRef.current.disconnect();
+                roomRef.current = null;
+            }
         };
-    }, [isExpanded, currentRoomId, gameState.phase, myPlayer?.name, handleDataReceived]);
+    }, [currentRoomId, gameState.phase, myPlayer?.name, handleDataReceived]);
 
     // Clean up on phase change
     useEffect(() => {
