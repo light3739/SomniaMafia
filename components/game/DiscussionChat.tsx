@@ -109,7 +109,8 @@ export const DiscussionChat: React.FC<DiscussionChatProps> = ({ isExpanded, onTo
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         room: roomName,
-                        username: userNameRef.current
+                        // Add _chat suffix to avoid DUPLICATE_IDENTITY with MicButton
+                        username: `${userNameRef.current}_chat`
                     })
                 });
 
