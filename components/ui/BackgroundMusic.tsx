@@ -15,7 +15,11 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAudioSettings } from '@/contexts/AudioContext';
 
-export const BackgroundMusic: React.FC = () => {
+interface BackgroundMusicProps {
+    additionalButtons?: React.ReactNode;
+}
+
+export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButtons }) => {
     const { masterVolume, setMasterVolume } = useAudioSettings();
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -182,6 +186,14 @@ export const BackgroundMusic: React.FC = () => {
                 >
                     {showSettings ? <ChevronUp size={20} /> : <Volume2 size={20} />}
                 </button>
+
+                {/* Additional Buttons (Chat, etc.) */}
+                {additionalButtons && (
+                    <>
+                        <div className="w-[1px] h-6 bg-white/10 mx-1" />
+                        {additionalButtons}
+                    </>
+                )}
             </div>
         </div>
     );
