@@ -516,17 +516,6 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     )}
                 </div>
 
-                {/* Microphone Button - Only during active discussion */}
-                {isDayPhase && discussionState?.active && currentRoomId && myPlayer && (
-                    <div className="flex justify-center mb-4">
-                        <MicButton
-                            roomId={`${currentRoomId}-day`}
-                            userName={myPlayer.name}
-                            isMyTurn={discussionState?.isMyTurn || false}
-                        />
-                    </div>
-                )}
-
                 {/* Event Feed - Restored height */}
                 <div className="mb-4 h-[360px] w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
                     <div className="absolute top-2 right-3 z-10 flex gap-1">
@@ -551,28 +540,38 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                             >
                                 {discussionState?.active ? (
                                     <>
-                                        {/* Timer Display (Handles both Delay and Speaking phases) */}
-                                        <div className="w-full py-1 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
-                                            {discussionState?.phase === 'initial_delay' ? (
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <Clock className="w-4 h-4 text-[#916A47]" />
-                                                    <span className="text-xl font-bold text-white tabular-nums">
-                                                        {smoothTimeRemaining}s
-                                                    </span>
-                                                    <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
-                                                        Starting Discussion...
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <Clock className="w-4 h-4 text-[#916A47]" />
-                                                    <span className="text-xl font-bold text-white tabular-nums">
-                                                        {Math.floor(smoothTimeRemaining / 60)}:{String(smoothTimeRemaining % 60).padStart(2, '0')}
-                                                    </span>
-                                                    <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
-                                                        {discussionState?.isMyTurn ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
-                                                    </span>
-                                                </div>
+                                        {/* Timer Display with Mic Button */}
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-1 py-1 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                                {discussionState?.phase === 'initial_delay' ? (
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <Clock className="w-4 h-4 text-[#916A47]" />
+                                                        <span className="text-xl font-bold text-white tabular-nums">
+                                                            {smoothTimeRemaining}s
+                                                        </span>
+                                                        <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
+                                                            Starting Discussion...
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <Clock className="w-4 h-4 text-[#916A47]" />
+                                                        <span className="text-xl font-bold text-white tabular-nums">
+                                                            {Math.floor(smoothTimeRemaining / 60)}:{String(smoothTimeRemaining % 60).padStart(2, '0')}
+                                                        </span>
+                                                        <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
+                                                            {discussionState?.isMyTurn ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {/* Mic Button - Right of timer */}
+                                            {currentRoomId && myPlayer && (
+                                                <MicButton
+                                                    roomId={`${currentRoomId}-day`}
+                                                    userName={myPlayer.name}
+                                                    isMyTurn={discussionState?.isMyTurn || false}
+                                                />
                                             )}
                                         </div>
 

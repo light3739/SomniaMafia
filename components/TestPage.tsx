@@ -16,6 +16,7 @@ import { RoleReveal } from './game/RoleReveal';
 import { PlayerSpot } from './game/PlayerSpot';
 import { GamePhase, Role, Player, MafiaChatMessage } from '../types';
 import { VotingAnnouncement } from './game/VotingAnnouncement';
+import { PostVotingTransition } from './game/PostVotingTransition';
 import { NightAnnouncement } from './game/NightAnnouncement';
 import { MafiaChat } from './game/MafiaChat';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -720,7 +721,52 @@ const GameOverTestWrapper: React.FC<{ winner: 'MAFIA' | 'TOWN' }> = ({ winner })
     return <GameLayout />;
 };
 
+// Wrapper for testing PostVotingTransition (Voting Results screen)
+const PostVotingTransitionTestWrapper: React.FC = () => {
+    const { setGameState, addLog } = useGameContext();
+    const [isReady, setIsReady] = useState(false);
+
+    useEffect(() => {
+        // Set up mock game state with some logs to display
+        setGameState({
+            phase: GamePhase.VOTING,
+            dayCount: 1,
+            myPlayerId: TEST_ADDRESS,
+            players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS),
+            logs: [
+                { id: '1', timestamp: '12:00:00', message: 'Day 1 voting started', type: 'phase' },
+                { id: '2', timestamp: '12:05:00', message: 'Alice voted for Charlie', type: 'info' },
+                { id: '3', timestamp: '12:05:15', message: 'Bob voted for Charlie', type: 'info' },
+                { id: '4', timestamp: '12:05:30', message: 'Charlie voted for Alice', type: 'info' },
+                { id: '5', timestamp: '12:05:45', message: 'Diana voted for Charlie', type: 'info' },
+                { id: '6', timestamp: '12:06:00', message: 'Eve voted for Charlie', type: 'info' },
+                { id: '7', timestamp: '12:06:05', message: 'You voted for Charlie', type: 'info' },
+                { id: '8', timestamp: '12:06:10', message: 'Charlie was eliminated! (5 votes)', type: 'danger' },
+                { id: '9', timestamp: '12:06:15', message: 'Charlie was a Mafia!', type: 'success' },
+            ],
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: 0,
+            winner: null,
+            mafiaMessages: []
+        });
+        setTimeout(() => setIsReady(true), 50);
+    }, [setGameState]);
+
+    if (!isReady) {
+        return <div className="w-full h-full flex items-center justify-center text-white">Loading...</div>;
+    }
+
+    return (
+        <div className="w-full h-[600px] relative bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
+            <PostVotingTransition />
+        </div>
+    );
+};
+
 // === TEST WRAPPERS FOR EARLY GAME PHASES ===
+
 
 // Animated Shuffle Phase - simulates players shuffling one by one
 const ShufflePhaseAnimatedTest: React.FC = () => {
@@ -1418,6 +1464,7 @@ const TestPage: React.FC = () => {
         { name: 'Day Phase', group: 'Game Phases', component: <DayPhaseTestWrapper /> },
         { name: 'Voting Phase', group: 'Game Phases', component: <VotingPhaseTestWrapper /> },
         { name: 'Voting Visualization', group: 'Game Phases', component: <VotingVisualizationTestWrapper /> },
+        { name: 'Voting Results', group: 'Game Phases', component: <PostVotingTransitionTestWrapper /> },
 
         // Pages
         { name: 'MainPage', group: 'Pages', component: <MainPage onStart={() => console.log('Start')} /> },
