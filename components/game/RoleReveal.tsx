@@ -426,7 +426,43 @@ export const RoleReveal: React.FC = React.memo(() => {
                             className="bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl pointer-events-auto"
                         >
                             <div className="text-center mb-6">
-                                <Search className="w-10 h-10 text-[#916A47] mx-auto mb-3" />
+                                {/* Animated Search Icon */}
+                                <div className="w-10 h-10 mx-auto mb-3 relative">
+                                    <motion.div
+                                        animate={{
+                                            x: [-3, 3, -3],
+                                            rotate: [-5, 5, -5]
+                                        }}
+                                        transition={{
+                                            duration: 2,
+                                            repeat: Infinity,
+                                            ease: "easeInOut"
+                                        }}
+                                    >
+                                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" className="text-[#916A47]">
+                                            {/* Magnifying glass circle */}
+                                            <motion.circle
+                                                cx="11"
+                                                cy="11"
+                                                r="7"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                fill="none"
+                                                animate={{
+                                                    scale: [1, 1.05, 1],
+                                                    opacity: [1, 0.8, 1]
+                                                }}
+                                                transition={{
+                                                    duration: 1.5,
+                                                    repeat: Infinity,
+                                                    ease: "easeInOut"
+                                                }}
+                                            />
+                                            {/* Handle */}
+                                            <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                        </svg>
+                                    </motion.div>
+                                </div>
                                 <h2 className="text-2xl font-['Playfair_Display'] text-white mb-1">
                                     Role Reveal
                                 </h2>
@@ -493,14 +529,21 @@ export const RoleReveal: React.FC = React.memo(() => {
                                 })}
                             </div>
 
-                            {/* Integrated Progress Bar */}
-                            <div className="mb-4 p-3 bg-white/5 rounded-xl border border-white/10 flex items-center gap-4">
+                            {/* Progress Bar with integrated status */}
+                            <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center gap-4">
                                 <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[#916A47]/10">
-                                    <Eye className="w-4 h-4 text-[#916A47]" />
+                                    <Loader2 className="w-4 h-4 text-[#916A47] animate-spin" />
                                 </div>
                                 <div className="flex-1">
-                                    <div className="flex justify-between text-[10px] text-white/40 mb-1.5">
-                                        <span>KEYS COLLECTED</span>
+                                    <div className="flex justify-between text-[10px] mb-1.5">
+                                        <span className="text-white/40 uppercase">
+                                            {!revealState.hasSharedKeys
+                                                ? 'SHARING DECRYPTION KEYS...'
+                                                : keysCollected < keysNeeded
+                                                    ? `WAITING FOR ${keysNeeded - keysCollected} KEYS...`
+                                                    : 'ALL KEYS READY! DECRYPTING...'
+                                            }
+                                        </span>
                                         <span className="font-mono text-[#916A47] font-bold">{keysCollected} / {keysNeeded}</span>
                                     </div>
                                     <div className="h-1.5 bg-black/40 rounded-full overflow-hidden p-[1px]">
@@ -512,27 +555,6 @@ export const RoleReveal: React.FC = React.memo(() => {
                                         />
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="space-y-3">
-                                {!revealState.hasSharedKeys ? (
-                                    <Button
-                                        onClick={shareMyKey}
-                                        isLoading={isProcessing}
-                                        disabled={isProcessing || isTxPending}
-                                        className="w-full h-12 text-base"
-                                    >
-                                        Share Decryption Key
-                                    </Button>
-                                ) : !revealState.isRevealed && (
-                                    <div className="text-center py-2 bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
-                                        <div className="flex items-center justify-center gap-2 text-[#916A47] text-sm font-medium">
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                            <span>{keysCollected < keysNeeded ? `Waiting for ${keysNeeded - keysCollected} keys...` : 'All keys ready! Decrypting...'}</span>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         </motion.div>
                     ) : (

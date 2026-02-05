@@ -384,41 +384,76 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 animate={{ opacity: 1, scale: 1 }}
                 className="w-[520px] max-w-[90vw] bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl relative pointer-events-auto"
             >
-                {/* Sync Button */}
-                <div className="flex items-center gap-4">
-                    {/* Timeline display */}
-                    <div className="text-sm text-gray-400">
-                        Player {shuffleState.currentShufflerIndex + 1} of {gameState.players.length}
-                    </div>
-
+                {/* Sync Button - positioned absolute */}
+                <div className="absolute top-3 right-3 flex items-center gap-2">
                     {/* Timeout Kick Button */}
                     {Date.now() / 1000 > shuffleState.phaseDeadline && shuffleState.phaseDeadline > 0 && (
                         <Button
                             variant="secondary"
                             onClick={handleTimeoutKick}
                             disabled={isProcessing}
-                            className="animate-pulse"
+                            className="animate-pulse text-xs px-2 py-1"
                         >
-                            <Clock className="w-4 h-4 mr-2" />
-                            Kick Timeout
+                            <Clock className="w-3 h-3 mr-1" />
+                            Kick
                         </Button>
                     )}
 
-                    <Button variant="ghost" onClick={forceSync} disabled={isSyncing}>
+                    <Button variant="ghost" onClick={forceSync} disabled={isSyncing} className="p-1">
                         <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
                     </Button>
                 </div>
 
                 <div className="text-center mb-6">
+                    {/* Animated Shuffle Icon */}
+                    <div className="w-10 h-10 mx-auto mb-3 relative overflow-hidden">
+                        {/* Arrow 1 - top */}
+                        <motion.div
+                            className="absolute top-1 left-0 right-0 flex items-center justify-center"
+                            animate={{
+                                x: [0, 20, -20, 0],
+                                opacity: [1, 0, 0, 1]
+                            }}
+                            transition={{
+                                duration: 1.5,
+                                repeat: Infinity,
+                                ease: "easeInOut",
+                                times: [0, 0.4, 0.5, 1]
+                            }}
+                        >
+                            <svg width="24" height="12" viewBox="0 0 24 12" fill="none" className="text-[#916A47]">
+                                <path d="M2 6h16M14 2l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        </motion.div>
+                        {/* Arrow 2 - bottom */}
+                        <motion.div
+                            className="absolute bottom-1 left-0 right-0 flex items-center justify-center rotate-180"
+                            animate={{
+                                x: [0, 20, -20, 0],
+                                opacity: [1, 0, 0, 1]
+                            }}
+                            transition={{
+                                duration: 1.5,
+                                repeat: Infinity,
+                                ease: "easeInOut",
+                                times: [0, 0.4, 0.5, 1],
+                                delay: 0.75
+                            }}
+                        >
+                            <svg width="24" height="12" viewBox="0 0 24 12" fill="none" className="text-[#916A47]">
+                                <path d="M2 6h16M14 2l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        </motion.div>
+                    </div>
                     <h2 className="text-2xl font-['Playfair_Display'] text-white mb-1">
                         Shuffling Deck
                     </h2>
-                    <p className="text-white/50 text-xs">
+                    <p className="text-white/40 text-[13px]">
                         {shuffleState.deck.length} cards in deck • Player {shuffleState.currentShufflerIndex + 1} of {gameState.players.length}
                     </p>
                 </div>
 
-                <div className="space-y-1.5 mb-4 max-h-[180px] overflow-y-auto custom-scrollbar pr-2">
+                <div className="space-y-1.5 mb-4 max-h-[240px] overflow-y-auto custom-scrollbar pr-2">
                     {gameState.players.map((player, index) => {
                         const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
                         let isDone = index < shuffleState.currentShufflerIndex;
@@ -474,18 +509,30 @@ export const ShufflePhase: React.FC = React.memo(() => {
                     })}
                 </div>
 
-                <div className="mb-4 p-3 bg-white/5 rounded-xl border border-white/10 flex items-center gap-4">
+                {/* Progress Bar with integrated status */}
+                <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center gap-4">
                     <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[#916A47]/10">
-                        <Shuffle className="w-4 h-4 text-[#916A47]" />
+                        {shuffleState.hasRevealed ? (
+                            <Check className="w-4 h-4 text-green-400" />
+                        ) : (
+                            <Loader2 className="w-4 h-4 text-[#916A47] animate-spin" />
+                        )}
                     </div>
                     <div className="flex-1">
-                        <div className="flex justify-between text-[10px] text-white/40 mb-1.5">
-                            <span>TOTAL PROGRESS</span>
+                        <div className="flex justify-between text-[10px] mb-1.5">
+                            <span className={shuffleState.hasRevealed ? 'text-green-400 uppercase' : 'text-white/40 uppercase'}>
+                                {shuffleState.hasRevealed
+                                    ? 'COMPLETE! WAITING FOR OTHERS...'
+                                    : shuffleState.isMyTurn
+                                        ? (shuffleState.hasCommitted ? 'REVEALING DECK...' : 'SHUFFLING & ENCRYPTING...')
+                                        : `WAITING FOR ${currentShuffler?.name?.toUpperCase() || 'PLAYER'}...`
+                                }
+                            </span>
                             <span className="font-mono text-[#916A47] font-bold">{Math.floor(progress)}%</span>
                         </div>
                         <div className="h-1.5 bg-black/40 rounded-full overflow-hidden p-[1px]">
                             <motion.div
-                                className="h-full bg-gradient-to-r from-[#916A47] to-[#c9a227] rounded-full"
+                                className={`h-full rounded-full ${shuffleState.hasRevealed ? 'bg-green-500' : 'bg-gradient-to-r from-[#916A47] to-[#c9a227]'}`}
                                 initial={{ width: 0 }}
                                 animate={{ width: `${progress}%` }}
                                 transition={{ duration: 0.8 }}
@@ -493,36 +540,6 @@ export const ShufflePhase: React.FC = React.memo(() => {
                         </div>
                     </div>
                 </div>
-
-                <AnimatePresence mode="wait">
-                    {shuffleState.isMyTurn && !shuffleState.hasCommitted ? (
-                        <motion.div key="my-turn" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <Button onClick={handleMyTurn} isLoading={isProcessing || isTxPending} className="w-full h-12 text-base">
-                                Shuffle & Encrypt
-                            </Button>
-                        </motion.div>
-                    ) : shuffleState.hasCommitted && !shuffleState.hasRevealed ? (
-                        <motion.div key="reveal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <Button onClick={handleReveal} isLoading={isProcessing || isTxPending} className="w-full h-12 text-base">
-                                Reveal Deck
-                            </Button>
-                        </motion.div>
-                    ) : shuffleState.hasRevealed ? (
-                        <div className="text-center py-2">
-                            <div className="flex items-center justify-center gap-2 text-green-400 text-sm">
-                                <Check className="w-4 h-4" />
-                                <span>Complete! Waiting for others...</span>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-center py-2">
-                            <div className="flex items-center justify-center gap-2 text-white/30 text-sm">
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>Waiting for {currentShuffler?.name || 'player'}...</span>
-                            </div>
-                        </div>
-                    )}
-                </AnimatePresence>
             </motion.div >
         </div >
     ), [shuffleState, gameState.players, myPlayer, isProcessing, isTxPending, isSyncing, forceSync, handleMyTurn, handleReveal, handleTimeoutKick, currentShuffler?.name, progress]);
