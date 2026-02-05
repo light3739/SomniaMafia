@@ -12,6 +12,7 @@ import { VotingAnnouncement } from './VotingAnnouncement';
 import { NightAnnouncement } from './NightAnnouncement';
 import { MorningAnnouncement } from './MorningAnnouncement';
 import { SessionKeyBanner } from './SessionKeyBanner';
+import { GameUIOverlay } from './GameUIOverlay';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { useSoundEffects } from '../ui/SoundEffects';
@@ -559,7 +560,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                                         if (p.role === Role.CIVILIAN) return { ...p, isAlive: true };
                                         return p;
                                     })
-                                }));
+                                }))
                                 addLog("[Test] Simulating Town Victory", "success");
                             }}
                         >
@@ -568,6 +569,9 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     </div>
                 </div>
             )}
+
+            {/* Game UI Overlay (Chat + Sound buttons) */}
+            <GameUIOverlay />
         </div>
     );
 };
