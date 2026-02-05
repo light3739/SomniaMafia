@@ -66,13 +66,26 @@ export function MicButton({
         detachRemoteAudioRef.current = detachRemoteAudio;
     }, [attachRemoteAudio, detachRemoteAudio]);
 
+    // Store userName in ref to avoid dependency issues
+    const userNameRef = useRef(userName);
+    useEffect(() => {
+        userNameRef.current = userName;
+    }, [userName]);
+
     // Connect to LiveKit room on mount
     useEffect(() => {
+        if (!roomId) return;
+
+        // Skip if already connected
+        if (roomRef.current) {
+            console.log('[MicButton] Already have room instance, skipping connect');
+            return;
+        }
+
         let cancelled = false;
 
         const connect = async () => {
-            if (!roomId) return;
-
+            console.log('[MicButton] Starting connection...');
             setIsConnecting(true);
             setError(null);
 
@@ -80,7 +93,7 @@ export function MicButton({
                 // Get token from API
                 const resp = await fetch("/api/token", {
                     method: "POST",
-                    body: JSON.stringify({ room: roomId, username: userName }),
+                    body: JSON.stringify({ room: roomId, username: userNameRef.current }),
                     headers: { "Content-Type": "application/json" },
                 });
 
@@ -202,7 +215,7 @@ export function MicButton({
                 audioContainerRef.current.innerHTML = '';
             }
         };
-    }, [roomId, userName]); // userName needed for token generation
+    }, [roomId]); // Only reconnect if roomId changes (userName stored in ref)
 
     // Toggle microphone
     const toggleMic = useCallback(async () => {
