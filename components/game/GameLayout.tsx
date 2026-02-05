@@ -433,9 +433,9 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                                 myRole={myPlayer?.role}
                                 mark={playerMarks[player.address.toLowerCase()] || null}
                                 onSetMark={setPlayerMark}
-                                isSpeaking={discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase()}
-                                speechTimeRemaining={discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase() ? discussionState.timeRemaining : 0}
-                                voters={voters}
+                                isSpeaking={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase()}
+                                speechTimeRemaining={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase() ? discussionState.timeRemaining : 0}
+                                voters={gameState.phase === GamePhase.VOTING ? voters : []}
                             />
                         </div>
                     );
