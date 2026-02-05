@@ -56,6 +56,16 @@ export function MicButton({
         console.log(`[MicButton] Detached audio from ${participant.identity}`);
     }, []);
 
+    // Use refs for callbacks to avoid dependency issues
+    const attachRemoteAudioRef = useRef(attachRemoteAudio);
+    const detachRemoteAudioRef = useRef(detachRemoteAudio);
+
+    // Update refs when callbacks change
+    useEffect(() => {
+        attachRemoteAudioRef.current = attachRemoteAudio;
+        detachRemoteAudioRef.current = detachRemoteAudio;
+    }, [attachRemoteAudio, detachRemoteAudio]);
+
     // Connect to LiveKit room on mount
     useEffect(() => {
         let cancelled = false;
@@ -110,16 +120,16 @@ export function MicButton({
                     }
                 });
 
-                // Handle remote tracks - SUBSCRIBE TO AUDIO
+                // Handle remote tracks - SUBSCRIBE TO AUDIO (use ref to avoid stale closure)
                 room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
                     if (!cancelled) {
-                        attachRemoteAudio(track, participant);
+                        attachRemoteAudioRef.current(track, participant);
                     }
                 });
 
                 room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
                     if (!cancelled) {
-                        detachRemoteAudio(track, participant);
+                        detachRemoteAudioRef.current(track, participant);
                     }
                 });
 
@@ -140,11 +150,11 @@ export function MicButton({
                     return;
                 }
 
-                // Attach any existing remote audio tracks
+                // Attach any existing remote audio tracks (use ref)
                 room.remoteParticipants.forEach((participant) => {
                     participant.audioTrackPublications.forEach((publication) => {
                         if (publication.track) {
-                            attachRemoteAudio(publication.track, participant);
+                            attachRemoteAudioRef.current(publication.track, participant);
                         }
                     });
                 });
@@ -192,7 +202,7 @@ export function MicButton({
                 audioContainerRef.current.innerHTML = '';
             }
         };
-    }, [roomId]); // Only reconnect if roomId changes
+    }, [roomId, userName]); // userName needed for token generation
 
     // Toggle microphone
     const toggleMic = useCallback(async () => {
