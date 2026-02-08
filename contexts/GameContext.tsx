@@ -11,7 +11,7 @@ import { loadSession, createNewSession, markSessionRegistered } from '../service
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
 
-const shotSound = "/assets/mafia_shot.mp3";
+const shotSound = "/assets/mafia_shot.wav";
 
 interface GameContextType {
     playerName: string;

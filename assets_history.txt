@@ -1,0 +1,122 @@
+commit 1dbd802439ac9381e3df8eb8aa13be756fd89a7f
+Author: Maksim <mpiatlitski@edu.cdv.pl>
+Date:   Sat Jan 24 19:17:27 2026 +0100
+
+    feat: Implement dynamic route-based background transitions and reduce the Ether value required for game actions.
+
+A	public/assets/mafia1.webp
+
+commit ddaa5705ad4ad84e54ac30e8ae0cb16b355be5a4
+Author: Maksim <mpiatlitski@edu.cdv.pl>
+Date:   Sat Jan 24 17:54:10 2026 +0100
+
+    Fix: Restore legacy mafia1.jpg background from commit 3910a9d
+
+A	public/assets/mafia1.jpg
+
+commit 4ed47a79c449575ee104c942b8163f61c3198688
+Author: Maksim <mpiatlitski@edu.cdv.pl>
+Date:   Sat Jan 24 16:06:52 2026 +0100
+
+    perf: fix GameContext memoization and asset optimization
+    
+    - Wrapped getActionLabel in useCallback to prevent GameContext re-renders
+    - Converted kill.wav, mafia_shot.wav, note_tick.wav to MP3 (saves bandwidth)
+    - Replaced large mafia1.jpg with optimized lobby_background.webp
+    - Removed unused/legacy assets
+
+A	public/assets/kill.mp3
+D	public/assets/kill.wav
+D	public/assets/mafia1.jpg
+A	public/assets/mafia_shot.mp3
+D	public/assets/mafia_shot.wav
+A	public/assets/note_tick.mp3
+D	public/assets/note_tick.wav
+
+commit d3259b217bdf0793d26722cebe0565aa8191bc79
+Author: Maksim <mpiatlitski@edu.cdv.pl>
+Date:   Sat Jan 24 15:51:58 2026 +0100
+
+    perf: compress assets - 27MB -> 9.4MB (65% reduction)
+    
+    - Convert backgrounds from PNG to WebP (2.1MB -> 98KB each)
+    - Compress audio files with ffmpeg
+    - night_sound2: 14MB -> 4.7MB
+    - Main_Music: 3.0MB -> 1.2MB
+    - morning_sound: 573KB -> 384KB
+    - TownWin_sound: 498KB -> 187KB
+
+M	public/assets/MafiaWin_Sound.mp3
+M	public/assets/Main_Music.mp3
+M	public/assets/TownWin_sound.mp3
+D	public/assets/game_background.png
+A	public/assets/game_background.webp
+D	public/assets/game_background_light.png
+A	public/assets/game_background_light.webp
+D	public/assets/lobby_background.png
+A	public/assets/lobby_background.webp
+M	public/assets/morning_sound.mp3
+M	public/assets/night_sound2.mp3
+
+commit 8988854ddd97c2f2352bce22a6ee8eb8404ff0fb
+Author: Haimanguyy <Haimanovrenat@gmail.com>
+Date:   Fri Jan 23 01:12:50 2026 +0300
+
+    Feat: Implement global audio settings with Music and SFX sliders
+
+A	public/assets/MafiaWin_Sound.mp3
+A	public/assets/TownWin_sound.mp3
+
+commit 9c735ef2b60d02a3e07026a719164b63b095e7d6
+Author: Haimanguyy <Haimanovrenat@gmail.com>
+Date:   Thu Jan 22 13:38:02 2026 +0300
+
+    Update audio transitions and assets
+
+A	public/assets/Voting_sound.mp3
+A	public/assets/night_sound2.mp3
+
+commit df6ea9a116387f2e1de27aa3ff02720724d0b116
+Author: Haimanguyy <Haimanovrenat@gmail.com>
+Date:   Thu Jan 22 01:16:08 2026 +0300
+
+    Add new note_tick.wav sound for player marking
+
+A	public/assets/note_tick.wav
+
+commit bd62a6a65140f2d8df88f8a5cfb6c1e0171b82dd
+Author: Haimanguyy <Haimanovrenat@gmail.com>
+Date:   Tue Jan 20 02:34:38 2026 +0300
+
+    fix: add 'use client' to SoundEffects and fix asset paths for Next.js build
+
+A	public/assets/default_sound.mp3
+A	public/assets/investigate.mp3
+A	public/assets/kill.wav
+A	public/assets/morning_sound.mp3
+A	public/assets/night_sound.mp3
+A	public/assets/protect.mp3
+
+commit 3bfbae30cc48fec8e06c4973de5c5eb3293ef1d4
+Merge: 3910a9d cf8fe14
+Author: Maksim <mpiatlitski@edu.cdv.pl>
+Date:   Mon Jan 19 23:17:14 2026 +0100
+
+    Merge branch 'main' of https://github.com/light3739/SomniaMafia
+    
+    # Conflicts:
+    #       App.tsx
+    #       public/assets/Main_Music.mp3
+
+commit 3910a9df73d220350bdea73ff3adad1abf42a8d4
+Author: Maksim <mpiatlitski@edu.cdv.pl>
+Date:   Mon Jan 19 23:15:26 2026 +0100
+
+    feat: migrate to Next.js, implement server-side ZK, and db integration
+
+A	public/assets/game_background.png
+A	public/assets/game_background_light.png
+A	public/assets/lobby_background.png
+A	public/assets/mafia1.jpg
+A	public/assets/mafia_shot.wav
+A	public/assets/somniayeal.png

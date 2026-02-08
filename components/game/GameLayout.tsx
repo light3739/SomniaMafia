@@ -46,8 +46,8 @@ const PostVotingTransition = dynamic(() => import('./PostVotingTransition').then
     ssr: false
 });
 
-const dayBg = "/assets/game_background_light.webp";
-const nightBg = "/assets/game_background.webp";
+const dayBg = "/assets/game_background_light.png";
+const nightBg = "/assets/game_background.png";
 
 // Coordinates for 14 players, clockwise starting from Top-Left
 const PLAYER_POSITIONS = [

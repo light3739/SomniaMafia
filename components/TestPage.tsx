@@ -21,8 +21,9 @@ import { NightAnnouncement } from './game/NightAnnouncement';
 import { MafiaChat } from './game/MafiaChat';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../contexts/GameContext';
-import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2 } from 'lucide-react';
+import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X } from 'lucide-react';
 import { MicButton } from './game/MicButton';
+import { useSoundEffects } from './ui/SoundEffects';
 
 // Wrapper for testing VotingAnnouncement state
 const VotingAnnouncementWrapper = () => {
@@ -1493,6 +1494,223 @@ const MicButtonTestWrapper: React.FC = () => {
     );
 };
 
+// Test wrapper for Discussion Chat - LOCAL ONLY (no LiveKit connection)
+const DiscussionChatTestWrapper: React.FC = () => {
+    const [isExpanded, setIsExpanded] = useState(true);
+    const [canWrite, setCanWrite] = useState(true);
+    const [messages, setMessages] = useState<{ id: string; sender: string; senderAddress: string; content: string; timestamp: number }[]>([
+        { id: '1', sender: 'Alice', senderAddress: '0x1111', content: 'Я думаю это Bob, потому что он молчит', timestamp: Date.now() - 30000 },
+        { id: '2', sender: 'Charlie', senderAddress: '0x2222', content: 'Согласен, Bob подозрителен', timestamp: Date.now() - 20000 },
+        { id: '3', sender: 'Bob', senderAddress: '0x3333', content: 'Я не мафия! Посмотрите на Dave!', timestamp: Date.now() - 10000 },
+    ]);
+    const [inputValue, setInputValue] = useState('');
+    const messagesEndRef = React.useRef<HTMLDivElement>(null);
+    const prevMessagesCountRef = React.useRef(messages.length);
+    const { playChatMessageSound } = useSoundEffects();
+
+    // Play sound when new message arrives from others
+    React.useEffect(() => {
+        if (messages.length > prevMessagesCountRef.current) {
+            const lastMsg = messages[messages.length - 1];
+            if (lastMsg && lastMsg.senderAddress.toLowerCase() !== TEST_ADDRESS.toLowerCase()) {
+                playChatMessageSound();
+            }
+        }
+        prevMessagesCountRef.current = messages.length;
+    }, [messages, playChatMessageSound]);
+
+    React.useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    const handleSend = () => {
+        if (!inputValue.trim()) return;
+        const newMessage = {
+            id: `${Date.now()}`,
+            sender: 'You',
+            senderAddress: TEST_ADDRESS.toLowerCase(),
+            content: inputValue.trim(),
+            timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, newMessage]);
+        setInputValue('');
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    };
+
+    return (
+        <div className="flex flex-col items-center gap-6 w-full">
+            {/* Controls */}
+            <div className="flex gap-4 flex-wrap justify-center">
+                <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className={`px-6 py-3 rounded-xl font-medium transition-all ${isExpanded ? 'bg-[#916A47] text-white' : 'bg-gray-700 text-gray-300'
+                        }`}
+                >
+                    {isExpanded ? 'Chat Open' : 'Chat Closed'}
+                </button>
+                <button
+                    onClick={() => setCanWrite(!canWrite)}
+                    className={`px-6 py-3 rounded-xl font-medium transition-all ${canWrite ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'
+                        }`}
+                >
+                    {canWrite ? '✓ Can Write' : '✗ Read Only'}
+                </button>
+                <button
+                    onClick={() => setMessages([])}
+                    className="px-6 py-3 rounded-xl font-medium bg-rose-600/50 text-white hover:bg-rose-600"
+                >
+                    Clear Messages
+                </button>
+                <button
+                    onClick={() => {
+                        const names = ['Alice', 'Bob', 'Charlie', 'Dave', 'Eve'];
+                        const phrases = [
+                            'Это точно не я!',
+                            'Голосуем за мафию!',
+                            'Кто молчит - тот подозрителен',
+                            'Я видел как он вёл себя странно',
+                            'Давайте обсудим спокойно'
+                        ];
+                        const randomName = names[Math.floor(Math.random() * names.length)];
+                        const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+                        const newMsg = {
+                            id: `${Date.now()}`,
+                            sender: randomName,
+                            senderAddress: '0xOTHER',
+                            content: randomPhrase,
+                            timestamp: Date.now()
+                        };
+                        setMessages(prev => [...prev, newMsg]);
+                    }}
+                    className="px-6 py-3 rounded-xl font-medium bg-blue-600 text-white hover:bg-blue-500"
+                >
+                    🔔 Simulate Message
+                </button>
+            </div>
+
+            {/* Chat container - positioned relative to show button always at bottom */}
+            <div className="relative flex flex-col items-end">
+                {/* Chat Panel - expands upward from button */}
+                <AnimatePresence>
+                    {isExpanded && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0, scaleY: 0 }}
+                            animate={{ opacity: 1, height: 384, scaleY: 1 }}
+                            exit={{ opacity: 0, height: 0, scaleY: 0 }}
+                            transition={{
+                                type: 'spring',
+                                damping: 25,
+                                stiffness: 300,
+                                opacity: { duration: 0.15 }
+                            }}
+                            style={{ originY: 1 }}
+                            className="w-80 mb-3 bg-black/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-black/40">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-white font-medium text-sm">Discussion Chat</span>
+                                </div>
+                                <button
+                                    onClick={() => setIsExpanded(false)}
+                                    className="w-7 h-7 flex items-center justify-center rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-all"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Messages Area */}
+                            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                                {messages.length === 0 ? (
+                                    <div className="h-full flex items-center justify-center text-white/30 text-sm">
+                                        No messages yet
+                                    </div>
+                                ) : (
+                                    messages.map((msg) => {
+                                        const isMe = msg.senderAddress.toLowerCase() === TEST_ADDRESS.toLowerCase();
+                                        return (
+                                            <div
+                                                key={msg.id}
+                                                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                                            >
+                                                <span className="text-[10px] text-white/40 mb-0.5 px-2">
+                                                    {msg.sender}
+                                                </span>
+                                                <div
+                                                    className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${isMe
+                                                        ? 'bg-[#916A47] text-white rounded-br-md'
+                                                        : 'bg-white/10 text-white/90 rounded-bl-md'
+                                                        }`}
+                                                >
+                                                    {msg.content}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                                <div ref={messagesEndRef} />
+                            </div>
+
+                            {/* Input Area */}
+                            <div className="p-3 border-t border-white/10 bg-black/40">
+                                {canWrite ? (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={inputValue}
+                                            onChange={(e) => setInputValue(e.target.value)}
+                                            onKeyDown={handleKeyDown}
+                                            placeholder="Type a message..."
+                                            maxLength={200}
+                                            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#916A47]/50 transition-all"
+                                        />
+                                        <button
+                                            onClick={handleSend}
+                                            disabled={!inputValue.trim()}
+                                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-[#916A47] text-white hover:bg-[#a5784f] disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
+                                        >
+                                            <Send className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-center gap-2 py-2 text-white/40 text-sm">
+                                        <Loader2 className="w-4 h-4" />
+                                        <span>Wait for your turn to speak</span>
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Toggle Button - always visible at bottom */}
+                <motion.button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className={`w-14 h-14 flex items-center justify-center rounded-full shadow-lg transition-all ${isExpanded
+                        ? 'bg-white/10 text-white border border-white/20'
+                        : 'bg-[#916A47] text-white hover:bg-[#a5784f]'
+                        }`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                >
+                    <motion.div
+                        animate={{ rotate: isExpanded ? 45 : 0 }}
+                        transition={{ duration: 0.2 }}
+                    >
+                        {isExpanded ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
+                    </motion.div>
+                </motion.button>
+            </div>
+        </div>
+    );
+};
+
 const TestPage: React.FC = () => {
     const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
@@ -1518,6 +1736,7 @@ const TestPage: React.FC = () => {
         { name: 'Mafia Chat', group: 'Game Components', component: <MafiaChatTestWrapper /> },
         { name: 'Mafia Consensus', group: 'Game Components', component: <MafiaConsensusTestWrapper /> },
         { name: 'Mic Button', group: 'Game Components', component: <MicButtonTestWrapper /> },
+        { name: 'Discussion Chat', group: 'Game Components', component: <DiscussionChatTestWrapper /> },
 
         // Game Phases (Test different phases and roles)
         { name: 'Night - Mafia', group: 'Game Phases', component: <NightPhaseTestWrapper testRole={Role.MAFIA} /> },
