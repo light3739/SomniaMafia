@@ -326,7 +326,16 @@ export function MicButton({
                     />
                 )}
 
-
+                {/* Participant count badge */}
+                {isConnected && participantCount > 1 && (
+                    <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="absolute -bottom-1 -left-1 min-w-[18px] h-[18px] px-1 bg-blue-500 rounded-full flex items-center justify-center text-[10px] text-white font-bold"
+                    >
+                        {participantCount}
+                    </motion.div>
+                )}
             </motion.button>
 
             {/* Hidden audio container for remote participants */}
