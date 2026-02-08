@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { BackgroundMusic } from '../ui/BackgroundMusic';
-import { DiscussionChat, ChatToggleButton } from './DiscussionChat';
+import { ChatToggleButton } from './DiscussionChat';
 import { useGameContext } from '@/contexts/GameContext';
 import { GamePhase } from '@/types';
 
@@ -63,22 +63,14 @@ export const GameUIOverlay: React.FC = () => {
 
     return (
         <>
-            {/* Discussion Chat Panel */}
-            {showChatButton && (
-                <DiscussionChat
-                    isExpanded={isChatExpanded}
-                    onToggle={() => setIsChatExpanded(!isChatExpanded)}
-                    canWrite={canWrite}
-                />
-            )}
-
-            {/* Background Music with Chat Button */}
+            {/* Background Music with Chat Button (chat panel is integrated in ChatToggleButton) */}
             <BackgroundMusic
                 additionalButtons={
                     showChatButton ? (
                         <ChatToggleButton
                             isExpanded={isChatExpanded}
                             onToggle={() => setIsChatExpanded(!isChatExpanded)}
+                            canWrite={canWrite}
                         />
                     ) : undefined
                 }
