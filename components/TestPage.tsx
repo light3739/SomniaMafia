@@ -21,7 +21,7 @@ import { NightAnnouncement } from './game/NightAnnouncement';
 import { MafiaChat } from './game/MafiaChat';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../contexts/GameContext';
-import { Skull, Shield, Search, Users, EyeOff } from 'lucide-react';
+import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2 } from 'lucide-react';
 import { MicButton } from './game/MicButton';
 
 // Wrapper for testing VotingAnnouncement state
@@ -1355,20 +1355,30 @@ const SpeechWarningGlowTestWrapper: React.FC = () => {
     );
 };
 
-// Test wrapper for MicButton component
+// Test wrapper for MicButton component - MOCK VERSION (no LiveKit connection)
 const MicButtonTestWrapper: React.FC = () => {
     const [isMyTurn, setIsMyTurn] = useState(false);
+    const [isMuted, setIsMuted] = useState(true);
+    const [isConnected, setIsConnected] = useState(true); // Simulated connected state
+
+    const toggleMic = () => {
+        if (isMyTurn && isConnected) {
+            setIsMuted(!isMuted);
+        }
+    };
+
+    const isDisabled = !isMyTurn || !isConnected;
 
     return (
         <div className="flex flex-col items-center gap-6 p-8">
             {/* Header */}
             <div className="text-center">
-                <h3 className="text-xl font-bold text-white mb-2">Microphone Button</h3>
-                <p className="text-white/50 text-sm">For voice chat during discussion phase</p>
+                <h3 className="text-xl font-bold text-white mb-2">Microphone Button (Mock)</h3>
+                <p className="text-white/50 text-sm">Visual preview - no LiveKit connection</p>
             </div>
 
             {/* Controls */}
-            <div className="flex gap-4">
+            <div className="flex gap-4 flex-wrap justify-center">
                 <button
                     onClick={() => setIsMyTurn(!isMyTurn)}
                     className={`px-6 py-3 rounded-xl font-medium transition-all ${isMyTurn
@@ -1378,47 +1388,103 @@ const MicButtonTestWrapper: React.FC = () => {
                 >
                     {isMyTurn ? '✓ My Turn' : '✗ Not My Turn'}
                 </button>
+                <button
+                    onClick={() => setIsConnected(!isConnected)}
+                    className={`px-6 py-3 rounded-xl font-medium transition-all ${isConnected
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-700 text-gray-300'
+                        }`}
+                >
+                    {isConnected ? '✓ Connected' : '✗ Disconnected'}
+                </button>
             </div>
 
             {/* Status Display */}
             <div className="text-center space-y-2">
                 <div className={`text-sm font-medium ${isMyTurn ? 'text-green-400' : 'text-gray-500'}`}>
-                    {isMyTurn ? '🎤 You can speak now!' : '🔇 Wait for your turn...'}
+                    {isMyTurn ? 'You can speak now!' : 'Wait for your turn...'}
                 </div>
             </div>
 
-            {/* Main Button Display */}
+            {/* Main Button Display - MOCK */}
             <div className="p-8 bg-black/40 rounded-2xl border border-white/10">
-                <MicButton
-                    roomId="test-room-123"
-                    userName="Test Player"
-                    isMyTurn={isMyTurn}
-                />
+                <motion.button
+                    onClick={toggleMic}
+                    disabled={isDisabled}
+                    className={`
+                        relative w-14 h-14 rounded-full flex items-center justify-center
+                        transition-all duration-300 shadow-lg
+                        ${isDisabled
+                            ? 'bg-gray-800/50 border border-gray-600/30 cursor-not-allowed opacity-50'
+                            : isMuted
+                                ? 'bg-gray-800/80 border-2 border-gray-500/50 hover:border-[#916A47]/70 hover:bg-gray-700/80'
+                                : 'bg-green-600 border-2 border-green-400/70 shadow-[0_0_20px_rgba(34,197,94,0.4)]'
+                        }
+                    `}
+                    whileHover={!isDisabled ? { scale: 1.05 } : {}}
+                    whileTap={!isDisabled ? { scale: 0.95 } : {}}
+                >
+                    {/* Speaking pulse animation */}
+                    <AnimatePresence>
+                        {!isMuted && isMyTurn && (
+                            <motion.div
+                                initial={{ scale: 1, opacity: 0.5 }}
+                                animate={{ scale: 1.5, opacity: 0 }}
+                                transition={{
+                                    repeat: Infinity,
+                                    duration: 1.5,
+                                    ease: "easeOut"
+                                }}
+                                className="absolute inset-0 rounded-full bg-green-500"
+                            />
+                        )}
+                    </AnimatePresence>
+
+                    {/* Icon */}
+                    {isMuted ? (
+                        <MicOff className={`w-6 h-6 ${isDisabled ? 'text-gray-500' : 'text-gray-300'}`} />
+                    ) : (
+                        <Mic className="w-6 h-6 text-white" />
+                    )}
+
+                    {/* Your turn indicator */}
+                    {isMyTurn && isConnected && (
+                        <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            className="absolute -top-1 -right-1 w-4 h-4 bg-[#916A47] rounded-full flex items-center justify-center"
+                        >
+                            <div className="w-2 h-2 bg-white rounded-full" />
+                        </motion.div>
+                    )}
+
+
+                </motion.button>
             </div>
 
             {/* Legend */}
             <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-gray-800/50 border border-gray-600/30 flex items-center justify-center opacity-50">
-                        <span className="text-gray-500">🔇</span>
+                        <MicOff className="w-4 h-4 text-gray-500" />
                     </div>
                     <span className="text-white/50">Not your turn</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-gray-800/80 border-2 border-gray-500/50 flex items-center justify-center">
-                        <span className="text-gray-300">🔇</span>
+                        <MicOff className="w-4 h-4 text-gray-300" />
                     </div>
                     <span className="text-white/50">Your turn (muted)</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-green-600 border-2 border-green-400/70 flex items-center justify-center shadow-[0_0_15px_rgba(34,197,94,0.4)]">
-                        <span className="text-white">🎤</span>
+                        <Mic className="w-4 h-4 text-white" />
                     </div>
                     <span className="text-white/50">Speaking</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-gray-800/50 flex items-center justify-center animate-pulse">
-                        <span className="text-[#916A47]">⟳</span>
+                        <Loader2 className="w-4 h-4 text-[#916A47] animate-spin" />
                     </div>
                     <span className="text-white/50">Connecting</span>
                 </div>

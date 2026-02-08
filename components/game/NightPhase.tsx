@@ -736,32 +736,34 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                         </p>
                     </motion.div>
 
-                    {/* Status Card - matching NightActionFeedback style */}
-                    <div className="mb-4 p-4 bg-indigo-950/20 rounded-2xl w-full">
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className="text-indigo-300 text-sm font-medium">Civilian Status</span>
-                        </div>
-                        <div className="h-px w-full bg-indigo-500/20 mb-3" />
-
-                        {/* Waiting message */}
-                        <div className="p-3 bg-indigo-900/20 rounded-lg">
-                            <div className="flex items-center gap-2">
-                                <Moon className="w-4 h-4 text-indigo-400" />
-                                <span className="text-indigo-300 text-sm">You have no night actions</span>
+                    <div className="w-full flex flex-col items-center relative">
+                        {/* Status Card - matching NightActionFeedback style */}
+                        <div className="mb-4 p-4 bg-indigo-950/20 rounded-2xl w-full">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-indigo-300 text-sm font-medium">Civilian Status</span>
                             </div>
+                            <div className="h-px w-full bg-indigo-500/20 mb-3" />
+
+                            {/* Waiting message */}
+                            <div className="p-3 bg-indigo-900/20 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                    <Moon className="w-4 h-4 text-indigo-400" />
+                                    <span className="text-indigo-300 text-sm">You have no night actions</span>
+                                </div>
+                            </div>
+
+                            {/* Info text */}
+                            <p className="text-indigo-200/40 text-xs mt-3 text-center">
+                                As a peaceful villager, wait for dawn to return.
+                            </p>
                         </div>
 
-                        {/* Info text */}
-                        <p className="text-indigo-200/40 text-xs mt-3 text-center">
-                            As a peaceful villager, wait for dawn to return.
-                        </p>
-                    </div>
-
-                    {/* Waiting indicator - matching other roles */}
-                    <div className="text-center">
-                        <p className="text-white/60 text-xs tracking-[0.4em] uppercase animate-pulse">
-                            Waiting for dawn
-                        </p>
+                        {/* Waiting indicator - Absolute positioning to match active roles */}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 whitespace-nowrap">
+                            <p className="text-white/60 text-xs tracking-[0.4em] uppercase animate-pulse">
+                                Waiting for dawn
+                            </p>
+                        </div>
                     </div>
                 </motion.div>
             </div>
@@ -879,7 +881,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                                 key="waiting-for-dawn"
                                                 initial={{ opacity: 0 }}
                                                 animate={{ opacity: 1 }}
-                                                transition={{ delay: 0.5, duration: 0.5 }}
+                                                transition={{ delay: 1, duration: 0.5 }}
                                                 className="absolute top-full left-1/2 -translate-x-1/2 mt-4 whitespace-nowrap"
                                             >
                                                 <p className="text-white/60 text-xs tracking-[0.4em] uppercase animate-pulse">Waiting for dawn</p>
