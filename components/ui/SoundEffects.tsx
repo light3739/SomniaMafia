@@ -190,7 +190,7 @@ const stopVictoryMusic = () => {
     }
 };
 
-export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'kill' | 'investigate' | 'propose' | 'approve' | 'reject') => {
+export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'kill' | 'investigate' | 'propose' | 'approve' | 'reject' | 'chat_message') => {
     // ... существующий код playSound ...
     const ctx = initCtx();
     if (!ctx) return;
@@ -235,7 +235,7 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
             break;
 
         case 'kill':
-            playAudioFile('/assets/kill.mp3', 2, 0.05, 0.12);
+            playAudioFile('/assets/kill.wav', 2, 0.05, 0.12);
             break;
 
         case 'investigate':
@@ -266,6 +266,39 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
                 playSharpNoise(ctx2, ctx2.currentTime, { duration: 0.03, vol: 0.15, freq: 2500, type: 'highpass' });
             }, 30);
             break;
+
+        case 'chat_message':
+            // Короткий металлический "дзинь" - high pitch ding
+            {
+                const osc1 = ctx.createOscillator();
+                const osc2 = ctx.createOscillator();
+                const g1 = ctx.createGain();
+                const g2 = ctx.createGain();
+
+                // Основной тон - высокий звонкий
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(2800, t);
+                osc1.frequency.exponentialRampToValueAtTime(2200, t + 0.08);
+
+                // Гармоника для металлического оттенка
+                osc2.type = 'triangle';
+                osc2.frequency.setValueAtTime(4200, t);
+                osc2.frequency.exponentialRampToValueAtTime(3500, t + 0.06);
+
+                const vol = 0.12 * globalMasterVolume;
+                g1.gain.setValueAtTime(vol, t);
+                g1.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+
+                g2.gain.setValueAtTime(vol * 0.4, t);
+                g2.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+
+                osc1.connect(g1); g1.connect(ctx.destination);
+                osc2.connect(g2); g2.connect(ctx.destination);
+
+                osc1.start(t); osc1.stop(t + 0.12);
+                osc2.start(t); osc2.stop(t + 0.08);
+            }
+            break;
     }
 };
 
@@ -280,7 +313,8 @@ export const useSoundEffects = () => {
         playProposeSound: () => playSound('propose'),
         playApproveSound: () => playSound('approve'),
         playRejectSound: () => playSound('reject'),
-        playMarkSound: () => playAudioFile('/assets/note_tick.mp3', 1, 0, 0.25),
+        playMarkSound: () => playAudioFile('/assets/note_tick.wav', 1, 0, 0.25),
+        playChatMessageSound: () => playSound('chat_message'),
 
         // Переход в ночь: длительность 5s, offset 5s, fadeOut 1s
         playNightTransition: () => playAudioFile('/assets/night_sound2.mp3', 5, 0.1, 0.3, 5, 1.0),
@@ -293,7 +327,7 @@ export const useSoundEffects = () => {
 
         // Победные треки (RMS ~-15dB, ставим 0.2 для комфорта)
         playTownWin: () => playVictoryMusic('/assets/TownWin_sound.mp3', 15.86, 0.2),
-        playMafiaWin: () => playVictoryMusic('/assets/MafiaWin_Sound.mp3', 243.51, 0.2),
+        playMafiaWin: () => playVictoryMusic('/assets/MafiaWin_Sound.mp3', 15, 0.2),
         stopVictoryMusic: () => stopVictoryMusic(),
     }), []);
 };
@@ -318,9 +352,9 @@ export const SoundEffects: React.FC = () => {
             if (ctx) {
                 const sounds = [
                     '/assets/default_sound.mp3',
-                    '/assets/note_tick.mp3',
+                    '/assets/note_tick.wav',
                     '/assets/protect.mp3',
-                    '/assets/kill.mp3',
+                    '/assets/kill.wav',
                     '/assets/investigate.mp3'
                 ];
                 // Load sequentially or parallel

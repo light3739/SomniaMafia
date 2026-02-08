@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 const somniaLogo = "/assets/somniayeal.png";
-const mafiaBg = "/assets/lobby_background.webp";
+const mafiaBg = "/assets/lobby_background.png";
 
 interface MainPageProps {
     onStart: () => void;

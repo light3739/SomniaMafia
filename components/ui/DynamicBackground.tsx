@@ -9,9 +9,9 @@ export const DynamicBackground = () => {
 
     const backgroundImage = useMemo(() => {
         if (pathname === "/") {
-            return "/assets/mafia1.webp";
+            return "/assets/mafia1.jpg";
         }
-        return "/assets/lobby_background.webp";
+        return "/assets/lobby_background.png";
     }, [pathname]);
 
     return (
