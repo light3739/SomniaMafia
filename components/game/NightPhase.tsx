@@ -871,6 +871,14 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                         myRole={myRole}
                                         nightState={nightState}
                                         gameState={gameState}
+                                        aliveMafiaCount={
+                                            myRole === Role.MAFIA
+                                                ? nightState.teammates.filter(addr => {
+                                                    const player = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
+                                                    return player?.isAlive;
+                                                }).length + (myPlayer?.isAlive ? 1 : 0) // teammates + me
+                                                : undefined
+                                        }
                                     />
 
                                     {/* Waiting Message - Absolute at the bottom of the content area, delayed after Action Completed */}
