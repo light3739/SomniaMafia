@@ -92,7 +92,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         return '';
     });
-    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('mafia_player_avatar') || null;
+        }
+        return null;
+    });
     const [lobbyName, setLobbyName] = useState(() => {
         if (typeof window !== 'undefined') {
             return sessionStorage.getItem('lobbyName') || '';
