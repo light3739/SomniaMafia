@@ -1,9 +1,9 @@
 // components/game/PlayerSpot.tsx
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useRef } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Player, Role } from '../../types';
-import { Skull, HelpCircle, User, X } from 'lucide-react';
+import { Skull, HelpCircle, User, X, Settings2, Volume2, VolumeX } from 'lucide-react';
 import { useSoundEffects } from '../ui/SoundEffects';
 
 
@@ -25,6 +25,25 @@ interface PlayerSpotProps {
 export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAct, isSelected, isNight = false, myRole, mark: currentMark, onSetMark: setPlayerMark, isSpeaking = false, speechTimeRemaining = 0, voters = [] }) => {
     const { playClickSound, playMarkSound } = useSoundEffects();
     const [isHoveringMarks, setIsHoveringMarks] = useState(false);
+    const [isVolumeOpen, setIsVolumeOpen] = useState(false);
+    const [volume, setVolume] = useState(1.0);
+    const closeTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    const handleVolumeChange = (newVolume: number) => {
+        setVolume(newVolume);
+        // Try to find LiveKit audio element for this player
+        // MicButton creates elements with id="audio-{identity}" where identity matches userName
+        const audioEl = document.getElementById(`audio-${player.name}`) as HTMLAudioElement;
+        if (audioEl) {
+            audioEl.volume = newVolume;
+        } else {
+            // Fallback: try finding by address if identity strategy changes
+            const audioElByAddr = document.getElementById(`audio-${player.address}`) as HTMLAudioElement;
+            if (audioElByAddr) {
+                audioElByAddr.volume = newVolume;
+            }
+        }
+    };
 
     // Determine selection color based on role during night
     const getSelectionClasses = () => {
@@ -294,9 +313,82 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
             {/* Text Info */}
             <div className="flex flex-col items-start min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1 w-full">
-                    <span className={`text-sm md:text-base font-bold truncate block max-w-full ${isMafiaVisible ? 'text-rose-500' : 'text-[#916A47]'}`}>
+                    <span className={`text-sm md:text-base font-bold truncate block max-w-[120px] ${isMafiaVisible ? 'text-rose-500' : 'text-[#916A47]'}`}>
                         {player.name}
                     </span>
+
+                    {/* Volume Mixer Control (Only if not me and alive) */}
+                    {!isMe && player.isAlive && (
+                        <div
+                            className="relative"
+                            onMouseLeave={() => {
+                                // Auto-close when mouse leaves the controls area
+                                closeTimerRef.current = setTimeout(() => setIsVolumeOpen(false), 50);
+                            }}
+                            onMouseEnter={() => {
+                                // Cancel close timer if mouse returns
+                                if (closeTimerRef.current) {
+                                    clearTimeout(closeTimerRef.current);
+                                    closeTimerRef.current = null;
+                                }
+                            }}
+                        >
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsVolumeOpen(!isVolumeOpen);
+                                }}
+                                className={`
+                                    p-1 rounded-md transition-all duration-200 mt-0.5
+                                    ${isVolumeOpen ? 'text-[#916A47] bg-[#916A47]/10' : 'text-[#916A47] hover:bg-[#916A47]/10'}
+                                `}
+                                title="Voice Volume"
+                            >
+                                <Volume2 className="w-4 h-4" />
+                            </button>
+
+                            {/* Volume Slider Flyout */}
+                            <AnimatePresence>
+                                {isVolumeOpen && (
+                                    <>
+                                        {/* Click Outside Overlay removed to allow onMouseLeave to work properly */}
+
+                                        <motion.div
+                                            initial={{ opacity: 0, scale: 0, y: 10 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0, y: 10 }}
+                                            transition={{ duration: 0.15, ease: "easeOut" }}
+                                            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 origin-bottom"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <div className="bg-black/70 backdrop-blur-md rounded-xl p-2 flex items-center gap-2 w-[120px]">
+                                                <button
+                                                    onClick={() => handleVolumeChange(volume === 0 ? 1 : 0)}
+                                                    className="text-[#916A47]/70 hover:text-[#916A47] transition-colors"
+                                                >
+                                                    {volume === 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                                                </button>
+                                                <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="1"
+                                                    step="0.05"
+                                                    value={volume}
+                                                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                                                    className="w-full h-1 bg-[#916A47]/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#916A47] [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(145,106,71,0.5)] hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
+                                                />
+                                            </div>
+                                            {/* Arrow pointer - positioned to minimize overlap for uniform transparency */}
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-black/70 rotate-45 transform backdrop-blur-md"></div>
+
+                                            {/* Invisible bridge to prevent closing when moving over the gap */}
+                                            <div className="absolute top-full left-0 w-full h-4 bg-transparent" />
+                                        </motion.div>
+                                    </>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    )}
                 </div>
                 <div className="text-[10px] text-white/30 font-mono">
                     {player.address ? `${player.address.slice(0, 4)}...${player.address.slice(-4)}` : '0x...'}
@@ -352,7 +444,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                 </AnimatePresence>
             </div>
 
-        </motion.div>
+        </motion.div >
     );
 });
 
