@@ -95,7 +95,7 @@ export const DiscussionChat: React.FC<DiscussionChatProps> = ({ isExpanded, onTo
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         room: roomName,
-                        username: myPlayer?.name || 'Player'
+                        username: (myPlayer?.name || 'Player') + '_chat'
                     })
                 });
 

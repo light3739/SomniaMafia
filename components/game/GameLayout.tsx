@@ -20,26 +20,26 @@ import { GamePhase, Role } from '../../types';
 
 // Dynamic imports for heavy components (code splitting)
 const ShufflePhase = dynamic(() => import('./ShufflePhase').then(m => m.ShufflePhase), {
-    loading: () => <div className="text-white/50 animate-pulse">Loading...</div>,
+    loading: () => null,
     ssr: false
 });
 const RoleReveal = dynamic(() => import('./RoleReveal').then(m => m.RoleReveal), {
-    loading: () => <div className="text-white/50 animate-pulse">Loading...</div>,
+    loading: () => null,
     ssr: false
 });
 const DayPhase = dynamic(() => import('./DayPhase').then(m => m.DayPhase), {
-    loading: () => <div className="text-white/50 animate-pulse">Loading...</div>,
+    loading: () => null,
     ssr: false
 });
 const NightPhase = dynamic(() => import('./NightPhase').then(m => m.NightPhase), {
-    loading: () => <div className="text-white/50 animate-pulse">Loading...</div>,
+    loading: () => null, // No visible loading to prevent flash
     ssr: false
 });
 const NightPhaseTimer = dynamic(() => import('./NightPhase').then(m => m.NightPhaseTimer), {
     ssr: false
 });
 const GameOver = dynamic(() => import('./GameOver').then(m => m.GameOver), {
-    loading: () => <div className="text-white/50 animate-pulse">Loading...</div>,
+    loading: () => null,
     ssr: false
 });
 const PostVotingTransition = dynamic(() => import('./PostVotingTransition').then(m => m.PostVotingTransition), {
