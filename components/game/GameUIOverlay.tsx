@@ -52,6 +52,15 @@ export const GameUIOverlay: React.FC = () => {
     // Can write only during my turn in discussion (DAY phase)
     const canWrite = isMyTurn && gameState.phase === GamePhase.DAY;
 
+    // Auto-open chat when DAY phase starts
+    useEffect(() => {
+        if (gameState.phase === GamePhase.DAY) {
+            setIsChatExpanded(true);
+        } else {
+            setIsChatExpanded(false);
+        }
+    }, [gameState.phase]);
+
     return (
         <>
             {/* Discussion Chat Panel */}

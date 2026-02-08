@@ -538,6 +538,17 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                 exit={{ opacity: 0, y: -10 }}
                                 className="w-full space-y-3"
                             >
+                                {/* Mic Button - Always visible during DAY phase */}
+                                {currentRoomId && myPlayer && (
+                                    <div className="flex items-center justify-end mb-3">
+                                        <MicButton
+                                            roomId={`${currentRoomId}-day`}
+                                            userName={myPlayer.name}
+                                            isMyTurn={discussionState?.isMyTurn || false}
+                                        />
+                                    </div>
+                                )}
+
                                 {discussionState?.active ? (
                                     <>
                                         {/* Timer Display with Mic Button */}
