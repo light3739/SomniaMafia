@@ -148,51 +148,53 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
                 )}
             </AnimatePresence>
 
-            {/* Main Control Bar */}
-            <div className="pointer-events-auto flex items-center gap-2 p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl group transition-all hover:bg-black/80 hover:border-[#916A47]/40">
+            {/* Horizontal row: Sound controls (left) + Chat button (right) */}
+            <div className="flex items-center gap-3">
+                {/* Main Control Bar - Sound controls only */}
+                <div className="pointer-events-auto flex items-center gap-2 p-1.5 bg-black/60 backdrop-blur-xl border-2 border-white/20 rounded-full shadow-2xl group transition-all hover:bg-black/80 hover:border-[#916A47]/60">
 
-                {/* Main Music Control (only if on music route) */}
-                {isMusicRoute && (
-                    <>
-                        {isPlaying ? (
-                            <button
-                                onClick={handleStop}
-                                className="w-10 h-10 flex items-center justify-center rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all active:scale-95"
-                                title="Stop Background Music"
-                            >
-                                <Square size={14} fill="currentColor" />
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handlePlay}
-                                className="w-10 h-10 flex items-center justify-center rounded-full bg-[#916A47]/20 text-[#916A47] hover:bg-[#916A47]/40 transition-all active:scale-95"
-                                title="Play Background Music"
-                            >
-                                <Play size={16} fill="currentColor" className="ml-0.5" />
-                            </button>
-                        )}
-                        <div className="w-[1px] h-6 bg-white/10 mx-1" />
-                    </>
-                )}
+                    {/* Main Music Control (only if on music route) */}
+                    {isMusicRoute && (
+                        <>
+                            {isPlaying ? (
+                                <button
+                                    onClick={handleStop}
+                                    className="w-10 h-10 flex items-center justify-center rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all active:scale-95"
+                                    title="Stop Background Music"
+                                >
+                                    <Square size={14} fill="currentColor" />
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handlePlay}
+                                    className="w-10 h-10 flex items-center justify-center rounded-full bg-[#916A47]/20 text-[#916A47] hover:bg-[#916A47]/40 transition-all active:scale-95"
+                                    title="Play Background Music"
+                                >
+                                    <Play size={16} fill="currentColor" className="ml-0.5" />
+                                </button>
+                            )}
+                            <div className="w-[1px] h-6 bg-white/10 mx-1" />
+                        </>
+                    )}
 
-                {/* Settings Toggle Button */}
-                <button
-                    onClick={() => setShowSettings(!showSettings)}
-                    className={`
-                        w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-90
-                        ${showSettings ? 'bg-[#916A47] text-white' : 'text-white/60 hover:text-white hover:bg-white/5'}
-                    `}
-                    title="Audio Settings"
-                >
-                    {showSettings ? <ChevronUp size={20} /> : <Volume2 size={20} />}
-                </button>
+                    {/* Settings Toggle Button */}
+                    <button
+                        onClick={() => setShowSettings(!showSettings)}
+                        className={`
+                            w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-90
+                            ${showSettings ? 'bg-[#916A47] text-white' : 'text-white/60 hover:text-white hover:bg-white/5'}
+                        `}
+                        title="Audio Settings"
+                    >
+                        {showSettings ? <ChevronUp size={20} /> : <Volume2 size={20} />}
+                    </button>
+                </div>
 
-                {/* Additional Buttons (Chat, etc.) */}
+                {/* Chat Button - Separate element on the right */}
                 {additionalButtons && (
-                    <>
-                        <div className="w-[1px] h-6 bg-white/10 mx-1" />
+                    <div className="pointer-events-auto">
                         {additionalButtons}
-                    </>
+                    </div>
                 )}
             </div>
         </div>

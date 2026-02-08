@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { useSessionKey } from '../../hooks/useSessionKey';
-const lobbyBg = "/assets/lobby_background.webp";
+const lobbyBg = "/assets/lobby_background.png";
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { GamePhase } from '../../types';
