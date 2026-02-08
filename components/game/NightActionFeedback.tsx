@@ -20,9 +20,15 @@ interface NightActionFeedbackProps {
     myRole: Role;
     nightState: NightState;
     gameState: GameState;
+    aliveMafiaCount?: number; // Total alive mafia for consensus progress
 }
 
-export const NightActionFeedback: React.FC<NightActionFeedbackProps> = ({ myRole, nightState, gameState }) => {
+export const NightActionFeedback: React.FC<NightActionFeedbackProps> = ({ myRole, nightState, gameState, aliveMafiaCount }) => {
+
+    // Calculate if all mafia have committed/revealed
+    const totalMafia = aliveMafiaCount || nightState.mafiaCommitted || 1;
+    const allMafiaCommitted = nightState.mafiaCommitted >= totalMafia;
+    const allMafiaRevealed = nightState.mafiaRevealed >= totalMafia;
 
     // Memoize player lookup to avoid recalculation on every render
     const targetName = useMemo(() => {
@@ -92,21 +98,37 @@ export const NightActionFeedback: React.FC<NightActionFeedbackProps> = ({ myRole
             {/* MAFIA CONSENSUS UI */}
             {myRole === Role.MAFIA && (
                 <>
-                    <div className="flex justify-between text-sm mb-3">
-                        <span className="text-rose-200/60">Committed: {nightState.mafiaCommitted}</span>
-                        <span className="text-rose-200/60">Revealed: {nightState.mafiaRevealed}</span>
+                    {/* Progress Bar */}
+                    <div className="mb-3">
+                        <div className="flex justify-between text-sm mb-2">
+                            <span className="text-rose-200/60">Committed: {nightState.mafiaCommitted}/{totalMafia}</span>
+                            <span className="text-rose-200/60">Revealed: {nightState.mafiaRevealed}/{totalMafia}</span>
+                        </div>
+                        {/* Visual progress bar */}
+                        <div className="h-1.5 bg-rose-950/50 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-rose-500 transition-all duration-500 ease-out"
+                                style={{ width: `${(nightState.mafiaRevealed / totalMafia) * 100}%` }}
+                            />
+                        </div>
                     </div>
 
-                    {nightState.mafiaRevealed < nightState.mafiaCommitted && (
+                    {/* Waiting for other mafia - show if not all revealed yet */}
+                    {!allMafiaRevealed && (
                         <div className="p-3 bg-rose-900/20 rounded-lg">
                             <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 rounded-full bg-rose-500 animate-pulse" />
-                                <span className="text-rose-300 text-sm">Waiting for other Mafia...</span>
+                                <span className="text-rose-300 text-sm">
+                                    {!allMafiaCommitted
+                                        ? `Waiting for ${totalMafia - nightState.mafiaCommitted} more mafia to choose...`
+                                        : `Waiting for ${totalMafia - nightState.mafiaRevealed} more mafia to confirm...`
+                                    }
+                                </span>
                             </div>
                         </div>
                     )}
 
-                    {nightState.mafiaRevealed > 0 && nightState.mafiaRevealed === nightState.mafiaCommitted && (
+                    {allMafiaRevealed && (
                         <div className="p-4 bg-rose-900/40 rounded-xl">
                             {nightState.mafiaConsensusTarget ? (
                                 <>
