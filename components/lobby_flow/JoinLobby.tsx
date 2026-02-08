@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import Image from 'next/image';
-const lobbyBg = "/assets/lobby_background.webp";
+const lobbyBg = "/assets/lobby_background.png";
 import { BackButton } from '../ui/BackButton';
 import { usePublicClient, useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';

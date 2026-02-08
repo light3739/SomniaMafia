@@ -378,8 +378,18 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                                     className="w-full h-1 bg-[#916A47]/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#916A47] [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(145,106,71,0.5)] hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
                                                 />
                                             </div>
-                                            {/* Arrow pointer - positioned to minimize overlap for uniform transparency */}
-                                            <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-black/70 rotate-45 transform backdrop-blur-md"></div>
+                                            {/* Triangle pointer */}
+                                            <div
+                                                className="absolute left-1/2 -translate-x-1/2 -bottom-2"
+                                                style={{
+                                                    width: 0,
+                                                    height: 0,
+                                                    borderLeft: '8px solid transparent',
+                                                    borderRight: '8px solid transparent',
+                                                    borderTop: '8px solid rgba(0, 0, 0, 0.7)',
+                                                }}
+                                            />
+
 
                                             {/* Invisible bridge to prevent closing when moving over the gap */}
                                             <div className="absolute top-full left-0 w-full h-4 bg-transparent" />
