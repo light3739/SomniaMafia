@@ -496,6 +496,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             dayCount
         });
 
+        // Fetch remote avatars from server
+        let remoteAvatars: Record<string, string> = {};
+        try {
+            const avatarRes = await fetch(`/api/game/avatar?roomId=${roomId.toString()}`);
+            if (avatarRes.ok) {
+                const data = await avatarRes.json();
+                remoteAvatars = data.avatars || {};
+            }
+        } catch (e) {
+            console.warn('[Avatar Sync] Failed to fetch avatars:', e);
+        }
+
         setGameState(prev => {
             const existingRoles = new Map<string, Role>();
             prev.players.forEach(p => {
@@ -510,7 +522,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     ep => ep.address.toLowerCase() === p.wallet.toLowerCase()
                 );
                 const isMe = p.wallet.toLowerCase() === address?.toLowerCase();
-                const playerAvatar = existingPlayer?.avatarUrl ||
+
+                // Avatar priority: 1) remote server, 2) existing, 3) local (if me), 4) fallback
+                const playerAvatar =
+                    remoteAvatars[p.wallet.toLowerCase()] ||
+                    existingPlayer?.avatarUrl ||
                     (isMe && avatarUrl) ||
                     `https://picsum.photos/seed/${p.wallet}/200`;
 
@@ -685,6 +701,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             markSessionRegistered();
             setCurrentRoomId(BigInt(newRoomId));
             await refreshPlayersList(BigInt(newRoomId));
+
+            // Upload avatar to server for other players to see
+            if (avatarUrl && address) {
+                try {
+                    await fetch('/api/game/avatar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            roomId: newRoomId.toString(),
+                            address,
+                            avatar: avatarUrl
+                        })
+                    });
+                    console.log('[Avatar Sync] Avatar uploaded to server');
+                } catch (e) {
+                    console.warn('[Avatar Sync] Failed to upload avatar:', e);
+                }
+            }
+
             addLog("Lobby created successfully!", "success");
             setIsTxPending(false);
         } catch (e: any) {
@@ -741,6 +776,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             setCurrentRoomId(BigInt(roomId));
             await refreshPlayersList(BigInt(roomId));
+
+            // Upload avatar to server for other players to see
+            if (avatarUrl && address) {
+                try {
+                    await fetch('/api/game/avatar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            roomId: roomId.toString(),
+                            address,
+                            avatar: avatarUrl
+                        })
+                    });
+                    console.log('[Avatar Sync] Avatar uploaded to server');
+                } catch (e) {
+                    console.warn('[Avatar Sync] Failed to upload avatar:', e);
+                }
+            }
+
             // addLog("Joined with auto-sign enabled!", "success");
             setIsTxPending(false);
         } catch (e: any) {
