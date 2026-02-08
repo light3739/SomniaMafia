@@ -232,6 +232,72 @@ export class ServerStore {
             console.error("[ServerStore] Redis error (clearDiscussion):", e);
         }
     }
+
+    // ============ PLAYER AVATARS ============
+
+    /**
+     * Store a player's avatar (base64) for a specific room.
+     */
+    static async storeAvatar(roomId: string, address: string, base64Avatar: string) {
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:avatars:${normalizedRoomId}`;
+
+        if (!redis) {
+            console.warn(`[ServerStore] Redis not configured. Using MEMORY fallback for avatars`);
+            if (!memoryStore[key]) memoryStore[key] = {};
+            memoryStore[key][address.toLowerCase()] = base64Avatar;
+            return;
+        }
+
+        try {
+            await redis.hset(key, address.toLowerCase(), base64Avatar);
+            await redis.expire(key, GAME_DATA_TTL);
+            console.log(`[ServerStore] Stored avatar for Room #${roomId}, Player ${address.slice(0, 8)}...`);
+        } catch (e) {
+            console.error("[ServerStore] Redis error (storeAvatar):", e);
+        }
+    }
+
+    /**
+     * Get all avatars for a room.
+     * Returns: { "0xaddress": "data:image/...", ... }
+     */
+    static async getAvatars(roomId: string): Promise<Record<string, string>> {
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:avatars:${normalizedRoomId}`;
+
+        if (!redis) {
+            return memoryStore[key] || {};
+        }
+
+        try {
+            const data = await redis.hgetall(key);
+            return data || {};
+        } catch (e) {
+            console.error("[ServerStore] Redis error (getAvatars):", e);
+            return {};
+        }
+    }
+
+    /**
+     * Get a single player's avatar.
+     */
+    static async getAvatar(roomId: string, address: string): Promise<string | null> {
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:avatars:${normalizedRoomId}`;
+
+        if (!redis) {
+            return memoryStore[key]?.[address.toLowerCase()] || null;
+        }
+
+        try {
+            const avatar = await redis.hget(key, address.toLowerCase());
+            return avatar || null;
+        } catch (e) {
+            console.error("[ServerStore] Redis error (getAvatar):", e);
+            return null;
+        }
+    }
 }
 
 /**
