@@ -645,7 +645,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
-                    args: [lobbyName, 4, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
+                    args: [lobbyName, 16, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
                     value: parseEther('0.5'),
                 });
@@ -662,7 +662,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'createAndJoin',
                 args: [
                     lobbyName,      // string roomName
-                    4,              // uint8 maxPlayers - REDUCED to 4 (min)
+                    16,             // uint8 maxPlayers
                     safeName,       // string nickname (SANITIZED)
                     pubKeyHex as `0x${string}`,      // bytes publicKey
                     sessionAddress as `0x${string}`  // address sessionAddress
