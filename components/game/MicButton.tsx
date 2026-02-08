@@ -56,13 +56,36 @@ export function MicButton({
         console.log(`[MicButton] Detached audio from ${participant.identity}`);
     }, []);
 
+    // Use refs for callbacks to avoid dependency issues
+    const attachRemoteAudioRef = useRef(attachRemoteAudio);
+    const detachRemoteAudioRef = useRef(detachRemoteAudio);
+
+    // Update refs when callbacks change
+    useEffect(() => {
+        attachRemoteAudioRef.current = attachRemoteAudio;
+        detachRemoteAudioRef.current = detachRemoteAudio;
+    }, [attachRemoteAudio, detachRemoteAudio]);
+
+    // Store userName in ref to avoid dependency issues
+    const userNameRef = useRef(userName);
+    useEffect(() => {
+        userNameRef.current = userName;
+    }, [userName]);
+
     // Connect to LiveKit room on mount
     useEffect(() => {
+        if (!roomId) return;
+
+        // Skip if already connected
+        if (roomRef.current) {
+            console.log('[MicButton] Already have room instance, skipping connect');
+            return;
+        }
+
         let cancelled = false;
 
         const connect = async () => {
-            if (!roomId) return;
-
+            console.log('[MicButton] Starting connection...');
             setIsConnecting(true);
             setError(null);
 
@@ -70,7 +93,7 @@ export function MicButton({
                 // Get token from API
                 const resp = await fetch("/api/token", {
                     method: "POST",
-                    body: JSON.stringify({ room: roomId, username: userName }),
+                    body: JSON.stringify({ room: roomId, username: userNameRef.current }),
                     headers: { "Content-Type": "application/json" },
                 });
 
@@ -110,16 +133,16 @@ export function MicButton({
                     }
                 });
 
-                // Handle remote tracks - SUBSCRIBE TO AUDIO
+                // Handle remote tracks - SUBSCRIBE TO AUDIO (use ref to avoid stale closure)
                 room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
                     if (!cancelled) {
-                        attachRemoteAudio(track, participant);
+                        attachRemoteAudioRef.current(track, participant);
                     }
                 });
 
                 room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
                     if (!cancelled) {
-                        detachRemoteAudio(track, participant);
+                        detachRemoteAudioRef.current(track, participant);
                     }
                 });
 
@@ -140,11 +163,11 @@ export function MicButton({
                     return;
                 }
 
-                // Attach any existing remote audio tracks
+                // Attach any existing remote audio tracks (use ref)
                 room.remoteParticipants.forEach((participant) => {
                     participant.audioTrackPublications.forEach((publication) => {
                         if (publication.track) {
-                            attachRemoteAudio(publication.track, participant);
+                            attachRemoteAudioRef.current(publication.track, participant);
                         }
                     });
                 });
@@ -192,7 +215,7 @@ export function MicButton({
                 audioContainerRef.current.innerHTML = '';
             }
         };
-    }, [roomId, userName, attachRemoteAudio, detachRemoteAudio]);
+    }, [roomId]); // Only reconnect if roomId changes (userName stored in ref)
 
     // Toggle microphone
     const toggleMic = useCallback(async () => {

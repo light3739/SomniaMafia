@@ -74,37 +74,60 @@ export const DiscussionChat: React.FC<DiscussionChatProps> = ({ isExpanded, onTo
         }
     }, []);
 
+    // Store username in ref to avoid dependency issues
+    const userNameRef = useRef(myPlayer?.name || 'Player');
+    useEffect(() => {
+        userNameRef.current = myPlayer?.name || 'Player';
+    }, [myPlayer?.name]);
+
     // Connect to LiveKit room for data channel
     useEffect(() => {
-        if (!isExpanded || !currentRoomId || gameState.phase !== GamePhase.DAY) {
+        // Connect in background regardless of isExpanded state
+        if (!currentRoomId || gameState.phase !== GamePhase.DAY) {
+            return;
+        }
+
+        // Skip if already connected or connecting
+        if (roomRef.current) {
+            console.log('[DiscussionChat] Already have room instance, skipping connect');
             return;
         }
 
         let cancelled = false;
 
         const connect = async () => {
-            if (roomRef.current?.state === 'connected') return;
-
+            console.log('[DiscussionChat] Starting connection...');
             setIsConnecting(true);
 
             try {
                 // Get token from API (same room as voice chat)
                 const roomName = `${currentRoomId}-day`;
+                console.log('[DiscussionChat] Getting token for room:', roomName);
+
                 const resp = await fetch('/api/token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         room: roomName,
-                        username: (myPlayer?.name || 'Player') + '_chat'
+                        // Add _chat suffix to avoid DUPLICATE_IDENTITY with MicButton
+                        username: `${userNameRef.current}_chat`
                     })
                 });
 
-                if (!resp.ok) throw new Error('Failed to get token');
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    throw new Error(`Failed to get token: ${resp.status} - ${text}`);
+                }
 
                 const data = await resp.json();
                 if (data.error) throw new Error(data.error);
 
-                if (cancelled) return;
+                if (cancelled) {
+                    console.log('[DiscussionChat] Cancelled before connect');
+                    return;
+                }
+
+                console.log('[DiscussionChat] Got token, creating room...');
 
                 // Create room connection
                 const room = new Room({
@@ -114,16 +137,16 @@ export const DiscussionChat: React.FC<DiscussionChatProps> = ({ isExpanded, onTo
 
                 room.on(RoomEvent.Connected, () => {
                     if (!cancelled) {
+                        console.log('[DiscussionChat] Connected to room!');
                         setIsConnected(true);
                         setIsConnecting(false);
-                        console.log('[DiscussionChat] Connected to room');
                     }
                 });
 
                 room.on(RoomEvent.Disconnected, () => {
                     if (!cancelled) {
-                        setIsConnected(false);
                         console.log('[DiscussionChat] Disconnected from room');
+                        setIsConnected(false);
                     }
                 });
 
@@ -135,9 +158,11 @@ export const DiscussionChat: React.FC<DiscussionChatProps> = ({ isExpanded, onTo
                 roomRef.current = room;
 
                 // Connect to room (only data, no audio/video)
+                console.log('[DiscussionChat] Connecting to LiveKit...');
                 await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, data.token, {
                     autoSubscribe: true
                 });
+                console.log('[DiscussionChat] room.connect() completed');
 
             } catch (e) {
                 console.error('[DiscussionChat] Connection error:', e);
@@ -150,11 +175,14 @@ export const DiscussionChat: React.FC<DiscussionChatProps> = ({ isExpanded, onTo
         connect();
 
         return () => {
+            console.log('[DiscussionChat] Cleanup called');
             cancelled = true;
-            // Don't disconnect - MicButton might be using the same room
-            // roomRef.current?.disconnect();
+            if (roomRef.current) {
+                roomRef.current.disconnect();
+                roomRef.current = null;
+            }
         };
-    }, [isExpanded, currentRoomId, gameState.phase, myPlayer?.name, handleDataReceived]);
+    }, [currentRoomId, gameState.phase, handleDataReceived]); // Removed myPlayer?.name
 
     // Clean up on phase change
     useEffect(() => {
