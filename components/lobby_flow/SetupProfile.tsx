@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Camera, Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -8,17 +8,67 @@ const lobbyBg = "/assets/lobby_background.webp";
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 
+const AVATAR_STORAGE_KEY = 'mafia_player_avatar';
+const MAX_AVATAR_SIZE = 150; // pixels for compression
+
 export const SetupProfile: React.FC = () => {
     const { playerName, setPlayerName, avatarUrl, setAvatarUrl } = useGameContext();
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Load saved avatar from localStorage on mount
+    useEffect(() => {
+        if (!avatarUrl) {
+            const savedAvatar = localStorage.getItem(AVATAR_STORAGE_KEY);
+            if (savedAvatar) {
+                setAvatarUrl(savedAvatar);
+            }
+        }
+    }, [avatarUrl, setAvatarUrl]);
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            const url = URL.createObjectURL(file);
-            setAvatarUrl(url);
-        }
+        if (!file) return;
+
+        // Convert to base64 with compression
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = document.createElement('img');
+            img.onload = () => {
+                // Compress image using canvas
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+
+                // Calculate new dimensions (max 150x150)
+                let width = img.width;
+                let height = img.height;
+                if (width > height) {
+                    if (width > MAX_AVATAR_SIZE) {
+                        height = (height * MAX_AVATAR_SIZE) / width;
+                        width = MAX_AVATAR_SIZE;
+                    }
+                } else {
+                    if (height > MAX_AVATAR_SIZE) {
+                        width = (width * MAX_AVATAR_SIZE) / height;
+                        height = MAX_AVATAR_SIZE;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Convert to base64 (JPEG for smaller size)
+                const base64 = canvas.toDataURL('image/jpeg', 0.8);
+
+                // Save to localStorage and state
+                localStorage.setItem(AVATAR_STORAGE_KEY, base64);
+                setAvatarUrl(base64);
+            };
+            img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
     };
 
     return (
