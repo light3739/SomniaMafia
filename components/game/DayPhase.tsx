@@ -518,10 +518,6 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
 
                 {/* Event Feed - Restored height */}
                 <div className="mb-4 h-[360px] w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
-                    <div className="absolute top-2 right-3 z-10 flex gap-1">
-                        <div className="w-1 h-1 rounded-full bg-[#916A47]/40" />
-                        <div className="w-1 h-1 rounded-full bg-[#916A47]/20" />
-                    </div>
                     <GameLog />
                 </div>
 
@@ -538,21 +534,10 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                 exit={{ opacity: 0, y: -10 }}
                                 className="w-full space-y-3"
                             >
-                                {/* Mic Button - Always visible during DAY phase */}
-                                {currentRoomId && myPlayer && (
-                                    <div className="flex items-center justify-end mb-3">
-                                        <MicButton
-                                            roomId={`${currentRoomId}-day`}
-                                            userName={myPlayer.name}
-                                            isMyTurn={discussionState?.isMyTurn || false}
-                                        />
-                                    </div>
-                                )}
-
                                 {discussionState?.active ? (
                                     <>
-                                        {/* Timer Display */}
-                                        <div className="w-full py-2 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                        {/* Timer Display with Mic Button */}
+                                        <div className="relative w-full py-2 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
                                             {discussionState?.phase === 'initial_delay' ? (
                                                 <div className="flex items-center justify-center gap-2">
                                                     <Clock className="w-4 h-4 text-[#916A47]" />
@@ -572,6 +557,16 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                                     <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
                                                         {discussionState?.isMyTurn ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
                                                     </span>
+                                                </div>
+                                            )}
+                                            {/* Mic Button - Positioned to the right of timer */}
+                                            {currentRoomId && myPlayer && (
+                                                <div className="absolute right-[-70px] top-1/2 -translate-y-1/2">
+                                                    <MicButton
+                                                        roomId={`${currentRoomId}-day`}
+                                                        userName={myPlayer.name}
+                                                        isMyTurn={discussionState?.isMyTurn || false}
+                                                    />
                                                 </div>
                                             )}
                                         </div>
@@ -636,7 +631,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                         key="transition-timer"
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className="w-full py-4 text-center bg-orange-950/20 rounded-xl border border-orange-500/30 backdrop-blur-sm"
+                                        className="w-full py-4 text-center"
                                     >
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <div className="flex items-center gap-2">
