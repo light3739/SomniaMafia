@@ -28,16 +28,8 @@ export const GameLog: React.FC = React.memo(() => {
     return (
         <div className="flex flex-col h-full bg-[#0a0a0a]/80 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
             {/* Заголовок лога */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/[0.02]">
-                <div className="flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-[#916A47]" />
-                    <span className="text-xs font-mono text-white/40 uppercase tracking-widest">Game Feed</span>
-                </div>
-                <div className="flex gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500/20" />
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500/20" />
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500/20" />
-                </div>
+            <div className="flex items-center px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+                <span className="text-sm font-semibold text-white/40 uppercase tracking-widest">Game Feed</span>
             </div>
 
             {/* Контент */}
