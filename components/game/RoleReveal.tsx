@@ -289,7 +289,6 @@ export const RoleReveal: React.FC = React.memo(() => {
             const keys = await collectKeys();
 
             if (!keys || keys.size < gameState.players.length - 1) {
-                // addLog(`Waiting for keys: ${keys?.size || 0}/${gameState.players.length - 1}`, "warning");
                 setIsProcessing(false);
                 return;
             }
@@ -308,7 +307,6 @@ export const RoleReveal: React.FC = React.memo(() => {
 
             // Расшифровываем ключами других игроков
             for (const [_, key] of keys) {
-                // Convert hex bytes back to string before using as decryption key
                 const decryptionKey = hexToString(key);
                 myEncryptedCard = shuffleService.decryptWithKey(myEncryptedCard, decryptionKey);
             }
@@ -335,6 +333,12 @@ export const RoleReveal: React.FC = React.memo(() => {
                 teammates
             }));
 
+            // PERSISTENCE: Save role to localStorage immediately
+            if (currentRoomId && address) {
+                localStorage.setItem(`my_role_${currentRoomId}_${address.toLowerCase()}`, role);
+                console.log("[RoleReveal] Role saved to localStorage");
+            }
+
             // Обновляем gameState с моей ролью и ролями союзников (если я мафия)
             setGameState(prev => ({
                 ...prev,
@@ -357,17 +361,12 @@ export const RoleReveal: React.FC = React.memo(() => {
         } finally {
             setIsProcessing(false);
         }
-    }, [revealState.myCardIndex, revealState.deck, gameState.players, myPlayer, collectKeys, addLog, setGameState, decryptAllCardsForTeammates]);
-
-
+    }, [revealState.myCardIndex, revealState.deck, gameState.players, myPlayer, collectKeys, addLog, setGameState, decryptAllCardsForTeammates, currentRoomId, address]);
 
     // Подтвердить роль (с предварительным коммитом)
     const handleConfirmRole = useCallback(async () => {
-        // Проверка, что роль расшифрована
         if (revealState.myRole === null) return;
 
-        // Маппинг ролей (String -> Number), так как контракт ждет uint8
-        // NONE=0, MAFIA=1, DOCTOR=2, DETECTIVE=3, CITIZEN=4
         const roleMap: Record<string, number> = {
             [Role.MAFIA]: 1,
             [Role.DOCTOR]: 2,
@@ -376,14 +375,33 @@ export const RoleReveal: React.FC = React.memo(() => {
             [Role.UNKNOWN]: 0
         };
 
-        const roleNum = roleMap[revealState.myRole] || 4; // Fallback to Citizen
+        const roleNum = roleMap[revealState.myRole] || 4;
 
         setIsProcessing(true);
         try {
             // 1. Генерируем соль
             const salt = ShuffleService.generateSalt();
 
-            // 2. ВЫЗЫВАЕМ НОВУЮ АТОМАРНУЮ ФУНКЦИЮ (Commit + Confirm за одну транзакцию)
+            // PERSISTENCE: Save salt to localStorage
+            if (currentRoomId && address) {
+                localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, salt);
+                console.log("[RoleReveal] Salt saved to localStorage");
+
+                // SERVER SYNC: Backup secret to server (enables Auto-Win)
+                fetch('/api/game/reveal-secret', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId: currentRoomId.toString(),
+                        address: address,
+                        role: roleNum,
+                        salt: salt
+                    })
+                }).then(() => console.log("[RoleReveal] Secret backed up to server"))
+                    .catch(err => console.error("[RoleReveal] Failed to backup secret:", err));
+            }
+
+            // 2. ВЫЗЫВАЕМ АТОМАРНУЮ ФУНКЦИЮ
             await commitAndConfirmRoleOnChain(roleNum, salt);
 
             setRevealState(prev => ({ ...prev, hasConfirmed: true }));
@@ -392,7 +410,18 @@ export const RoleReveal: React.FC = React.memo(() => {
         } finally {
             setIsProcessing(false);
         }
-    }, [revealState.myRole, commitAndConfirmRoleOnChain]);
+    }, [revealState.myRole, commitAndConfirmRoleOnChain, currentRoomId, address]);
+
+    // Sync state if role is already known in GameContext (recovered from LS)
+    useEffect(() => {
+        if (!revealState.isRevealed && myPlayer?.role && myPlayer.role !== Role.UNKNOWN) {
+            setRevealState(prev => ({
+                ...prev,
+                myRole: myPlayer.role,
+                isRevealed: true
+            }));
+        }
+    }, [myPlayer?.role, revealState.isRevealed]);
 
     // Initial fetch
     useEffect(() => {
