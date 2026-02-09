@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent, useWatchBlockNumber } from 'wagmi';
 import { createWalletClient, http, parseEther, parseEventLogs, toHex, pad } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -313,6 +313,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         playersRef.current = gameState.players;
     }, [gameState.players]);
+
+    // Fix for "Night Action" flashing before Voting Results:
+    // When detecting a transition from VOTING to NIGHT (e.g. via polling), 
+    // immediately trigger the Voting Results view.
+    const prevPhaseRef = useRef<GamePhase>(gameState.phase);
+    useLayoutEffect(() => {
+        const prevPhase = prevPhaseRef.current;
+        const currentPhase = gameState.phase;
+
+        if (prevPhase === GamePhase.VOTING && currentPhase === GamePhase.NIGHT) {
+            setShowVotingResults(true);
+            // Auto-hide after 10s (matches PostVotingTransition timer)
+            const timer = setTimeout(() => setShowVotingResults(false), 10000);
+            return () => clearTimeout(timer);
+        }
+
+        prevPhaseRef.current = currentPhase;
+    }, [gameState.phase, setShowVotingResults]);
 
     // Ищем myPlayer: если myPlayerId установлен (тестовый режим), используем его, иначе - адрес кошелька
     const myPlayerById = gameState.myPlayerId
