@@ -250,7 +250,7 @@ export function MicButton({
                 onClick={toggleMic}
                 disabled={isDisabled}
                 className={`
-                relative w-14 h-14 rounded-full flex items-center justify-center
+                relative w-12 h-12 rounded-full flex items-center justify-center
                 transition-all duration-300 shadow-lg
                 ${isDisabled
                         ? 'bg-gray-800/50 border border-gray-600/30 cursor-not-allowed opacity-50'
