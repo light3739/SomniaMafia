@@ -1065,56 +1065,55 @@ const RoleCardShowcaseTest: React.FC = () => {
                                 </p>
                             </motion.div>
                         ) : (
-                        ): (
-                                <motion.div
+                            <motion.div
                                 key="revealed"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="absolute inset-0 -top-40 w-full h-[800px] flex items-center justify-center pointer-events-none"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="absolute inset-0 -top-40 w-full h-[800px] flex items-center justify-center pointer-events-none"
                             >
-                        <div className="w-full h-full pointer-events-auto">
-                            <Lanyard wireLength={180}>
-                                <div
-                                    className={`bg-gradient-to-br ${config.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-12 shadow-2xl flex flex-col justify-between w-[400px] h-[400px] cursor-grab active:cursor-grabbing select-none`}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                >
-                                    <div className="text-center flex-1 flex flex-col justify-center pointer-events-none">
-                                        {/* Role Name */}
-                                        <h2
-                                            className={`text-5xl font-['Playfair_Display'] mb-6 ${config.color}`}
+                                <div className="w-full h-full pointer-events-auto">
+                                    <Lanyard wireLength={180}>
+                                        <div
+                                            className={`bg-gradient-to-br ${config.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-12 shadow-2xl flex flex-col justify-between w-[400px] h-[400px] cursor-grab active:cursor-grabbing select-none`}
+                                            onPointerDown={(e) => e.stopPropagation()}
                                         >
-                                            {selectedRole}
-                                        </h2>
+                                            <div className="text-center flex-1 flex flex-col justify-center pointer-events-none">
+                                                {/* Role Name */}
+                                                <h2
+                                                    className={`text-5xl font-['Playfair_Display'] mb-6 ${config.color}`}
+                                                >
+                                                    {selectedRole}
+                                                </h2>
 
-                                        {/* Description */}
-                                        <p
-                                            className="text-white/60 text-sm max-w-xs mx-auto"
-                                        >
-                                            {config.description}
-                                        </p>
-                                    </div>
+                                                {/* Description */}
+                                                <p
+                                                    className="text-white/60 text-sm max-w-xs mx-auto"
+                                                >
+                                                    {config.description}
+                                                </p>
+                                            </div>
 
-                                    <div className="space-y-3 mt-6 pointer-events-auto">
-                                        {/* Confirm Button Mock */}
-                                        <button
-                                            className="w-full px-6 py-3 bg-gradient-to-r from-[#916A47] to-[#7a5a3c] text-white rounded-xl font-medium hover:from-[#a67b52] hover:to-[#916A47] transition-all shadow-lg"
-                                        >
-                                            I Understand My Role ({countdown})
-                                        </button>
+                                            <div className="space-y-3 mt-6 pointer-events-auto">
+                                                {/* Confirm Button Mock */}
+                                                <button
+                                                    className="w-full px-6 py-3 bg-gradient-to-r from-[#916A47] to-[#7a5a3c] text-white rounded-xl font-medium hover:from-[#a67b52] hover:to-[#916A47] transition-all shadow-lg"
+                                                >
+                                                    I Understand My Role ({countdown})
+                                                </button>
 
-                                        <div className="text-xs text-white/30 text-center">
-                                            Display closes in {countdown}s
+                                                <div className="text-xs text-white/30 text-center">
+                                                    Display closes in {countdown}s
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
+                                    </Lanyard>
                                 </div>
-                            </Lanyard>
-                        </div>
-                    </motion.div>
+                            </motion.div>
                         )}
-                </AnimatePresence>
+                    </AnimatePresence>
                 </div>
-    )
-}
+            )
+            }
         </div >
     );
 };
