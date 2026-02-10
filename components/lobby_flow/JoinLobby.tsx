@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
-import Image from 'next/image';
-const lobbyBg = "/assets/lobby_background.png";
 import { BackButton } from '../ui/BackButton';
 import { usePublicClient, useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
@@ -100,10 +98,10 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         fetchRooms();
     }, [publicClient, initialRoomId]);
 
+    const { isConnected } = useAccount();
+
     const handleJoin = async (room: any) => {
         if (!isConnected) {
-            // Usually ConnectButton handles this, but if we have a custom button setup:
-            // For now, we rely on the UI showing ConnectButton instead of Join if not connected.
             return;
         }
         const success = await joinLobbyOnChain(room.id);
@@ -112,8 +110,6 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             router.push('/waiting');
         }
     };
-
-    const { isConnected } = useAccount();
 
     return (
         <div className="relative w-full min-h-screen font-['Montserrat'] flex items-center justify-center p-4">

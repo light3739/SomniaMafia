@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
-import { Activity } from 'lucide-react';
 
 const logColorMap: Record<string, string> = {
     danger: 'text-red-400 border-l-4 border-red-600/60 pl-3 py-3 my-2 bg-red-500/5 rounded-r-lg text-sm md:text-base font-bold shadow-[0_0_20px_rgba(220,38,38,0.1)]',
