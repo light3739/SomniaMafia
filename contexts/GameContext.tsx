@@ -2229,7 +2229,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         setTimeout(() => {
                             console.log("[VotingFinalized] Results phase ended. Proceeding to Night.");
                             setShowVotingResults(false);
-                            addLog("Night has fallen...", "danger");
+                            addLog("Night has fallen...", "night");
                         }, 10000); // 10 seconds
 
                         break;

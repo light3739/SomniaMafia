@@ -4,6 +4,7 @@ import { useGameContext } from '../../contexts/GameContext';
 
 const logColorMap: Record<string, string> = {
     danger: 'text-red-400 border-l-4 border-red-600/60 pl-3 py-3 my-2 bg-red-500/5 rounded-r-lg text-sm md:text-base font-bold shadow-[0_0_20px_rgba(220,38,38,0.1)]',
+    night: 'text-blue-400 font-black border-l-4 border-blue-500 pl-3 py-4 my-4 bg-blue-500/10 rounded-r-lg text-base md:text-lg tracking-wide uppercase shadow-[inset_0_0_30px_rgba(59,130,246,0.1)]',
     success: 'text-emerald-400 border-l-2 border-emerald-500/50 pl-2',
     phase: 'text-[#916A47] font-black border-l-4 border-[#916A47] pl-3 py-4 my-4 bg-[#916A47]/10 rounded-r-lg text-base md:text-lg tracking-wide uppercase shadow-[inset_0_0_30px_rgba(145,106,71,0.1)]',
     warning: 'text-amber-400 border-l-2 border-amber-500/40 pl-2 font-medium bg-amber-500/5 py-1 rounded-r-sm',
