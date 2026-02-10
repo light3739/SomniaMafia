@@ -50,7 +50,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 }
 
             } else {
-                // Fetch LAST 10 rooms (Default behavior)
+                // Fetch LAST 20 rooms (Increased from 10 to catch more active games)
                 // Use 'latest' block tag to ensure freshness if possible, but default is fine
                 const nextId = await publicClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -60,7 +60,11 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
                 // console.log("Next Room ID:", nextId.toString());
 
-                const start = nextId > 10n ? nextId - 10n : 1n;
+                // FIX: Allow checking room 0. 
+                // If nextId is 5, we want to check 4,3,2,1,0.
+                // Start should be min(nextId - 20, 0).
+                const scanCount = 20n;
+                const start = nextId > scanCount ? nextId - scanCount : 0n;
                 const fetchPromises = [];
 
                 for (let i = nextId - 1n; i >= start; i--) {
@@ -70,14 +74,22 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                             abi: MAFIA_ABI,
                             functionName: 'getRoom',
                             args: [i],
-                        }).then(data => ({ id: i, data: data as any }))
+                        })
+                            .then(data => ({ id: i, data: data as any, success: true }))
+                            .catch(err => {
+                                console.warn(`Failed to fetch room ${i}:`, err);
+                                return { id: i, data: null, success: false };
+                            })
                     );
                 }
 
                 const results = await Promise.all(fetchPromises);
 
                 // Process results in order
-                for (const { id, data } of results) {
+                for (const res of results) {
+                    if (!res.success || !res.data) continue;
+
+                    const { id, data } = res;
                     const phase = Number(data.phase);
                     // DEBUG: Log found rooms
                     // console.log(`Room ${id}: Phase ${phase}`);  
