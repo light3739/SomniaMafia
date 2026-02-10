@@ -43,9 +43,16 @@ const config = getDefaultConfig({
             http(somniaChain.rpcUrls.default.http[0])
         ])
     },
-    // Disable multicall batching — Somnia testnet has no Multicall3 contract deployed,
-    // which causes wagmi's batched readContract calls to fail/delay silently.
-    batch: { multicall: false },
+    // Use deployless multicall — works on ANY chain without needing Multicall3 deployed.
+    // This sends multicall bytecode directly via eth_call, zero contract dependency.
+    batch: {
+        multicall: {
+            deployless: true,
+            wait: 50, // batch window 50ms to group parallel reads
+        },
+    },
+    // Lower polling interval — Somnia has fast blocks (~1s)
+    pollingInterval: 4_000,
     ssr: true,
 });
 
