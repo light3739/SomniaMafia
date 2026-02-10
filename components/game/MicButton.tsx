@@ -305,37 +305,6 @@ export function MicButton({
                 ) : (
                     <Mic className="w-6 h-6 text-white" />
                 )}
-
-                {/* Your turn indicator */}
-                {isMyTurn && isConnected && (
-                    <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-[#916A47] rounded-full flex items-center justify-center"
-                    >
-                        <div className="w-2 h-2 bg-white rounded-full" />
-                    </motion.div>
-                )}
-
-                {/* Error indicator */}
-                {error && (
-                    <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full"
-                    />
-                )}
-
-                {/* Participant count badge */}
-                {isConnected && participantCount > 1 && (
-                    <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="absolute -bottom-1 -left-1 min-w-[18px] h-[18px] px-1 bg-blue-500 rounded-full flex items-center justify-center text-[10px] text-white font-bold"
-                    >
-                        {participantCount}
-                    </motion.div>
-                )}
             </motion.button>
 
             {/* Hidden audio container for remote participants */}
