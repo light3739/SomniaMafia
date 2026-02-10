@@ -448,7 +448,9 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         // Don't trigger if transaction is pending
         if (isProcessing || isTxPending) return;
 
-        const checkTimeout = () => {
+        const checkTimeout = async () => {
+            if (timeoutTriggeredRef.current) return;
+            
             const now = Math.floor(Date.now() / 1000);
             const secondsPastDeadline = now - deadline;
 
@@ -457,6 +459,26 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
 
             // If we're past the deadline + buffer + index delay, trigger timeout
             if (secondsPastDeadline >= myTriggerTime) {
+                // FIX #4: Re-verify phase from contract before triggering
+                if (publicClient && currentRoomId) {
+                    try {
+                        const roomData = await publicClient.readContract({
+                            address: MAFIA_CONTRACT_ADDRESS,
+                            abi: MAFIA_ABI,
+                            functionName: 'getRoom',
+                            args: [currentRoomId],
+                        }) as any;
+                        const onChainPhase = Number(Array.isArray(roomData) ? roomData[3] : roomData.phase);
+                        // GamePhase.NIGHT = 5 typically, check if still night
+                        if (onChainPhase !== gameState.phase) {
+                            console.log(`[NightPhase] Phase already changed (${onChainPhase}), skipping timeout trigger.`);
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('[NightPhase] Could not verify phase, proceeding anyway:', e);
+                    }
+                }
+
                 console.log(`[NightPhase] Timer expired. Waterfall Trigger (Index ${myIndex})...`, {
                     deadline,
                     now,
@@ -481,7 +503,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         // And poll every 2 seconds
         const interval = setInterval(checkTimeout, 2000);
         return () => clearInterval(interval);
-    }, [gameState.phaseDeadline, gameState.players, myPlayer?.address, isTestMode, isProcessing, isTxPending, forcePhaseTimeoutOnChain, addLog]);
+    }, [gameState.phaseDeadline, gameState.players, gameState.phase, myPlayer?.address, isTestMode, isProcessing, isTxPending, forcePhaseTimeoutOnChain, addLog, publicClient, currentRoomId]);
 
     // Reset timeout flag when phase changes (new night phase)
     useEffect(() => {
@@ -697,16 +719,20 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
     }, [nightState.committedTarget, nightState.salt, nightState.hasRevealed, nightState.commitHash, myRole, roleConfig.action, revealMafiaTargetOnChain, revealNightActionOnChain, NIGHT_COMMIT_KEY, getInvestigationResultOnChain, address, gameState.players, addLog, setSelectedTarget, isTestMode, playApproveSound, playVoteSound, setGameState, nightState.investigationResult]);
 
     // Auto-reveal effect (formerly NightRevealAuto)
+    // FIX #8: Add 2s delay between commit TX confirming and reveal TX to avoid nonce collision
     useEffect(() => {
         if (nightState.hasCommitted && !nightState.hasRevealed && !isProcessing && !isTxPending) {
-            const checkReady = async () => {
-                const saved = localStorage.getItem(NIGHT_COMMIT_KEY);
-                if (saved) {
-                    console.log("[NightPhase] Auto-revealing action...");
-                    handleReveal();
-                }
-            };
-            checkReady();
+            const saved = localStorage.getItem(NIGHT_COMMIT_KEY);
+            if (saved) {
+                const timer = setTimeout(() => {
+                    // Re-check conditions after delay (avoid stale trigger)
+                    if (!nightState.hasRevealed && !isProcessing && !isTxPending) {
+                        console.log("[NightPhase] Auto-revealing action (after 2s delay)...");
+                        handleReveal();
+                    }
+                }, 2000); // 2s delay to let nonce sync
+                return () => clearTimeout(timer);
+            }
         }
     }, [nightState.hasCommitted, nightState.hasRevealed, isProcessing, isTxPending, handleReveal, NIGHT_COMMIT_KEY]);
 

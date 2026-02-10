@@ -16,6 +16,15 @@ if (redis) {
  */
 const memoryStore: Record<string, Record<string, string>> = {};
 
+// FIX #25: Warn loudly if memoryStore is used in production
+if (!redis && process.env.NODE_ENV === 'production') {
+    console.error(
+        '\n\n🚨🚨🚨 [ServerStore] CRITICAL: Redis is NOT configured in PRODUCTION!\n' +
+        'All player secrets will be stored in memory and LOST on server restart/redeploy.\n' +
+        'Set REDIS_URL environment variable immediately.\n🚨🚨🚨\n'
+    );
+}
+
 /**
  * Global expiration for game data (24 hours)
  */
