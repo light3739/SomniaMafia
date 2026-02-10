@@ -1173,10 +1173,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     addLog("Role confirmed (fallback).", "success");
                     await publicClient?.waitForTransactionReceipt({ hash });
                 } catch (err: any) {
-                    // If confirm fails, maybe we never actually committed? 
-                    // Hard to distinguish without checking hasCommitted flag, but let's assume if this fails we might need manual intervention or reset.
-                    console.error("Fallback confirm failed:", err);
-                    throw err;
+                    // FIX: If standalone confirmRole fails (role was never committed on-chain),
+                    // fall back to full commitAndConfirmRole with the saved salt
+                    console.warn("Fallback confirmRole failed — role may never have been committed. Retrying full commitAndConfirmRole...", err.shortMessage || err.message);
+                    try {
+                        const { ShuffleService } = await import('../services/shuffleService');
+                        const roleHash = ShuffleService.createRoleCommitHash(role, savedSalt);
+                        const retryHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
+                        addLog("Role committed & confirmed (recovery).", "success");
+                        await publicClient?.waitForTransactionReceipt({ hash: retryHash });
+                    } catch (retryErr: any) {
+                        console.error("Full commitAndConfirmRole retry also failed:", retryErr);
+                        // Clear stale salt so next attempt goes through normal flow
+                        if (address) localStorage.removeItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`);
+                        throw retryErr;
+                    }
                 }
             } else {
                 // Normal flow: No salt, not confirmed -> Commit + Confirm

@@ -383,10 +383,18 @@ export const RoleReveal: React.FC = React.memo(() => {
             // 1. Генерируем соль
             const salt = ShuffleService.generateSalt();
 
-            // PERSISTENCE: Save salt to localStorage
+            // FIX: Do NOT save salt to localStorage before TX!
+            // Previously this caused commitAndConfirmRoleOnChain to think role was already committed
+            // and call standalone confirmRole() — which reverts if role hash was never committed.
+            // Salt is now saved AFTER the TX succeeds.
+
+            // 2. ВЫЗЫВАЕМ АТОМАРНУЮ ФУНКЦИЮ
+            await commitAndConfirmRoleOnChain(roleNum, salt);
+
+            // 3. PERSISTENCE: Save salt only AFTER successful commit+confirm TX
             if (currentRoomId && address) {
                 localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, salt);
-                console.log("[RoleReveal] Salt saved to localStorage");
+                console.log("[RoleReveal] Salt saved to localStorage (post-TX)");
 
                 // SERVER SYNC: Backup secret to server (enables Auto-Win)
                 syncSecretWithServer(
@@ -397,9 +405,6 @@ export const RoleReveal: React.FC = React.memo(() => {
                 ).then(() => console.log("[RoleReveal] Secret backed up to server"))
                     .catch(err => console.error("[RoleReveal] Failed to backup secret:", err));
             }
-
-            // 2. ВЫЗЫВАЕМ АТОМАРНУЮ ФУНКЦИЮ
-            await commitAndConfirmRoleOnChain(roleNum, salt);
 
             setRevealState(prev => ({ ...prev, hasConfirmed: true }));
         } catch (e: any) {
