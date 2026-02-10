@@ -121,6 +121,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Ref для currentRoomId чтобы избежать проблем с замыканием в callbacks
     const currentRoomIdRef = useRef<bigint | null>(currentRoomId);
+    const autoWinLockRef = useRef(false);
     useEffect(() => {
         currentRoomIdRef.current = currentRoomId;
     }, [currentRoomId]);
@@ -1423,7 +1424,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await publicClient?.waitForTransactionReceipt({ hash });
         } catch (e: any) {
             // Ignore "already revealed" errors
-            if (e.message.includes("RoleAlreadyRevealed")) return;
+            if (e.message?.includes("RoleAlreadyRevealed")) return;
             addLog(e.shortMessage || e.message, "danger");
             throw e;
         }
@@ -1620,9 +1621,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     return;
                 }
 
-                // BLOCK POLLING IMMEDIATELY
-                setIsTxPending(true);
-
                 const formattedProof = {
                     a: [BigInt(formatted.a[0]), BigInt(formatted.a[1])],
                     b: [
@@ -1646,11 +1644,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     formattedProof.inputs
                 ] as const;
 
-                // LOCK ONLY BEFORE SUBMITTING
-                if (isTxPending) {
+                // LOCK ONLY BEFORE SUBMITTING (use ref to avoid stale closure)
+                if (autoWinLockRef.current) {
                     console.log("[AutoWin] Win detected, but another transaction is pending. Retrying shortly...");
                     return;
                 }
+                autoWinLockRef.current = true;
                 setIsTxPending(true);
 
                 // SIMULATE CONTRACT FIRST
@@ -1685,6 +1684,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     console.error("[AutoWin ZK Debug] Transaction FAILED:", txErr);
                     addLog(`Auto-Win Failed: ${txErr.shortMessage || txErr.message}`, "danger");
                 } finally {
+                    autoWinLockRef.current = false;
                     setIsTxPending(false);
                 }
             } else if (data.message && data.message !== 'Game continues') {
@@ -1694,7 +1694,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.warn("[AutoWin] Silent check failed:", e);
         }
-    }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, isTxPending, address, revealMyRoleAfterGameEnd]);
+    }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, address, revealMyRoleAfterGameEnd]);
 
     // Manual triggers for victory claim (reveals role + checks win condition)
     const claimVictory = useCallback(async () => {
