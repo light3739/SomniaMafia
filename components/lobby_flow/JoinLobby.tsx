@@ -1,12 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { BackButton } from '../ui/BackButton';
-import { useAccount } from 'wagmi';
-import { createPublicClient, http } from 'viem';
+import { usePublicClient, useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../../contracts/config';
+import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 
 interface JoinLobbyProps {
     initialRoomId?: string | null;
@@ -15,20 +14,16 @@ interface JoinLobbyProps {
 export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const { setLobbyName, joinLobbyOnChain, isTxPending } = useGameContext();
     const router = useRouter();
+    const publicClient = usePublicClient();
     const [rooms, setRooms] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const fetchInFlight = useRef(false);
 
-    // Raw viem client WITHOUT wagmi multicall batching.
-    // Somnia testnet has no Multicall3 contract, so wagmi's batched reads fail/delay.
-    const rawClient = useMemo(() => createPublicClient({
-        chain: somniaChain,
-        transport: http(somniaChain.rpcUrls.default.http[0]),
-        batch: { multicall: false },
-    }), []);
-
-    // Получаем список комнат прямо из блокчейна
-    const fetchRooms = React.useCallback(async (silent = false) => {
-        if (!rawClient) return;
+    // Fetch rooms from blockchain using wagmi publicClient (deployless multicall enabled)
+    const fetchRooms = useCallback(async (silent = false) => {
+        if (!publicClient) return;
+        if (fetchInFlight.current) return; // debounce overlapping fetches
+        fetchInFlight.current = true;
         if (!silent) setIsLoading(true);
         try {
             const roomList = [];
@@ -36,7 +31,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             if (initialRoomId) {
                 // Fetch SPECIFIC room
                 const roomId = BigInt(initialRoomId);
-                const roomData = await rawClient.readContract({
+                const roomData = await publicClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'getRoom',
@@ -60,20 +55,20 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             } else {
                 // Fetch LAST 20 rooms (Increased from 10 to catch more active games)
                 // Use 'latest' block tag to ensure freshness if possible, but default is fine
-                const nextId = await rawClient.readContract({
+                const nextId = await publicClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'nextRoomId',
                 }) as bigint;
 
-                // Scan last 10 rooms (enough to find active lobbies without spamming RPC)
-                const scanCount = 10n;
+                // Scan last 15 rooms — deployless multicall batches these into 1 RPC call
+                const scanCount = 15n;
                 const start = nextId > scanCount ? nextId - scanCount : 0n;
                 const fetchPromises = [];
 
                 for (let i = nextId - 1n; i >= start; i--) {
                     fetchPromises.push(
-                        rawClient.readContract({
+                        publicClient.readContract({
                             address: MAFIA_CONTRACT_ADDRESS,
                             abi: MAFIA_ABI,
                             functionName: 'getRoom',
@@ -149,8 +144,9 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             console.error("Error fetching rooms:", e);
         } finally {
             if (!silent) setIsLoading(false);
+            fetchInFlight.current = false;
         }
-    }, [rawClient, initialRoomId]);
+    }, [publicClient, initialRoomId]);
 
     // Initial load + Polling every 5 seconds (no block-level watching — Somnia has ~1s blocks which causes RPC spam)
     useEffect(() => {
