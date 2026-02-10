@@ -23,7 +23,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../contexts/GameContext';
 import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X } from 'lucide-react';
 import { MicButton } from './game/MicButton';
+import { MicButton } from './game/MicButton';
 import { useSoundEffects } from './ui/SoundEffects';
+import { Lanyard } from './ui/Lanyard';
 
 // Wrapper for testing VotingAnnouncement state
 const VotingAnnouncementWrapper = () => {
@@ -1063,56 +1065,57 @@ const RoleCardShowcaseTest: React.FC = () => {
                                 </p>
                             </motion.div>
                         ) : (
-                            <motion.div
+                        ): (
+                                <motion.div
                                 key="revealed"
-                                initial={{ rotateY: 90, opacity: 0 }}
-                                animate={{ rotateY: 0, opacity: 1 }}
-                                transition={{ type: "spring", duration: 0.8 }}
-                                className={`absolute inset-0 bg-gradient-to-br ${config.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-12 shadow-2xl flex flex-col justify-between`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="absolute inset-0 -top-40 w-full h-[800px] flex items-center justify-center pointer-events-none"
                             >
-                                <div className="text-center flex-1 flex flex-col justify-center">
-                                    {/* Role Name */}
-                                    <motion.h2
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: 0.3 }}
-                                        className={`text-5xl font-['Playfair_Display'] mb-6 ${config.color}`}
-                                    >
-                                        {selectedRole}
-                                    </motion.h2>
+                        <div className="w-full h-full pointer-events-auto">
+                            <Lanyard wireLength={180}>
+                                <div
+                                    className={`bg-gradient-to-br ${config.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-12 shadow-2xl flex flex-col justify-between w-[400px] h-[400px] cursor-grab active:cursor-grabbing select-none`}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                >
+                                    <div className="text-center flex-1 flex flex-col justify-center pointer-events-none">
+                                        {/* Role Name */}
+                                        <h2
+                                            className={`text-5xl font-['Playfair_Display'] mb-6 ${config.color}`}
+                                        >
+                                            {selectedRole}
+                                        </h2>
 
-                                    {/* Description */}
-                                    <motion.p
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        transition={{ delay: 0.5 }}
-                                        className="text-white/60 text-sm max-w-xs mx-auto"
-                                    >
-                                        {config.description}
-                                    </motion.p>
-                                </div>
+                                        {/* Description */}
+                                        <p
+                                            className="text-white/60 text-sm max-w-xs mx-auto"
+                                        >
+                                            {config.description}
+                                        </p>
+                                    </div>
 
-                                <div className="space-y-3 mt-6">
-                                    {/* Confirm Button Mock */}
-                                    <motion.button
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: 1 }}
-                                        className="w-full px-6 py-3 bg-gradient-to-r from-[#916A47] to-[#7a5a3c] text-white rounded-xl font-medium hover:from-[#a67b52] hover:to-[#916A47] transition-all"
-                                    >
-                                        I Understand My Role ({countdown})
-                                    </motion.button>
+                                    <div className="space-y-3 mt-6 pointer-events-auto">
+                                        {/* Confirm Button Mock */}
+                                        <button
+                                            className="w-full px-6 py-3 bg-gradient-to-r from-[#916A47] to-[#7a5a3c] text-white rounded-xl font-medium hover:from-[#a67b52] hover:to-[#916A47] transition-all shadow-lg"
+                                        >
+                                            I Understand My Role ({countdown})
+                                        </button>
 
-                                    <div className="text-xs text-white/30 text-center">
-                                        Display closes in {countdown}s
+                                        <div className="text-xs text-white/30 text-center">
+                                            Display closes in {countdown}s
+                                        </div>
                                     </div>
                                 </div>
-                            </motion.div>
+                            </Lanyard>
+                        </div>
+                    </motion.div>
                         )}
-                    </AnimatePresence>
+                </AnimatePresence>
                 </div>
-            )}
-        </div>
+    )
+}
+        </div >
     );
 };
 
