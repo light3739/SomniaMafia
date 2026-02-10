@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { BackButton } from '../ui/BackButton';
-import { usePublicClient, useAccount, useWatchBlockNumber } from 'wagmi';
+import { useAccount, useWatchBlockNumber } from 'wagmi';
+import { createPublicClient, http } from 'viem';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
+import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../../contracts/config';
 
 interface JoinLobbyProps {
     initialRoomId?: string | null;
@@ -14,13 +15,20 @@ interface JoinLobbyProps {
 export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const { setLobbyName, joinLobbyOnChain, isTxPending } = useGameContext();
     const router = useRouter();
-    const publicClient = usePublicClient();
     const [rooms, setRooms] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Raw viem client WITHOUT wagmi multicall batching.
+    // Somnia testnet has no Multicall3 contract, so wagmi's batched reads fail/delay.
+    const rawClient = useMemo(() => createPublicClient({
+        chain: somniaChain,
+        transport: http(somniaChain.rpcUrls.default.http[0]),
+        batch: { multicall: false },
+    }), []);
+
     // Получаем список комнат прямо из блокчейна
     const fetchRooms = React.useCallback(async (silent = false) => {
-        if (!publicClient) return;
+        if (!rawClient) return;
         if (!silent) setIsLoading(true);
         try {
             const roomList = [];
@@ -28,7 +36,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             if (initialRoomId) {
                 // Fetch SPECIFIC room
                 const roomId = BigInt(initialRoomId);
-                const roomData = await publicClient.readContract({
+                const roomData = await rawClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'getRoom',
@@ -52,24 +60,21 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             } else {
                 // Fetch LAST 20 rooms (Increased from 10 to catch more active games)
                 // Use 'latest' block tag to ensure freshness if possible, but default is fine
-                const nextId = await publicClient.readContract({
+                const nextId = await rawClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'nextRoomId',
                 }) as bigint;
 
-                // console.log("Next Room ID:", nextId.toString());
-
-                // FIX: Allow checking room 0. 
-                // If nextId is 5, we want to check 4,3,2,1,0.
-                // Start should be min(nextId - 20, 0).
+                // Scan 2 rooms AHEAD of nextRoomId in case RPC returned stale value
+                const scanAhead = nextId + 2n;
                 const scanCount = 20n;
-                const start = nextId > scanCount ? nextId - scanCount : 0n;
+                const start = scanAhead > scanCount ? scanAhead - scanCount : 0n;
                 const fetchPromises = [];
 
-                for (let i = nextId - 1n; i >= start; i--) {
+                for (let i = scanAhead - 1n; i >= start; i--) {
                     fetchPromises.push(
-                        publicClient.readContract({
+                        rawClient.readContract({
                             address: MAFIA_CONTRACT_ADDRESS,
                             abi: MAFIA_ABI,
                             functionName: 'getRoom',
@@ -146,7 +151,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         } finally {
             if (!silent) setIsLoading(false);
         }
-    }, [publicClient, initialRoomId]);
+    }, [rawClient, initialRoomId]);
 
     // Initial load + Polling
     useEffect(() => {

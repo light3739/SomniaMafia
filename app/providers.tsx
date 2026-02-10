@@ -43,6 +43,9 @@ const config = getDefaultConfig({
             http(somniaChain.rpcUrls.default.http[0])
         ])
     },
+    // Disable multicall batching — Somnia testnet has no Multicall3 contract deployed,
+    // which causes wagmi's batched readContract calls to fail/delay silently.
+    batch: { multicall: false },
     ssr: true,
 });
 
