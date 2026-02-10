@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
@@ -14,21 +14,16 @@ export const CreateLobby: React.FC = () => {
         setLobbyName,
         createLobbyOnChain,
         isTxPending,
-        currentRoomId
     } = useGameContext();
 
     const router = useRouter();
 
-    // Как только транзакция прошла и контракт выдал нам ID комнаты — идем в ожидание
-    useEffect(() => {
-        if (currentRoomId !== null) {
-            router.push('/waiting');
-        }
-    }, [currentRoomId, router]);
-
     const handleCreate = async () => {
         if (!lobbyName.trim() || isTxPending) return;
-        await createLobbyOnChain();
+        const success = await createLobbyOnChain();
+        if (success) {
+            router.push('/waiting');
+        }
     };
 
     return (

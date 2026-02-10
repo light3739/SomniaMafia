@@ -106,9 +106,11 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             // For now, we rely on the UI showing ConnectButton instead of Join if not connected.
             return;
         }
-        await joinLobbyOnChain(room.id);
-        setLobbyName(room.name || `Room #${room.id}`);
-        router.push('/waiting');
+        const success = await joinLobbyOnChain(room.id);
+        if (success) {
+            setLobbyName(room.name || `Room #${room.id}`);
+            router.push('/waiting');
+        }
     };
 
     const { isConnected } = useAccount();
