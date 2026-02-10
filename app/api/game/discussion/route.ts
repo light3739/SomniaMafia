@@ -147,10 +147,10 @@ export async function POST(request: Request) {
             const roomData = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
                 abi: MAFIA_ABI,
-                functionName: 'rooms',
+                functionName: 'getRoom',
                 args: [BigInt(roomId)],
             }) as any;
-            hostAddress = roomData[1];
+            hostAddress = roomData.host;
         } catch (e) {
             if (roomId === '999') {
                 alivePlayers = Array(10).fill(null).map((_, i) => ({

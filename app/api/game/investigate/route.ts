@@ -36,10 +36,10 @@ export async function POST(request: Request) {
             fromBlock: currentBlock - 990n // Somnia RPC limit is 1000 blocks
         });
 
-        const revealEvent = logs.find(log =>
-            (log.args as any).player?.toLowerCase() === detectiveAddress.toLowerCase() &&
-            (log.args as any).action === ACTION_CHECK &&
-            (log.args as any).target?.toLowerCase() === targetAddress.toLowerCase()
+        const revealEvent = logs.find((log: any) =>
+            log.args?.player?.toLowerCase() === detectiveAddress.toLowerCase() &&
+            log.args?.action === ACTION_CHECK &&
+            log.args?.target?.toLowerCase() === targetAddress.toLowerCase()
         );
 
         if (!revealEvent) {
