@@ -63,6 +63,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         commitRoleOnChain,
         confirmRoleOnChain,
         commitAndConfirmRoleOnChain,
+        syncSecretWithServer,
         addLog,
         isTxPending,
         setGameState
@@ -388,16 +389,12 @@ export const RoleReveal: React.FC = React.memo(() => {
                 console.log("[RoleReveal] Salt saved to localStorage");
 
                 // SERVER SYNC: Backup secret to server (enables Auto-Win)
-                fetch('/api/game/reveal-secret', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        roomId: currentRoomId.toString(),
-                        address: address,
-                        role: roleNum,
-                        salt: salt
-                    })
-                }).then(() => console.log("[RoleReveal] Secret backed up to server"))
+                syncSecretWithServer(
+                    currentRoomId.toString(),
+                    address,
+                    roleNum,
+                    salt
+                ).then(() => console.log("[RoleReveal] Secret backed up to server"))
                     .catch(err => console.error("[RoleReveal] Failed to backup secret:", err));
             }
 
