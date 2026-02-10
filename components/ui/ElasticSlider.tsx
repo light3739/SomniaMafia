@@ -29,9 +29,13 @@ export default function ElasticSlider({
     const [value, setValue] = useState(startingValue ?? defaultValue);
     const containerRef = useRef<HTMLDivElement>(null);
 
+    // Calculate initial percentage immediately for synchronous render
+    const initialVal = startingValue ?? defaultValue;
+    const initialPercentage = ((initialVal - min) / (max - min)) * 100;
+
     // Motion values for the slider logic
     // We map 0-100% (of width) to the value range
-    const x = useMotionValue(0);
+    const x = useMotionValue(initialPercentage);
 
     // Spring for the visual progress bar (smooth catchup)
     const scaleX = useSpring(useTransform(x, [0, 100], [0, 1]), {
