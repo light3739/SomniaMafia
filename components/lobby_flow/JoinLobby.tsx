@@ -33,24 +33,20 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     const roomData = await publicClient.readContract({
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI,
-                        functionName: 'rooms',
+                        functionName: 'getRoom',
                         args: [roomId],
                     }) as any;
 
                     // Check if it exists/is valid (phase 0 = LOBBY)
-                    // If roomData[0] is 0 and host is 0x0, it doesn't exist. 
-                    // But contract returns struct. Check ID matching.
-                    if (Number(roomData[0]) === Number(roomId)) {
-                        const phase = Number(roomData[3]);
-                        // Even if phase != 0, we might want to show it (but maybe disabled?)
-                        // User likely wants to join.
+                    if (Number(roomData.id) === Number(roomId)) {
+                        const phase = Number(roomData.phase);
                         if (phase === 0) {
                             roomList.push({
-                                id: Number(roomData[0]),
-                                host: roomData[1],
-                                name: roomData[2],
-                                players: Number(roomData[5]),
-                                max: Number(roomData[4])
+                                id: Number(roomData.id),
+                                host: roomData.host,
+                                name: roomData.name,
+                                players: Number(roomData.playersCount),
+                                max: Number(roomData.maxPlayers)
                             });
                         }
                     }
@@ -71,7 +67,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                             publicClient.readContract({
                                 address: MAFIA_CONTRACT_ADDRESS,
                                 abi: MAFIA_ABI,
-                                functionName: 'rooms',
+                                functionName: 'getRoom',
                                 args: [i],
                             }).then(data => ({ id: i, data: data as any }))
                         );
@@ -81,14 +77,14 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
                     // Process results in order
                     for (const { id, data } of results) {
-                        const phase = Number(data[3]);
+                        const phase = Number(data.phase);
                         if (phase === 0) {
                             roomList.push({
-                                id: Number(data[0]),
-                                host: data[1],
-                                name: data[2],
-                                players: Number(data[5]),
-                                max: Number(data[4])
+                                id: Number(data.id),
+                                host: data.host,
+                                name: data.name,
+                                players: Number(data.playersCount),
+                                max: Number(data.maxPlayers)
                             });
                         }
                     }

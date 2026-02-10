@@ -4,8 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { generateEndGameProof } from '@/services/zkProof';
 import { useWriteContract, usePublicClient, useSendTransaction } from 'wagmi';
-import { MafiaABI } from '@/contracts/MafiaPortal';
-import { MAFIA_CONTRACT_ADDRESS } from '@/contracts/config';
+import { MAFIA_ABI, MAFIA_CONTRACT_ADDRESS } from '@/contracts/config';
 import { privateKeyToAccount } from 'viem/accounts';
 import { formatEther, parseEther, createWalletClient, http, defineChain } from 'viem';
 
@@ -112,7 +111,7 @@ export default function ZKTestPage() {
 
                 const hash = await botClient.writeContract({
                     address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MafiaABI.abi,
+                    abi: MAFIA_ABI,
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), "BotPlayer", "0x00" as `0x${string}`, "0x0000000000000000000000000000000000000000" as `0x${string}`],
                     value: BigInt(0),
@@ -141,18 +140,18 @@ export default function ZKTestPage() {
         try {
             const room: any = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
-                abi: MafiaABI.abi,
-                functionName: 'rooms',
+                abi: MAFIA_ABI,
+                functionName: 'getRoom',
                 args: [BigInt(roomId)]
             });
             const players: any = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
-                abi: MafiaABI.abi,
+                abi: MAFIA_ABI,
                 functionName: 'getPlayers',
                 args: [BigInt(roomId)]
             });
             const phases = ["LOBBY", "SHUFFLING", "REVEAL", "DAY", "VOTING", "NIGHT", "ENDED"];
-            addLog(`Room #${roomId} State: Phase=${phases[room[3]]}, Count=${room[5]}, Max=${room[4]}`);
+            addLog(`Room #${roomId} State: Phase=${phases[Number(room.phase)]}, Count=${room.playersCount}, Max=${room.maxPlayers}`);
 
             if (players && players.length > 0) {
                 players.forEach((p: any, i: number) => {
@@ -170,7 +169,7 @@ export default function ZKTestPage() {
             if (type === 'create') {
                 const hash = await writeContractAsync({
                     address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MafiaABI.abi,
+                    abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
                     args: ["ZK-Test-Lobby", 4, "TestPlayer", "0x00" as `0x${string}`, "0x0000000000000000000000000000000000000000" as `0x${string}`],
                     value: BigInt(0)
@@ -184,7 +183,7 @@ export default function ZKTestPage() {
                     receipt.logs.forEach(log => {
                         try {
                             const decoded = decodeEventLog({
-                                abi: MafiaABI.abi,
+                                abi: MAFIA_ABI,
                                 data: log.data,
                                 topics: log.topics,
                             });
@@ -204,7 +203,7 @@ export default function ZKTestPage() {
             } else {
                 const hash = await writeContractAsync({
                     address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MafiaABI.abi,
+                    abi: MAFIA_ABI,
                     functionName: 'startGame',
                     args: [BigInt(roomId)],
                     gas: 500000n
@@ -245,7 +244,7 @@ export default function ZKTestPage() {
             // Try commitDeck (might fail if not turn, but we try)
             const txDeck = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
-                abi: MafiaABI.abi,
+                abi: MAFIA_ABI,
                 functionName: 'commitDeck',
                 args: [BigInt(roomId), deckHash],
             });
@@ -254,7 +253,7 @@ export default function ZKTestPage() {
 
             const txReveal = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
-                abi: MafiaABI.abi,
+                abi: MAFIA_ABI,
                 functionName: 'revealDeck',
                 args: [BigInt(roomId), deckStrings, deckSalt],
             });
@@ -323,7 +322,7 @@ export default function ZKTestPage() {
                 try {
                     const txDeck = await botClient.writeContract({
                         address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MafiaABI.abi,
+                        abi: MAFIA_ABI,
                         functionName: 'commitDeck',
                         args: [BigInt(roomId), deckHash],
                     });
@@ -332,7 +331,7 @@ export default function ZKTestPage() {
                     addLog(`Bot ${bot.address.slice(0, 6)} revealing deck...`);
                     const txReveal = await botClient.writeContract({
                         address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MafiaABI.abi,
+                        abi: MAFIA_ABI,
                         functionName: 'revealDeck',
                         args: [BigInt(roomId), deckStrings, deckSalt],
                     });
@@ -349,7 +348,7 @@ export default function ZKTestPage() {
                     addLog(`Bot ${bot.address.slice(0, 6)} committing role...`);
                     const tx1 = await botClient.writeContract({
                         address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MafiaABI.abi,
+                        abi: MAFIA_ABI,
                         functionName: 'commitRole',
                         args: [BigInt(roomId), roleHash],
                     });
@@ -362,7 +361,7 @@ export default function ZKTestPage() {
                     addLog(`Bot ${bot.address.slice(0, 6)} confirming role...`);
                     const tx2 = await botClient.writeContract({
                         address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MafiaABI.abi,
+                        abi: MAFIA_ABI,
                         functionName: 'confirmRole',
                         args: [BigInt(roomId)],
                     });
@@ -408,7 +407,7 @@ export default function ZKTestPage() {
 
             const hash = await writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
-                abi: MafiaABI.abi,
+                abi: MAFIA_ABI,
                 functionName: 'endGameZK',
                 args: [
                     BigInt(roomId),
