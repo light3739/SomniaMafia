@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
-import { useAccount, useWriteContract, usePublicClient, useWatchContractEvent, useWatchBlockNumber } from 'wagmi';
+import { useAccount, useWriteContract, usePublicClient, useWalletClient, useWatchContractEvent, useWatchBlockNumber } from 'wagmi';
 import { createWalletClient, http, parseEther, parseEventLogs, toHex, pad } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
@@ -63,6 +63,7 @@ interface GameContextType {
     endGameAutomaticallyOnChain: () => Promise<void>;
     endGameZK: () => Promise<void>;
     getInvestigationResultOnChain: (detective: string, target: string) => Promise<{ role: Role; isMafia: boolean }>;
+    syncSecretWithServer: (roomId: string, playerAddress: string, role: number, salt: string) => Promise<void>;
     setCurrentRoomId: (id: bigint | null) => void;
 
     // Utility
@@ -128,6 +129,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { address } = useAccount();
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
+    const { data: walletClient } = useWalletClient();
     const [isTxPending, setIsTxPending] = useState(false);
     const [isTestMode, setIsTestMode] = useState(false);
     const [playerMarks, setPlayerMarks] = useState<Record<string, 'mafia' | 'civilian' | 'question' | null>>({});
@@ -161,6 +163,32 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return null;
         }
     }, []);
+
+    // Helper: sync role secret with server (includes signature verification)
+    const syncSecretWithServer = useCallback(async (roomId: string, playerAddress: string, role: number, salt: string) => {
+        if (!walletClient) {
+            console.warn('[SyncSecret] No wallet client, skipping server sync');
+            return;
+        }
+        try {
+            const message = `reveal-secret:${roomId}:${role}:${salt}`;
+            const signature = await walletClient.signMessage({ message });
+            await fetch('/api/game/reveal-secret', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId,
+                    address: playerAddress,
+                    role,
+                    salt,
+                    signature
+                })
+            });
+            console.log("[Status] Secret synced with server DB.");
+        } catch (err) {
+            console.warn("[Warning] Failed to sync secret with server DB.", err);
+        }
+    }, [walletClient]);
 
     // Wrapper для транзакций - использует session key если доступен
     const sendGameTransaction = useCallback(async (
@@ -963,21 +991,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // SYNC WITH SERVER-SIDE DB (for automated win-checking)
-            try {
-                await fetch('/api/game/reveal-secret', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        roomId: currentRoomId.toString(),
-                        address,
-                        role,
-                        salt: saltToUse
-                    })
-                });
-                console.log("[Status] Secret synced with server DB.");
-            } catch (err) {
-                console.warn("[Warning] Failed to sync secret with server DB.", err);
-            }
+            if (address) await syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse);
 
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
@@ -1089,21 +1103,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // SYNC WITH SERVER-SIDE DB
-            try {
-                await fetch('/api/game/reveal-secret', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        roomId: currentRoomId.toString(),
-                        address,
-                        role,
-                        salt: saltToUse
-                    })
-                });
-                console.log("[Status] Secret synced with server DB.");
-            } catch (err) {
-                console.warn("[Warning] Failed to sync secret with server DB.", err);
-            }
+            if (address) await syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse);
 
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
@@ -1238,16 +1238,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return { role: Role.CIVILIAN, isMafia: false };
         }
         if (!currentRoomId) return { role: Role.UNKNOWN, isMafia: false };
+        if (!walletClient) return { role: Role.UNKNOWN, isMafia: false };
 
         try {
             console.log(`[Investigation API] Fetching result for ${detective} -> ${target}`);
+            // Sign message to prove we are the detective
+            const message = `investigate:${currentRoomId.toString()}:${target}`;
+            const signature = await walletClient.signMessage({ message });
+
             const response = await fetch('/api/game/investigate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     roomId: currentRoomId.toString(),
                     detectiveAddress: detective,
-                    targetAddress: target
+                    targetAddress: target,
+                    signature
                 })
             });
 
@@ -1269,7 +1275,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(`Investigation failed: ${e.message}`, "danger");
             return { role: Role.UNKNOWN, isMafia: false };
         }
-    }, [currentRoomId, addLog]);
+    }, [currentRoomId, addLog, walletClient]);
 
     const forcePhaseTimeoutOnChain = useCallback(async () => {
         if (!currentRoomId) return;
@@ -2204,7 +2210,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         startVotingOnChain, voteOnChain,
         commitNightActionOnChain, revealNightActionOnChain,
         commitMafiaTargetOnChain, revealMafiaTargetOnChain,
-        forcePhaseTimeoutOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain,
+        forcePhaseTimeoutOnChain, getInvestigationResultOnChain, syncSecretWithServer, endGameAutomaticallyOnChain,
         revealRoleOnChain, tryEndGame, claimVictory, endGameZK,
         sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList,
@@ -2224,7 +2230,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         startVotingOnChain, voteOnChain, commitNightActionOnChain,
         revealNightActionOnChain, commitMafiaTargetOnChain, revealMafiaTargetOnChain,
         forcePhaseTimeoutOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain, revealRoleOnChain,
-        tryEndGame, claimVictory, endGameZK, sendMafiaMessageOnChain,
+        tryEndGame, claimVictory, endGameZK, syncSecretWithServer, sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList, addLog,
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         isTestMode, setIsTestMode,
