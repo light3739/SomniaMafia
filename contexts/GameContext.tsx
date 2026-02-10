@@ -464,11 +464,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fetchGameData = useCallback(async (roomId: bigint) => {
         if (isTestMode || !publicClient) return null;
         try {
+            // console.log(`[GameData] Fetching for room ${roomId}...`);
+
             const data = await publicClient.readContract({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
                 functionName: 'getPlayers',
                 args: [roomId],
+                blockTag: 'latest', // Force latest state
             }) as any[];
 
             const roomData = await publicClient.readContract({
@@ -476,6 +479,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'getRoom',
                 args: [roomId],
+                blockTag: 'latest',
             }) as any;
 
             // Fetch Mafia Consensus counts
@@ -484,6 +488,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'getMafiaConsensus',
                 args: [roomId],
+                blockTag: 'latest',
             }) as [number, number, string];
 
             // Parse Room Data
@@ -521,8 +526,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 mafiaCommittedCount: Number(mafiaCommitted),
                 mafiaRevealedCount: Number(mafiaRevealed)
             };
-        } catch (e) {
-            console.error("Fetch Game Data Error:", e);
+        } catch (e: any) {
+            console.error("[FetchGameData] Error:", e);
+            // Optionally add log to UI if persistent failure?
             return null;
         }
     }, [publicClient, isTestMode]);
