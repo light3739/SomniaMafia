@@ -361,6 +361,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
     }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, gameState.players.length, handleMyTurn]);
 
     // AUTO-REVEAL: Trigger handleReveal if we have committed but not revealed
+    // FIX #9: Add 2s delay to avoid nonce collision with commit TX
     useEffect(() => {
         const canAutoReveal =
             shuffleState.isMyTurn &&
@@ -372,8 +373,14 @@ export const ShufflePhase: React.FC = React.memo(() => {
             pendingSalt;
 
         if (canAutoReveal) {
-            console.log("[Shuffle Auto] Detected commit complete. Starting automatic reveal...");
-            handleReveal();
+            const timer = setTimeout(() => {
+                // Re-check conditions after delay
+                if (!shuffleState.hasRevealed && !isProcessing && !isTxPending) {
+                    console.log("[Shuffle Auto] Detected commit complete. Starting automatic reveal (after 2s delay)...");
+                    handleReveal();
+                }
+            }, 2000); // 2s delay for nonce to sync
+            return () => clearTimeout(timer);
         }
     }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, pendingDeck, pendingSalt, handleReveal]);
 

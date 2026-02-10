@@ -395,16 +395,35 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
             // Delay based on index
             const myDelay = myIndex * 3000; // 3 seconds spacing
 
-            const timer = setTimeout(() => {
-                // Re-check conditions after delay
-                if (discussionState?.finished && isDayPhase && !votingStartedRef.current) {
-                    votingStartedRef.current = true;
-                    setVotingAttemptTs(Date.now());
-                    console.log(`[DayPhase] Discussion finished. Waterfall Trigger (Index ${myIndex})...`);
-                    addLog("All players have spoken. Starting vote...", "warning");
+            const timer = setTimeout(async () => {
+                // FIX #17: Re-check ALL conditions after delay to avoid double-start
+                if (!discussionState?.finished || !isDayPhase || votingStartedRef.current) return;
 
-                    handleStartVoting();
+                // FIX #4: Re-check phase from contract to ensure we're still in DAY
+                if (publicClient && currentRoomId) {
+                    try {
+                        const roomData = await publicClient.readContract({
+                            address: MAFIA_CONTRACT_ADDRESS,
+                            abi: MAFIA_ABI,
+                            functionName: 'getRoom',
+                            args: [currentRoomId],
+                        }) as any;
+                        const onChainPhase = Number(Array.isArray(roomData) ? roomData[3] : roomData.phase);
+                        if (onChainPhase !== GamePhase.DAY) {
+                            console.log(`[DayPhase] Phase already changed to ${onChainPhase}, skipping voting start.`);
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('[DayPhase] Could not verify phase, proceeding anyway:', e);
+                    }
                 }
+
+                votingStartedRef.current = true;
+                setVotingAttemptTs(Date.now());
+                console.log(`[DayPhase] Discussion finished. Waterfall Trigger (Index ${myIndex})...`);
+                addLog("All players have spoken. Starting vote...", "warning");
+
+                handleStartVoting();
             }, myDelay + 1000); // Base 1s + staggered delay
             return () => clearTimeout(timer);
         }
@@ -483,13 +502,16 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         playVoteSound();
         const prevVote = voteState.myVote;
         const prevHasVoted = voteState.hasVoted;
+        const prevTarget = selectedTarget; // FIX #22: Save for rollback
         setVoteState(prev => ({ ...prev, hasVoted: true, myVote: selectedTarget }));
         setSelectedTarget(null);
         setIsProcessing(true);
         try {
             await voteOnChain(selectedTarget);
         } catch (e: any) {
+            // FIX #22: Full rollback including selectedTarget
             setVoteState(prev => ({ ...prev, hasVoted: prevHasVoted, myVote: prevVote }));
+            setSelectedTarget(prevTarget);
             addLog(e.shortMessage || "Vote failed", "danger");
         } finally {
             setIsProcessing(false);
@@ -729,8 +751,12 @@ const VotingTimer: React.FC = React.memo(() => {
                     if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive) {
                         hasAutoVotedRef.current = true;
                         addLog("1 minute limit reached. Auto-voting for self...", "warning");
+                        // FIX #16: Re-check hasVoted fresh from the latest player data
+                        const freshPlayer = gameState.players.find(p => p.address.toLowerCase() === myAddress.toLowerCase());
+                        if (freshPlayer?.hasVoted) return; // Already voted manually
                         voteOnChain(myAddress as `0x${string}`).catch(e => {
                             console.error("[AutoVote] Failed:", e);
+                            hasAutoVotedRef.current = false; // Allow retry
                             addLog("Auto-vote failed. Please vote manually!", "danger");
                         });
                     }
@@ -744,8 +770,12 @@ const VotingTimer: React.FC = React.memo(() => {
                     if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive) {
                         hasAutoVotedRef.current = true;
                         addLog("Late join during hard timer. Auto-voting for self...", "warning");
+                        // FIX #16: Re-check hasVoted
+                        const freshPlayer = gameState.players.find(p => p.address.toLowerCase() === myAddress.toLowerCase());
+                        if (freshPlayer?.hasVoted) return;
                         voteOnChain(myAddress as `0x${string}`).catch(e => {
                             console.error("[AutoVote] Failed:", e);
+                            hasAutoVotedRef.current = false;
                             addLog("Auto-vote failed.", "danger");
                         });
                     }
