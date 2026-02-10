@@ -69,13 +69,17 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     functionName: 'nextRoomId',
                 }) as bigint;
 
-                // Scan last 15 rooms — deployless multicall batches these into 1 RPC call
-                const scanCount = 15n;
-                const start = nextId > scanCount ? nextId - scanCount : 0n;
+                // LOOK-AHEAD: scan 3 rooms BEYOND nextRoomId to catch rooms
+                // created between the nextRoomId read and the getRoom reads.
+                // Non-existent rooms return zero-address host → filtered by isValid.
+                const lookAhead = 3n;
+                const scanEnd = nextId + lookAhead;
+                const scanCount = 15n + lookAhead; // 15 real + 3 look-ahead
+                const start = scanEnd > scanCount ? scanEnd - scanCount : 0n;
 
                 const results = await Promise.allSettled(
-                    Array.from({ length: Number(nextId - start) }, (_, idx) => {
-                        const i = nextId - 1n - BigInt(idx);
+                    Array.from({ length: Number(scanEnd - start) }, (_, idx) => {
+                        const i = scanEnd - 1n - BigInt(idx);
                         return publicClient.readContract({
                             address: MAFIA_CONTRACT_ADDRESS, abi: MAFIA_ABI,
                             functionName: 'getRoom', args: [i],
