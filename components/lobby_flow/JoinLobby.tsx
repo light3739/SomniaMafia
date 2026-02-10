@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { BackButton } from '../ui/BackButton';
-import { useAccount, useWatchBlockNumber } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { createPublicClient, http } from 'viem';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../../contracts/config';
@@ -66,13 +66,12 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     functionName: 'nextRoomId',
                 }) as bigint;
 
-                // Scan 2 rooms AHEAD of nextRoomId in case RPC returned stale value
-                const scanAhead = nextId + 2n;
-                const scanCount = 20n;
-                const start = scanAhead > scanCount ? scanAhead - scanCount : 0n;
+                // Scan last 10 rooms (enough to find active lobbies without spamming RPC)
+                const scanCount = 10n;
+                const start = nextId > scanCount ? nextId - scanCount : 0n;
                 const fetchPromises = [];
 
-                for (let i = scanAhead - 1n; i >= start; i--) {
+                for (let i = nextId - 1n; i >= start; i--) {
                     fetchPromises.push(
                         rawClient.readContract({
                             address: MAFIA_CONTRACT_ADDRESS,
@@ -153,19 +152,12 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         }
     }, [rawClient, initialRoomId]);
 
-    // Initial load + Polling
+    // Initial load + Polling every 5 seconds (no block-level watching — Somnia has ~1s blocks which causes RPC spam)
     useEffect(() => {
         fetchRooms();
-        const interval = setInterval(() => fetchRooms(true), 3000); // Poll every 3 seconds
+        const interval = setInterval(() => fetchRooms(true), 5000);
         return () => clearInterval(interval);
     }, [fetchRooms]);
-
-    // Listen to new blocks (faster updates)
-    useWatchBlockNumber({
-        onBlockNumber() {
-            fetchRooms(true);
-        },
-    });
 
     const { isConnected } = useAccount();
 
