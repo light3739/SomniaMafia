@@ -2128,7 +2128,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         break;
 
                     case 'NightStarted':
-                        addLog("Night started", "phase");
+                        // Log moved to VotingFinalized timeout
                         refreshPlayersList(currentRoomId);
                         break;
 
@@ -2229,6 +2229,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         setTimeout(() => {
                             console.log("[VotingFinalized] Results phase ended. Proceeding to Night.");
                             setShowVotingResults(false);
+                            addLog("Night has fallen...", "danger");
                         }, 10000); // 10 seconds
 
                         break;
