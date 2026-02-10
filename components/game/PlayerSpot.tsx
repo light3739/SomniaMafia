@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Player, Role } from '../../types';
 import { Skull, HelpCircle, User, X, Settings2, Volume2, VolumeX } from 'lucide-react';
 import { useSoundEffects } from '../ui/SoundEffects';
+import ElasticSlider from '../ui/ElasticSlider';
 
 
 interface PlayerSpotProps {
@@ -361,22 +362,23 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                             className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 origin-bottom"
                                             onClick={(e) => e.stopPropagation()}
                                         >
-                                            <div className="bg-black/70 backdrop-blur-md rounded-xl p-2 flex items-center gap-2 w-[120px]">
+                                            <div className="bg-black/70 backdrop-blur-md rounded-xl p-3 flex items-center gap-3 w-[140px] border border-[#916A47]/30 shadow-xl">
                                                 <button
                                                     onClick={() => handleVolumeChange(volume === 0 ? 1 : 0)}
-                                                    className="text-[#916A47]/70 hover:text-[#916A47] transition-colors"
+                                                    className="text-[#916A47]/70 hover:text-[#916A47] transition-colors shrink-0"
                                                 >
-                                                    {volume === 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                                                    {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                                                 </button>
-                                                <input
-                                                    type="range"
-                                                    min="0"
-                                                    max="1"
-                                                    step="0.05"
-                                                    value={volume}
-                                                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                                                    className="w-full h-1 bg-[#916A47]/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#916A47] [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(145,106,71,0.5)] hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
-                                                />
+
+                                                <div className="flex-1 w-full">
+                                                    <ElasticSlider
+                                                        startingValue={volume}
+                                                        onChange={handleVolumeChange}
+                                                        min={0}
+                                                        max={1}
+                                                        step={0.05}
+                                                    />
+                                                </div>
                                             </div>
                                             {/* Triangle pointer */}
                                             <div
