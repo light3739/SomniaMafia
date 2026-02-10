@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { BackButton } from '../ui/BackButton';
-import { usePublicClient, useAccount } from 'wagmi';
+import { usePublicClient, useAccount, useWatchBlockNumber } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 
@@ -19,87 +19,100 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const [isLoading, setIsLoading] = useState(true);
 
     // Получаем список комнат прямо из блокчейна
-    useEffect(() => {
-        const fetchRooms = async (silent = false) => {
-            if (!publicClient) return;
-            if (!silent) setIsLoading(true);
-            try {
-                const roomList = [];
+    const fetchRooms = React.useCallback(async (silent = false) => {
+        if (!publicClient) return;
+        if (!silent) setIsLoading(true);
+        try {
+            const roomList = [];
 
-                if (initialRoomId) {
-                    // Fetch SPECIFIC room
-                    const roomId = BigInt(initialRoomId);
-                    const roomData = await publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MAFIA_ABI,
-                        functionName: 'getRoom',
-                        args: [roomId],
-                    }) as any;
+            if (initialRoomId) {
+                // Fetch SPECIFIC room
+                const roomId = BigInt(initialRoomId);
+                const roomData = await publicClient.readContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'getRoom',
+                    args: [roomId],
+                }) as any;
 
-                    // Check if it exists/is valid (phase 0 = LOBBY)
-                    if (Number(roomData.id) === Number(roomId)) {
-                        const phase = Number(roomData.phase);
-                        if (phase === 0) {
-                            roomList.push({
-                                id: Number(roomData.id),
-                                host: roomData.host,
-                                name: roomData.name,
-                                players: Number(roomData.playersCount),
-                                max: Number(roomData.maxPlayers)
-                            });
-                        }
-                    }
-
-                } else {
-                    // Fetch LAST 10 rooms (Default behavior)
-                    const nextId = await publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MAFIA_ABI,
-                        functionName: 'nextRoomId',
-                    }) as bigint;
-
-                    const start = nextId > 10n ? nextId - 10n : 1n;
-                    const fetchPromises = [];
-
-                    for (let i = nextId - 1n; i >= start; i--) {
-                        fetchPromises.push(
-                            publicClient.readContract({
-                                address: MAFIA_CONTRACT_ADDRESS,
-                                abi: MAFIA_ABI,
-                                functionName: 'getRoom',
-                                args: [i],
-                            }).then(data => ({ id: i, data: data as any }))
-                        );
-                    }
-
-                    const results = await Promise.all(fetchPromises);
-
-                    // Process results in order
-                    for (const { id, data } of results) {
-                        const phase = Number(data.phase);
-                        if (phase === 0) {
-                            roomList.push({
-                                id: Number(data.id),
-                                host: data.host,
-                                name: data.name,
-                                players: Number(data.playersCount),
-                                max: Number(data.maxPlayers)
-                            });
-                        }
+                // Check if it exists/is valid (phase 0 = LOBBY)
+                if (Number(roomData.id) === Number(roomId)) {
+                    const phase = Number(roomData.phase);
+                    if (phase === 0) {
+                        roomList.push({
+                            id: Number(roomData.id),
+                            host: roomData.host,
+                            name: roomData.name,
+                            players: Number(roomData.playersCount),
+                            max: Number(roomData.maxPlayers)
+                        });
                     }
                 }
-                setRooms(roomList);
-            } catch (e) {
-                console.error("Error fetching rooms:", e);
-            } finally {
-                setIsLoading(false);
-            }
-        };
 
+            } else {
+                // Fetch LAST 10 rooms (Default behavior)
+                // Use 'latest' block tag to ensure freshness if possible, but default is fine
+                const nextId = await publicClient.readContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'nextRoomId',
+                }) as bigint;
+
+                // console.log("Next Room ID:", nextId.toString());
+
+                const start = nextId > 10n ? nextId - 10n : 1n;
+                const fetchPromises = [];
+
+                for (let i = nextId - 1n; i >= start; i--) {
+                    fetchPromises.push(
+                        publicClient.readContract({
+                            address: MAFIA_CONTRACT_ADDRESS,
+                            abi: MAFIA_ABI,
+                            functionName: 'getRoom',
+                            args: [i],
+                        }).then(data => ({ id: i, data: data as any }))
+                    );
+                }
+
+                const results = await Promise.all(fetchPromises);
+
+                // Process results in order
+                for (const { id, data } of results) {
+                    const phase = Number(data.phase);
+                    // DEBUG: Log found rooms
+                    // console.log(`Room ${id}: Phase ${phase}`);  
+                    if (phase === 0) {
+                        roomList.push({
+                            id: Number(data.id),
+                            host: data.host,
+                            name: data.name,
+                            players: Number(data.playersCount),
+                            max: Number(data.maxPlayers)
+                        });
+                    }
+                }
+            }
+            setRooms(roomList);
+        } catch (e) {
+            console.error("Error fetching rooms:", e);
+        } finally {
+            if (!silent) setIsLoading(false);
+        }
+    }, [publicClient, initialRoomId]);
+
+    // Initial load + Polling
+    useEffect(() => {
         fetchRooms();
         const interval = setInterval(() => fetchRooms(true), 3000); // Poll every 3 seconds
         return () => clearInterval(interval);
-    }, [publicClient, initialRoomId]);
+    }, [fetchRooms]);
+
+    // Listen to new blocks (faster updates)
+    useWatchBlockNumber({
+        onBlockNumber() {
+            fetchRooms(true);
+        },
+    });
 
     const { isConnected } = useAccount();
 
@@ -148,7 +161,16 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     </div>
                 )}
 
-                <h2 className="text-white text-3xl font-light tracking-widest uppercase">Live Sessions</h2>
+                <div className="flex items-center justify-between w-full">
+                    <h2 className="text-white text-3xl font-light tracking-widest uppercase">Live Sessions</h2>
+                    <button
+                        onClick={() => fetchRooms(false)}
+                        className="text-[#916A47] hover:text-white transition-colors text-2xl"
+                        title="Refresh List"
+                    >
+                        ⟳
+                    </button>
+                </div>
 
                 <div className="w-full flex flex-col gap-3">
                     {isLoading ? (
