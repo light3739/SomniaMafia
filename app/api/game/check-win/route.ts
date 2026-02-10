@@ -27,12 +27,12 @@ export async function POST(request: Request) {
         const roomData: any = await publicClient.readContract({
             address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
             abi: MAFIA_ABI,
-            functionName: 'rooms',
+            functionName: 'getRoom',
             args: [BigInt(roomId)],
         });
 
-        // roomData[3] is phase. 6 = ENDED
-        const phase = Number(roomData[3]);
+        // roomData.phase: 6 = ENDED
+        const phase = Number(roomData.phase);
         if (phase === 0 || phase === 6) {
             return NextResponse.json({
                 winDetected: false,

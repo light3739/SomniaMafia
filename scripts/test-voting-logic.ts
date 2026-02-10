@@ -41,7 +41,9 @@ function runTests() {
         console.log("Test 1: Transitioning VOTING -> NIGHT");
         game.setPhase('NIGHT');
 
+        // @ts-expect-error - phase is already set, comparison is intentional test assertion
         if (game.phase !== 'NIGHT') throw new Error("Phase updated to NIGHT");
+        // @ts-expect-error - testing runtime behavior, TS narrowing is overly strict here
         if (game.showVotingResults !== true) throw new Error("showVotingResults should be TRUE immediately");
 
         console.log("PASS: Test 1");

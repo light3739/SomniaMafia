@@ -1928,8 +1928,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 processedEventsRef.current.add(logId);
                 hasChanges = true;
 
-                const eventName = log.eventName;
-                const args = log.args as any;
+                const eventName = (log as any).eventName;
+                const args = (log as any).args;
 
                 console.log(`[Event Received] ${eventName}`, args);
 
