@@ -322,17 +322,6 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                     {!isMe && player.isAlive && (
                         <div
                             className="relative"
-                            onMouseLeave={() => {
-                                // Auto-close when mouse leaves the controls area
-                                closeTimerRef.current = setTimeout(() => setIsVolumeOpen(false), 50);
-                            }}
-                            onMouseEnter={() => {
-                                // Cancel close timer if mouse returns
-                                if (closeTimerRef.current) {
-                                    clearTimeout(closeTimerRef.current);
-                                    closeTimerRef.current = null;
-                                }
-                            }}
                         >
                             <button
                                 onClick={(e) => {
