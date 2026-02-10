@@ -526,7 +526,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             )}
 
             {/* Test Controls - Bottom Right */}
-            {(window as any).isTestMode && (
+            {typeof window !== 'undefined' && (window as any).isTestMode && (
                 <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 p-4 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 text-white pointer-events-auto">
                     <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">Dev Tools</div>
                     <div className="flex gap-2">

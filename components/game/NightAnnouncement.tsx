@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Moon } from 'lucide-react';
 
@@ -6,6 +6,30 @@ interface NightAnnouncementProps {
     show: boolean;
     onComplete: () => void;
 }
+
+const StarField = React.memo(() => {
+    const stars = useMemo(() => [...Array(20)].map((_, i) => ({
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        duration: 1.5 + Math.random(),
+        delay: Math.random() * 2,
+    })), []);
+
+    return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {stars.map((star, i) => (
+                <motion.div
+                    key={i}
+                    className="absolute w-1 h-1 bg-white rounded-full"
+                    style={{ left: star.left, top: star.top }}
+                    animate={{ opacity: [0, 1, 0], scale: [0.5, 1, 0.5] }}
+                    transition={{ duration: star.duration, repeat: Infinity, delay: star.delay }}
+                />
+            ))}
+        </div>
+    );
+});
+StarField.displayName = 'StarField';
 
 export const NightAnnouncement: React.FC<NightAnnouncementProps> = ({ show, onComplete }) => {
     useEffect(() => {
@@ -74,27 +98,7 @@ export const NightAnnouncement: React.FC<NightAnnouncementProps> = ({ show, onCo
                         </p>
 
                         {/* Stars effect */}
-                        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                            {[...Array(20)].map((_, i) => (
-                                <motion.div
-                                    key={i}
-                                    className="absolute w-1 h-1 bg-white rounded-full"
-                                    style={{
-                                        left: `${Math.random() * 100}%`,
-                                        top: `${Math.random() * 100}%`,
-                                    }}
-                                    animate={{
-                                        opacity: [0, 1, 0],
-                                        scale: [0.5, 1, 0.5]
-                                    }}
-                                    transition={{
-                                        duration: 1.5 + Math.random(),
-                                        repeat: Infinity,
-                                        delay: Math.random() * 2
-                                    }}
-                                />
-                            ))}
-                        </div>
+                        <StarField />
                     </motion.div>
                 </motion.div>
             )}

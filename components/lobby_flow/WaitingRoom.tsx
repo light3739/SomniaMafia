@@ -3,7 +3,6 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { useSessionKey } from '../../hooks/useSessionKey';
-const lobbyBg = "/assets/lobby_background.png";
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { GamePhase } from '../../types';
@@ -34,8 +33,7 @@ export const WaitingRoom: React.FC = () => {
         }
     }, [gameState.phase, router]);
 
-    // 2. V4: Any participant can start the game (HOST_ROLE removed)
-    // We still show who created the room (first player), but anyone can start
+    // 2. Room creator (first player) can start the game
     const isRoomCreator = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
     const isParticipant = gameState.players.some(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
 
@@ -166,8 +164,7 @@ export const WaitingRoom: React.FC = () => {
                     )}
                 </motion.div>
 
-                {/* V4: Any participant can start the game when enough players */}
-                {/* Host only can start */}
+                {/* Room creator can start the game when enough players */}
                 {canStartGame ? (
                     <Button
                         onClick={handleStart}
