@@ -679,26 +679,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setKeys(keyPair);
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
-            // 2.5. ОТЗЫВАЕМ СТАРУЮ СЕССИЮ (если есть)
-            // Это решает проблему SessionAlreadyRegistered на мейннете
+            // 2.5. Revoke logic removed for performance. Contract handles session overwrites.
+            // if (sessionKeys[msg.sender].isActive) { delete ... } in _registerSessionKey
+            /* 
             try {
                 console.log('[Session] Revoking old session if exists...');
-                const revokeHash = await writeContractAsync({
-                    address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MAFIA_ABI,
-                    functionName: 'revokeSessionKey',
-                    args: [],
-                    gas: 2_000_000n, // Increased from 500k to prevent OUT_OF_GAS
-                    type: 'legacy',
-                });
-                console.log('[Session] Revoke tx:', revokeHash);
-                // Ждем подтверждения
-                await publicClient.waitForTransactionReceipt({ hash: revokeHash });
-                console.log('[Session] Old session revoked successfully');
-            } catch (revokeError: any) {
-                // Игнорируем ошибку если сессии не было
-                console.log('[Session] No session to revoke or revoke failed (this is OK):', revokeError.shortMessage || revokeError.message);
-            }
+                // ... (logic removed)
+            } catch (revokeError: any) { ... } 
+            */
 
             // 3. Сессия
             const { sessionAddress } = createNewSession(address, newRoomId);
@@ -743,11 +731,40 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
 
             addLog(`Creating room "${lobbyName}"...`, "info");
-            await publicClient?.waitForTransactionReceipt({ hash });
+            const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+
+            // Detect ACTUAL roomId from events (Avoid race conditions)
+            let finalRoomId = BigInt(newRoomId);
+            try {
+                const logs = parseEventLogs({
+                    abi: MAFIA_ABI,
+                    eventName: 'RoomCreated',
+                    logs: receipt.logs
+                });
+                if (logs.length > 0) {
+                    finalRoomId = (logs[0] as any).args.roomId;
+                    console.log(`[Lobby] Created Room ID: ${finalRoomId} (Predicted: ${newRoomId})`);
+                }
+            } catch (e) {
+                console.warn("[Lobby] Failed to parse RoomCreated log, falling back to predicted ID", e);
+            }
+
+            // Update session if predicted ID was wrong
+            if (Number(finalRoomId) !== newRoomId) {
+                console.warn(`[Lobby] Room ID mismatch! Updating session key...`);
+                // We need to update the stored session to point to finalRoomId
+                const session = loadSession();
+                if (session) {
+                    session.roomId = Number(finalRoomId);
+                    // Re-save session with correct roomId
+                    // We must import storeSession for this, or just hack it via localStorage if storeSession isn't exported (it is exported)
+                    localStorage.setItem('somnia_mafia_session', JSON.stringify(session));
+                }
+            }
 
             markSessionRegistered();
-            setCurrentRoomId(BigInt(newRoomId));
-            await refreshPlayersList(BigInt(newRoomId));
+            setCurrentRoomId(finalRoomId);
+            await refreshPlayersList(finalRoomId);
 
             // Upload avatar to server for other players to see
             if (avatarUrl && address) {

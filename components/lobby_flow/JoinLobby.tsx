@@ -20,8 +20,9 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
     // Получаем список комнат прямо из блокчейна
     useEffect(() => {
-        const fetchRooms = async () => {
+        const fetchRooms = async (silent = false) => {
             if (!publicClient) return;
+            if (!silent) setIsLoading(true);
             try {
                 const roomList = [];
 
@@ -96,6 +97,8 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         };
 
         fetchRooms();
+        const interval = setInterval(() => fetchRooms(true), 3000); // Poll every 3 seconds
+        return () => clearInterval(interval);
     }, [publicClient, initialRoomId]);
 
     const { isConnected } = useAccount();
