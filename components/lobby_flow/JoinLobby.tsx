@@ -6,6 +6,7 @@ import { BackButton } from '../ui/BackButton';
 import { usePublicClient, useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
+import { parseAbiItem } from 'viem';
 
 interface JoinLobbyProps {
     initialRoomId?: string | null;
@@ -17,13 +18,16 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const publicClient = usePublicClient();
     const [rooms, setRooms] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const fetchInFlight = useRef(false);
+    // Generation counter: prevents stale async results from overwriting newer ones
+    const fetchGenRef = useRef(0);
 
     // Fetch rooms from blockchain using wagmi publicClient (deployless multicall enabled)
     const fetchRooms = useCallback(async (silent = false) => {
-        if (!publicClient) return;
-        if (fetchInFlight.current) return; // debounce overlapping fetches
-        fetchInFlight.current = true;
+        if (!publicClient) {
+            console.warn('[JoinLobby] publicClient not ready, skipping fetch');
+            return;
+        }
+        const gen = ++fetchGenRef.current; // claim this generation
         if (!silent) setIsLoading(true);
         try {
             const roomList = [];
@@ -53,13 +57,14 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 }
 
             } else {
-                // Fetch LAST 20 rooms (Increased from 10 to catch more active games)
-                // Use 'latest' block tag to ensure freshness if possible, but default is fine
+                // Fetch recent rooms — deployless multicall batches parallel reads into 1 RPC call
+                // NOTE: Somnia ignores blockTag on eth_call — all tags return latest state
                 const nextId = await publicClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'nextRoomId',
                 }) as bigint;
+                if (gen !== fetchGenRef.current) return; // stale — newer fetch started
 
                 // Scan last 15 rooms — deployless multicall batches these into 1 RPC call
                 const scanCount = 15n;
@@ -115,19 +120,18 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                         host = data.host;
                         name = data.name;
                         playersCount = Number(data.playersCount);
-                        maxPlayers = data.maxPlayers; // Assuming maxPlayers is already a number or BigInt that Number() can handle
+                        maxPlayers = Number(data.maxPlayers);
                     }
 
                     // Filter: Phase 0 (Lobby) AND Created/Active within last 4 hours
-                    // 4h is generous enough for lobbies waiting for players
-                    const isRecent = timestamp === 0 || (now - timestamp) < 14400; // 4 hours
+                    const isRecent = timestamp === 0 || (now - timestamp) < 14400;
 
                     // Skip invalid/uninitialized rooms (e.g. room 0 with zero host)
                     const isValid = host !== '0x0000000000000000000000000000000000000000' && maxPlayers > 0;
 
                     if (phase === 0 && isRecent && isValid) {
                         roomList.push({
-                            id: Number(data.id || id), // Use id from loop if data.id missing
+                            id: Number(data.id || id),
                             host,
                             name,
                             players: playersCount,
@@ -139,21 +143,62 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             }
             // Sort by ID descending (newest first)
             roomList.sort((a, b) => b.id - a.id);
+            if (gen !== fetchGenRef.current) return; // stale — newer fetch won
             setRooms(roomList);
         } catch (e) {
-            console.error("Error fetching rooms:", e);
+            console.error('[JoinLobby] fetchRooms error:', e);
         } finally {
-            if (!silent) setIsLoading(false);
-            fetchInFlight.current = false;
+            if (gen === fetchGenRef.current) {
+                if (!silent) setIsLoading(false);
+            }
         }
     }, [publicClient, initialRoomId]);
 
-    // Initial load + Polling every 5 seconds (no block-level watching — Somnia has ~1s blocks which causes RPC spam)
+    // Initial load + Polling every 5s + Real-time event subscription
     useEffect(() => {
-        fetchRooms();
+        // Immediate first fetch + quick retry on transient failure
+        fetchRooms().catch(() => {
+            setTimeout(() => fetchRooms(), 1500);
+        });
+
+        // Poll every 5 seconds as fallback
         const interval = setInterval(() => fetchRooms(true), 5000);
-        return () => clearInterval(interval);
-    }, [fetchRooms]);
+
+        // Subscribe to RoomCreated + PlayerJoined events for instant updates
+        let unwatch1: (() => void) | undefined;
+        let unwatch2: (() => void) | undefined;
+        if (publicClient && !initialRoomId) {
+            try {
+                unwatch1 = publicClient.watchContractEvent({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    eventName: 'RoomCreated',
+                    onLogs: () => {
+                        // Room created — instant refetch
+                        fetchRooms(true);
+                    },
+                });
+                unwatch2 = publicClient.watchContractEvent({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    eventName: 'PlayerJoined',
+                    onLogs: () => {
+                        // Player joined — update player count
+                        fetchRooms(true);
+                    },
+                });
+            } catch (e) {
+                console.warn('[JoinLobby] Event subscription failed, relying on polling:', e);
+            }
+        }
+
+        return () => {
+            clearInterval(interval);
+            unwatch1?.();
+            unwatch2?.();
+            fetchGenRef.current++; // cancel any in-flight fetch on unmount
+        };
+    }, [fetchRooms, publicClient, initialRoomId]);
 
     const { isConnected } = useAccount();
 
