@@ -639,13 +639,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         refreshPlayersList(currentRoomId);
     }, [currentRoomId, publicClient, refreshPlayersList, isTestMode]);
 
-    // Polling для регулярного обновления состояния (backup для events)
+    // Polling & Block Watching for real-time updates
+    useWatchBlockNumber({
+        onBlockNumber() {
+            if (!isTestMode && currentRoomId) {
+                refreshPlayersList(currentRoomId);
+            }
+        },
+    });
+
+    // Backup polling (in case websocket/blocks stall)
     useEffect(() => {
         if (isTestMode || !currentRoomId || !publicClient) return;
 
+        refreshPlayersList(currentRoomId); // Immediate fetch on mount/ID change
+
         const interval = setInterval(() => {
             refreshPlayersList(currentRoomId);
-        }, 5000); // Каждые 5 секунд
+        }, 5000);
 
         return () => clearInterval(interval);
     }, [currentRoomId, publicClient, refreshPlayersList, isTestMode]);

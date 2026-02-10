@@ -118,8 +118,15 @@ export const WaitingRoom: React.FC = () => {
                     </div>
 
                     <div className="pt-4 mt-4 border-t border-white/5 flex items-center justify-between">
-                        <div className="text-white/40 text-[10px] uppercase tracking-tighter font-mono">
-                            Status: Secured by ZK-Shuffle
+                        <div className="text-white/40 text-[10px] uppercase tracking-tighter font-mono flex items-center gap-2">
+                            Status: ZK-Shuffle Secured
+                            <button
+                                onClick={() => roomIdNumber && refreshPlayersList(BigInt(roomIdNumber))}
+                                className="hover:text-white transition-colors"
+                                title="Force Refresh"
+                            >
+                                ⟳
+                            </button>
                         </div>
                         <div className="text-white/60 text-sm">
                             Players: <span className="text-[#916A47] font-bold">{gameState.players.length}/16</span>
