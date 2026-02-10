@@ -58,7 +58,7 @@ export default function ElasticSlider({
     });
 
     // Update value based on mouse X position relative to container
-    const updateValue = (clientX: number) => {
+    const updateValue = React.useCallback((clientX: number) => {
         if (containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
             // Calculate percentage 0-100
@@ -82,7 +82,31 @@ export default function ElasticSlider({
 
             if (onChange) onChange(finalValue);
         }
-    };
+    }, [max, min, step, onChange, x]);
+
+    // Global drag listeners
+    useEffect(() => {
+        if (isDragging) {
+            const handlePointerMove = (e: PointerEvent) => {
+                updateValue(e.clientX);
+            };
+
+            const handlePointerUp = () => {
+                setIsDragging(false);
+            };
+
+            window.addEventListener('pointermove', handlePointerMove);
+            window.addEventListener('pointerup', handlePointerUp);
+            // Also handle pointercancel just in case
+            window.addEventListener('pointercancel', handlePointerUp);
+
+            return () => {
+                window.removeEventListener('pointermove', handlePointerMove);
+                window.removeEventListener('pointerup', handlePointerUp);
+                window.removeEventListener('pointercancel', handlePointerUp);
+            };
+        }
+    }, [isDragging, updateValue]);
 
     // Construct initial position
     useEffect(() => {
@@ -100,11 +124,6 @@ export default function ElasticSlider({
                 setIsDragging(true);
                 updateValue(e.clientX);
             }}
-            onPointerMove={(e) => {
-                if (isDragging) updateValue(e.clientX);
-            }}
-            onPointerUp={() => setIsDragging(false)}
-            onPointerLeave={() => setIsDragging(false)}
         >
             {/* Background Track */}
             <div className="absolute h-1.5 w-full bg-[#916A47]/20 rounded-full overflow-hidden">
