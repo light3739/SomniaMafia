@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, verifyMessage } from 'viem';
 import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
 import { ServerStore } from '@/services/serverStore';
 
@@ -13,13 +13,25 @@ const ACTION_CHECK = 3;
 
 export async function POST(request: Request) {
     try {
-        const { roomId: rawRoomId, detectiveAddress, targetAddress } = await request.json();
+        const { roomId: rawRoomId, detectiveAddress, targetAddress, signature } = await request.json();
 
-        if (!rawRoomId || !detectiveAddress || !targetAddress) {
+        if (!rawRoomId || !detectiveAddress || !targetAddress || !signature) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
         const roomId = BigInt(rawRoomId);
+
+        // 0. Verify the caller is actually the detective (signature check)
+        const message = `investigate:${rawRoomId}:${targetAddress}`;
+        const valid = await verifyMessage({
+            address: detectiveAddress as `0x${string}`,
+            message,
+            signature: signature as `0x${string}`,
+        });
+        if (!valid) {
+            return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+        }
+
         console.log(`[API/Investigate] Detective ${detectiveAddress} checking ${targetAddress} in Room #${roomId}`);
 
         // 1. Verify on-chain that the detective revealed a CHECK on the target
