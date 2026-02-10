@@ -120,7 +120,8 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     }
 
                     // Filter: Phase 0 (Lobby) AND Created/Active within last 12 minutes (slight buffer for 10m request)
-                    const isRecent = (now - timestamp) < 720; // 12 mins
+                    // Note: If timestamp is 0, we assume it's a new/valid room that missed a timestamp update, so we show it to be safe.
+                    const isRecent = timestamp === 0 || (now - timestamp) < 720; // 12 mins
 
                     // DEBUG: Log found rooms
                     // console.log(`Room ${id}: Phase ${phase}, Timestamp ${timestamp}, Now ${now}, Recent: ${isRecent}`);  
