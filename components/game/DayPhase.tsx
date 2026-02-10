@@ -559,7 +559,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                 {discussionState?.active ? (
                                     <>
                                         {/* Timer Display with Mic Button */}
-                                        <div className="relative w-full py-1 text-center bg-[#916A47]/5 rounded-lg border border-[#916A47]/20">
+                                        <div className="relative w-full py-2 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
                                             {discussionState?.phase === 'initial_delay' ? (
                                                 <div className="flex items-center justify-center gap-2">
                                                     <Clock className="w-4 h-4 text-[#916A47]" />
@@ -600,7 +600,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                                 disabled={isProcessing}
                                                 isLoading={isProcessing}
                                                 variant="outline-gold"
-                                                className="w-full h-[40px]"
+                                                className="w-full h-[50px]"
                                             >
                                                 <ChevronRight className="w-5 h-5 mr-2" />
                                                 Finish Speech Early
@@ -614,7 +614,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                                 disabled={isProcessing}
                                                 isLoading={isProcessing}
                                                 variant="secondary"
-                                                className="w-full h-[40px] mt-2 bg-amber-900/30 hover:bg-amber-900/50 border-amber-500/30 text-amber-200"
+                                                className="w-full h-[44px] mt-2 bg-amber-900/30 hover:bg-amber-900/50 border-amber-500/30 text-amber-200"
                                             >
                                                 <ChevronRight className="w-5 h-5 mr-2" />
                                                 Force Skip (Host)
