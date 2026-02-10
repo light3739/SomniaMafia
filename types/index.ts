@@ -52,7 +52,7 @@ export interface LogEntry {
   id: string;
   timestamp: string;
   message: string;
-  type: 'info' | 'danger' | 'success' | 'phase' | 'warning';
+  type: 'info' | 'danger' | 'success' | 'phase' | 'warning' | 'night';
 }
 
 export interface MafiaChatMessage {
