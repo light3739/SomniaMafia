@@ -316,7 +316,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                         encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
                     }
 
-                    const cardRole = ShuffleService.roleNumberToRole(encryptedCard);
+                    const cardRole = ShuffleService.roleNumberToRole(encryptedCard, currentRoomId?.toString());
 
                     if (cardRole === Role.MAFIA) {
                         const player = gameState.players[i];
@@ -380,7 +380,19 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
 
             if (saved) {
                 try {
-                    const { salt, commitHash, committedTarget } = JSON.parse(saved);
+                    const { salt, commitHash, committedTarget, hasCommitted: lsCommitted } = JSON.parse(saved);
+                    // FIX: If localStorage has hasCommitted=false but chain says committed,
+                    // it means the page crashed between TX receipt and localStorage update.
+                    // Promote to hasCommitted=true since chain is authoritative.
+                    if (!lsCommitted) {
+                        console.log("[NightPhase] Promoting localStorage hasCommitted to true (chain is authoritative)");
+                        localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
+                            salt, commitHash, committedTarget,
+                            action: JSON.parse(saved).action,
+                            hasCommitted: true,
+                            hasRevealed: false
+                        }));
+                    }
                     setNightState(prev => ({
                         ...prev,
                         hasCommitted: true,
@@ -549,6 +561,17 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         }));
         setIsProcessing(true);
 
+        // FIX: Save salt BEFORE TX with hasCommitted=false to prevent permanent salt loss
+        // if page crashes between TX receipt and localStorage write
+        localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
+            salt,
+            commitHash: hash,
+            committedTarget: committedTarget,
+            action: roleConfig.action,
+            hasCommitted: false, // Not yet confirmed on-chain
+            hasRevealed: false
+        }));
+
         try {
             if (!isTestMode) {
                 if (myRole === Role.MAFIA) {
@@ -573,6 +596,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 }));
             }
 
+            // Promote to committed=true after TX success
             localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
                 salt,
                 commitHash: hash,
@@ -585,6 +609,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             addLog("Night action committed!", "success");
             setSelectedTarget(null);
         } catch (e: any) {
+            // Remove pre-saved localStorage entry on TX failure
+            localStorage.removeItem(NIGHT_COMMIT_KEY);
             setNightState(prev => ({
                 ...prev,
                 commitHash: null,
