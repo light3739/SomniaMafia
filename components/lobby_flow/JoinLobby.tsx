@@ -86,24 +86,58 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 const results = await Promise.all(fetchPromises);
 
                 // Process results in order
+                const now = Math.floor(Date.now() / 1000);
+
                 for (const res of results) {
                     if (!res.success || !res.data) continue;
 
                     const { id, data } = res;
-                    const phase = Number(data.phase);
+
+                    // Robust data parsing (Array vs Object)
+                    let phase = 0;
+                    let timestamp = 0;
+                    let host = '';
+                    let name = '';
+                    let playersCount = 0;
+                    let maxPlayers = 0;
+
+                    if (Array.isArray(data)) {
+                        // Tuple handling
+                        phase = Number(data[3]);
+                        timestamp = Number(data[9]);
+                        host = data[1];
+                        name = data[2];
+                        playersCount = Number(data[5]);
+                        maxPlayers = Number(data[4]);
+                    } else {
+                        // Object handling
+                        phase = Number(data.phase);
+                        timestamp = Number(data.lastActionTimestamp);
+                        host = data.host;
+                        name = data.name;
+                        playersCount = Number(data.playersCount);
+                        maxPlayers = data.maxPlayers; // Assuming maxPlayers is already a number or BigInt that Number() can handle
+                    }
+
+                    // Filter: Phase 0 (Lobby) AND Created/Active within last 12 minutes (slight buffer for 10m request)
+                    const isRecent = (now - timestamp) < 720; // 12 mins
+
                     // DEBUG: Log found rooms
-                    // console.log(`Room ${id}: Phase ${phase}`);  
-                    if (phase === 0) {
+                    // console.log(`Room ${id}: Phase ${phase}, Timestamp ${timestamp}, Now ${now}, Recent: ${isRecent}`);  
+                    if (phase === 0 && isRecent) {
                         roomList.push({
-                            id: Number(data.id),
-                            host: data.host,
-                            name: data.name,
-                            players: Number(data.playersCount),
-                            max: Number(data.maxPlayers)
+                            id: Number(data.id || id), // Use id from loop if data.id missing
+                            host,
+                            name,
+                            players: playersCount,
+                            max: maxPlayers,
+                            timestamp
                         });
                     }
                 }
             }
+            // Sort by ID descending (newest first)
+            roomList.sort((a, b) => b.id - a.id);
             setRooms(roomList);
         } catch (e) {
             console.error("Error fetching rooms:", e);
