@@ -140,7 +140,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const txQueueRef = useRef<Promise<any>>(Promise.resolve());
     const enqueueTx = useCallback(<T,>(fn: () => Promise<T>): Promise<T> => {
         const result = txQueueRef.current.then(fn, fn); // run even if previous failed
-        txQueueRef.current = result.catch(() => {}); // swallow to keep chain alive
+        txQueueRef.current = result.catch(() => { }); // swallow to keep chain alive
         return result;
     }, []);
 
@@ -223,7 +223,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     // Store locally so we can retry later
                     try {
                         localStorage.setItem(`pending_sync_${roomId}_${playerAddress.toLowerCase()}`, JSON.stringify({ role, salt }));
-                    } catch (_) {}
+                    } catch (_) { }
                 }
             }
         }
@@ -2171,7 +2171,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         }
 
                         const elimName = elimPlayer?.name || args.player?.slice(0, 6) || "Unknown";
-                        addLog(`${elimName} eliminated: ${args.reason}`, "danger");
+                        if (args.reason !== 'Killed at night') {
+                            addLog(`${elimName} eliminated: ${args.reason}`, "danger");
+                        }
                         refreshPlayersList(currentRoomId);
                         break;
 
