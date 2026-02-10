@@ -15,7 +15,8 @@ export const WaitingRoom: React.FC = () => {
         startGameOnChain,
         isTxPending,
         currentRoomId,
-        myPlayer
+        myPlayer,
+        refreshPlayersList
     } = useGameContext();
 
     const roomIdNumber = currentRoomId ? Number(currentRoomId) : null;
