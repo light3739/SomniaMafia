@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWalletClient, useWatchContractEvent, useWatchBlockNumber } from 'wagmi';
-import { createWalletClient, http, parseEther, parseEventLogs, toHex, pad } from 'viem';
+import { createWalletClient, http, parseEther, parseEventLogs, toHex, pad, type WalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../contracts/config';
@@ -110,8 +110,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     const [currentRoomId, setCurrentRoomId] = useState<bigint | null>(() => {
         if (typeof window !== 'undefined') {
+            // FIX #24: Try URL param first, then sessionStorage, then localStorage
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlRoomId = urlParams.get('roomId');
+            if (urlRoomId) return BigInt(urlRoomId);
+
             const saved = sessionStorage.getItem('currentRoomId');
-            return saved ? BigInt(saved) : null;
+            if (saved) return BigInt(saved);
+
+            // Fallback: check localStorage (survives tab close)
+            const lsSaved = localStorage.getItem('currentRoomId');
+            if (lsSaved) return BigInt(lsSaved);
         }
         return null;
     });
@@ -122,9 +131,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Ref для currentRoomId чтобы избежать проблем с замыканием в callbacks
     const currentRoomIdRef = useRef<bigint | null>(currentRoomId);
     const autoWinLockRef = useRef(false);
+    const checkWinInProgressRef = useRef(false);
     useEffect(() => {
         currentRoomIdRef.current = currentRoomId;
     }, [currentRoomId]);
+
+    // === TX QUEUE: Serialize session key transactions to prevent nonce collisions ===
+    const txQueueRef = useRef<Promise<any>>(Promise.resolve());
+    const enqueueTx = useCallback(<T,>(fn: () => Promise<T>): Promise<T> => {
+        const result = txQueueRef.current.then(fn, fn); // run even if previous failed
+        txQueueRef.current = result.catch(() => {}); // swallow to keep chain alive
+        return result;
+    }, []);
+
+    // === DEBOUNCE refreshPlayersList: prevent 10+/sec RPC spam ===
+    const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const refreshPromiseRef = useRef<Promise<any> | null>(null);
+    const lastRefreshTimeRef = useRef<number>(0);
 
     // Web3
     const { address } = useAccount();
@@ -166,28 +189,43 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     // Helper: sync role secret with server (includes signature verification)
+    // FIX #10/#11: Retry with exponential backoff instead of fire-and-forget
     const syncSecretWithServer = useCallback(async (roomId: string, playerAddress: string, role: number, salt: string) => {
         if (!walletClient) {
             console.warn('[SyncSecret] No wallet client, skipping server sync');
             return;
         }
-        try {
-            const message = `reveal-secret:${roomId}:${role}:${salt}`;
-            const signature = await walletClient.signMessage({ message });
-            await fetch('/api/game/reveal-secret', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    roomId,
-                    address: playerAddress,
-                    role,
-                    salt,
-                    signature
-                })
-            });
-            console.log("[Status] Secret synced with server DB.");
-        } catch (err) {
-            console.warn("[Warning] Failed to sync secret with server DB.", err);
+        const MAX_RETRIES = 3;
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const message = `reveal-secret:${roomId}:${role}:${salt}`;
+                const signature = await walletClient.signMessage({ message });
+                const res = await fetch('/api/game/reveal-secret', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId,
+                        address: playerAddress,
+                        role,
+                        salt,
+                        signature
+                    })
+                });
+                if (!res.ok) throw new Error(`Server responded ${res.status}`);
+                console.log(`[Status] Secret synced with server DB (attempt ${attempt}).`);
+                return; // success
+            } catch (err) {
+                console.warn(`[SyncSecret] Attempt ${attempt}/${MAX_RETRIES} failed:`, err);
+                if (attempt < MAX_RETRIES) {
+                    await new Promise(r => setTimeout(r, 1000 * attempt)); // 1s, 2s backoff
+                } else {
+                    console.error('[SyncSecret] All retries exhausted. Secret NOT synced with server!');
+                    // Store locally so we can retry later
+                    try {
+                        localStorage.setItem(`pending_sync_${roomId}_${playerAddress.toLowerCase()}`, JSON.stringify({ role, salt }));
+                    } catch (_) {}
+                }
+            }
         }
     }, [walletClient]);
 
@@ -280,7 +318,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (canUseSession && sessionClient) {
             console.log(`[Session TX] Sending ${functionName} with gas ${calculatedGas}...`);
 
-            const attemptSend = async (retry: boolean = true): Promise<`0x${string}`> => {
+            const attemptSend = async (retryCount: number = 0): Promise<`0x${string}`> => {
+                const MAX_NONCE_RETRIES = 3; // FIX #7: Multi-attempt nonce retry
                 try {
                     const hash = await sessionClient.writeContract({
                         address: MAFIA_CONTRACT_ADDRESS,
@@ -294,22 +333,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     return hash;
                 } catch (err: any) {
                     const errMsg = err.message || '';
-                    if (retry && (errMsg.includes('nonce too low') || errMsg.includes('Nonce provided for the transaction is lower'))) {
-                        console.warn(`[Session TX] Nonce too low for ${functionName}. Retrying with fresh nonce...`);
+                    if (retryCount < MAX_NONCE_RETRIES && (errMsg.includes('nonce too low') || errMsg.includes('Nonce provided for the transaction is lower') || errMsg.includes('replacement transaction underpriced'))) {
+                        console.warn(`[Session TX] Nonce issue for ${functionName} (attempt ${retryCount + 1}/${MAX_NONCE_RETRIES}). Retrying...`);
 
-                        // Wait a bit for RPC to sync or mempool to update
-                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        // Wait with exponential backoff
+                        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
 
-                        // Explicitly fetch next nonce if possible, or just let viem try again
-                        // Most reliable is to just retry once, viem will call getTransactionCount again
-                        return attemptSend(false);
+                        // Retry - viem will re-fetch nonce from getTransactionCount
+                        return attemptSend(retryCount + 1);
                     }
                     console.error('[Session TX] Failed:', err.message || err);
                     throw err;
                 }
             };
 
-            return attemptSend();
+            // FIX #8/#9: Enqueue session key TXs to prevent nonce collisions
+            return enqueueTx(() => attemptSend(0));
         } else {
             // Fallback на основной кошелек (MetaMask)
             console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas}`);
@@ -375,6 +414,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (currentRoomId) {
             sessionStorage.setItem('currentRoomId', currentRoomId.toString());
             sessionStorage.setItem('lobbyName', lobbyName);
+            // FIX #24: Also persist to localStorage (survives new tab)
+            localStorage.setItem('currentRoomId', currentRoomId.toString());
+        } else {
+            localStorage.removeItem('currentRoomId');
         }
     }, [currentRoomId, lobbyName]);
     // FIXED: Only auto-set myPlayerId from wallet if we're NOT in test mode
@@ -423,6 +466,26 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // --- DATA SYNC ---
     // V3 flag constants (must match contract)
     const FLAG_CONFIRMED_ROLE = 1;
+
+    // FIX #12: Retry any pending secret syncs that failed on previous sessions
+    useEffect(() => {
+        if (!currentRoomId || !address || !walletClient) return;
+        const pendingKey = `pending_sync_${currentRoomId}_${address.toLowerCase()}`;
+        const pending = localStorage.getItem(pendingKey);
+        if (pending) {
+            try {
+                const { role, salt } = JSON.parse(pending);
+                console.log('[Recovery] Retrying pending server sync...');
+                syncSecretWithServer(currentRoomId.toString(), address, role, salt).then(() => {
+                    localStorage.removeItem(pendingKey);
+                    console.log('[Recovery] Pending sync completed successfully.');
+                });
+            } catch (e) {
+                console.warn('[Recovery] Failed to parse pending sync data:', e);
+                localStorage.removeItem(pendingKey);
+            }
+        }
+    }, [currentRoomId, address, walletClient, syncSecretWithServer]);
     const FLAG_ACTIVE = 2;
 
     // Check win condition on frontend (since contract doesn't know roles)
@@ -639,34 +702,62 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return gameData;
     }, [fetchGameData, checkWinCondition, address, avatarUrl]);
 
+    // FIX #14: Debounced refreshPlayersList wrapper
+    // Coalesces multiple rapid calls into one, with 300ms debounce + 2s min interval
+    const refreshPlayersListDebounced = useCallback((roomId: bigint) => {
+        // If a refresh is already in-flight, skip
+        if (refreshPromiseRef.current) return;
+
+        // Debounce: clear existing timer, schedule new one
+        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+
+        const now = Date.now();
+        const timeSinceLastRefresh = now - lastRefreshTimeRef.current;
+        const MIN_INTERVAL = 2000; // 2s min between actual RPC calls
+
+        const delay = timeSinceLastRefresh < MIN_INTERVAL
+            ? MIN_INTERVAL - timeSinceLastRefresh
+            : 300; // 300ms debounce
+
+        refreshTimerRef.current = setTimeout(() => {
+            refreshTimerRef.current = null;
+            lastRefreshTimeRef.current = Date.now();
+
+            const promise = refreshPlayersList(roomId).finally(() => {
+                refreshPromiseRef.current = null;
+            });
+            refreshPromiseRef.current = promise;
+        }, delay);
+    }, [refreshPlayersList]);
+
+    // Direct (non-debounced) refresh for critical paths (after TX confirmation)
+    // Use refreshPlayersList directly for those cases
+
     // Initial load
     useEffect(() => {
         if (isTestMode || !currentRoomId || !publicClient) return;
         refreshPlayersList(currentRoomId);
     }, [currentRoomId, publicClient, refreshPlayersList, isTestMode]);
 
-    // Polling & Block Watching for real-time updates
+    // FIX #14: Single block watcher — debounced, no more 10+/sec spam
     useWatchBlockNumber({
         onBlockNumber() {
             if (!isTestMode && currentRoomIdRef.current) {
-                // console.log(`[BlockWatcher] New block! Refreshing room ${currentRoomIdRef.current}`);
-                refreshPlayersList(currentRoomIdRef.current);
+                refreshPlayersListDebounced(currentRoomIdRef.current);
             }
         },
     });
 
-    // Backup polling (in case websocket/blocks stall)
+    // Backup polling (in case websocket/blocks stall) — every 5s, debounced
     useEffect(() => {
         if (isTestMode || !currentRoomId || !publicClient) return;
 
-        refreshPlayersList(currentRoomId); // Immediate fetch on mount/ID change
-
         const interval = setInterval(() => {
-            refreshPlayersList(currentRoomId);
+            refreshPlayersListDebounced(currentRoomId);
         }, 5000);
 
         return () => clearInterval(interval);
-    }, [currentRoomId, publicClient, refreshPlayersList, isTestMode]);
+    }, [currentRoomId, publicClient, refreshPlayersListDebounced, isTestMode]);
 
 
 
@@ -1373,8 +1464,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     content = { type: 'text', text: hexContent };
                 }
 
-                // Resolve sender name
-                const senderPlayer = gameState.players.find(p => p.address.toLowerCase() === msg.sender.toLowerCase());
+                // Resolve sender name — FIX #19: use playersRef to avoid stale closure
+                const senderPlayer = playersRef.current.find(p => p.address.toLowerCase() === msg.sender.toLowerCase());
                 const playerName = senderPlayer?.name || msg.sender.slice(0, 6);
 
                 return {
@@ -1390,7 +1481,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.error("Error fetching mafia chat:", e);
         }
-    }, [publicClient, gameState.players, setGameState]); // Removed hexToString dependency to avoid complex scope issues, inline implementation
+    }, [publicClient, setGameState]); // FIX #19: Removed gameState.players from deps — use playersRef inside
 
     const sendMafiaMessageOnChain = async (content: MafiaChatMessage['content']) => {
         if (!currentRoomId) return;
@@ -1416,25 +1507,31 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
 
-    // Polling for Mafia Chat
+    // FIX #19: Polling for Mafia Chat — use refs to avoid re-creation on every player list change
+    const isMafiaRef = useRef(false);
+    const gamePhaseRef = useRef(gameState.phase);
+    useEffect(() => {
+        const myAddr = address?.toLowerCase();
+        isMafiaRef.current = playersRef.current.some(
+            p => p.address.toLowerCase() === myAddr && p.role === Role.MAFIA
+        );
+        gamePhaseRef.current = gameState.phase;
+    }, [gameState.players, gameState.phase, address]);
+
     useEffect(() => {
         if (!currentRoomId || !publicClient) return;
 
-        const CHECK_INTERVAL = 3000; // Check chat every 3s
+        const CHECK_INTERVAL = 3000;
+        const roomIdForChat = currentRoomId; // capture
 
         const interval = setInterval(() => {
-            // Only fetch if we are mafia
-            const isMafia = gameState.myPlayerId ?
-                gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase())?.role === Role.MAFIA :
-                gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase())?.role === Role.MAFIA;
-
-            if (isMafia && gameState.phase >= GamePhase.DAY) {
-                fetchMafiaChat(currentRoomId);
+            if (isMafiaRef.current && gamePhaseRef.current >= GamePhase.DAY) {
+                fetchMafiaChat(roomIdForChat);
             }
         }, CHECK_INTERVAL);
 
         return () => clearInterval(interval);
-    }, [currentRoomId, publicClient, fetchMafiaChat, gameState.players, gameState.myPlayerId, address, gameState.phase]);
+    }, [currentRoomId, publicClient, fetchMafiaChat]);
 
 
     const endGameAutomaticallyOnChain = useCallback(async () => {
@@ -1534,10 +1631,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(`Waiting turn to submit proof (${delayMs / 1000}s)...`, "info");
             await new Promise(resolve => setTimeout(resolve, delayMs));
 
-            // Re-check if game ended while waiting
-            // We can check if we are still on the same room/state, but ideally we check if the game is OVER.
-            // However, endGameZK is usually called when we *think* it's over.
-            // A simple check is if another tx is pending or if phase changed (though phase won't change until tx confirms)
+            // FIX #6: Re-verify game state after delay — someone else may have ended it
+            try {
+                const freshRoom = await publicClient.readContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'getRoom',
+                    args: [currentRoomId],
+                }) as any;
+                const currentPhase = Number(Array.isArray(freshRoom) ? freshRoom[3] : freshRoom.phase);
+                if (currentPhase === GamePhase.ENDED) {
+                    console.log('[ZK] Game already ended by another player. Aborting.');
+                    addLog('Game already ended by another player.', 'info');
+                    return;
+                }
+            } catch (e) {
+                console.warn('[ZK] Could not re-verify game state, proceeding anyway:', e);
+            }
         }
 
         setIsTxPending(true);
@@ -1632,9 +1742,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const roomId = currentRoomIdRef.current;
         if (!roomId || !publicClient) return;
 
-        // Note: We don't block the CHECK (server fetch) if isTxPending is true,
-        // because the transaction that is pending might be the one that triggers the win!
-        // We only block the SUBMISSION of the endGameZK transaction.
+        // FIX #23: Guard the entire check (including server fetch) with a ref
+        if (checkWinInProgressRef.current) {
+            console.log('[AutoWin] Check already in progress, skipping.');
+            return;
+        }
+        checkWinInProgressRef.current = true;
 
         try {
             console.log(`[AutoWin] Checking for victory in Room #${roomId}...`);
@@ -1728,6 +1841,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         } catch (e) {
             console.warn("[AutoWin] Silent check failed:", e);
+        } finally {
+            checkWinInProgressRef.current = false; // FIX #23: Always release
         }
     }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, address, revealMyRoleAfterGameEnd]);
 
@@ -2009,7 +2124,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     case 'NightFinalized':
                         if (args.killed && args.killed !== '0x0000000000000000000000000000000000000000') {
                             const killedStr = (args.killed as string).toLowerCase();
-                            let killedPlayer = gameState.players.find(p => p.address.toLowerCase() === killedStr);
+                            let killedPlayer = playersRef.current.find(p => p.address.toLowerCase() === killedStr);
 
                             if (!killedPlayer) {
                                 console.warn("[NightFinalized] Killed player missing locally. Fetching fresh data...");
@@ -2033,7 +2148,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     case 'PlayerEliminated':
                         const elimStr = (args.player as string).toLowerCase();
-                        let elimPlayer = gameState.players.find(p => p.address.toLowerCase() === elimStr);
+                        let elimPlayer = playersRef.current.find(p => p.address.toLowerCase() === elimStr);
 
                         if (!elimPlayer) {
                             console.warn("[PlayerEliminated] Player missing locally. Fetching fresh data...");
@@ -2059,9 +2174,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             const voterStr = (args.voter as string).toLowerCase();
                             const targetStr = (args.target as string).toLowerCase();
 
-                            // Try Local Lookup
-                            let voter = gameState.players.find(p => p.address.toLowerCase() === voterStr);
-                            let target = gameState.players.find(p => p.address.toLowerCase() === targetStr);
+                            // Try Local Lookup — FIX #15: use ref to avoid stale closure
+                            let voter = playersRef.current.find(p => p.address.toLowerCase() === voterStr);
+                            let target = playersRef.current.find(p => p.address.toLowerCase() === targetStr);
 
                             // ROBUST FIX: If race condition (player missing), fetch fresh data IMMEDIATELY
                             if (!voter || !target) {

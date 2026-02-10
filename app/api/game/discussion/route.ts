@@ -168,6 +168,13 @@ export async function POST(request: Request) {
         const totalSpeakers = alivePlayers.length;
 
         if (action === 'start') {
+            // FIX #21: Check if discussion state already exists to prevent double-start reset
+            const existingState = await ServerStore.getDiscussionState(roomId, dayCount);
+            if (existingState && !existingState.finished) {
+                console.log(`[API/Discussion] Discussion already active for Room #${roomId} Day ${dayCount}, returning existing state`);
+                return buildResponse(existingState, alivePlayers, playerAddress);
+            }
+
             // Initialize discussion state with initial delay
             const newState: DiscussionState = {
                 currentSpeakerIndex: 0,
