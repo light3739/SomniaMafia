@@ -9,7 +9,6 @@ import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { Role, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
 import { Eye, EyeOff, Check, Users, Skull, Shield, Search, Loader2, RefreshCw } from 'lucide-react';
-import { Lanyard } from '../ui/Lanyard';
 
 interface RevealState {
     deck: string[];
@@ -588,61 +587,56 @@ export const RoleReveal: React.FC = React.memo(() => {
                         // Phase 2: Role Revealed
                         <motion.div
                             key="revealed"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-0 w-full h-full flex items-center justify-center p-0"
+                            initial={{ opacity: 0, rotateY: 90 }}
+                            animate={{ opacity: 1, rotateY: 0 }}
+                            transition={{ type: "spring", duration: 0.8 }}
+                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-12 shadow-2xl pointer-events-auto w-[400px] h-[400px] flex flex-col justify-between mx-auto`}
                         >
-                            <Lanyard wireLength={200} className="h-full">
-                                <div
-                                    className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-12 shadow-2xl pointer-events-auto w-[400px] h-[400px] flex flex-col justify-between cursor-grab active:cursor-grabbing select-none`}
-                                    onPointerDown={(e) => e.stopPropagation()} // Let matter.js handle it? Use capture?
-                                // Actually, let click propagate to buttons, but drag handles standard.
+                            <div className="text-center flex-1 flex flex-col justify-center">
+                                {/* Role Name */}
+                                <motion.h2
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.3 }}
+                                    className={`text-4xl font-['Playfair_Display'] mb-6 ${roleConfig.color}`}
                                 >
-                                    <div className="text-center flex-1 flex flex-col justify-center pointer-events-none"> {/* Text non-interactive */}
-                                        {/* Role Name */}
-                                        <h2
-                                            className={`text-4xl font-['Playfair_Display'] mb-6 ${roleConfig.color}`}
-                                        >
-                                            {revealState.myRole}
-                                        </h2>
+                                    {revealState.myRole}
+                                </motion.h2>
 
-                                        {/* Description */}
-                                        <p
-                                            className="text-white/60 text-sm max-w-xs mx-auto"
-                                        >
-                                            {roleConfig.description}
-                                        </p>
+                                {/* Description */}
+                                <motion.p
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ delay: 0.5 }}
+                                    className="text-white/60 text-sm max-w-xs mx-auto"
+                                >
+                                    {roleConfig.description}
+                                </motion.p>
+                            </div>
+
+                            <div className="space-y-3 mt-6">
+                                {/* Confirm Button */}
+                                {!revealState.hasConfirmed ? (
+                                    <Button
+                                        onClick={handleConfirmRole}
+                                        isLoading={isProcessing || isTxPending}
+                                        disabled={isProcessing || isTxPending}
+                                        className="w-full"
+                                    >
+                                        {isProcessing ? 'Auto-confirming role...' : 'I Understand My Role'}
+                                    </Button>
+                                ) : (
+                                    <div className="flex items-center justify-center gap-2 text-[#916A47] py-4">
+                                        <Check className="w-5 h-5" />
+                                        <span>Role Confirmed! Waiting for others...</span>
                                     </div>
+                                )}
 
-                                    <div className="space-y-3 mt-6 pointer-events-auto"> {/* Buttons interactive */}
-                                        {/* Confirm Button */}
-                                        {!revealState.hasConfirmed ? (
-                                            <Button
-                                                onClick={(e) => {
-                                                    e.stopPropagation(); // Prevent Drag start?
-                                                    handleConfirmRole();
-                                                }}
-                                                isLoading={isProcessing || isTxPending}
-                                                disabled={isProcessing || isTxPending}
-                                                className="w-full relative z-50"
-                                            >
-                                                {isProcessing ? 'Auto-confirming role...' : 'I Understand My Role'}
-                                            </Button>
-                                        ) : (
-                                            <div className="flex items-center justify-center gap-2 text-[#916A47] py-4">
-                                                <Check className="w-5 h-5" />
-                                                <span>Role Confirmed! Waiting for others...</span>
-                                            </div>
-                                        )}
-
-                                        {/* Confirmation count */}
-                                        <div className="text-xs text-white/30 text-center">
-                                            {gameState.players.filter(p => p.hasConfirmedRole).length} / {gameState.players.length} confirmed
-                                        </div>
-                                    </div>
+                                {/* Confirmation count */}
+                                <div className="text-xs text-white/30 text-center">
+                                    {gameState.players.filter(p => p.hasConfirmedRole).length} / {gameState.players.length} confirmed
                                 </div>
-                            </Lanyard>
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
