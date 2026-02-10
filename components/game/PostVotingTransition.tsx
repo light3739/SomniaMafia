@@ -30,13 +30,16 @@ export const PostVotingTransition: React.FC = () => {
                     <GameLog />
                 </div>
 
-                <div className="flex flex-col items-center justify-center p-4 rounded-xl bg-black/40 border border-[#916A47]/30 backdrop-blur-sm min-w-[200px]">
-                    <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] text-[#916A47] mb-1">
-                        Night Starting
-                    </div>
-                    <div className="text-3xl sm:text-4xl font-black tabular-nums leading-none tracking-tight text-white font-mono flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-[#916A47] animate-pulse" />
-                        00:{timeLeft.toString().padStart(2, '0')}
+                <div className="w-full py-2 flex justify-center">
+                    <div className="flex items-center justify-center gap-3 px-6 py-2 bg-black/40 border border-[#916A47]/30 rounded-full text-white/50 select-none">
+                        <Clock className="w-4 h-4 text-[#916A47]/70" />
+                        <span className="text-lg font-mono font-bold text-white/80 tabular-nums">
+                            00:{timeLeft.toString().padStart(2, '0')}
+                        </span>
+                        <div className="w-[1px] h-4 bg-white/10 mx-1" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#916A47]">
+                            Night Starting...
+                        </span>
                     </div>
                 </div>
             </motion.div>
