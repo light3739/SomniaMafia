@@ -43,6 +43,7 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
   const { writeContractAsync } = useWriteContract();
 
   // Check session status on mount and when roomId/wallet changes
+  // Poll every second until session is valid (covers timing issues with markSessionRegistered)
   useEffect(() => {
     if (!roomId || !mainWallet) {
       setHasSession(false);
@@ -51,15 +52,34 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
       return;
     }
 
-    const valid = hasValidSession(roomId, mainWallet);
-    setHasSession(valid);
-    
-    if (valid) {
-      const info = getSessionInfo();
-      if (info) {
-        setSessionAddress(info.address);
-        setExpiresAt(info.expiresAt);
+    const checkSession = () => {
+      const valid = hasValidSession(roomId, mainWallet);
+      setHasSession(valid);
+      
+      if (valid) {
+        const info = getSessionInfo();
+        if (info) {
+          setSessionAddress(info.address);
+          setExpiresAt(info.expiresAt);
+        }
       }
+      return valid;
+    };
+
+    // Check immediately
+    const isValid = checkSession();
+
+    // If not valid yet, poll every second until it becomes valid
+    // This handles the race condition where markSessionRegistered() updates localStorage
+    // but the useEffect deps [roomId, mainWallet] haven't changed to trigger a re-check
+    if (!isValid) {
+      const interval = setInterval(() => {
+        const nowValid = checkSession();
+        if (nowValid) {
+          clearInterval(interval);
+        }
+      }, 1000);
+      return () => clearInterval(interval);
     }
   }, [roomId, mainWallet]);
 

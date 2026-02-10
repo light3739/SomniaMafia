@@ -30,8 +30,8 @@ interface GameContextType {
     setShowVotingResults: (val: boolean) => void;
 
     // Lobby
-    createLobbyOnChain: () => Promise<void>;
-    joinLobbyOnChain: (roomId: number) => Promise<void>;
+    createLobbyOnChain: () => Promise<boolean>;
+    joinLobbyOnChain: (roomId: number) => Promise<boolean>;
 
     // Shuffle (V4: commit-reveal)
     startGameOnChain: () => Promise<void>;
@@ -633,8 +633,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // --- LOBBY ACTIONS (V3: createRoom only, then joinRoom with session) ---
 
-    const createLobbyOnChain = useCallback(async () => {
-        if (!playerName || !address || !lobbyName || !publicClient) return alert("Enter details and connect wallet!");
+    const createLobbyOnChain = useCallback(async (): Promise<boolean> => {
+        if (!playerName || !address || !lobbyName || !publicClient) { alert("Enter details and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
             // 1. Предсказываем ID комнаты (читаем nextRoomId)
@@ -740,15 +740,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             addLog("Lobby created successfully!", "success");
             setIsTxPending(false);
+            return true;
         } catch (e: any) {
             console.error(e);
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
+            return false;
         }
     }, [playerName, address, lobbyName, publicClient, writeContractAsync, addLog, refreshPlayersList]);
 
-    const joinLobbyOnChain = useCallback(async (roomId: number) => {
-        if (!playerName || !address || !publicClient) return alert("Enter name and connect wallet!");
+    const joinLobbyOnChain = useCallback(async (roomId: number): Promise<boolean> => {
+        if (!playerName || !address || !publicClient) { alert("Enter name and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
             // 1. Generate crypto keys
@@ -815,9 +817,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // addLog("Joined with auto-sign enabled!", "success");
             setIsTxPending(false);
+            return true;
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
+            return false;
         }
     }, [playerName, address, publicClient, writeContractAsync, addLog, refreshPlayersList]);
 
