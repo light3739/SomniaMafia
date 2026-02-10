@@ -648,8 +648,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Polling & Block Watching for real-time updates
     useWatchBlockNumber({
         onBlockNumber() {
-            if (!isTestMode && currentRoomId) {
-                refreshPlayersList(currentRoomId);
+            if (!isTestMode && currentRoomIdRef.current) {
+                // console.log(`[BlockWatcher] New block! Refreshing room ${currentRoomIdRef.current}`);
+                refreshPlayersList(currentRoomIdRef.current);
             }
         },
     });
@@ -790,7 +791,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            roomId: newRoomId.toString(),
+                            roomId: finalRoomId.toString(), // FIXED: Use finalRoomId
                             address,
                             avatar: avatarUrl
                         })
