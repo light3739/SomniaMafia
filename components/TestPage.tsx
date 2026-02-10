@@ -23,7 +23,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../contexts/GameContext';
 import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X } from 'lucide-react';
 import { MicButton } from './game/MicButton';
-import { MicButton } from './game/MicButton';
+
 import { useSoundEffects } from './ui/SoundEffects';
 import { Lanyard } from './ui/Lanyard';
 
