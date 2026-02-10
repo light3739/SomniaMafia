@@ -1,5 +1,5 @@
 // components/game/PlayerSpot.tsx
-import React, { memo, useState, useRef } from 'react';
+import React, { memo, useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Player, Role } from '../../types';
@@ -29,6 +29,21 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
     const [isVolumeOpen, setIsVolumeOpen] = useState(false);
     const [volume, setVolume] = useState(1.0);
     const closeTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const volumeWrapperRef = useRef<HTMLDivElement>(null);
+
+    // Click outside to close volume slider
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (isVolumeOpen && volumeWrapperRef.current && !volumeWrapperRef.current.contains(event.target as Node)) {
+                setIsVolumeOpen(false);
+            }
+        }
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [isVolumeOpen]);
 
     const handleVolumeChange = (newVolume: number) => {
         setVolume(newVolume);
@@ -321,6 +336,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                     {/* Volume Mixer Control (Only if not me and alive) */}
                     {!isMe && player.isAlive && (
                         <div
+                            ref={volumeWrapperRef}
                             className="relative"
                         >
                             <button
