@@ -39,9 +39,9 @@ const config = getDefaultConfig({
     ],
     transports: {
         [somniaChain.id]: fallback([
+            http(somniaChain.rpcUrls.default.http[0]),
             webSocket(somniaChain.rpcUrls.default.webSocket![0]),
-            http(somniaChain.rpcUrls.default.http[0])
-        ])
+        ], { rank: true }),
     },
     // Use deployless multicall — works on ANY chain without needing Multicall3 deployed.
     // This sends multicall bytecode directly via eth_call, zero contract dependency.
