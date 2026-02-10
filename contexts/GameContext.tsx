@@ -468,23 +468,52 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const FLAG_CONFIRMED_ROLE = 1;
 
     // FIX #12: Retry any pending secret syncs that failed on previous sessions
+    // Also periodically retry during active gameplay to ensure server has all secrets
     useEffect(() => {
         if (!currentRoomId || !address || !walletClient) return;
-        const pendingKey = `pending_sync_${currentRoomId}_${address.toLowerCase()}`;
-        const pending = localStorage.getItem(pendingKey);
-        if (pending) {
-            try {
-                const { role, salt } = JSON.parse(pending);
-                console.log('[Recovery] Retrying pending server sync...');
-                syncSecretWithServer(currentRoomId.toString(), address, role, salt).then(() => {
+
+        const retryPendingSync = () => {
+            const pendingKey = `pending_sync_${currentRoomId}_${address.toLowerCase()}`;
+            const pending = localStorage.getItem(pendingKey);
+            if (pending) {
+                try {
+                    const { role, salt } = JSON.parse(pending);
+                    console.log('[Recovery] Retrying pending server sync...');
+                    syncSecretWithServer(currentRoomId.toString(), address, role, salt).then(() => {
+                        localStorage.removeItem(pendingKey);
+                        console.log('[Recovery] Pending sync completed successfully.');
+                    });
+                } catch (e) {
+                    console.warn('[Recovery] Failed to parse pending sync data:', e);
                     localStorage.removeItem(pendingKey);
-                    console.log('[Recovery] Pending sync completed successfully.');
-                });
-            } catch (e) {
-                console.warn('[Recovery] Failed to parse pending sync data:', e);
-                localStorage.removeItem(pendingKey);
+                }
+                return;
             }
-        }
+
+            // Also try syncing from saved role_salt if no pending entry exists
+            // This handles the case where syncSecretWithServer was never called (e.g., page crash)
+            const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`);
+            const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${address.toLowerCase()}`);
+            if (savedSalt && savedRole) {
+                const roleMap: Record<string, number> = { 'MAFIA': 1, 'DOCTOR': 2, 'DETECTIVE': 3, 'CIVILIAN': 4 };
+                const roleNum = roleMap[savedRole] || 4;
+                // Only sync if we haven't already confirmed sync
+                const syncedKey = `secret_synced_${currentRoomId}_${address.toLowerCase()}`;
+                if (!localStorage.getItem(syncedKey)) {
+                    syncSecretWithServer(currentRoomId.toString(), address, roleNum, savedSalt).then(() => {
+                        localStorage.setItem(syncedKey, 'true');
+                        console.log('[Recovery] Role secret synced from localStorage backup.');
+                    }).catch(() => { /* will retry next interval */ });
+                }
+            }
+        };
+
+        // Retry immediately on mount
+        retryPendingSync();
+
+        // Retry every 15s during active gameplay
+        const interval = setInterval(retryPendingSync, 15000);
+        return () => clearInterval(interval);
     }, [currentRoomId, address, walletClient, syncSecretWithServer]);
     const FLAG_ACTIVE = 2;
 
@@ -1038,9 +1067,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const revealDeckOnChain = useCallback(async (deck: string[], salt: string) => {
         if (!currentRoomId) return;
+        // Strip 0x prefix if present — keep consistent with new salt format
+        const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
         setIsTxPending(true);
         try {
-            const hash = await sendGameTransaction('revealDeck', [currentRoomId, deck, salt]);
+            const hash = await sendGameTransaction('revealDeck', [currentRoomId, deck, cleanSalt]);
             addLog("Deck revealed!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
@@ -1311,17 +1342,20 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const revealNightActionOnChain = useCallback(async (action: number, target: string, salt: string) => {
         if (!currentRoomId) return;
 
+        // Strip 0x prefix if present — keep consistent with new salt format
+        const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
+
         // DEBUG: Log what we're sending to contract
         console.log('[Reveal TX]', {
             roomId: Number(currentRoomId),
             action,
             target,
-            salt,
-            saltLength: salt.length
+            salt: cleanSalt,
+            saltLength: cleanSalt.length
         });
 
         try {
-            const hash = await sendGameTransaction('revealNightAction', [currentRoomId, action, target, salt]);
+            const hash = await sendGameTransaction('revealNightAction', [currentRoomId, action, target, cleanSalt]);
             // addLog("Night action revealed!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
             // V3: auto-finalize when all revealed - just refresh
@@ -1353,9 +1387,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const revealMafiaTargetOnChain = useCallback(async (target: string, salt: string) => {
         if (!currentRoomId) return;
+        // Strip 0x prefix if present — keep consistent with new salt format
+        const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
         setIsTxPending(true);
         try {
-            const hash = await sendGameTransaction('revealMafiaTarget', [currentRoomId, target, salt]);
+            const hash = await sendGameTransaction('revealMafiaTarget', [currentRoomId, target, cleanSalt]);
             // addLog("Mafia target revealed!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
@@ -1402,7 +1438,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const data = await response.json();
             // Convert numerical role to Role enum
-            const role = ShuffleService.roleNumberToRole(data.role.toString());
+            const role = ShuffleService.roleNumberToRole(data.role.toString(), currentRoomId?.toString());
 
             return {
                 role,
@@ -1562,7 +1598,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const revealRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
         try {
-            const hash = await sendGameTransaction('revealRole', [currentRoomId, role, salt]);
+            // Strip 0x prefix if present — contract enforces bytes(salt).length <= 64
+            // New salts are 64 hex chars (no prefix). Old salts may have 0x prefix (66 chars).
+            // NOTE: If commit hash was computed with 0x prefix, stripping here will cause
+            // InvalidRoleReveal. But 66-char salt always reverts SaltTooLong, so this is
+            // the best-effort approach for backward compat.
+            const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
+            const hash = await sendGameTransaction('revealRole', [currentRoomId, role, cleanSalt]);
             addLog("Role revealed on-chain!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
         } catch (e: any) {

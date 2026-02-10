@@ -263,7 +263,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                     encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
                 }
 
-                const cardRole = ShuffleService.roleNumberToRole(encryptedCard);
+                const cardRole = ShuffleService.roleNumberToRole(encryptedCard, currentRoomId?.toString());
 
                 if (cardRole === targetRole) {
                     // Находим игрока по индексу
@@ -313,7 +313,7 @@ export const RoleReveal: React.FC = React.memo(() => {
             }
 
             // Преобразуем число в роль
-            const role = ShuffleService.roleNumberToRole(myEncryptedCard);
+            const role = ShuffleService.roleNumberToRole(myEncryptedCard, currentRoomId?.toString());
 
             // Если я мафия — расшифровываем ВСЕ карты чтобы найти союзников
             let teammates: string[] = [];

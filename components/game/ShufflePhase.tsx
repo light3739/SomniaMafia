@@ -51,7 +51,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
 
     const SHUFFLE_COMMIT_KEY = `mafia_shuffle_commit_${currentRoomId}_${myPlayer?.address?.toLowerCase() || ''}`;
 
-    // Restore state from local storage on mount
+    // Restore state from local storage on mount — cross-check with chain flags
     useEffect(() => {
         const saved = localStorage.getItem(SHUFFLE_COMMIT_KEY);
         if (saved) {
@@ -63,10 +63,33 @@ export const ShufflePhase: React.FC = React.memo(() => {
                     if (hasCommitted) {
                         setShuffleState(prev => ({ ...prev, hasCommitted: true, isMyTurn: true }));
                     } else {
-                        // If we have data but not committed, it means we crashed/refreshed during TX or before it finished.
-                        // Restore state so user can click "Retry" or we can auto-retry if needed.
-                        setShuffleState(prev => ({ ...prev, isMyTurn: true }));
-                        console.log("Restored pending shuffle state (pre-commit)");
+                        // FIX: Cross-check with chain — maybe TX succeeded but localStorage wasn't updated
+                        if (publicClient && currentRoomId && myPlayer?.address) {
+                            publicClient.readContract({
+                                address: MAFIA_CONTRACT_ADDRESS,
+                                abi: MAFIA_ABI,
+                                functionName: 'getPlayerFlags',
+                                args: [currentRoomId, myPlayer.address as `0x${string}`],
+                            }).then((flags: any) => {
+                                // flags[3] = hasCommitted (FLAG_HAS_COMMITTED)
+                                const chainCommitted = flags?.[3];
+                                if (chainCommitted) {
+                                    console.log("[Shuffle Recovery] Chain confirms commit. Promoting to hasCommitted=true.");
+                                    localStorage.setItem(SHUFFLE_COMMIT_KEY, JSON.stringify({ deck, salt, hasCommitted: true }));
+                                    setShuffleState(prev => ({ ...prev, hasCommitted: true, isMyTurn: true }));
+                                } else {
+                                    console.log("Restored pending shuffle state (pre-commit, chain not committed yet)");
+                                    setShuffleState(prev => ({ ...prev, isMyTurn: true }));
+                                }
+                            }).catch(() => {
+                                // If chain check fails, fall back to retry mode
+                                setShuffleState(prev => ({ ...prev, isMyTurn: true }));
+                                console.log("Restored pending shuffle state (chain check failed)");
+                            });
+                        } else {
+                            setShuffleState(prev => ({ ...prev, isMyTurn: true }));
+                            console.log("Restored pending shuffle state (pre-commit)");
+                        }
                     }
                 }
             } catch (e) {
@@ -256,7 +279,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                     console.warn("Host sees existing deck, resetting...");
                 }
                 // addLog("Generating initial deck...", "info");
-                const initialDeck = ShuffleService.generateInitialDeck(gameState.players.length);
+                const initialDeck = ShuffleService.generateInitialDeck(gameState.players.length, currentRoomId?.toString());
                 const shuffled = shuffleService.shuffleArray(initialDeck);
                 newDeck = shuffleService.encryptDeck(shuffled);
             } else {

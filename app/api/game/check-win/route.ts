@@ -92,13 +92,22 @@ export async function POST(request: Request) {
         // 4. Check Win Condition
         let result = null;
 
-        // We only declare a win if we have ALL secrets for ALIVE players
         if (missingSecrets === 0) {
+            // All secrets available — standard check
             if (mafiaCount === 0) {
                 result = 'TOWN_WIN';
             } else if (mafiaCount >= townCount) {
                 result = 'MAFIA_WIN';
             }
+        } else {
+            // Some secrets missing — try to determine winner with available data
+            // MAFIA_WIN: If known mafia >= known town + missing (even if all missing are town, mafia still wins)
+            if (mafiaCount > 0 && mafiaCount >= townCount + missingSecrets) {
+                result = 'MAFIA_WIN';
+                console.log(`[API/CheckWin] Room #${roomId}: MAFIA_WIN determined despite ${missingSecrets} missing secrets`);
+            }
+            // TOWN_WIN with missing secrets: We can't be sure — missing players might be mafia
+            // So we DO NOT declare TOWN_WIN when secrets are missing
         }
 
         if (result) {

@@ -7,6 +7,15 @@ import { keccak256, encodePacked, encodeAbiParameters, parseAbiParameters } from
 // Простое число для модульной арифметики (в продакшене использовать большие простые)
 const PRIME = 2147483647n; // Mersenne prime 2^31 - 1
 
+// Per-room offset to avoid v^e mod p = v when v ∈ {0,1}
+// Derived deterministically from roomId so all players in the same room compute the same offset
+// Range: 100..10099 — always > 1 to avoid fixed-point, unique per room
+function getCardOffset(roomId: string | number): number {
+    const id = typeof roomId === 'string' ? parseInt(roomId) || 0 : roomId;
+    // Simple deterministic hash: spread across range [100, 10099]
+    return 100 + ((id * 7919 + 104729) % 10000);
+}
+
 export interface ShuffleKeys {
     encryptionKey: bigint;
     decryptionKey: bigint;
@@ -141,44 +150,48 @@ export class ShuffleService {
     // ============ СТАТИЧЕСКИЕ УТИЛИТЫ ============
 
     // Генерация начальной колоды ролей
-    // Возвращает числовые ID: 1=MAFIA, 2=DOCTOR, 3=DETECTIVE, 4+=CIVILIAN
-    public static generateInitialDeck(playerCount: number): string[] {
+    // Возвращает числовые ID с per-room offset: role + offset(roomId)
+    // This ensures value 1 (MAFIA) is never raw "1" which is a fixed point of modular exponentiation
+    public static generateInitialDeck(playerCount: number, roomId: string | number = 0): string[] {
         const deck: number[] = [];
+        const offset = getCardOffset(roomId);
 
         // Определяем количество мафии (примерно 1/4 игроков, минимум 1)
         const mafiaCount = Math.max(1, Math.floor(playerCount / 4));
 
         // Добавляем мафию
         for (let i = 0; i < mafiaCount; i++) {
-            deck.push(1); // MAFIA = 1
+            deck.push(1 + offset); // MAFIA = 1
         }
 
         // Добавляем доктора (если >= 4 игроков)
         if (playerCount >= 4) {
-            deck.push(2); // DOCTOR = 2
+            deck.push(2 + offset); // DOCTOR = 2
         }
 
         // Добавляем детектива (если >= 5 игроков)
         if (playerCount >= 5) {
-            deck.push(3); // DETECTIVE = 3
+            deck.push(3 + offset); // DETECTIVE = 3
         }
 
         // Остальные — мирные жители
         while (deck.length < playerCount) {
-            deck.push(4); // CIVILIAN = 4
+            deck.push(4 + offset); // CIVILIAN = 4
         }
 
         return deck.map(n => n.toString());
     }
 
     // Преобразование числа роли в enum Role
-    public static roleNumberToRole(num: string): Role {
-        const n = parseInt(num);
+    // roomId is required to compute the same per-room offset used during deck generation
+    public static roleNumberToRole(num: string, roomId: string | number = 0): Role {
+        const offset = getCardOffset(roomId);
+        const n = parseInt(num) - offset;
         switch (n) {
             case 1: return Role.MAFIA;
             case 2: return Role.DOCTOR;
             case 3: return Role.DETECTIVE;
-            case 4:
+            case 4: return Role.CIVILIAN;
             default: return Role.CIVILIAN;
         }
     }
@@ -190,21 +203,24 @@ export class ShuffleService {
         target: string,
         salt: string
     ): `0x${string}` {
+        const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
         return keccak256(
             encodeAbiParameters(
                 parseAbiParameters('uint8, address, string'),
-                [action, target as `0x${string}`, salt]
+                [action, target as `0x${string}`, cleanSalt]
             )
         );
     }
 
     // Создать хэш для фиксации роли (Role Commit)
     // keccak256(abi.encode(role, salt))
+    // Salt must NOT have 0x prefix to match contract's revealRole (max 64 bytes)
     public static createRoleCommitHash(role: number, salt: string): `0x${string}` {
+        const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
         return keccak256(
             encodeAbiParameters(
                 parseAbiParameters('uint8, string'),
-                [role, salt]
+                [role, cleanSalt]
             )
         );
     }
@@ -215,10 +231,11 @@ export class ShuffleService {
         target: string,
         salt: string
     ): `0x${string}` {
+        const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
         return keccak256(
             encodeAbiParameters(
                 parseAbiParameters('address, string'),
-                [target as `0x${string}`, salt]
+                [target as `0x${string}`, cleanSalt]
             )
         );
     }
@@ -228,19 +245,21 @@ export class ShuffleService {
         deck: string[],
         salt: string
     ): `0x${string}` {
+        const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
         return keccak256(
             encodeAbiParameters(
                 parseAbiParameters('string[], string'),
-                [deck, salt]
+                [deck, cleanSalt]
             )
         );
     }
 
     // Генерация случайной соли
-    public static generateSalt(): `0x${string}` {
+    // Returns 64 hex chars (no 0x prefix) to fit contract's 64-byte salt limit
+    public static generateSalt(): string {
         const array = new Uint8Array(32);
         crypto.getRandomValues(array);
-        return `0x${Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('')}`;
+        return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
     // ============ PERSISTENCE ============

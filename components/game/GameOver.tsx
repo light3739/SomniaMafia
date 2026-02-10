@@ -129,7 +129,7 @@ export const GameOver: React.FC = React.memo(() => {
                             encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
                         }
 
-                        const role = ShuffleService.roleNumberToRole(encryptedCard);
+                        const role = ShuffleService.roleNumberToRole(encryptedCard, currentRoomId?.toString());
                         roles.set(gameState.players[i].address.toLowerCase(), role);
                     }
                 } catch (e: any) {
