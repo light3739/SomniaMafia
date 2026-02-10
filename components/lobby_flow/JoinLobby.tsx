@@ -119,13 +119,14 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                         maxPlayers = data.maxPlayers; // Assuming maxPlayers is already a number or BigInt that Number() can handle
                     }
 
-                    // Filter: Phase 0 (Lobby) AND Created/Active within last 12 minutes (slight buffer for 10m request)
-                    // Note: If timestamp is 0, we assume it's a new/valid room that missed a timestamp update, so we show it to be safe.
-                    const isRecent = timestamp === 0 || (now - timestamp) < 720; // 12 mins
+                    // Filter: Phase 0 (Lobby) AND Created/Active within last 4 hours
+                    // 4h is generous enough for lobbies waiting for players
+                    const isRecent = timestamp === 0 || (now - timestamp) < 14400; // 4 hours
 
-                    // DEBUG: Log found rooms
-                    // console.log(`Room ${id}: Phase ${phase}, Timestamp ${timestamp}, Now ${now}, Recent: ${isRecent}`);  
-                    if (phase === 0 && isRecent) {
+                    // Skip invalid/uninitialized rooms (e.g. room 0 with zero host)
+                    const isValid = host !== '0x0000000000000000000000000000000000000000' && maxPlayers > 0;
+
+                    if (phase === 0 && isRecent && isValid) {
                         roomList.push({
                             id: Number(data.id || id), // Use id from loop if data.id missing
                             host,
