@@ -176,13 +176,19 @@ export const RoleReveal: React.FC = React.memo(() => {
         }
     }, [publicClient, currentRoomId, myPlayer, address, addLog]);
 
+    // FIX: Use refs for isProcessing/isTxPending to avoid re-creating checkIfShared
+    // (which causes the useEffect to restart the interval + fire immediately on every state change)
+    const isProcessingRef = useRef(isProcessing);
+    const isTxPendingRef = useRef(isTxPending);
+    useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
+    useEffect(() => { isTxPendingRef.current = isTxPending; }, [isTxPending]);
+
     // Check if we already shared keys (from contract)
     const checkIfShared = useCallback(async () => {
         if (!publicClient || !currentRoomId || !address) return;
 
         // Don't overwrite optimistic UI during active transactions
-        if (isProcessing || isTxPending) {
-            console.log('[RoleReveal] Skipping sync: transaction in progress');
+        if (isProcessingRef.current || isTxPendingRef.current) {
             return;
         }
 
@@ -203,7 +209,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } catch (e) {
             console.error("Failed to check flags:", e);
         }
-    }, [publicClient, currentRoomId, address, isProcessing, isTxPending]);
+    }, [publicClient, currentRoomId, address]);
 
     // Check flags on mount and periodically
     useEffect(() => {
