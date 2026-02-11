@@ -271,24 +271,36 @@ export const ShufflePhase: React.FC = React.memo(() => {
             const shuffleService = getShuffleService();
             shuffleService.generateKeys(); // Generate my E/D keys
 
+            // V4 Fix: Identify Active Slots (Alive players)
+            // Only these slots should participate in role shuffling
+            const activeIndices = gameState.players
+                .map((p, i) => p.isAlive ? i : -1)
+                .filter(i => i !== -1);
+
             let newDeck: string[];
 
             if (shuffleState.currentShufflerIndex === 0) {
-                // I am the host (first player) - Generate fresh deck
+                // I am the host (first player) - Generate fresh deck with proper role placement
                 if (shuffleState.deck.length > 0) {
                     console.warn("Host sees existing deck, resetting...");
                 }
-                // addLog("Generating initial deck...", "info");
-                const initialDeck = ShuffleService.generateInitialDeck(gameState.players.length, currentRoomId?.toString());
-                const shuffled = shuffleService.shuffleArray(initialDeck);
+
+                // Use new distributed generation
+                const initialDeck = ShuffleService.generateDistributedDeck(
+                    gameState.players.map(p => ({ isAlive: p.isAlive })),
+                    currentRoomId?.toString()
+                );
+                // Even though generateDistributedDeck shuffles internally, we do one more shuffle pass
+                // strictly on active indices to ensure consistency with the pipeline
+                const shuffled = shuffleService.shuffleSubarray(initialDeck, activeIndices);
                 newDeck = shuffleService.encryptDeck(shuffled);
             } else {
-                // I am a subsequent player - Shuffle existing deck
+                // I am a subsequent player - Shuffle existing deck BUT ONLY ACTIVE SLOTS
                 if (shuffleState.deck.length === 0) {
                     throw new Error("Deck is empty! Sync error.");
                 }
-                // addLog("Shuffling and re-encrypting deck...", "info");
-                const shuffled = shuffleService.shuffleArray(shuffleState.deck);
+                // Use shuffleSubarray to avoid moving Mafia card to a dead slot
+                const shuffled = shuffleService.shuffleSubarray(shuffleState.deck, activeIndices);
                 newDeck = shuffleService.encryptDeck(shuffled);
             }
 
