@@ -190,42 +190,69 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Helper: sync role secret with server (includes signature verification)
     // FIX #10/#11: Retry with exponential backoff instead of fire-and-forget
+    // FIX: Added in-memory guard to prevent concurrent calls (each call triggers MetaMask sign)
+    const syncInProgressRef = useRef(false);
+    const lastSyncKeyRef = useRef<string>(''); // Track last successful sync to prevent dupes
     const syncSecretWithServer = useCallback(async (roomId: string, playerAddress: string, role: number, salt: string) => {
         if (!walletClient) {
             console.warn('[SyncSecret] No wallet client, skipping server sync');
             return;
         }
-        const MAX_RETRIES = 3;
-        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-            try {
-                const message = `reveal-secret:${roomId}:${role}:${salt}`;
-                const signature = await walletClient.signMessage({ message });
-                const res = await fetch('/api/game/reveal-secret', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        roomId,
-                        address: playerAddress,
-                        role,
-                        salt,
-                        signature
-                    })
-                });
-                if (!res.ok) throw new Error(`Server responded ${res.status}`);
-                console.log(`[Status] Secret synced with server DB (attempt ${attempt}).`);
-                return; // success
-            } catch (err) {
-                console.warn(`[SyncSecret] Attempt ${attempt}/${MAX_RETRIES} failed:`, err);
-                if (attempt < MAX_RETRIES) {
-                    await new Promise(r => setTimeout(r, 1000 * attempt)); // 1s, 2s backoff
-                } else {
-                    console.error('[SyncSecret] All retries exhausted. Secret NOT synced with server!');
-                    // Store locally so we can retry later
+
+        // FIX: Dedup — don't re-sync exact same data
+        const syncKey = `${roomId}:${playerAddress.toLowerCase()}:${role}:${salt}`;
+        if (lastSyncKeyRef.current === syncKey) {
+            console.log('[SyncSecret] Already synced this exact data, skipping.');
+            return;
+        }
+
+        // FIX: Prevent concurrent calls (each triggers MetaMask popup)
+        if (syncInProgressRef.current) {
+            console.log('[SyncSecret] Another sync in progress, skipping.');
+            return;
+        }
+        syncInProgressRef.current = true;
+
+        const MAX_RETRIES = 2; // Reduced from 3 — each retry triggers MetaMask
+        try {
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const message = `reveal-secret:${roomId}:${role}:${salt}`;
+                    const signature = await walletClient.signMessage({ message });
+                    const res = await fetch('/api/game/reveal-secret', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            roomId,
+                            address: playerAddress,
+                            role,
+                            salt,
+                            signature
+                        })
+                    });
+                    if (!res.ok) throw new Error(`Server responded ${res.status}`);
+                    console.log(`[Status] Secret synced with server DB (attempt ${attempt}).`);
+                    lastSyncKeyRef.current = syncKey; // Mark as synced
+                    // Mark as synced in localStorage to prevent recovery useEffect from retrying
                     try {
-                        localStorage.setItem(`pending_sync_${roomId}_${playerAddress.toLowerCase()}`, JSON.stringify({ role, salt }));
-                    } catch (_) { }
+                        localStorage.setItem(`secret_synced_${roomId}_${playerAddress.toLowerCase()}`, 'true');
+                        localStorage.removeItem(`pending_sync_${roomId}_${playerAddress.toLowerCase()}`);
+                    } catch (_) {}
+                    return; // success
+                } catch (err) {
+                    console.warn(`[SyncSecret] Attempt ${attempt}/${MAX_RETRIES} failed:`, err);
+                    if (attempt < MAX_RETRIES) {
+                        await new Promise(r => setTimeout(r, 1500 * attempt));
+                    } else {
+                        console.error('[SyncSecret] All retries exhausted. Secret NOT synced with server!');
+                        try {
+                            localStorage.setItem(`pending_sync_${roomId}_${playerAddress.toLowerCase()}`, JSON.stringify({ role, salt }));
+                        } catch (_) { }
+                    }
                 }
             }
+        } finally {
+            syncInProgressRef.current = false;
         }
     }, [walletClient]);
 
@@ -468,52 +495,63 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const FLAG_CONFIRMED_ROLE = 1;
 
     // FIX #12: Retry any pending secret syncs that failed on previous sessions
-    // Also periodically retry during active gameplay to ensure server has all secrets
+    // FIX: Only retry ONCE on mount, not every 15 seconds (each call triggers MetaMask popup)
+    const recoveryAttemptedRef = useRef<string>(''); // Track which room we already attempted
     useEffect(() => {
         if (!currentRoomId || !address || !walletClient) return;
 
-        const retryPendingSync = () => {
+        // FIX: Only attempt recovery ONCE per room (not every mount/re-render)
+        const roomKey = `${currentRoomId}_${address.toLowerCase()}`;
+        if (recoveryAttemptedRef.current === roomKey) return;
+
+        // Check if already synced
+        const syncedKey = `secret_synced_${currentRoomId}_${address.toLowerCase()}`;
+        if (localStorage.getItem(syncedKey)) {
+            recoveryAttemptedRef.current = roomKey;
+            return; // Already synced, no need to retry
+        }
+
+        // Mark as attempted regardless of outcome (prevents re-triggering)
+        recoveryAttemptedRef.current = roomKey;
+
+        const retryPendingSync = async () => {
             const pendingKey = `pending_sync_${currentRoomId}_${address.toLowerCase()}`;
             const pending = localStorage.getItem(pendingKey);
             if (pending) {
                 try {
                     const { role, salt } = JSON.parse(pending);
                     console.log('[Recovery] Retrying pending server sync...');
-                    syncSecretWithServer(currentRoomId.toString(), address, role, salt).then(() => {
-                        localStorage.removeItem(pendingKey);
-                        console.log('[Recovery] Pending sync completed successfully.');
-                    });
-                } catch (e) {
-                    console.warn('[Recovery] Failed to parse pending sync data:', e);
+                    await syncSecretWithServer(currentRoomId.toString(), address, role, salt);
                     localStorage.removeItem(pendingKey);
+                    console.log('[Recovery] Pending sync completed successfully.');
+                } catch (e) {
+                    console.warn('[Recovery] Failed to retry pending sync:', e);
                 }
                 return;
             }
 
             // Also try syncing from saved role_salt if no pending entry exists
-            // This handles the case where syncSecretWithServer was never called (e.g., page crash)
             const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`);
             const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${address.toLowerCase()}`);
-            if (savedSalt && savedRole) {
+            if (savedSalt && savedRole && savedRole !== 'UNKNOWN') {
                 const roleMap: Record<string, number> = { 'MAFIA': 1, 'DOCTOR': 2, 'DETECTIVE': 3, 'CIVILIAN': 4 };
-                const roleNum = roleMap[savedRole] || 4;
-                // Only sync if we haven't already confirmed sync
-                const syncedKey = `secret_synced_${currentRoomId}_${address.toLowerCase()}`;
-                if (!localStorage.getItem(syncedKey)) {
-                    syncSecretWithServer(currentRoomId.toString(), address, roleNum, savedSalt).then(() => {
-                        localStorage.setItem(syncedKey, 'true');
-                        console.log('[Recovery] Role secret synced from localStorage backup.');
-                    }).catch(() => { /* will retry next interval */ });
+                const roleNum = roleMap[savedRole];
+                if (!roleNum) {
+                    console.warn(`[Recovery] Invalid saved role '${savedRole}', skipping sync.`);
+                    return;
+                }
+                try {
+                    await syncSecretWithServer(currentRoomId.toString(), address, roleNum, savedSalt);
+                    console.log('[Recovery] Role secret synced from localStorage backup.');
+                } catch (e) {
+                    console.warn('[Recovery] Sync from localStorage failed:', e);
                 }
             }
         };
 
-        // Retry immediately on mount
-        retryPendingSync();
-
-        // Retry every 15s during active gameplay
-        const interval = setInterval(retryPendingSync, 15000);
-        return () => clearInterval(interval);
+        // Retry ONCE on mount after a short delay (give time for normal flow to complete first)
+        const timer = setTimeout(retryPendingSync, 10000);
+        return () => clearTimeout(timer);
     }, [currentRoomId, address, walletClient, syncSecretWithServer]);
     const FLAG_ACTIVE = 2;
 

@@ -195,7 +195,11 @@ export class ShuffleService {
             case 2: return Role.DOCTOR;
             case 3: return Role.DETECTIVE;
             case 4: return Role.CIVILIAN;
-            default: return Role.CIVILIAN;
+            default:
+                // FIX: Log unexpected values instead of silently mapping to CIVILIAN
+                // This helps debug incorrect decryption (potential source of wrong role assignments)
+                console.warn(`[roleNumberToRole] Unexpected card value: raw=${num}, offset=${offset}, decoded=${n}, roomId=${roomId}`);
+                return Role.UNKNOWN;
         }
     }
 
