@@ -152,12 +152,15 @@ export class ShuffleService {
     // Генерация начальной колоды ролей
     // Возвращает числовые ID с per-room offset: role + offset(roomId)
     // This ensures value 1 (MAFIA) is never raw "1" which is a fixed point of modular exponentiation
-    public static generateInitialDeck(playerCount: number, roomId: string | number = 0): string[] {
+    public static generateInitialDeck(playerCount: number, roomId: string | number = 0, activeCount?: number): string[] {
         const deck: number[] = [];
         const offset = getCardOffset(roomId);
 
+        // Use activeCount if provided to determine role quantities
+        const countForRoles = activeCount !== undefined ? activeCount : playerCount;
+
         // Определяем количество мафии (примерно 1/4 игроков, минимум 1)
-        const mafiaCount = Math.max(1, Math.floor(playerCount / 4));
+        const mafiaCount = Math.max(1, Math.floor(countForRoles / 4));
 
         // Добавляем мафию
         for (let i = 0; i < mafiaCount; i++) {
@@ -165,16 +168,16 @@ export class ShuffleService {
         }
 
         // Добавляем доктора (если >= 4 игроков)
-        if (playerCount >= 4) {
+        if (countForRoles >= 4) {
             deck.push(2 + offset); // DOCTOR = 2
         }
 
         // Добавляем детектива (если >= 5 игроков)
-        if (playerCount >= 5) {
+        if (countForRoles >= 5) {
             deck.push(3 + offset); // DETECTIVE = 3
         }
 
-        // Остальные — мирные жители
+        // Остальные — мирные жители (fill up to TOTAL playerCount required by contract)
         while (deck.length < playerCount) {
             deck.push(4 + offset); // CIVILIAN = 4
         }
@@ -240,7 +243,7 @@ export class ShuffleService {
         );
     }
 
-    // Создать хэш для deck commit-reveal (V4)
+    // Пропускаем карты
     public static createDeckCommitHash(
         deck: string[],
         salt: string
@@ -252,6 +255,73 @@ export class ShuffleService {
                 [deck, cleanSalt]
             )
         );
+    }
+
+    // V4 FIXED: Generate deck with roles distributed ONLY among active players
+    public static generateDistributedDeck(
+        players: { isAlive: boolean }[],
+        roomId: string | number
+    ): string[] {
+        const deck: string[] = new Array(players.length).fill('');
+        const offset = getCardOffset(roomId);
+
+        // 1. Identify active slots
+        const activeIndices = players.map((p, i) => p.isAlive ? i : -1).filter(i => i !== -1);
+        const activeCount = activeIndices.length;
+
+        // 2. Generate roles for ACTIVE players only
+        // Standard distribution logic (1 mafia per 4 players) based on ACTIVE count
+        const activeDeckArr: number[] = [];
+        const mafiaCount = Math.max(1, Math.floor(activeCount / 4));
+
+        for (let i = 0; i < mafiaCount; i++) activeDeckArr.push(1 + offset);
+        if (activeCount >= 4) activeDeckArr.push(2 + offset); // Doctor
+        if (activeCount >= 5) activeDeckArr.push(3 + offset); // Detective
+        while (activeDeckArr.length < activeCount) activeDeckArr.push(4 + offset); // Civilian
+
+        // 3. Shuffle the ACTIVE roles internally (Fisher-Yates)
+        // We do this locally here so the initial distribution is random within valid slots
+        for (let i = activeDeckArr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [activeDeckArr[i], activeDeckArr[j]] = [activeDeckArr[j], activeDeckArr[i]];
+        }
+
+        // 4. Assign roles to specific slots
+        // Active slots get the shuffled active roles
+        activeIndices.forEach((slotIndex, i) => {
+            deck[slotIndex] = activeDeckArr[i].toString();
+        });
+
+        // Inactive slots get Civilian roles (placeholder)
+        // They will never play, but deck size must match total players
+        for (let i = 0; i < players.length; i++) {
+            if (!players[i].isAlive) {
+                deck[i] = (4 + offset).toString();
+            }
+        }
+
+        return deck;
+    }
+
+    // V4 FIXED: Shuffle ONLY specific indices (preserves dead/alive separation)
+    public shuffleSubarray<T>(array: T[], indices: number[]): T[] {
+        const result = [...array];
+
+        // Extract elements at the target indices
+        const subElements = indices.map(i => result[i]);
+
+        // Shuffle the sub-elements
+        for (let i = subElements.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [subElements[i], subElements[j]] = [subElements[j], subElements[i]];
+        }
+
+        // Place them back
+        indices.forEach((slotIndex, i) => {
+            result[slotIndex] = subElements[i];
+        });
+
+        return result;
     }
 
     // Генерация случайной соли
