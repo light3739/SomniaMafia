@@ -420,14 +420,8 @@ export const RoleReveal: React.FC = React.memo(() => {
                 localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, salt);
                 console.log("[RoleReveal] Salt saved to localStorage (post-TX)");
 
-                // SERVER SYNC: Backup secret to server (enables Auto-Win)
-                syncSecretWithServer(
-                    currentRoomId.toString(),
-                    address,
-                    roleNum,
-                    salt
-                ).then(() => console.log("[RoleReveal] Secret backed up to server"))
-                    .catch(err => console.error("[RoleReveal] Failed to backup secret:", err));
+                // NOTE: syncSecretWithServer is already called inside commitAndConfirmRoleOnChain.
+                // Do NOT call it again here — that causes duplicate MetaMask signature popups.
             }
 
             setRevealState(prev => ({ ...prev, hasConfirmed: true }));
