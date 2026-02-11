@@ -1,5 +1,5 @@
 // components/game/RoleReveal.tsx
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
@@ -83,6 +83,11 @@ export const RoleReveal: React.FC = React.memo(() => {
     });
     const [isProcessing, setIsProcessing] = useState(false);
     const [showRole, setShowRole] = useState(false);
+
+    // FIX: Ref-based guards to prevent race conditions (refs update synchronously, state doesn't)
+    const isShareInFlightRef = useRef(false);
+    const isDecryptInFlightRef = useRef(false);
+    const isConfirmInFlightRef = useRef(false);
 
     // Синхронизируем локальный hasConfirmed с данными из контракта
     useEffect(() => {
@@ -209,7 +214,9 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // V3: Поделиться своим ключом со всеми (batch - одна транзакция!)
     const shareMyKey = useCallback(async () => {
-        if (!myPlayer || isProcessing || revealState.hasSharedKeys) return;
+        // FIX: Use ref guard to prevent concurrent calls (React state batching can miss isProcessing)
+        if (!myPlayer || isShareInFlightRef.current || isProcessing || revealState.hasSharedKeys) return;
+        isShareInFlightRef.current = true;
 
         setIsProcessing(true);
         try {
@@ -233,9 +240,18 @@ export const RoleReveal: React.FC = React.memo(() => {
             // addLog("All keys shared in one tx!", "success");
         } catch (e: any) {
             console.error("Failed to share keys:", e);
-            addLog(e.message || "Failed to share keys", "danger");
+            // FIX: Check if keys were actually shared on-chain (TX may have succeeded but receipt failed)
+            const errMsg = (e.message || '').toLowerCase();
+            if (errMsg.includes('alreadyshared') || errMsg.includes('keysalreadyshared')) {
+                console.log("[RoleReveal] Keys already shared on-chain, marking as shared.");
+                setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
+            } else {
+                addLog(e.message || "Failed to share keys", "danger");
+            }
         } finally {
             setIsProcessing(false);
+            // FIX: Release ref guard after a short delay to prevent rapid re-entry
+            setTimeout(() => { isShareInFlightRef.current = false; }, 3000);
         }
     }, [gameState.players, myPlayer, isProcessing, revealState.hasSharedKeys, shareKeysToAllOnChain, addLog, stringToHex]);
 
@@ -283,6 +299,9 @@ export const RoleReveal: React.FC = React.memo(() => {
     // Расшифровать мою роль
     const decryptMyRole = useCallback(async () => {
         if (revealState.myCardIndex < 0 || revealState.deck.length === 0) return;
+        // FIX: Ref guard to prevent concurrent decrypt calls
+        if (isDecryptInFlightRef.current) return;
+        isDecryptInFlightRef.current = true;
 
         setIsProcessing(true);
         try {
@@ -361,12 +380,17 @@ export const RoleReveal: React.FC = React.memo(() => {
             addLog(e.message || "Failed to decrypt", "danger");
         } finally {
             setIsProcessing(false);
+            // FIX: Release ref guard after delay to prevent rapid retry on failure
+            setTimeout(() => { isDecryptInFlightRef.current = false; }, 5000);
         }
     }, [revealState.myCardIndex, revealState.deck, gameState.players, myPlayer, collectKeys, addLog, setGameState, decryptAllCardsForTeammates, currentRoomId, address]);
 
     // Подтвердить роль (с предварительным коммитом)
     const handleConfirmRole = useCallback(async () => {
-        if (revealState.myRole === null) return;
+        if (revealState.myRole === null || revealState.hasConfirmed) return;
+        // FIX: Ref guard to prevent concurrent confirm calls
+        if (isConfirmInFlightRef.current) return;
+        isConfirmInFlightRef.current = true;
 
         const roleMap: Record<string, number> = {
             [Role.MAFIA]: 1,
@@ -409,10 +433,18 @@ export const RoleReveal: React.FC = React.memo(() => {
             setRevealState(prev => ({ ...prev, hasConfirmed: true }));
         } catch (e: any) {
             console.error(e);
+            // FIX: If contract says already committed/confirmed, mark as confirmed to break the loop
+            const errMsg = (e.message || '').toLowerCase() + (e.shortMessage || '').toLowerCase();
+            if (errMsg.includes('alreadycommitted') || errMsg.includes('alreadyconfirmed') || errMsg.includes('alreadyrevealed')) {
+                console.log("[RoleReveal] Role already processed on-chain, marking as confirmed.");
+                setRevealState(prev => ({ ...prev, hasConfirmed: true }));
+            }
         } finally {
             setIsProcessing(false);
+            // FIX: Release ref guard after cooldown to prevent rapid retry on failure
+            setTimeout(() => { isConfirmInFlightRef.current = false; }, 5000);
         }
-    }, [revealState.myRole, commitAndConfirmRoleOnChain, currentRoomId, address]);
+    }, [revealState.myRole, revealState.hasConfirmed, commitAndConfirmRoleOnChain, currentRoomId, address]);
 
     // Sync state if role is already known in GameContext (recovered from LS)
     useEffect(() => {
@@ -682,18 +714,50 @@ const RoleRevealAuto: React.FC<{
     const [countdown, setCountdown] = useState<number | null>(null);
     const [hasStartedCountdown, setHasStartedCountdown] = useState(false);
 
+    // FIX: Ref-based guards to prevent useEffect from firing the same action multiple times
+    // React state batching means isProcessing may still be false on subsequent renders
+    const shareTriggeredRef = useRef(false);
+    const decryptTriggeredRef = useRef(false);
+    const confirmTriggeredRef = useRef(false);
+    // FIX: Retry limits to prevent infinite TX spam on persistent failures
+    const shareRetryCountRef = useRef(0);
+    const confirmRetryCountRef = useRef(0);
+    const MAX_AUTO_RETRIES = 3;
+
+    // Reset triggered refs when the action completes (either success or terminal failure)
+    useEffect(() => {
+        if (revealState.hasSharedKeys) shareTriggeredRef.current = false; // Reset so ref doesn't block future mounts
+    }, [revealState.hasSharedKeys]);
+    useEffect(() => {
+        if (revealState.isRevealed) decryptTriggeredRef.current = false;
+    }, [revealState.isRevealed]);
+    useEffect(() => {
+        if (revealState.hasConfirmed) confirmTriggeredRef.current = false;
+    }, [revealState.hasConfirmed]);
+
     // 1. Auto-share keys (first step)
     useEffect(() => {
+        if (shareTriggeredRef.current) return; // Already triggered, waiting for result
+        if (shareRetryCountRef.current >= MAX_AUTO_RETRIES) {
+            console.warn(`[RoleReveal Auto] Share keys max retries (${MAX_AUTO_RETRIES}) reached. Manual action required.`);
+            return;
+        }
         const canShare = !revealState.hasSharedKeys && !isProcessing && !isTxPending && myPlayer;
 
         if (canShare) {
-            console.log("[RoleReveal Auto] Sharing my decryption keys...");
-            shareMyKey();
+            shareTriggeredRef.current = true;
+            shareRetryCountRef.current += 1;
+            console.log(`[RoleReveal Auto] Sharing my decryption keys... (attempt ${shareRetryCountRef.current})`);
+            shareMyKey().catch(() => {
+                // On failure, release the ref after a cooldown so it can retry
+                setTimeout(() => { shareTriggeredRef.current = false; }, 5000);
+            });
         }
     }, [revealState.hasSharedKeys, isProcessing, isTxPending, myPlayer, shareMyKey]);
 
     // 2. Auto-decrypt role when all keys are present
     useEffect(() => {
+        if (decryptTriggeredRef.current) return; // Already triggered
         const canAutoDecrypt =
             revealState.hasSharedKeys &&  // Must have shared first
             !revealState.isRevealed &&
@@ -703,21 +767,13 @@ const RoleRevealAuto: React.FC<{
             revealState.collectedKeys.size >= keysNeeded &&
             keysNeeded > 0;  // Avoid division by zero
 
-        // Log state for debugging
-        console.log("[RoleReveal Auto] Decrypt check:", {
-            hasSharedKeys: revealState.hasSharedKeys,
-            isRevealed: revealState.isRevealed,
-            isProcessing,
-            isTxPending,
-            deckLength: revealState.deck.length,
-            collectedKeys: revealState.collectedKeys.size,
-            keysNeeded,
-            canAutoDecrypt
-        });
-
         if (canAutoDecrypt) {
+            decryptTriggeredRef.current = true;
             console.log("[RoleReveal Auto] All keys collected. Decrypting role...");
-            decryptMyRole();
+            decryptMyRole().catch(() => {
+                // On failure, release after cooldown
+                setTimeout(() => { decryptTriggeredRef.current = false; }, 5000);
+            });
         }
     }, [revealState.hasSharedKeys, revealState.isRevealed, revealState.collectedKeys.size, revealState.deck.length, keysNeeded, isProcessing, isTxPending, decryptMyRole]);
 
@@ -743,6 +799,11 @@ const RoleRevealAuto: React.FC<{
 
     // 5. Auto-confirm when countdown reaches 0
     useEffect(() => {
+        if (confirmTriggeredRef.current) return; // Already triggered
+        if (confirmRetryCountRef.current >= MAX_AUTO_RETRIES) {
+            console.warn(`[RoleReveal Auto] Confirm role max retries (${MAX_AUTO_RETRIES}) reached. Manual action required.`);
+            return;
+        }
         const canAutoConfirm =
             countdown === 0 &&
             revealState.isRevealed &&
@@ -751,19 +812,14 @@ const RoleRevealAuto: React.FC<{
             !isTxPending &&
             revealState.myRole !== null;
 
-        console.log("[RoleReveal Auto] Confirm check:", {
-            countdown,
-            isRevealed: revealState.isRevealed,
-            hasConfirmed: revealState.hasConfirmed,
-            isProcessing,
-            isTxPending,
-            myRole: revealState.myRole,
-            canAutoConfirm
-        });
-
         if (canAutoConfirm) {
-            console.log("[RoleReveal Auto] Countdown finished. Auto-confirming...");
-            handleConfirmRole();
+            confirmTriggeredRef.current = true;
+            confirmRetryCountRef.current += 1;
+            console.log(`[RoleReveal Auto] Countdown finished. Auto-confirming... (attempt ${confirmRetryCountRef.current})`);
+            handleConfirmRole().catch(() => {
+                // On failure, release after cooldown
+                setTimeout(() => { confirmTriggeredRef.current = false; }, 5000);
+            });
         }
     }, [countdown, revealState.isRevealed, revealState.hasConfirmed, revealState.myRole, isProcessing, isTxPending, handleConfirmRole]);
 

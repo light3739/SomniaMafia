@@ -1096,9 +1096,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             ]);
             addLog(`Keys shared to ${recipients.length} players!`, "success");
             await publicClient?.waitForTransactionReceipt({ hash });
-            setIsTxPending(false);
         } catch (e: any) {
+            // FIX: If keys were already shared, swallow the error (don't re-throw)
+            const errMsg = (e.message || '').toLowerCase() + (e.shortMessage || '').toLowerCase();
+            if (errMsg.includes('alreadyshared') || errMsg.includes('keysalreadyshared')) {
+                console.log("[shareKeysToAll] Keys already shared on-chain.");
+                return; // Not an error, just a no-op
+            }
             addLog(e.shortMessage || e.message, "danger");
+            throw e; // FIX: Re-throw so caller knows it failed (prevents false hasSharedKeys=true)
+        } finally {
             setIsTxPending(false);
         }
     }, [currentRoomId, sendGameTransaction, addLog, publicClient]);
@@ -1275,12 +1282,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (address) await syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse);
 
             await refreshPlayersList(currentRoomId);
-            setIsTxPending(false);
         } catch (e: any) {
             console.error("Confirmation error:", e);
+            // FIX: If role is already confirmed/committed, don't throw — this breaks the RoleReveal auto-loop
+            const errMsg = (e.message || '').toLowerCase() + (e.shortMessage || '').toLowerCase();
+            if (errMsg.includes('alreadycommitted') || errMsg.includes('alreadyconfirmed') || errMsg.includes('alreadyrevealed')) {
+                console.log("[commitAndConfirmRole] Role already processed on-chain. Not re-throwing.");
+                // Still sync with server
+                if (address) {
+                    try { await syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse); } catch (_) {}
+                }
+                return; // Swallow the error — role is done
+            }
             addLog(e.shortMessage || "Confirmation failed", "danger");
-            setIsTxPending(false);
             throw e;
+        } finally {
+            setIsTxPending(false);
         }
     }, [currentRoomId, address, publicClient, sendGameTransaction, addLog, refreshPlayersList, myPlayer?.hasConfirmedRole]);
 
