@@ -4,19 +4,36 @@ import { ServerStore } from '@/services/serverStore';
 
 export async function POST(request: Request) {
     try {
-        const { roomId: rawRoomId, address, role, salt, signature } = await request.json();
+        const { roomId: rawRoomId, address, role, salt, signature, sessionKeyAddress } = await request.json();
 
         if (!rawRoomId || !address || role === undefined || !salt || !signature) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        // Verify the caller owns the address
+        // Verify the caller owns the address (or has a valid session key for it)
         const message = `reveal-secret:${rawRoomId}:${role}:${salt}`;
-        const valid = await verifyMessage({
+
+        // Try verifying against main wallet address first
+        let valid = await verifyMessage({
             address: address as `0x${string}`,
             message,
             signature: signature as `0x${string}`,
         });
+
+        // If main wallet verification fails and a session key address was provided,
+        // verify against the session key address instead.
+        // Session keys are registered on-chain and authorized to act on behalf of the player.
+        if (!valid && sessionKeyAddress) {
+            valid = await verifyMessage({
+                address: sessionKeyAddress as `0x${string}`,
+                message,
+                signature: signature as `0x${string}`,
+            });
+            if (valid) {
+                console.log(`[RevealSecret] Verified via session key ${sessionKeyAddress} for player ${address}`);
+            }
+        }
+
         if (!valid) {
             return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
         }

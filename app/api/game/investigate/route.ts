@@ -13,7 +13,7 @@ const ACTION_CHECK = 3;
 
 export async function POST(request: Request) {
     try {
-        const { roomId: rawRoomId, detectiveAddress, targetAddress, signature } = await request.json();
+        const { roomId: rawRoomId, detectiveAddress, targetAddress, signature, sessionKeyAddress } = await request.json();
 
         if (!rawRoomId || !detectiveAddress || !targetAddress || !signature) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -23,11 +23,24 @@ export async function POST(request: Request) {
 
         // 0. Verify the caller is actually the detective (signature check)
         const message = `investigate:${rawRoomId}:${targetAddress}`;
-        const valid = await verifyMessage({
+        let valid = await verifyMessage({
             address: detectiveAddress as `0x${string}`,
             message,
             signature: signature as `0x${string}`,
         });
+
+        // If main wallet verification fails and session key provided, verify against session key
+        if (!valid && sessionKeyAddress) {
+            valid = await verifyMessage({
+                address: sessionKeyAddress as `0x${string}`,
+                message,
+                signature: signature as `0x${string}`,
+            });
+            if (valid) {
+                console.log(`[Investigate] Verified via session key ${sessionKeyAddress} for detective ${detectiveAddress}`);
+            }
+        }
+
         if (!valid) {
             return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
         }
