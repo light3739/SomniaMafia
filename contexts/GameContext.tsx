@@ -204,11 +204,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const syncInProgressRef = useRef(false);
     const lastSyncKeyRef = useRef<string>(''); // Track last successful sync to prevent dupes
     const syncSecretWithServer = useCallback(async (roomId: string, playerAddress: string, role: number, salt: string) => {
-        if (!walletClient) {
-            console.warn('[SyncSecret] No wallet client, skipping server sync');
-            return;
-        }
-
         // FIX: Dedup — don't re-sync exact same data
         const syncKey = `${roomId}:${playerAddress.toLowerCase()}:${role}:${salt}`;
         if (lastSyncKeyRef.current === syncKey) {
@@ -216,19 +211,41 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return;
         }
 
-        // FIX: Prevent concurrent calls (each triggers MetaMask popup)
+        // FIX: Prevent concurrent calls
         if (syncInProgressRef.current) {
             console.log('[SyncSecret] Another sync in progress, skipping.');
             return;
         }
         syncInProgressRef.current = true;
 
-        const MAX_RETRIES = 2; // Reduced from 3 — each retry triggers MetaMask
+        const MAX_RETRIES = 2;
         try {
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                 try {
                     const message = `reveal-secret:${roomId}:${role}:${salt}`;
-                    const signature = await walletClient.signMessage({ message });
+                    let signature: `0x${string}`;
+                    let signerAddress: string = playerAddress;
+                    let sessionKeyAddress: string | undefined;
+
+                    // FIX: Use session key to sign (no MetaMask popup!)
+                    // Session key is a local private key — signing is instant and invisible.
+                    const session = loadSession();
+                    if (session && session.registeredOnChain && Date.now() < session.expiresAt &&
+                        session.mainWallet.toLowerCase() === playerAddress.toLowerCase()) {
+                        const sessionAccount = privateKeyToAccount(session.privateKey);
+                        signature = await sessionAccount.signMessage({ message });
+                        signerAddress = playerAddress; // Server verifies against main address
+                        sessionKeyAddress = sessionAccount.address; // Pass session key for server to verify
+                        console.log('[SyncSecret] Signed with session key (no popup)');
+                    } else if (walletClient) {
+                        // Fallback: use main wallet (MetaMask popup)
+                        signature = await walletClient.signMessage({ message });
+                        console.log('[SyncSecret] Signed with main wallet (MetaMask)');
+                    } else {
+                        console.warn('[SyncSecret] No wallet available, skipping server sync');
+                        return;
+                    }
+
                     const res = await fetch('/api/game/reveal-secret', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -237,13 +254,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             address: playerAddress,
                             role,
                             salt,
-                            signature
+                            signature,
+                            sessionKeyAddress, // optional: server uses this to verify session key sig
                         })
                     });
                     if (!res.ok) throw new Error(`Server responded ${res.status}`);
                     console.log(`[Status] Secret synced with server DB (attempt ${attempt}).`);
-                    lastSyncKeyRef.current = syncKey; // Mark as synced
-                    // Mark as synced in localStorage to prevent recovery useEffect from retrying
+                    lastSyncKeyRef.current = syncKey;
                     try {
                         localStorage.setItem(`secret_synced_${roomId}_${playerAddress.toLowerCase()}`, 'true');
                         localStorage.removeItem(`pending_sync_${roomId}_${playerAddress.toLowerCase()}`);
@@ -1500,7 +1517,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log(`[Investigation API] Fetching result for ${detective} -> ${target}`);
             // Sign message to prove we are the detective
             const message = `investigate:${currentRoomId.toString()}:${target}`;
-            const signature = await walletClient.signMessage({ message });
+            let signature: `0x${string}`;
+            let sessionKeyAddr: string | undefined;
+
+            // FIX: Use session key to sign (no MetaMask popup)
+            const session = loadSession();
+            if (session && session.registeredOnChain && Date.now() < session.expiresAt &&
+                session.mainWallet.toLowerCase() === detective.toLowerCase()) {
+                const sessionAccount = privateKeyToAccount(session.privateKey);
+                signature = await sessionAccount.signMessage({ message });
+                sessionKeyAddr = sessionAccount.address;
+                console.log('[Investigation] Signed with session key (no popup)');
+            } else if (walletClient) {
+                signature = await walletClient.signMessage({ message });
+                console.log('[Investigation] Signed with main wallet (MetaMask)');
+            } else {
+                throw new Error('No wallet available for signing');
+            }
 
             const response = await fetch('/api/game/investigate', {
                 method: 'POST',
@@ -1509,7 +1542,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     roomId: currentRoomId.toString(),
                     detectiveAddress: detective,
                     targetAddress: target,
-                    signature
+                    signature,
+                    sessionKeyAddress: sessionKeyAddr,
                 })
             });
 
