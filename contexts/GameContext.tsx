@@ -115,6 +115,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const urlRoomId = urlParams.get('roomId');
             if (urlRoomId) return BigInt(urlRoomId);
 
+            // FIX: Only restore roomId from storage on game-related pages
+            // Prevents stale room polling on home/setup pages after a previous game
+            const path = window.location.pathname;
+            const isGamePage = ['/game', '/lobby', '/waiting', '/join'].some(p => path.startsWith(p));
+            if (!isGamePage) {
+                console.log('[RoomId] Not on game page, skipping roomId restore from storage');
+                return null;
+            }
+
             const saved = sessionStorage.getItem('currentRoomId');
             if (saved) return BigInt(saved);
 
@@ -148,6 +157,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
     const refreshPromiseRef = useRef<Promise<any> | null>(null);
     const lastRefreshTimeRef = useRef<number>(0);
+    const lastPhaseKeyRef = useRef<string>('');
 
     // Web3
     const { address } = useAccount();
@@ -447,6 +457,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             localStorage.removeItem('currentRoomId');
         }
     }, [currentRoomId, lobbyName]);
+
+    // FIX: Clear stored roomId when game ends to prevent stale polling on next visit
+    useEffect(() => {
+        if (gameState.phase === GamePhase.ENDED) {
+            console.log('[Cleanup] Game ended — clearing stored roomId');
+            localStorage.removeItem('currentRoomId');
+            sessionStorage.removeItem('currentRoomId');
+        }
+    }, [gameState.phase]);
+
     // FIXED: Only auto-set myPlayerId from wallet if we're NOT in test mode
     // Test mode sets myPlayerId to a mock address; we shouldn't override it
     useEffect(() => {
@@ -672,12 +692,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             mafiaCommittedCount, mafiaRevealedCount, phaseDeadline
         } = gameData;
 
-        // DEBUG: Log current phase from contract
-        console.log('[Phase Sync]', {
-            contractPhase: phase,
-            phaseName: GamePhase[phase],
-            dayCount
-        });
+        // DEBUG: Log current phase from contract (only when phase/day changes to reduce noise)
+        const phaseKey = `${phase}:${dayCount}`;
+        if (lastPhaseKeyRef.current !== phaseKey) {
+            console.log('[Phase Sync]', {
+                contractPhase: phase,
+                phaseName: GamePhase[phase],
+                dayCount
+            });
+            lastPhaseKeyRef.current = phaseKey;
+        }
 
         // Fetch remote avatars from server
         let remoteAvatars: Record<string, string> = {};
@@ -806,16 +830,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         refreshPlayersList(currentRoomId);
     }, [currentRoomId, publicClient, refreshPlayersList, isTestMode]);
 
-    // FIX #14: Single block watcher — debounced, no more 10+/sec spam
-    useWatchBlockNumber({
-        onBlockNumber() {
-            if (!isTestMode && currentRoomIdRef.current) {
-                refreshPlayersListDebounced(currentRoomIdRef.current);
-            }
-        },
-    });
-
-    // Backup polling (in case websocket/blocks stall) — every 5s, debounced
+    // FIX: Removed per-block useWatchBlockNumber for refreshPlayersList.
+    // The event-driven pollEvents already triggers refreshPlayersList when state changes.
+    // A backup poll every 5s handles non-event state changes (e.g., deadline expiry).
     useEffect(() => {
         if (isTestMode || !currentRoomId || !publicClient) return;
 
@@ -1194,7 +1211,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // SYNC WITH SERVER-SIDE DB (for automated win-checking)
-            if (address) await syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse);
+            // FIX: Non-blocking — if sign fails (user rejects MetaMask), don't break the commit flow
+            if (address) {
+                syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse)
+                    .catch(err => console.warn('[commitRole] Server sync failed (non-blocking):', err));
+            }
 
             await refreshPlayersList(currentRoomId);
             setIsTxPending(false);
@@ -1317,7 +1338,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // SYNC WITH SERVER-SIDE DB
-            if (address) await syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse);
+            // FIX: Non-blocking — don't let MetaMask sign rejection break the entire confirm flow
+            // The on-chain TX already succeeded; server sync is a backup for auto-win checking
+            if (address) {
+                syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse)
+                    .catch(err => console.warn('[commitAndConfirm] Server sync failed (non-blocking):', err));
+            }
 
             await refreshPlayersList(currentRoomId);
         } catch (e: any) {
@@ -1326,9 +1352,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const errMsg = (e.message || '').toLowerCase() + (e.shortMessage || '').toLowerCase();
             if (errMsg.includes('alreadycommitted') || errMsg.includes('alreadyconfirmed') || errMsg.includes('alreadyrevealed')) {
                 console.log("[commitAndConfirmRole] Role already processed on-chain. Not re-throwing.");
-                // Still sync with server
+                // Non-blocking server sync attempt
                 if (address) {
-                    try { await syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse); } catch (_) {}
+                    syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse)
+                        .catch(_ => {});
                 }
                 return; // Swallow the error — role is done
             }
@@ -2202,31 +2229,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.log(`[Event Received] ${eventName}`, args);
 
                 // --- EVENT HANDLERS SWITCH ---
+                // FIX: All event cases now just set hasChanges=true and add logs.
+                // refreshPlayersList is called ONCE at the end of the poll cycle.
                 switch (eventName) {
                     case 'PlayerJoined':
-                        // Refresh only once per batch at the end using hasChanges?
-                        // But handlers might need immediate effect.
-                        // For now, keep existing logic, but maybe optimize refreshes later.
-                        refreshPlayersList(currentRoomId);
                         break;
 
                     case 'GameStarted':
-                        refreshPlayersList(currentRoomId);
                         break;
 
                     case 'DayStarted':
                         addLog(`Day ${args.dayNumber} has begun`, "phase");
-                        refreshPlayersList(currentRoomId);
                         break;
 
                     case 'VotingStarted':
                         addLog("Voting Phase Started", "phase");
-                        refreshPlayersList(currentRoomId);
                         break;
 
                     case 'NightStarted':
                         // Log moved to VotingFinalized timeout
-                        refreshPlayersList(currentRoomId);
                         break;
 
                     case 'NightFinalized':
@@ -2235,12 +2256,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             let killedPlayer = playersRef.current.find(p => p.address.toLowerCase() === killedStr);
 
                             if (!killedPlayer) {
-                                console.warn("[NightFinalized] Killed player missing locally. Fetching fresh data...");
-                                const freshData = await refreshPlayersList(currentRoomId);
-                                if (freshData && freshData.rawPlayers) {
-                                    const rawKilled = freshData.rawPlayers.find((p: any) => p.wallet.toLowerCase() === killedStr);
-                                    if (rawKilled) killedPlayer = { name: rawKilled.nickname } as any;
-                                }
+                                console.warn("[NightFinalized] Killed player missing locally. Will refresh.");
                             }
 
                             const name = killedPlayer?.name || args.killed.slice(0, 6);
@@ -2251,32 +2267,20 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         if (args.healed && args.healed !== '0x0000000000000000000000000000000000000000') {
                             addLog("Doctor successfully saved the target!", "success");
                         }
-                        refreshPlayersList(currentRoomId);
                         break;
 
-                    case 'PlayerEliminated':
+                    case 'PlayerEliminated': {
                         const elimStr = (args.player as string).toLowerCase();
-                        let elimPlayer = playersRef.current.find(p => p.address.toLowerCase() === elimStr);
-
-                        if (!elimPlayer) {
-                            console.warn("[PlayerEliminated] Player missing locally. Fetching fresh data...");
-                            const freshData = await refreshPlayersList(currentRoomId);
-                            if (freshData && freshData.rawPlayers) {
-                                const rawElim = freshData.rawPlayers.find((p: any) => p.wallet.toLowerCase() === elimStr);
-                                if (rawElim) elimPlayer = { name: rawElim.nickname } as any;
-                            }
-                        }
-
+                        const elimPlayer = playersRef.current.find(p => p.address.toLowerCase() === elimStr);
                         const elimName = elimPlayer?.name || args.player?.slice(0, 6) || "Unknown";
                         if (args.reason !== 'Killed at night') {
                             addLog(`${elimName} eliminated: ${args.reason}`, "danger");
                         }
-                        refreshPlayersList(currentRoomId);
                         break;
+                    }
 
                     case 'GameEnded':
                         // Handle game end
-                        refreshPlayersList(currentRoomId);
                         break;
 
                     case 'VoteCast':
@@ -2284,22 +2288,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             const voterStr = (args.voter as string).toLowerCase();
                             const targetStr = (args.target as string).toLowerCase();
 
-                            // Try Local Lookup — FIX #15: use ref to avoid stale closure
-                            let voter = playersRef.current.find(p => p.address.toLowerCase() === voterStr);
-                            let target = playersRef.current.find(p => p.address.toLowerCase() === targetStr);
-
-                            // ROBUST FIX: If race condition (player missing), fetch fresh data IMMEDIATELY
-                            if (!voter || !target) {
-                                console.warn("[VoteCast] Player missing locally (race condition). Fetching fresh data...");
-                                const freshData = await refreshPlayersList(currentRoomId);
-                                if (freshData && freshData.rawPlayers) {
-                                    const rawVoter = freshData.rawPlayers.find((p: any) => p.wallet.toLowerCase() === voterStr);
-                                    const rawTarget = freshData.rawPlayers.find((p: any) => p.wallet.toLowerCase() === targetStr);
-
-                                    if (rawVoter) voter = { name: rawVoter.nickname } as any;
-                                    if (rawTarget) target = { name: rawTarget.nickname } as any;
-                                }
-                            }
+                            // Use ref for local lookup to avoid stale closure
+                            const voter = playersRef.current.find(p => p.address.toLowerCase() === voterStr);
+                            const target = playersRef.current.find(p => p.address.toLowerCase() === targetStr);
 
                             const voterName = voter?.name || args.voter.slice(0, 6);
                             const targetName = target?.name || args.target.slice(0, 6);
@@ -2308,8 +2299,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         } catch (e) {
                             console.error("[VoteCast] Error logging:", e);
                         }
-                        // Refresh to ensure UI counts are correct
-                        refreshPlayersList(currentRoomId);
                         break;
 
                     case 'VotingFinalized':
@@ -2318,7 +2307,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         } else {
                             addLog(`Voting Finalized: No one was eliminated.`, "warning");
                         }
-                        refreshPlayersList(currentRoomId);
 
                         // NEW: Trigger Voting Results Phase (10s delay)
                         console.log("[VotingFinalized] Triggering 10s results phase...");
@@ -2333,26 +2321,26 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
 
+            // FIX: Batch refresh — call refreshPlayersList ONCE per poll cycle, not per event
+            if (hasChanges) {
+                refreshPlayersListDebounced(currentRoomId);
+            }
+
             // Advance block cursor
             lastProcessedBlockRef.current = currentBlock + 1n;
 
         } catch (e) {
             console.error("[Smart Poller] Error:", e);
         }
-    }, [publicClient, currentRoomId, addLog, refreshPlayersList]);
+    }, [publicClient, currentRoomId, addLog, refreshPlayersListDebounced]);
 
-    // Use wagmi hook to listen for new blocks -> triggers pollEvents immediately
-    useWatchBlockNumber({
-        onBlockNumber() {
-            pollEvents();
-        },
-    });
-
-    // Fallback/Watchdog polling (keep alive every 10s just in case WS drops silently)
+    // FIX: Poll events every 2 seconds instead of on every block (Somnia: 100ms blocks = 10 calls/sec!)
+    // This reduces RPC spam from ~20 calls/sec to 1 call/2sec while keeping sub-3s event latency.
     useEffect(() => {
-        const interval = setInterval(pollEvents, 10000);
+        if (!publicClient || !currentRoomId) return;
+        const interval = setInterval(pollEvents, 2000);
         return () => clearInterval(interval);
-    }, [pollEvents]);
+    }, [pollEvents, publicClient, currentRoomId]);
 
 
 

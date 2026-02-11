@@ -323,12 +323,14 @@ export const GameOver: React.FC = React.memo(() => {
     const handlePlayAgain = useCallback(() => {
         stopVictoryMusic();
         sessionStorage.removeItem('currentRoomId');
+        localStorage.removeItem('currentRoomId');
         router.push('/setup');
     }, [stopVictoryMusic, router]);
 
     const handleHome = useCallback(() => {
         stopVictoryMusic();
         sessionStorage.removeItem('currentRoomId');
+        localStorage.removeItem('currentRoomId');
         router.push('/');
     }, [stopVictoryMusic, router]);
 
