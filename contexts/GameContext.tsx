@@ -1864,22 +1864,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 throw new Error("Contract rejected the proof. Check log for details.");
             }
 
-            // 5. DECIDE WALLET (Session vs Main) based on balance
+            // 5. DECIDE WALLET (Session vs Main)
             let useSessionKey = false;
             const session = loadSession();
             if (session && session.registeredOnChain && Date.now() < session.expiresAt && session.roomId === Number(currentRoomId)) {
-                try {
-                    const balance = await publicClient.getBalance({ address: session.address as `0x${string}` });
-                    const MIN_BALANCE = 5_000_000_000_000_000n; // 0.005 ETH
-                    if (balance >= MIN_BALANCE) {
-                        useSessionKey = true;
-                        console.log(`[ZK] Session Key has balance (${balance}), optimizing submission.`);
-                    } else {
-                        console.warn(`[ZK] Session Key balance too low (${balance}), falling back to Main Wallet.`);
-                    }
-                } catch (e) {
-                    console.error("[ZK] Failed to check session balance:", e);
-                }
+                useSessionKey = true;
+                console.log(`[ZK] Using session key for endGameZK.`);
             }
 
             // 6. Send Transaction
@@ -1969,22 +1959,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 autoWinLockRef.current = true;
                 setIsTxPending(true);
 
-                // DECIDE WALLET (Session vs Main) based on balance — same logic as endGameZK
+                // DECIDE WALLET (Session vs Main)
                 let useSessionKey = false;
                 const session = loadSession();
                 if (session && session.registeredOnChain && Date.now() < session.expiresAt && session.roomId === Number(roomId)) {
-                    try {
-                        const balance = await publicClient.getBalance({ address: session.address as `0x${string}` });
-                        const MIN_BALANCE = 5_000_000_000_000_000n; // 0.005 ETH
-                        if (balance >= MIN_BALANCE) {
-                            useSessionKey = true;
-                            console.log(`[AutoWin] Session Key has balance (${balance}), using session key.`);
-                        } else {
-                            console.warn(`[AutoWin] Session Key balance too low (${balance}), falling back to Main Wallet.`);
-                        }
-                    } catch (e) {
-                        console.error("[AutoWin] Failed to check session balance:", e);
-                    }
+                    useSessionKey = true;
+                    console.log(`[AutoWin] Using session key for endGameZK.`);
                 }
 
                 const simulationAccount = useSessionKey ? (session!.address as `0x${string}`) : address;
@@ -2017,9 +1997,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     await refreshPlayersList(roomId);
 
                     // Auto-reveal my role on-chain for trustless verification
-                    await revealMyRoleAfterGameEnd();
+                    // Only after successful endGame — if TX failed, game is still active
+                    try {
+                        await revealMyRoleAfterGameEnd();
+                    } catch (revealErr) {
+                        console.warn("[AutoWin] Role reveal after game end failed (non-critical):", revealErr);
+                    }
                 } catch (txErr: any) {
                     console.error("[AutoWin ZK Debug] Transaction FAILED:", txErr);
+                    // Don't call revealMyRoleAfterGameEnd here — game didn't end
                     addLog(`Auto-Win Failed: ${txErr.shortMessage || txErr.message}`, "danger");
                 } finally {
                     autoWinLockRef.current = false;

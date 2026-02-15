@@ -298,6 +298,17 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             );
 
             const shuffleService = getShuffleService();
+
+            // Ensure keys are loaded (after page reload, ShuffleService is a fresh instance)
+            if (!shuffleService.hasKeys()) {
+                const loaded = shuffleService.loadKeys(currentRoomId.toString(), myPlayer.address);
+                if (!loaded) {
+                    console.warn("[NightPhase] Cannot load shuffle keys from localStorage — teammate discovery unavailable");
+                    return;
+                }
+                console.log("[NightPhase] Shuffle keys recovered from localStorage");
+            }
+
             const teammates: string[] = [];
 
             // Decrypt all cards to find fellow mafia
