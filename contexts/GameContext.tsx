@@ -1969,6 +1969,26 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 autoWinLockRef.current = true;
                 setIsTxPending(true);
 
+                // DECIDE WALLET (Session vs Main) based on balance — same logic as endGameZK
+                let useSessionKey = false;
+                const session = loadSession();
+                if (session && session.registeredOnChain && Date.now() < session.expiresAt && session.roomId === Number(roomId)) {
+                    try {
+                        const balance = await publicClient.getBalance({ address: session.address as `0x${string}` });
+                        const MIN_BALANCE = 5_000_000_000_000_000n; // 0.005 ETH
+                        if (balance >= MIN_BALANCE) {
+                            useSessionKey = true;
+                            console.log(`[AutoWin] Session Key has balance (${balance}), using session key.`);
+                        } else {
+                            console.warn(`[AutoWin] Session Key balance too low (${balance}), falling back to Main Wallet.`);
+                        }
+                    } catch (e) {
+                        console.error("[AutoWin] Failed to check session balance:", e);
+                    }
+                }
+
+                const simulationAccount = useSessionKey ? (session!.address as `0x${string}`) : address;
+
                 // SIMULATE CONTRACT FIRST
                 try {
                     await publicClient.simulateContract({
@@ -1976,9 +1996,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         abi: MAFIA_ABI,
                         functionName: 'endGameZK',
                         args: args as any,
-                        account: address,
+                        account: simulationAccount,
                     });
-                    console.log("[AutoWin ZK Debug] Simulation SUCCESS");
+                    console.log(`[AutoWin ZK Debug] Simulation SUCCESS (Session: ${useSessionKey})`);
                 } catch (simErr: any) {
                     console.error("[AutoWin ZK Debug] Simulation FAILED!");
                     console.error("Reason:", simErr.reason || simErr.shortMessage || "Unknown revert");
@@ -1988,8 +2008,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");
 
                 try {
-                    // Send with a very generous gas limit for ZK verification on Somnia
-                    const hash = await sendGameTransaction('endGameZK', args as any, false);
+                    // Send via session key if available, otherwise main wallet
+                    console.log(`[AutoWin] Sending endGameZK (Session: ${useSessionKey})...`);
+                    const hash = await sendGameTransaction('endGameZK', args as any, useSessionKey);
 
                     await publicClient.waitForTransactionReceipt({ hash });
                     addLog("Game ended automatically via Server ZK!", "phase");

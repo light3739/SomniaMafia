@@ -410,13 +410,17 @@ export const RoleReveal: React.FC = React.memo(() => {
 
         setIsProcessing(true);
         try {
-            // 1. Генерируем соль
-            const salt = ShuffleService.generateSalt();
+            // 1. Reuse existing salt if one was already committed (e.g., reload recovery).
+            // Generating a NEW salt here would overwrite the correct one after
+            // commitAndConfirmRoleOnChain uses the old salt internally → hash mismatch on reveal.
+            const existingSalt = (currentRoomId && address)
+                ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`)
+                : null;
+            const salt = existingSalt || ShuffleService.generateSalt();
 
-            // FIX: Do NOT save salt to localStorage before TX!
-            // Previously this caused commitAndConfirmRoleOnChain to think role was already committed
-            // and call standalone confirmRole() — which reverts if role hash was never committed.
-            // Salt is now saved AFTER the TX succeeds.
+            if (existingSalt) {
+                console.log("[RoleReveal] Reusing existing salt from localStorage (reload recovery)");
+            }
 
             // 2. ВЫЗЫВАЕМ АТОМАРНУЮ ФУНКЦИЮ
             await commitAndConfirmRoleOnChain(roleNum, salt);
