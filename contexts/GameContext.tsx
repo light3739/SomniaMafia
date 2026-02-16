@@ -23,6 +23,7 @@ interface GameContextType {
     gameState: GameState;
     setGameState: React.Dispatch<React.SetStateAction<GameState>>;
     isTxPending: boolean;
+    isTxConfirming: boolean;
     currentRoomId: bigint | null;
     selectedTarget: `0x${string}` | null;
     setSelectedTarget: (target: `0x${string}` | null) => void;
@@ -166,6 +167,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const publicClient = usePublicClient();
     const { data: walletClient } = useWalletClient();
     const [isTxPending, setIsTxPending] = useState(false);
+    const [isTxConfirming, setIsTxConfirming] = useState(false);
+    const pendingConfirmationsRef = useRef<Set<string>>(new Set());
     const [isTestMode, setIsTestMode] = useState(false);
     const [playerMarks, setPlayerMarks] = useState<Record<string, 'mafia' | 'civilian' | 'question' | null>>({});
     // Vote map: stores who voted for whom (voter address -> target address)
@@ -896,6 +899,56 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return gameData;
     }, [fetchGameData, checkWinCondition, address, avatarUrl]);
 
+    // === OPTIMISTIC UI: Background TX confirmation ===
+    const confirmInBackground = useCallback((
+        hash: `0x${string}`,
+        functionName: string,
+        onReverted?: () => void
+    ) => {
+        pendingConfirmationsRef.current.add(hash);
+        setIsTxConfirming(true);
+        (async () => {
+            try {
+                const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+                if (receipt?.status === 'reverted') {
+                    console.error(`[Optimistic] ❌ ${functionName} REVERTED! Rolling back...`);
+                    addLog(`${functionName} reverted on-chain. Reverting...`, 'danger');
+                    onReverted?.();
+                } else {
+                    console.log(`[Optimistic] ✅ ${functionName} confirmed (block ${receipt?.blockNumber})`);
+                }
+                const roomId = currentRoomIdRef.current;
+                if (roomId) { await refreshPlayersList(roomId); }
+            } catch (err) {
+                console.error(`[Optimistic] Receipt check failed for ${functionName}:`, err);
+                onReverted?.();
+                const roomId = currentRoomIdRef.current;
+                if (roomId) { await refreshPlayersList(roomId); }
+            } finally {
+                pendingConfirmationsRef.current.delete(hash);
+                if (pendingConfirmationsRef.current.size === 0) { setIsTxConfirming(false); }
+            }
+        })();
+    }, [publicClient, addLog, refreshPlayersList]);
+
+    const applyOptimisticUpdate = useCallback((updates: Partial<{
+        hasVoted: boolean;
+        hasDeckCommitted: boolean;
+        hasNightCommitted: boolean;
+        hasNightRevealed: boolean;
+        hasConfirmedRole: boolean;
+    }>) => {
+        if (!address) return;
+        setGameState(prev => ({
+            ...prev,
+            players: prev.players.map(p =>
+                p.address.toLowerCase() === address.toLowerCase()
+                    ? { ...p, ...updates }
+                    : p
+            )
+        }));
+    }, [address]);
+
     // FIX #14: Debounced refreshPlayersList wrapper
     // Coalesces multiple rapid calls into one, with 300ms debounce + 2s min interval
     const refreshPlayersListDebounced = useCallback((roomId: bigint) => {
@@ -1238,14 +1291,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 type: 'legacy',
             });
             addLog("Starting game...", "phase");
-            await publicClient?.waitForTransactionReceipt({ hash });
-            await refreshPlayersList(currentRoomId);
+            // OPTIMISTIC: Release spinner immediately, confirm receipt in background
             setIsTxPending(false);
+            confirmInBackground(hash, 'startGame');
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    }, [currentRoomId, publicClient, address, addLog, refreshPlayersList, writeContractAsync]);
+    }, [currentRoomId, publicClient, address, addLog, confirmInBackground, writeContractAsync]);
 
     // V4: Deck commit-reveal
     const commitDeckOnChain = useCallback(async (deckHash: string) => {
@@ -1254,14 +1307,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const hash = await sendGameTransaction('commitDeck', [currentRoomId, deckHash]);
             addLog("Deck hash committed!", "success");
-            await publicClient?.waitForTransactionReceipt({ hash });
-            await refreshPlayersList(currentRoomId);
+            // OPTIMISTIC: Mark deck as committed immediately, confirm in background
+            applyOptimisticUpdate({ hasDeckCommitted: true });
             setIsTxPending(false);
+            confirmInBackground(hash, 'commitDeck', () => {
+                applyOptimisticUpdate({ hasDeckCommitted: false });
+            });
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
 
     const revealDeckOnChain = useCallback(async (deck: string[], salt: string) => {
         if (!currentRoomId) return;
@@ -1271,14 +1327,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const hash = await sendGameTransaction('revealDeck', [currentRoomId, deck, cleanSalt]);
             addLog("Deck revealed!", "success");
-            await publicClient?.waitForTransactionReceipt({ hash });
-            await refreshPlayersList(currentRoomId);
+            // OPTIMISTIC: Release spinner immediately, confirm in background
             setIsTxPending(false);
+            confirmInBackground(hash, 'revealDeck');
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, sendGameTransaction, addLog, confirmInBackground]);
 
     // --- REVEAL PHASE (V3: batch share keys) ---
 
@@ -1293,7 +1349,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 encryptedKeys.map(k => k as `0x${string}`) // Convert to bytes
             ]);
             addLog(`Keys shared to ${recipients.length} players!`, "success");
-            await publicClient?.waitForTransactionReceipt({ hash });
+            // OPTIMISTIC: Release spinner immediately, confirm in background
+            setIsTxPending(false);
+            confirmInBackground(hash, 'shareKeysToAll');
         } catch (e: any) {
             // FIX: If keys were already shared, swallow the error (don't re-throw)
             const errMsg = (e.message || '').toLowerCase() + (e.shortMessage || '').toLowerCase();
@@ -1306,7 +1364,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient]);
+    }, [currentRoomId, sendGameTransaction, addLog, confirmInBackground]);
 
     const commitRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
@@ -1375,14 +1433,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const hash = await sendGameTransaction('confirmRole', [currentRoomId]);
             addLog("Role confirmed.", "success");
-            await publicClient?.waitForTransactionReceipt({ hash });
-            await refreshPlayersList(currentRoomId);
+            // OPTIMISTIC: Mark confirmed immediately
+            applyOptimisticUpdate({ hasConfirmedRole: true });
             setIsTxPending(false);
+            confirmInBackground(hash, 'confirmRole', () => {
+                applyOptimisticUpdate({ hasConfirmedRole: false });
+            });
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
 
     const commitAndConfirmRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
@@ -1411,7 +1472,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     const hash = await sendGameTransaction('confirmRole', [currentRoomId]);
                     addLog("Role confirmed (fallback).", "success");
-                    await publicClient?.waitForTransactionReceipt({ hash });
+                    // OPTIMISTIC: confirm in background
+                    confirmInBackground(hash, 'confirmRole (fallback)');
                 } catch (err: any) {
                     // FIX: If standalone confirmRole fails (role was never committed on-chain),
                     // fall back to full commitAndConfirmRole with the saved salt
@@ -1421,7 +1483,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         const roleHash = ShuffleService.createRoleCommitHash(role, savedSalt);
                         const retryHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
                         addLog("Role committed & confirmed (recovery).", "success");
-                        await publicClient?.waitForTransactionReceipt({ hash: retryHash });
+                        // OPTIMISTIC: confirm in background
+                        confirmInBackground(retryHash, 'commitAndConfirmRole (recovery)');
                     } catch (retryErr: any) {
                         console.error("Full commitAndConfirmRole retry also failed:", retryErr);
                         // Clear stale salt so next attempt goes through normal flow
@@ -1436,8 +1499,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const roleHash = ShuffleService.createRoleCommitHash(role, saltToUse);
                     const txHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
                     addLog("Role committed & confirmed on-chain!", "success");
-                    await publicClient?.waitForTransactionReceipt({ hash: txHash });
+                    // OPTIMISTIC: confirm in background, save salt immediately
                     if (address) localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, saltToUse);
+                    confirmInBackground(txHash, 'commitAndConfirmRole');
                 } catch (txErr: any) {
                     const errMsg = (txErr.message || "").toLowerCase();
                     const shortMsg = (txErr.shortMessage || "").toLowerCase();
@@ -1465,7 +1529,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             addLog("Role previously committed. Confirming now...", "info");
                             // Determine gas for confirmRole
                             const confirmHash = await sendGameTransaction('confirmRole', [currentRoomId]);
-                            await publicClient?.waitForTransactionReceipt({ hash: confirmHash });
+                            // OPTIMISTIC: confirm in background
+                            confirmInBackground(confirmHash, 'confirmRole (retry)');
                             addLog("Role confirmed separately!", "success");
                         } else {
                             console.log("Role already confirmed on-chain.");
@@ -1488,7 +1553,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     .catch(err => console.warn('[commitAndConfirm] Server sync failed (non-blocking):', err));
             }
 
-            await refreshPlayersList(currentRoomId);
+            // OPTIMISTIC: No blocking refreshPlayersList — confirmInBackground handles refresh
+            setIsTxPending(false);
         } catch (e: any) {
             console.error("Confirmation error:", e);
             // FIX: If role is already confirmed/committed, don't throw — this breaks the RoleReveal auto-loop
@@ -1507,7 +1573,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, address, publicClient, sendGameTransaction, addLog, refreshPlayersList, myPlayer?.hasConfirmedRole]);
+    }, [currentRoomId, address, publicClient, sendGameTransaction, addLog, confirmInBackground, myPlayer?.hasConfirmedRole]);
 
     // --- DAY & VOTING ---
 
@@ -1517,14 +1583,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const hash = await sendGameTransaction('startVoting', [currentRoomId]);
             addLog("Voting phase started!", "phase");
-            await publicClient?.waitForTransactionReceipt({ hash });
-            await refreshPlayersList(currentRoomId);
+            // OPTIMISTIC: Release spinner immediately
             setIsTxPending(false);
+            confirmInBackground(hash, 'startVoting');
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, sendGameTransaction, addLog, confirmInBackground]);
 
     const voteOnChain = useCallback(async (targetAddress: string) => {
         if (!currentRoomId) return;
@@ -1533,16 +1599,28 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const hash = await sendGameTransaction('vote', [currentRoomId, targetAddress]);
             const targetPlayer = gameState.players.find(p => p.address.toLowerCase() === targetAddress.toLowerCase());
             const targetName = targetPlayer ? (targetPlayer.name || `Player ${gameState.players.indexOf(targetPlayer) + 1}`) : targetAddress.slice(0, 6);
-            // addLog(`🗳️ You voted for ${targetName}`, "warning");
-            await publicClient?.waitForTransactionReceipt({ hash });
-            // V3: auto-finalize when all voted - just refresh
-            await refreshPlayersList(currentRoomId);
+            // OPTIMISTIC: Mark as voted immediately, update vote map
+            applyOptimisticUpdate({ hasVoted: true });
+            if (address) {
+                setVoteMap(prev => ({ ...prev, [address.toLowerCase()]: targetAddress.toLowerCase() }));
+            }
             setIsTxPending(false);
+            confirmInBackground(hash, 'vote', () => {
+                // Rollback: unmark vote
+                applyOptimisticUpdate({ hasVoted: false });
+                if (address) {
+                    setVoteMap(prev => {
+                        const next = { ...prev };
+                        delete next[address.toLowerCase()];
+                        return next;
+                    });
+                }
+            });
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, sendGameTransaction, addLog, gameState.players, address, applyOptimisticUpdate, confirmInBackground]);
 
     // V3: finalizeVoting removed - auto-triggers on last vote
 
@@ -1553,16 +1631,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             const txHash = await sendGameTransaction('commitNightAction', [currentRoomId, hash as `0x${string}`]);
-            // addLog("Night action committed!", "info");
-            await publicClient?.waitForTransactionReceipt({ hash: txHash });
-            await refreshPlayersList(currentRoomId);
+            // OPTIMISTIC: Mark committed immediately
+            applyOptimisticUpdate({ hasNightCommitted: true });
             setIsTxPending(false);
+            confirmInBackground(txHash, 'commitNightAction', () => {
+                applyOptimisticUpdate({ hasNightCommitted: false });
+            });
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
             throw e; // Re-throw so caller knows it failed
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
 
     const revealNightActionOnChain = useCallback(async (action: number, target: string, salt: string) => {
         if (!currentRoomId) return;
@@ -1581,16 +1661,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             const hash = await sendGameTransaction('revealNightAction', [currentRoomId, action, target, cleanSalt]);
-            // addLog("Night action revealed!", "success");
-            await publicClient?.waitForTransactionReceipt({ hash });
-            // V3: auto-finalize when all revealed - just refresh
-            await refreshPlayersList(currentRoomId);
+            // OPTIMISTIC: Mark revealed immediately
+            applyOptimisticUpdate({ hasNightRevealed: true });
+            confirmInBackground(hash, 'revealNightAction', () => {
+                applyOptimisticUpdate({ hasNightRevealed: false });
+            });
         } catch (e: any) {
             console.error('[Reveal TX Failed]', e);
             addLog(e.shortMessage || e.message, "danger");
             throw e; // Re-throw so caller knows it failed
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
 
     // --- V4: MAFIA CONSENSUS KILL FUNCTIONS ---
 
@@ -1599,16 +1680,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('commitMafiaTarget', [currentRoomId, targetHash as `0x${string}`]);
-            // addLog("Mafia target committed!", "info");
-            await publicClient?.waitForTransactionReceipt({ hash });
-            await refreshPlayersList(currentRoomId);
+            // OPTIMISTIC: Mark mafia commit immediately
+            applyOptimisticUpdate({ hasNightCommitted: true });
             setIsTxPending(false);
+            confirmInBackground(hash, 'commitMafiaTarget', () => {
+                applyOptimisticUpdate({ hasNightCommitted: false });
+            });
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
             throw e;
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
 
     const revealMafiaTargetOnChain = useCallback(async (target: string, salt: string) => {
         if (!currentRoomId) return;
@@ -1617,16 +1700,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('revealMafiaTarget', [currentRoomId, target, cleanSalt]);
-            // addLog("Mafia target revealed!", "success");
-            await publicClient?.waitForTransactionReceipt({ hash });
-            await refreshPlayersList(currentRoomId);
+            // OPTIMISTIC: Mark mafia reveal immediately
+            applyOptimisticUpdate({ hasNightRevealed: true });
             setIsTxPending(false);
+            confirmInBackground(hash, 'revealMafiaTarget', () => {
+                applyOptimisticUpdate({ hasNightRevealed: false });
+            });
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
             throw e;
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
 
     const getInvestigationResultOnChain = useCallback(async (detective: string, target: string) => {
         if (isTestMode) {
@@ -1785,8 +1870,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             const hash = await sendGameTransaction('sendMafiaMessage', [currentRoomId, hexData]);
-            await publicClient?.waitForTransactionReceipt({ hash });
-            fetchMafiaChat(currentRoomId);
+            // OPTIMISTIC: Add message to local state immediately
+            if (address) {
+                const myPlayer = playersRef.current.find(p => p.address.toLowerCase() === address.toLowerCase());
+                setGameState(prev => ({
+                    ...prev,
+                    mafiaMessages: [...prev.mafiaMessages, {
+                        id: `optimistic-${Date.now()}`,
+                        sender: address,
+                        playerName: myPlayer?.name || address.slice(0, 6),
+                        content,
+                        timestamp: Date.now(),
+                    }]
+                }));
+            }
+            // Background: confirm + refresh chat from chain
+            confirmInBackground(hash, 'sendMafiaMessage');
         } catch (e: any) {
             addLog(`Chat failed: ${e.shortMessage || e.message}`, "danger");
             throw e;
@@ -1829,12 +1928,34 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const hash = await sendGameTransaction('endGameAutomatically', [currentRoomId]);
             addLog("Game ended automatically!", "phase");
             await publicClient?.waitForTransactionReceipt({ hash });
+
+            // DEBUG: Check deposit status after auto-end
+            if (address && publicClient) {
+                try {
+                    const deposit = await publicClient.readContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'getPlayerDeposit',
+                        args: [currentRoomId, address],
+                    }) as bigint;
+                    console.log(`[Deposit Debug] After endGameAutomatically:`, {
+                        myDeposit: formatEther(deposit) + ' STT',
+                        autoRefunded: deposit === 0n,
+                    });
+                    if (deposit === 0n) {
+                        console.log(`[Deposit Debug] ✅ Contract AUTO-REFUNDED deposit during endGameAutomatically.`);
+                    }
+                } catch (depErr) {
+                    console.warn('[Deposit Debug] Failed to check deposit after endGameAutomatically:', depErr);
+                }
+            }
+
             await refreshPlayersList(currentRoomId);
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             throw e;
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList, address]);
 
     // Reveal role on-chain (used at game end to allow contract to verify win condition)
     const revealRoleOnChain = useCallback(async (role: number, salt: string) => {
@@ -2032,7 +2153,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         depositPool: formatEther(depositPool) + ' STT',
                         depositPerPlayer: formatEther(depositPerPlayer) + ' STT',
                         canClaimRefund: deposit > 0n,
+                        autoRefunded: deposit === 0n,
                     });
+                    if (deposit === 0n) {
+                        console.log(`[Deposit Debug] ✅ Contract AUTO-REFUNDED deposit during endGameZK. No manual claimRefund needed.`);
+                    }
                 } catch (depErr) {
                     console.warn('[Deposit Debug] Failed to check deposit after endGameZK:', depErr);
                 }
@@ -2772,7 +2897,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const contextValue = useMemo(() => ({
         playerName, setPlayerName, avatarUrl, setAvatarUrl, lobbyName, setLobbyName,
-        gameState, setGameState, isTxPending, currentRoomId,
+        gameState, setGameState, isTxPending, isTxConfirming, currentRoomId,
         createLobbyOnChain, joinLobbyOnChain,
         startGameOnChain, commitDeckOnChain, revealDeckOnChain,
         shareKeysToAllOnChain, commitRoleOnChain, confirmRoleOnChain,
@@ -2793,7 +2918,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         voteMap, setVoteMap,
         setCurrentRoomId
     }), [
-        playerName, avatarUrl, lobbyName, gameState, isTxPending, currentRoomId,
+        playerName, avatarUrl, lobbyName, gameState, isTxPending, isTxConfirming, currentRoomId,
         createLobbyOnChain, joinLobbyOnChain, startGameOnChain,
         commitDeckOnChain, revealDeckOnChain, shareKeysToAllOnChain,
         commitRoleOnChain, confirmRoleOnChain, commitAndConfirmRoleOnChain,

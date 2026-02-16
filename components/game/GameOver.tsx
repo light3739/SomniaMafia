@@ -61,6 +61,7 @@ export const GameOver: React.FC = React.memo(() => {
     const [isRevealing, setIsRevealing] = useState(false);
     const [winner, setWinner] = useState<Winner>((gameState.winner as Winner) || 'DRAW');
     const [refundClaimed, setRefundClaimed] = useState(false);
+    const [refundAutomatic, setRefundAutomatic] = useState(false);
     const [depositAmount, setDepositAmount] = useState<string>('0');
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -106,7 +107,15 @@ export const GameOver: React.FC = React.memo(() => {
 
                 setDepositAmount(formatEther(deposit));
                 if (deposit === 0n) {
+                    console.log(`[Deposit Debug] Deposit is 0 at GameOver mount — contract auto-refunded during endGame.`, {
+                        roomId: currentRoomId.toString(),
+                        depositPool: formatEther(depositPool) + ' STT',
+                        depositPerPlayer: formatEther(depositPerPlayer) + ' STT',
+                    });
                     setRefundClaimed(true);
+                    setRefundAutomatic(true);
+                } else {
+                    console.log(`[Deposit Debug] Deposit still held — manual claimRefund needed.`);
                 }
             } catch (e) {
                 console.warn('[GameOver] Failed to check deposit:', e);
@@ -577,7 +586,7 @@ export const GameOver: React.FC = React.memo(() => {
                             animate={{ opacity: 1 }}
                             className="text-center text-emerald-400/60 text-xs mb-4"
                         >
-                            ✓ Deposit refunded
+                            ✓ {refundAutomatic ? 'Deposit auto-refunded by contract' : 'Deposit refunded'}
                         </motion.div>
                     )}
 
