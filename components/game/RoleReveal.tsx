@@ -214,7 +214,7 @@ export const RoleReveal: React.FC = React.memo(() => {
     // Check flags on mount and periodically
     useEffect(() => {
         checkIfShared();
-        const interval = setInterval(checkIfShared, 2000);
+        const interval = setInterval(checkIfShared, 1500);
         return () => clearInterval(interval);
     }, [checkIfShared]);
 
@@ -257,7 +257,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } finally {
             setIsProcessing(false);
             // FIX: Release ref guard after a short delay to prevent rapid re-entry
-            setTimeout(() => { isShareInFlightRef.current = false; }, 3000);
+            setTimeout(() => { isShareInFlightRef.current = false; }, 1500);
         }
     }, [gameState.players, myPlayer, isProcessing, revealState.hasSharedKeys, shareKeysToAllOnChain, addLog, stringToHex]);
 
@@ -387,7 +387,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } finally {
             setIsProcessing(false);
             // FIX: Release ref guard after delay to prevent rapid retry on failure
-            setTimeout(() => { isDecryptInFlightRef.current = false; }, 5000);
+            setTimeout(() => { isDecryptInFlightRef.current = false; }, 2000);
         }
     }, [revealState.myCardIndex, revealState.deck, gameState.players, myPlayer, collectKeys, addLog, setGameState, decryptAllCardsForTeammates, currentRoomId, address]);
 
@@ -446,7 +446,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } finally {
             setIsProcessing(false);
             // FIX: Release ref guard after cooldown to prevent rapid retry on failure
-            setTimeout(() => { isConfirmInFlightRef.current = false; }, 5000);
+            setTimeout(() => { isConfirmInFlightRef.current = false; }, 2000);
         }
     }, [revealState.myRole, revealState.hasConfirmed, commitAndConfirmRoleOnChain, currentRoomId, address]);
 
@@ -468,7 +468,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // Polling for keys
     useEffect(() => {
-        const interval = setInterval(collectKeys, 3000);
+        const interval = setInterval(collectKeys, 1500);
         return () => clearInterval(interval);
     }, [collectKeys]);
 
@@ -714,7 +714,7 @@ const RoleRevealAuto: React.FC<{
     const keysNeeded = gameState.players.length - 1;
 
     // Countdown timer for viewing role before auto-confirm
-    const ROLE_VIEW_TIME = 10; // seconds
+    const ROLE_VIEW_TIME = 3; // seconds — quick glance, then auto-confirm
     const [countdown, setCountdown] = useState<number | null>(null);
     const [hasStartedCountdown, setHasStartedCountdown] = useState(false);
 
@@ -754,7 +754,7 @@ const RoleRevealAuto: React.FC<{
             console.log(`[RoleReveal Auto] Sharing my decryption keys... (attempt ${shareRetryCountRef.current})`);
             shareMyKey().catch(() => {
                 // On failure, release the ref after a cooldown so it can retry
-                setTimeout(() => { shareTriggeredRef.current = false; }, 5000);
+                setTimeout(() => { shareTriggeredRef.current = false; }, 2000);
             });
         }
     }, [revealState.hasSharedKeys, isProcessing, isTxPending, myPlayer, shareMyKey]);
@@ -776,7 +776,7 @@ const RoleRevealAuto: React.FC<{
             console.log("[RoleReveal Auto] All keys collected. Decrypting role...");
             decryptMyRole().catch(() => {
                 // On failure, release after cooldown
-                setTimeout(() => { decryptTriggeredRef.current = false; }, 5000);
+                setTimeout(() => { decryptTriggeredRef.current = false; }, 2000);
             });
         }
     }, [revealState.hasSharedKeys, revealState.isRevealed, revealState.collectedKeys.size, revealState.deck.length, keysNeeded, isProcessing, isTxPending, decryptMyRole]);
@@ -822,7 +822,7 @@ const RoleRevealAuto: React.FC<{
             console.log(`[RoleReveal Auto] Countdown finished. Auto-confirming... (attempt ${confirmRetryCountRef.current})`);
             handleConfirmRole().catch(() => {
                 // On failure, release after cooldown
-                setTimeout(() => { confirmTriggeredRef.current = false; }, 5000);
+                setTimeout(() => { confirmTriggeredRef.current = false; }, 2000);
             });
         }
     }, [countdown, revealState.isRevealed, revealState.hasConfirmed, revealState.myRole, isProcessing, isTxPending, handleConfirmRole]);
