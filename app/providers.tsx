@@ -48,11 +48,12 @@ const config = getDefaultConfig({
     batch: {
         multicall: {
             deployless: true,
-            wait: 50, // batch window 50ms to group parallel reads
+            wait: 20, // SPEED: 20ms batch window (was 50ms) — Somnia is fast, don't wait long
         },
     },
     // Lower polling interval — Somnia has fast blocks (~1s)
-    pollingInterval: 4_000,
+    // 1s matches Somnia's sub-second finality for fastest receipt detection
+    pollingInterval: 1_000,
     ssr: true,
 });
 
