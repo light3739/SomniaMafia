@@ -5,13 +5,14 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
+import { formatEther } from 'viem';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { hexToString } from '../../services/cryptoUtils';
 import { Role } from '../../types';
 import { Button } from '../ui/Button';
 import { useSoundEffects } from '../ui/SoundEffects';
-import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye } from 'lucide-react';
+import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye, Coins } from 'lucide-react';
 
 const RoleIcons: Record<Role, React.ReactNode> = {
     [Role.MAFIA]: <Skull className="w-5 h-5 text-rose-500" />,
@@ -51,7 +52,7 @@ const contractRoleToRole = (contractRole: number): Role => {
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = React.memo(() => {
-    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, claimRefund, isTxPending } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const router = useRouter();
@@ -59,8 +60,44 @@ export const GameOver: React.FC = React.memo(() => {
     const [onChainRoles, setOnChainRoles] = useState<Map<string, Role>>(new Map());
     const [isRevealing, setIsRevealing] = useState(false);
     const [winner, setWinner] = useState<Winner>((gameState.winner as Winner) || 'DRAW');
+    const [refundClaimed, setRefundClaimed] = useState(false);
+    const [depositAmount, setDepositAmount] = useState<string>('0');
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Check player deposit amount
+    useEffect(() => {
+        if (!publicClient || !currentRoomId || !address) return;
+
+        const checkDeposit = async () => {
+            try {
+                const deposit = await publicClient.readContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'getPlayerDeposit',
+                    args: [currentRoomId, address],
+                }) as bigint;
+                setDepositAmount(formatEther(deposit));
+                if (deposit === 0n) {
+                    setRefundClaimed(true);
+                }
+            } catch (e) {
+                console.warn('[GameOver] Failed to check deposit:', e);
+            }
+        };
+
+        checkDeposit();
+    }, [publicClient, currentRoomId, address]);
+
+    const handleClaimRefund = useCallback(async () => {
+        try {
+            await claimRefund();
+            setRefundClaimed(true);
+            setDepositAmount('0');
+        } catch (e) {
+            console.error('[GameOver] Claim refund failed:', e);
+        }
+    }, [claimRefund]);
 
 
     // Расшифровать все роли в конце игры
@@ -474,6 +511,41 @@ export const GameOver: React.FC = React.memo(() => {
                             })}
                         </div>
                     </motion.div>
+
+                    {/* Deposit Refund */}
+                    {!refundClaimed && parseFloat(depositAmount) > 0 && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 1.8 }}
+                            className="bg-gradient-to-r from-emerald-950/40 to-emerald-900/20 border border-emerald-500/30 rounded-2xl p-4 mb-4 flex items-center justify-between"
+                        >
+                            <div className="flex items-center gap-3">
+                                <Coins className="w-6 h-6 text-emerald-400" />
+                                <div>
+                                    <p className="text-emerald-300 font-medium text-sm">Deposit Available</p>
+                                    <p className="text-emerald-400/70 text-xs">{depositAmount} STT refundable</p>
+                                </div>
+                            </div>
+                            <Button
+                                onClick={handleClaimRefund}
+                                disabled={isTxPending}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 text-sm"
+                            >
+                                {isTxPending ? 'Claiming...' : 'Claim Refund'}
+                            </Button>
+                        </motion.div>
+                    )}
+
+                    {refundClaimed && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="text-center text-emerald-400/60 text-xs mb-4"
+                        >
+                            ✓ Deposit refunded
+                        </motion.div>
+                    )}
 
                     {/* Actions */}
                     <motion.div
