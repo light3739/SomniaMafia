@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWalletClient, useWatchContractEvent, useWatchBlockNumber } from 'wagmi';
-import { createWalletClient, http, parseEther, parseEventLogs, toHex, pad, type WalletClient } from 'viem';
+import { createWalletClient, http, parseEther, formatEther, parseEventLogs, toHex, pad, type WalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../contracts/config';
@@ -62,6 +62,7 @@ interface GameContextType {
     forcePhaseTimeoutOnChain: () => Promise<void>;
     endGameAutomaticallyOnChain: () => Promise<void>;
     endGameZK: () => Promise<void>;
+    claimRefund: () => Promise<void>;
     getInvestigationResultOnChain: (detective: string, target: string) => Promise<{ role: Role; isMafia: boolean }>;
     syncSecretWithServer: (roomId: string, playerAddress: string, role: number, salt: string) => Promise<void>;
     setCurrentRoomId: (id: bigint | null) => void;
@@ -307,12 +308,31 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
 
         // Проверяем можно ли использовать session key
-        const canUseSession = useSessionKeyParam &&
+        let canUseSession = useSessionKeyParam &&
             session &&
             session.registeredOnChain &&
             Date.now() < session.expiresAt &&
             roomId !== null &&
             session.roomId === Number(roomId);
+
+        // FIX: For gas-heavy functions (endGameZK), check session key balance
+        // If balance is too low, fall back to main wallet to avoid "insufficient balance"
+        if (canUseSession && session && publicClient && ['endGameZK'].includes(functionName)) {
+            try {
+                const sessionBalance = await publicClient.getBalance({
+                    address: session.address as `0x${string}`
+                });
+                const MIN_BALANCE_FOR_HEAVY_TX = parseEther('0.3'); // ~0.3 STT minimum for endGameZK
+                if (sessionBalance < MIN_BALANCE_FOR_HEAVY_TX) {
+                    console.warn(`[Session TX] Session key balance too low for ${functionName}: ${formatEther(sessionBalance)} STT. Falling back to main wallet.`);
+                    canUseSession = false;
+                } else {
+                    console.log(`[Session TX] Session key balance OK for ${functionName}: ${formatEther(sessionBalance)} STT`);
+                }
+            } catch (balErr) {
+                console.warn('[Session TX] Failed to check session balance, proceeding anyway:', balErr);
+            }
+        }
 
         console.log(`[TX Debug] Final canUseSession for ${functionName}: ${canUseSession}`);
 
@@ -351,7 +371,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             calculatedGas = (gasEstimate * 150n) / 100n;
 
             // 3. Safety cap - if gas is crazy (revert symptom), don't scare MetaMask
-            const safetyCap = functionName === 'endGameZK' ? 150_000_000n : 30_000_000n;
+            const safetyCap = functionName === 'endGameZK' ? 80_000_000n : 30_000_000n;
             if (calculatedGas > safetyCap) {
                 console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at ${safetyCap} to avoid balance error (likely contract revert).`);
                 calculatedGas = safetyCap;
@@ -362,7 +382,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
             // Если оценка упала, используем высокий лимит для тяжелых функций
             if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK', 'commitAndConfirmRole'].includes(functionName)) {
-                calculatedGas = functionName === 'endGameZK' ? 100_000_000n : 50_000_000n;
+                calculatedGas = functionName === 'endGameZK' ? 60_000_000n : 50_000_000n;
             } else {
                 calculatedGas = 10_000_000n;
             }
@@ -915,7 +935,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'createAndJoin',
                     args: [lobbyName, 16, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('0.5'),
+                    value: parseEther('1'),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -935,7 +955,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     pubKeyHex as `0x${string}`,      // bytes publicKey
                     sessionAddress as `0x${string}`  // address sessionAddress
                 ],
-                value: parseEther('0.5'),
+                value: parseEther('1'),
                 gas: gasLimit,
                 type: 'legacy',
             });
@@ -1026,7 +1046,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('0.5'),
+                    value: parseEther('1'),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -1040,7 +1060,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
-                value: parseEther('0.5'),
+                value: parseEther('1'),
                 gas: gasLimit,
                 type: 'legacy',
             });
@@ -2063,6 +2083,51 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [currentRoomId, myPlayer, address, revealRoleOnChain, endGameAutomaticallyOnChain, triggerAutoWinCheck, addLog]);
 
+    // Claim deposit refund after game ends
+    const claimRefund = useCallback(async () => {
+        if (!currentRoomId || !publicClient) {
+            addLog("No active room to claim refund from.", "danger");
+            return;
+        }
+
+        setIsTxPending(true);
+        try {
+            // Check deposit before claiming
+            if (address) {
+                try {
+                    const deposit = await publicClient.readContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'getPlayerDeposit',
+                        args: [currentRoomId, address],
+                    }) as bigint;
+                    console.log(`[Refund] Player deposit for room ${currentRoomId}: ${formatEther(deposit)} STT`);
+                    if (deposit === 0n) {
+                        addLog("No deposit to refund (already claimed or not deposited).", "info");
+                        setIsTxPending(false);
+                        return;
+                    }
+                } catch (e) {
+                    console.warn("[Refund] Could not check deposit, attempting claim anyway:", e);
+                }
+            }
+
+            addLog("Claiming deposit refund...", "info");
+            const hash = await sendGameTransaction('claimRefund', [currentRoomId], false);
+            await publicClient.waitForTransactionReceipt({ hash });
+            addLog("Deposit refunded successfully!", "success");
+        } catch (e: any) {
+            console.error("[Refund] Failed:", e);
+            if (e.message?.includes("DepositAlreadyRefunded")) {
+                addLog("Deposit was already refunded.", "info");
+            } else {
+                addLog(`Refund failed: ${e.shortMessage || e.message}`, "danger");
+            }
+        } finally {
+            setIsTxPending(false);
+        }
+    }, [currentRoomId, publicClient, address, sendGameTransaction, addLog]);
+
 
     // === SMART POLLING ===
     // === SMART POLLING (Auto-Win Check) ===
@@ -2501,7 +2566,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         commitNightActionOnChain, revealNightActionOnChain,
         commitMafiaTargetOnChain, revealMafiaTargetOnChain,
         forcePhaseTimeoutOnChain, getInvestigationResultOnChain, syncSecretWithServer, endGameAutomaticallyOnChain,
-        revealRoleOnChain, tryEndGame, claimVictory, endGameZK,
+        revealRoleOnChain, tryEndGame, claimVictory, endGameZK, claimRefund,
         sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList,
         addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
@@ -2520,7 +2585,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         startVotingOnChain, voteOnChain, commitNightActionOnChain,
         revealNightActionOnChain, commitMafiaTargetOnChain, revealMafiaTargetOnChain,
         forcePhaseTimeoutOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain, revealRoleOnChain,
-        tryEndGame, claimVictory, endGameZK, syncSecretWithServer, sendMafiaMessageOnChain,
+        tryEndGame, claimVictory, endGameZK, claimRefund, syncSecretWithServer, sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList, addLog,
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         isTestMode, setIsTestMode,
