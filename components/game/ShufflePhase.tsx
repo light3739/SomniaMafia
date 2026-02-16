@@ -257,7 +257,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
     // Polling
     useEffect(() => {
         fetchShuffleData();
-        const interval = setInterval(fetchShuffleData, 3000);
+        const interval = setInterval(fetchShuffleData, 1500);
         return () => clearInterval(interval);
     }, [fetchShuffleData]);
 
@@ -365,7 +365,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
             }));
 
             // addLog("Deck revealed successfully!", "success");
-            setTimeout(fetchShuffleData, 1000); // Trigger immediate update
+            setTimeout(fetchShuffleData, 200); // Quick re-fetch after reveal
 
         } catch (e: any) {
             console.error("Reveal failed:", e);
@@ -411,10 +411,10 @@ export const ShufflePhase: React.FC = React.memo(() => {
             const timer = setTimeout(() => {
                 // Re-check conditions after delay
                 if (!shuffleState.hasRevealed && !isProcessing && !isTxPending) {
-                    console.log("[Shuffle Auto] Detected commit complete. Starting automatic reveal (after 2s delay)...");
+                    console.log("[Shuffle Auto] Detected commit complete. Starting automatic reveal (after 500ms delay)...");
                     handleReveal();
                 }
-            }, 2000); // 2s delay for nonce to sync
+            }, 500); // 500ms — nonceManager handles nonce sequencing
             return () => clearTimeout(timer);
         }
     }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, pendingDeck, pendingSalt, handleReveal]);
