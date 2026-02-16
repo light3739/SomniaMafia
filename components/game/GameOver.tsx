@@ -71,12 +71,39 @@ export const GameOver: React.FC = React.memo(() => {
 
         const checkDeposit = async () => {
             try {
-                const deposit = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
-                    abi: MAFIA_ABI,
-                    functionName: 'getPlayerDeposit',
-                    args: [currentRoomId, address],
-                }) as bigint;
+                const [deposit, room, defaultDeposit] = await Promise.all([
+                    publicClient.readContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'getPlayerDeposit',
+                        args: [currentRoomId, address],
+                    }) as Promise<bigint>,
+                    publicClient.readContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'getRoom',
+                        args: [currentRoomId],
+                    }) as Promise<any>,
+                    publicClient.readContract({
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'getDefaultDeposit',
+                    }) as Promise<bigint>,
+                ]);
+
+                const depositPool = Array.isArray(room) ? room[room.length - 2] : room.depositPool;
+                const depositPerPlayer = Array.isArray(room) ? room[room.length - 1] : room.depositPerPlayer;
+
+                console.log(`[Deposit Debug] GameOver screen:`, {
+                    roomId: currentRoomId.toString(),
+                    myDeposit: formatEther(deposit) + ' STT',
+                    depositPool: formatEther(depositPool) + ' STT',
+                    depositPerPlayer: formatEther(depositPerPlayer) + ' STT',
+                    defaultDeposit: formatEther(defaultDeposit) + ' STT',
+                    canClaimRefund: deposit > 0n,
+                    alreadyRefunded: deposit === 0n,
+                });
+
                 setDepositAmount(formatEther(deposit));
                 if (deposit === 0n) {
                     setRefundClaimed(true);
@@ -117,33 +144,33 @@ export const GameOver: React.FC = React.memo(() => {
 
         setIsRevealing(true);
         try {
-            // Получаем колоду одним вызовом
-            const deck = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'getDeck',
-                args: [currentRoomId],
-            }) as string[];
-
-            // Собираем ключи от всех игроков (V3.1 Batch Fetch)
-            const keys = new Map<string, string>();
-
-            try {
-                const [senders, keyBytes] = await publicClient.readContract({
+            // SPEED: Fetch deck and keys in parallel — saves one sequential RPC roundtrip
+            const [deck, keysResult] = await Promise.all([
+                publicClient.readContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'getDeck',
+                    args: [currentRoomId],
+                }) as Promise<string[]>,
+                publicClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'getAllKeysForMe',
                     args: [currentRoomId],
                     account: address,
-                }) as [string[], string[]];
+                }).catch(e => {
+                    console.error("Failed to batch fetch keys:", e);
+                    return [[], []] as [string[], string[]];
+                }) as Promise<[string[], string[]]>,
+            ]);
 
-                for (let i = 0; i < senders.length; i++) {
-                    if (keyBytes[i] && keyBytes[i] !== '0x') {
-                        keys.set(senders[i].toLowerCase(), keyBytes[i]);
-                    }
+            // Собираем ключи от всех игроков (V3.1 Batch Fetch)
+            const keys = new Map<string, string>();
+            const [senders, keyBytes] = keysResult;
+            for (let i = 0; i < senders.length; i++) {
+                if (keyBytes[i] && keyBytes[i] !== '0x') {
+                    keys.set(senders[i].toLowerCase(), keyBytes[i]);
                 }
-            } catch (e) {
-                console.error("Failed to batch fetch keys:", e);
             }
 
             const shuffleService = getShuffleService();
@@ -206,20 +233,27 @@ export const GameOver: React.FC = React.memo(() => {
         try {
             const roles = new Map<string, Role>();
 
-            for (const player of gameState.players) {
-                try {
-                    const contractRole = await publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MAFIA_ABI,
-                        functionName: 'playerRoles',
-                        args: [currentRoomId, player.address],
-                    }) as number;
+            // SPEED: Batch all playerRoles reads into single multicall
+            // Was: N sequential readContract calls (one per player = N roundtrips)
+            // Now: 1 multicall RPC call for all players
+            const roleResults = await publicClient.multicall({
+                contracts: gameState.players.map(player => ({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI as any,
+                    functionName: 'playerRoles' as const,
+                    args: [currentRoomId, player.address],
+                })),
+                allowFailure: true,
+            });
 
-                    const role = contractRoleToRole(Number(contractRole));
+            for (let i = 0; i < gameState.players.length; i++) {
+                const result = roleResults[i];
+                if (result.status === 'success') {
+                    const role = contractRoleToRole(Number(result.result));
                     if (role !== Role.UNKNOWN) {
-                        roles.set(player.address.toLowerCase(), role);
+                        roles.set(gameState.players[i].address.toLowerCase(), role);
                     }
-                } catch { }
+                }
             }
 
             setOnChainRoles(roles);

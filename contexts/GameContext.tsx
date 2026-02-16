@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWalletClient, useWatchContractEvent, useWatchBlockNumber } from 'wagmi';
 import { createWalletClient, http, parseEther, formatEther, parseEventLogs, toHex, pad, type WalletClient } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { privateKeyToAccount, nonceManager } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
@@ -178,7 +178,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }));
     }, []);
 
-    // Функция для получения session wallet client (вызывается при каждой транзакции)
+    // === CACHED SESSION WALLET CLIENT: avoid recreating on every TX ===
+    // The WalletClient is cached in a ref keyed by privateKey+roomId.
+    // nonceManager from viem eliminates eth_getTransactionCount RPC per TX (~200ms saved).
+    const sessionClientRef = useRef<{ client: WalletClient; key: string } | null>(null);
+
     const getSessionWalletClient = useCallback(() => {
         const session = loadSession();
         if (!session || !session.registeredOnChain || Date.now() >= session.expiresAt) {
@@ -186,13 +190,31 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         try {
-            const account = privateKeyToAccount(session.privateKey);
-            console.log(`[Session Debug] Client created for ${account.address}`);
-            return createWalletClient({
+            // Cache key: if same private key + same room, reuse existing client
+            const cacheKey = `${session.privateKey}:${session.roomId}`;
+            if (sessionClientRef.current && sessionClientRef.current.key === cacheKey) {
+                return sessionClientRef.current.client;
+            }
+
+            // SPEED: nonceManager auto-manages nonces locally, eliminating
+            // eth_getTransactionCount RPC call before every writeContract (~200ms saved)
+            const account = privateKeyToAccount(session.privateKey, { nonceManager });
+            console.log(`[Session Debug] Creating new cached client for ${account.address}`);
+            const client = createWalletClient({
                 account,
                 chain: somniaChain,
-                transport: http(),
+                transport: http(somniaChain.rpcUrls.default.http[0], {
+                    // SPEED: Tighter timeout — Somnia RPCs respond in <500ms normally
+                    timeout: 8_000,
+                    // SPEED: Fewer retries for faster failure detection (queue will retry anyway)
+                    retryCount: 2,
+                    retryDelay: 300,
+                    // SPEED: Batch JSON-RPC — combine multiple calls into single HTTP request
+                    batch: { batchSize: 20, wait: 16 },
+                }),
             });
+            sessionClientRef.current = { client, key: cacheKey };
+            return client;
         } catch (err) {
             console.error("[Session Debug] Failed to create client:", err);
             return null;
@@ -354,37 +376,72 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // === АВТОМАТИЧЕСКИЙ РАСЧЕТ ГАЗА ===
         let calculatedGas = 1_000_000n; // Fallback на случай сбоя оценки
+        const txStartTime = performance.now();
 
-        try {
-            console.log(`[Gas] Estimating for ${functionName}...`);
+        // SPEED FIX: Use known gas price to skip eth_gasPrice RPC call
+        // Somnia testnet consistently reports 6 gwei — hardcode to save ~200ms per TX
+        const SOMNIA_GAS_PRICE = 6_000_000_000n; // 6 gwei
 
-            // 1. Спрашиваем у ноды, сколько нужно газа
-            const gasEstimate = await publicClient.estimateContractGas({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: functionName as any,
-                args: args as any,
-                account: accountToUse,
-            });
+        // SPEED FIX: Known gas limits for heavy functions — skip estimateContractGas
+        // These are battle-tested values, estimation adds 500-2000ms latency
+        const KNOWN_GAS_LIMITS: Record<string, bigint> = {
+            commitDeck: 2_000_000n,
+            revealDeck: 30_000_000n,
+            shareKeysToAll: 30_000_000n,
+            commitAndConfirmRole: 3_000_000n,
+            commitNightAction: 1_500_000n,
+            revealNightAction: 3_000_000n,
+            commitMafiaTarget: 1_500_000n,
+            revealMafiaTarget: 5_000_000n,
+            vote: 2_000_000n,
+            startVoting: 5_000_000n,
+            revealRole: 5_000_000n,
+            endGameZK: 80_000_000n,
+            forcePhaseTimeout: 10_000_000n,
+            sendMafiaMessage: 2_000_000n,
+            claimRefund: 3_000_000n,
+        };
 
-            // 2. Добавляем буфер безопасности +50% (x1.5)
-            calculatedGas = (gasEstimate * 150n) / 100n;
+        const knownLimit = KNOWN_GAS_LIMITS[functionName];
+        if (knownLimit && canUseSession) {
+            // SPEED: Skip gas estimation for session key TXs with known limits
+            calculatedGas = knownLimit;
+            console.log(`[Gas] Using known limit for ${functionName}: ${calculatedGas} (skipped estimation, saved ~500ms)`);
+        } else {
+            try {
+                console.log(`[Gas] Estimating for ${functionName}...`);
+                const estStart = performance.now();
 
-            // 3. Safety cap - if gas is crazy (revert symptom), don't scare MetaMask
-            const safetyCap = functionName === 'endGameZK' ? 80_000_000n : 30_000_000n;
-            if (calculatedGas > safetyCap) {
-                console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at ${safetyCap} to avoid balance error (likely contract revert).`);
-                calculatedGas = safetyCap;
-            }
+                // 1. Спрашиваем у ноды, сколько нужно газа
+                const gasEstimate = await publicClient.estimateContractGas({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: functionName as any,
+                    args: args as any,
+                    account: accountToUse,
+                });
 
-            console.log(`[Gas] Estimated for ${functionName}: ${gasEstimate}, With Buffer: ${calculatedGas}`);
-        } catch (e) {
-            console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
-            // Если оценка упала, используем высокий лимит для тяжелых функций
-            if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK', 'commitAndConfirmRole'].includes(functionName)) {
-                calculatedGas = functionName === 'endGameZK' ? 60_000_000n : 50_000_000n;
-            } else {
-                calculatedGas = 10_000_000n;
+                const estTime = Math.round(performance.now() - estStart);
+
+                // 2. Добавляем буфер безопасности +50% (x1.5)
+                calculatedGas = (gasEstimate * 150n) / 100n;
+
+                // 3. Safety cap - if gas is crazy (revert symptom), don't scare MetaMask
+                const safetyCap = functionName === 'endGameZK' ? 80_000_000n : 30_000_000n;
+                if (calculatedGas > safetyCap) {
+                    console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at ${safetyCap} to avoid balance error (likely contract revert).`);
+                    calculatedGas = safetyCap;
+                }
+
+                console.log(`[Gas] Estimated for ${functionName}: ${gasEstimate}, With Buffer: ${calculatedGas} (took ${estTime}ms)`);
+            } catch (e) {
+                console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
+                // Если оценка упала, используем высокий лимит для тяжелых функций
+                if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK', 'commitAndConfirmRole'].includes(functionName)) {
+                    calculatedGas = functionName === 'endGameZK' ? 60_000_000n : 50_000_000n;
+                } else {
+                    calculatedGas = 10_000_000n;
+                }
             }
         }
 
@@ -395,15 +452,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const attemptSend = async (retryCount: number = 0): Promise<`0x${string}`> => {
                 const MAX_NONCE_RETRIES = 3; // FIX #7: Multi-attempt nonce retry
                 try {
+                    const sendStart = performance.now();
                     const hash = await sessionClient.writeContract({
                         address: MAFIA_CONTRACT_ADDRESS,
                         abi: MAFIA_ABI as any,
                         functionName: functionName as any,
                         args: args as any,
+                        account: sessionClient.account!,
+                        chain: somniaChain,
                         gas: calculatedGas,
+                        gasPrice: SOMNIA_GAS_PRICE, // SPEED: Skip eth_gasPrice RPC call
                         type: 'legacy',
                     });
-                    console.log(`[Session TX] Success! Hash: ${hash}`);
+                    const sendTime = Math.round(performance.now() - sendStart);
+                    const totalTime = Math.round(performance.now() - txStartTime);
+                    console.log(`[Session TX] ✅ ${functionName} sent! Hash: ${hash} (send: ${sendTime}ms, total: ${totalTime}ms)`);
                     return hash;
                 } catch (err: any) {
                     const errMsg = err.message || '';
@@ -425,7 +488,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return enqueueTx(() => attemptSend(0));
         } else {
             // Fallback на основной кошелек (MetaMask)
-            console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas}`);
+            const totalTime = Math.round(performance.now() - txStartTime);
+            console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas} (prep took ${totalTime}ms)`);
             return writeContractAsync({
                 address: MAFIA_CONTRACT_ADDRESS,
                 abi: MAFIA_ABI,
@@ -651,32 +715,35 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fetchGameData = useCallback(async (roomId: bigint) => {
         if (isTestMode || !publicClient) return null;
         try {
-            // console.log(`[GameData] Fetching for room ${roomId}...`);
-
-            const data = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'getPlayers',
-                args: [roomId],
-                blockTag: 'latest', // Force latest state
-            }) as any[];
-
-            const roomData = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'getRoom',
-                args: [roomId],
+            // SPEED: Batch all 3 reads into a single multicall — saves 2 sequential RPC roundtrips (~400-800ms)
+            const [playersResult, roomResult, mafiaResult] = await publicClient.multicall({
+                contracts: [
+                    {
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'getPlayers',
+                        args: [roomId],
+                    },
+                    {
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'getRoom',
+                        args: [roomId],
+                    },
+                    {
+                        address: MAFIA_CONTRACT_ADDRESS,
+                        abi: MAFIA_ABI,
+                        functionName: 'getMafiaConsensus',
+                        args: [roomId],
+                    },
+                ],
+                allowFailure: false,
                 blockTag: 'latest',
-            }) as any;
+            }) as [any[], any, [number, number, string]];
 
-            // Fetch Mafia Consensus counts
-            const [mafiaCommitted, mafiaRevealed] = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'getMafiaConsensus',
-                args: [roomId],
-                blockTag: 'latest',
-            }) as [number, number, string];
+            const data = playersResult;
+            const roomData = roomResult;
+            const [mafiaCommitted, mafiaRevealed] = mafiaResult;
 
             // Parse Room Data
             let phase: GamePhase;
@@ -715,7 +782,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             };
         } catch (e: any) {
             console.error("[FetchGameData] Error:", e);
-            // Optionally add log to UI if persistent failure?
             return null;
         }
     }, [publicClient, isTestMode]);
@@ -963,6 +1029,26 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(`Creating room "${lobbyName}"...`, "info");
             const receipt = await publicClient?.waitForTransactionReceipt({ hash });
 
+            // DEBUG: Check deposit collection
+            try {
+                const depositLogs = parseEventLogs({
+                    abi: MAFIA_ABI,
+                    eventName: 'DepositCollected',
+                    logs: receipt.logs
+                });
+                if (depositLogs.length > 0) {
+                    const depArgs = (depositLogs[0] as any).args;
+                    console.log(`[Deposit Debug] DepositCollected event:`, {
+                        player: depArgs.player,
+                        amount: formatEther(depArgs.amount) + ' STT',
+                    });
+                } else {
+                    console.log(`[Deposit Debug] No DepositCollected event found in createAndJoin receipt — contract may not collect deposits.`);
+                }
+            } catch (e) {
+                console.warn('[Deposit Debug] Could not parse deposit events:', e);
+            }
+
             // Detect ACTUAL roomId from events (Avoid race conditions)
             let finalRoomId = BigInt(newRoomId);
             try {
@@ -1065,7 +1151,27 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 type: 'legacy',
             });
             // addLog("Joining with auto-sign...", "info");
-            await publicClient?.waitForTransactionReceipt({ hash });
+            const joinReceipt = await publicClient?.waitForTransactionReceipt({ hash });
+
+            // DEBUG: Check deposit collection on join
+            try {
+                const depositLogs = parseEventLogs({
+                    abi: MAFIA_ABI,
+                    eventName: 'DepositCollected',
+                    logs: joinReceipt.logs
+                });
+                if (depositLogs.length > 0) {
+                    const depArgs = (depositLogs[0] as any).args;
+                    console.log(`[Deposit Debug] joinRoom DepositCollected:`, {
+                        player: depArgs.player,
+                        amount: formatEther(depArgs.amount) + ' STT',
+                    });
+                } else {
+                    console.log(`[Deposit Debug] No DepositCollected in joinRoom receipt.`);
+                }
+            } catch (e) {
+                console.warn('[Deposit Debug] Could not parse join deposit events:', e);
+            }
 
             // 5. Mark session as registered
             markSessionRegistered();
@@ -1902,6 +2008,36 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await publicClient.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
 
+            // DEBUG: Check deposit status after game end
+            if (address) {
+                try {
+                    const [deposit, room] = await Promise.all([
+                        publicClient.readContract({
+                            address: MAFIA_CONTRACT_ADDRESS,
+                            abi: MAFIA_ABI,
+                            functionName: 'getPlayerDeposit',
+                            args: [currentRoomId, address],
+                        }) as Promise<bigint>,
+                        publicClient.readContract({
+                            address: MAFIA_CONTRACT_ADDRESS,
+                            abi: MAFIA_ABI,
+                            functionName: 'getRoom',
+                            args: [currentRoomId],
+                        }) as Promise<any>,
+                    ]);
+                    const depositPool = Array.isArray(room) ? room[room.length - 2] : room.depositPool;
+                    const depositPerPlayer = Array.isArray(room) ? room[room.length - 1] : room.depositPerPlayer;
+                    console.log(`[Deposit Debug] After endGameZK:`, {
+                        myDeposit: formatEther(deposit) + ' STT',
+                        depositPool: formatEther(depositPool) + ' STT',
+                        depositPerPlayer: formatEther(depositPerPlayer) + ' STT',
+                        canClaimRefund: deposit > 0n,
+                    });
+                } catch (depErr) {
+                    console.warn('[Deposit Debug] Failed to check deposit after endGameZK:', depErr);
+                }
+            }
+
             // Auto-reveal my role on-chain for trustless verification
             await revealMyRoleAfterGameEnd();
 
@@ -2016,6 +2152,36 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     addLog("Game ended automatically via Server ZK!", "phase");
                     await refreshPlayersList(roomId);
 
+                    // DEBUG: Check deposit status after AutoWin endGame
+                    if (address) {
+                        try {
+                            const [deposit, room] = await Promise.all([
+                                publicClient.readContract({
+                                    address: MAFIA_CONTRACT_ADDRESS,
+                                    abi: MAFIA_ABI,
+                                    functionName: 'getPlayerDeposit',
+                                    args: [roomId, address],
+                                }) as Promise<bigint>,
+                                publicClient.readContract({
+                                    address: MAFIA_CONTRACT_ADDRESS,
+                                    abi: MAFIA_ABI,
+                                    functionName: 'getRoom',
+                                    args: [roomId],
+                                }) as Promise<any>,
+                            ]);
+                            const depositPool = Array.isArray(room) ? room[room.length - 2] : room.depositPool;
+                            const depositPerPlayer = Array.isArray(room) ? room[room.length - 1] : room.depositPerPlayer;
+                            console.log(`[Deposit Debug] After AutoWin endGameZK:`, {
+                                myDeposit: formatEther(deposit) + ' STT',
+                                depositPool: formatEther(depositPool) + ' STT',
+                                depositPerPlayer: formatEther(depositPerPlayer) + ' STT',
+                                canClaimRefund: deposit > 0n,
+                            });
+                        } catch (depErr) {
+                            console.warn('[Deposit Debug] Failed to check deposit after AutoWin:', depErr);
+                        }
+                    }
+
                     // Auto-reveal my role on-chain for trustless verification
                     // Only after successful endGame — if TX failed, game is still active
                     try {
@@ -2092,34 +2258,83 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         setIsTxPending(true);
         try {
-            // Check deposit before claiming
+            // Check deposit + balance before claiming
             if (address) {
                 try {
-                    const deposit = await publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MAFIA_ABI,
-                        functionName: 'getPlayerDeposit',
-                        args: [currentRoomId, address],
-                    }) as bigint;
-                    console.log(`[Refund] Player deposit for room ${currentRoomId}: ${formatEther(deposit)} STT`);
+                    const [deposit, balanceBefore, room] = await Promise.all([
+                        publicClient.readContract({
+                            address: MAFIA_CONTRACT_ADDRESS,
+                            abi: MAFIA_ABI,
+                            functionName: 'getPlayerDeposit',
+                            args: [currentRoomId, address],
+                        }) as Promise<bigint>,
+                        publicClient.getBalance({ address }),
+                        publicClient.readContract({
+                            address: MAFIA_CONTRACT_ADDRESS,
+                            abi: MAFIA_ABI,
+                            functionName: 'getRoom',
+                            args: [currentRoomId],
+                        }) as Promise<any>,
+                    ]);
+
+                    const depositPool = Array.isArray(room) ? room[room.length - 2] : room.depositPool;
+                    const phase = Number(Array.isArray(room) ? room[3] : room.phase);
+                    
+                    console.log(`[Deposit Debug] Before claimRefund:`, {
+                        roomId: currentRoomId.toString(),
+                        phase,
+                        myDeposit: formatEther(deposit) + ' STT',
+                        depositPool: formatEther(depositPool) + ' STT',
+                        myBalance: formatEther(balanceBefore) + ' STT',
+                        contractAddress: MAFIA_CONTRACT_ADDRESS,
+                    });
+
                     if (deposit === 0n) {
                         addLog("No deposit to refund (already claimed or not deposited).", "info");
+                        console.log(`[Deposit Debug] Deposit is 0 — either already refunded, auto-refunded by contract, or never collected.`);
                         setIsTxPending(false);
                         return;
                     }
+
+                    addLog(`Claiming deposit refund (${formatEther(deposit)} STT)...`, "info");
                 } catch (e) {
-                    console.warn("[Refund] Could not check deposit, attempting claim anyway:", e);
+                    console.warn("[Deposit Debug] Could not check deposit, attempting claim anyway:", e);
+                    addLog("Claiming deposit refund...", "info");
                 }
             }
 
-            addLog("Claiming deposit refund...", "info");
             const hash = await sendGameTransaction('claimRefund', [currentRoomId], false);
             await publicClient.waitForTransactionReceipt({ hash });
+
+            // Check balance after refund
+            if (address) {
+                try {
+                    const [balanceAfter, depositAfter] = await Promise.all([
+                        publicClient.getBalance({ address }),
+                        publicClient.readContract({
+                            address: MAFIA_CONTRACT_ADDRESS,
+                            abi: MAFIA_ABI,
+                            functionName: 'getPlayerDeposit',
+                            args: [currentRoomId, address],
+                        }) as Promise<bigint>,
+                    ]);
+                    console.log(`[Deposit Debug] After claimRefund:`, {
+                        myBalance: formatEther(balanceAfter) + ' STT',
+                        depositRemaining: formatEther(depositAfter) + ' STT',
+                        refundSuccess: depositAfter === 0n,
+                    });
+                } catch (e) {
+                    console.warn("[Deposit Debug] Could not verify post-refund state:", e);
+                }
+            }
+
             addLog("Deposit refunded successfully!", "success");
         } catch (e: any) {
-            console.error("[Refund] Failed:", e);
+            console.error("[Deposit Debug] claimRefund FAILED:", e);
             if (e.message?.includes("DepositAlreadyRefunded")) {
                 addLog("Deposit was already refunded.", "info");
+            } else if (e.message?.includes("WrongPhase")) {
+                addLog("Cannot claim refund yet — game still in progress.", "danger");
             } else {
                 addLog(`Refund failed: ${e.shortMessage || e.message}`, "danger");
             }
