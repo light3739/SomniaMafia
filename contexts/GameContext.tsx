@@ -1765,8 +1765,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             const data = await response.json();
-            // Convert numerical role to Role enum
-            const role = ShuffleService.roleNumberToRole(data.role.toString(), currentRoomId?.toString());
+            // ServerStore stores raw role numbers (1=MAFIA, 2=DOCTOR, 3=DETECTIVE, 4=CIVILIAN)
+            // Do NOT use ShuffleService.roleNumberToRole — that expects card values with per-room offset
+            const rawRole = Number(data.role);
+            let role: Role;
+            switch (rawRole) {
+                case 1: role = Role.MAFIA; break;
+                case 2: role = Role.DOCTOR; break;
+                case 3: role = Role.DETECTIVE; break;
+                case 4: role = Role.CIVILIAN; break;
+                default:
+                    console.warn(`[Investigation API] Unexpected raw role: ${rawRole}`);
+                    role = Role.UNKNOWN;
+            }
 
             return {
                 role,
