@@ -473,7 +473,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
 
         const checkTimeout = async () => {
             if (timeoutTriggeredRef.current) return;
-            
+
             const now = Math.floor(Date.now() / 1000);
             const secondsPastDeadline = now - deadline;
 
