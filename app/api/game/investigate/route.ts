@@ -38,22 +38,60 @@ export async function POST(request: Request) {
         // If signed by session key, verify it's registered for the detective's main wallet
         if (actualSigner.toLowerCase() !== detectiveAddress.toLowerCase()) {
             try {
-                const mainWallet = await publicClient.readContract({
+                // Approach 1: Use sessionKeys(detectiveAddress) to get the registered session key
+                // sessionKeys returns a struct: { sessionAddress, expiresAt, roomId, isActive }
+                const sessionKeyData = await publicClient.readContract({
                     address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
                     abi: MAFIA_ABI,
-                    functionName: 'sessionToMain',
-                    args: [actualSigner as `0x${string}`],
-                }) as string;
+                    functionName: 'sessionKeys',
+                    args: [detectiveAddress as `0x${string}`],
+                }) as any;
 
-                if (mainWallet.toLowerCase() !== detectiveAddress.toLowerCase()) {
+                console.log(`[API/Investigate] sessionKeys(${detectiveAddress}):`, JSON.stringify(sessionKeyData, (_, v) => typeof v === 'bigint' ? v.toString() : v));
+
+                // Extract sessionAddress from the struct (could be array or object)
+                const registeredSession = Array.isArray(sessionKeyData)
+                    ? sessionKeyData[0]  // First element is sessionAddress
+                    : sessionKeyData.sessionAddress;
+
+                const isActive = Array.isArray(sessionKeyData)
+                    ? sessionKeyData[3]  // Fourth element is isActive
+                    : sessionKeyData.isActive;
+
+                if (!registeredSession || registeredSession.toLowerCase() !== actualSigner.toLowerCase()) {
+                    console.error(`[API/Investigate] Session key mismatch: registered=${registeredSession}, actual=${actualSigner}`);
                     return NextResponse.json({
-                        error: 'Session key is not registered for this detective'
+                        error: 'Session key is not registered for this detective',
+                        debug: { registeredSession, actualSigner, detectiveAddress }
                     }, { status: 403 });
                 }
+
+                if (!isActive) {
+                    console.warn(`[API/Investigate] Session key ${actualSigner} is inactive/expired`);
+                }
+
                 console.log(`[API/Investigate] Verified via session key ${actualSigner} for detective ${detectiveAddress}`);
-            } catch (e) {
-                console.error('[API/Investigate] Failed to verify session key:', e);
-                return NextResponse.json({ error: 'Failed to verify session key ownership' }, { status: 500 });
+            } catch (e: any) {
+                console.error('[API/Investigate] Failed to verify session key:', e?.message || e);
+                // Fallback: try sessionToMain if available
+                try {
+                    const mainWallet = await publicClient.readContract({
+                        address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+                        abi: MAFIA_ABI,
+                        functionName: 'sessionToMain',
+                        args: [actualSigner as `0x${string}`],
+                    }) as string;
+
+                    if (mainWallet.toLowerCase() !== detectiveAddress.toLowerCase()) {
+                        return NextResponse.json({
+                            error: 'Session key is not registered for this detective (fallback)',
+                        }, { status: 403 });
+                    }
+                    console.log(`[API/Investigate] Verified via sessionToMain fallback`);
+                } catch (e2: any) {
+                    console.error('[API/Investigate] sessionToMain fallback also failed:', e2?.message || e2);
+                    return NextResponse.json({ error: 'Failed to verify session key ownership' }, { status: 500 });
+                }
             }
         }
 
