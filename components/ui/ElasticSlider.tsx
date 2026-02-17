@@ -57,6 +57,10 @@ export default function ElasticSlider({
         return isDragging ? 0.8 : 1;
     });
 
+    // Store onChange in ref to avoid recreating updateValue on every render
+    const onChangeRef = useRef(onChange);
+    useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+
     // Update value based on mouse X position relative to container
     const updateValue = React.useCallback((clientX: number) => {
         if (containerRef.current) {
@@ -80,9 +84,9 @@ export default function ElasticSlider({
             const finalPercent = ((finalValue - min) / (max - min)) * 100;
             x.set(finalPercent);
 
-            if (onChange) onChange(finalValue);
+            if (onChangeRef.current) onChangeRef.current(finalValue);
         }
-    }, [max, min, step, onChange, x]);
+    }, [max, min, step, x]);
 
     // Global drag listeners
     useEffect(() => {
@@ -108,13 +112,17 @@ export default function ElasticSlider({
         }
     }, [isDragging, updateValue]);
 
-    // Construct initial position
+    // Construct initial position (only on mount)
+    const mountedRef = useRef(false);
     useEffect(() => {
+        if (mountedRef.current) return; // Skip re-runs after mount
+        mountedRef.current = true;
         const val = startingValue ?? defaultValue;
-        const initialPercentage = ((val - min) / (max - min)) * 100;
-        x.set(initialPercentage);
+        const pct = ((val - min) / (max - min)) * 100;
+        x.set(pct);
         setValue(val);
-    }, [startingValue, defaultValue, min, max, x]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
         <div
