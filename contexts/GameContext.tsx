@@ -879,9 +879,35 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const winner = checkWinCondition(formattedPlayers, phase);
             let finalPhase = phase;
+            let resolvedWinner = winner;
+
             if (winner && phase !== GamePhase.ENDED) {
                 console.log('[Win Condition Calculated Local]', winner);
                 finalPhase = GamePhase.ENDED;
+            }
+
+            // FIX: If contract says ENDED but we can't determine winner locally
+            // (e.g. other players' roles are UNKNOWN), trust the contract phase
+            // and try to determine winner from alive counts
+            if (phase === GamePhase.ENDED && !resolvedWinner) {
+                // Check if we already have a winner from a GameEnded event
+                if (prev.winner) {
+                    resolvedWinner = prev.winner;
+                } else {
+                    // Fallback: derive winner from alive mafia count
+                    const aliveMafia = formattedPlayers.filter(p => p.isAlive && p.role === Role.MAFIA).length;
+                    const aliveTotal = formattedPlayers.filter(p => p.isAlive).length;
+                    const aliveTown = aliveTotal - aliveMafia;
+                    // If we can tell (no unknowns among alive or simple heuristic)
+                    if (aliveMafia === 0) {
+                        resolvedWinner = 'TOWN';
+                    } else if (aliveMafia >= aliveTown) {
+                        resolvedWinner = 'MAFIA';
+                    }
+                    if (resolvedWinner) {
+                        console.log('[Win] Derived winner from contract ENDED phase:', resolvedWinner);
+                    }
+                }
             }
 
             return {
@@ -893,7 +919,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 mafiaCommittedCount,
                 mafiaRevealedCount,
                 phaseDeadline,
-                winner: winner || prev.winner
+                winner: resolvedWinner || prev.winner
             };
         });
         return gameData;
@@ -2737,9 +2763,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         break;
                     }
 
-                    case 'GameEnded':
-                        // Handle game end
+                    case 'GameEnded': {
+                        const winCondition = args.winCondition as string || '';
+                        const gameWinner: 'MAFIA' | 'TOWN' = winCondition.toLowerCase().includes('mafia') ? 'MAFIA' : 'TOWN';
+                        console.log(`[Event] GameEnded! Winner: ${gameWinner}, condition: ${winCondition}`);
+                        addLog(`Game Over! ${gameWinner === 'MAFIA' ? '🔪 Mafia wins!' : '🏘️ Town wins!'}`, 'phase');
+                        setGameState(prev => ({
+                            ...prev,
+                            phase: GamePhase.ENDED,
+                            winner: gameWinner
+                        }));
                         break;
+                    }
 
                     case 'VoteCast':
                         try {
