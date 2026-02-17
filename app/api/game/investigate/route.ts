@@ -13,7 +13,7 @@ const ACTION_CHECK = 3;
 
 export async function POST(request: Request) {
     try {
-        const { roomId: rawRoomId, detectiveAddress, targetAddress, signature, sessionKeyAddress } = await request.json();
+        const { roomId: rawRoomId, detectiveAddress, targetAddress, signature, signerAddress } = await request.json();
 
         if (!rawRoomId || !detectiveAddress || !targetAddress || !signature) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -22,27 +22,39 @@ export async function POST(request: Request) {
         const roomId = BigInt(rawRoomId);
 
         // 0. Verify the caller is actually the detective (signature check)
+        // Support both main wallet and session key signatures
         const message = `investigate:${rawRoomId}:${targetAddress}`;
-        let valid = await verifyMessage({
-            address: detectiveAddress as `0x${string}`,
+        const actualSigner = signerAddress || detectiveAddress;
+
+        const valid = await verifyMessage({
+            address: actualSigner as `0x${string}`,
             message,
             signature: signature as `0x${string}`,
         });
-
-        // If main wallet verification fails and session key provided, verify against session key
-        if (!valid && sessionKeyAddress) {
-            valid = await verifyMessage({
-                address: sessionKeyAddress as `0x${string}`,
-                message,
-                signature: signature as `0x${string}`,
-            });
-            if (valid) {
-                console.log(`[Investigate] Verified via session key ${sessionKeyAddress} for detective ${detectiveAddress}`);
-            }
-        }
-
         if (!valid) {
             return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+        }
+
+        // If signed by session key, verify it's registered for the detective's main wallet
+        if (actualSigner.toLowerCase() !== detectiveAddress.toLowerCase()) {
+            try {
+                const mainWallet = await publicClient.readContract({
+                    address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+                    abi: MAFIA_ABI,
+                    functionName: 'sessionToMain',
+                    args: [actualSigner as `0x${string}`],
+                }) as string;
+
+                if (mainWallet.toLowerCase() !== detectiveAddress.toLowerCase()) {
+                    return NextResponse.json({
+                        error: 'Session key is not registered for this detective'
+                    }, { status: 403 });
+                }
+                console.log(`[API/Investigate] Verified via session key ${actualSigner} for detective ${detectiveAddress}`);
+            } catch (e) {
+                console.error('[API/Investigate] Failed to verify session key:', e);
+                return NextResponse.json({ error: 'Failed to verify session key ownership' }, { status: 500 });
+            }
         }
 
         console.log(`[API/Investigate] Detective ${detectiveAddress} checking ${targetAddress} in Room #${roomId}`);
@@ -51,15 +63,15 @@ export async function POST(request: Request) {
         // FIX #20: Search in multiple block ranges to handle night ending between reveal and API call
         // Somnia produces blocks fast, so we search in chunks of 990 blocks
         const currentBlock = await publicClient.getBlockNumber();
-        
+
         let revealEvent = null;
         const CHUNK_SIZE = 990n;
         const MAX_LOOKBACK = 5000n; // Search up to 5000 blocks back
-        
+
         for (let offset = 0n; offset < MAX_LOOKBACK && !revealEvent; offset += CHUNK_SIZE) {
             const toBlock = currentBlock - offset;
             const fromBlock = toBlock > CHUNK_SIZE ? toBlock - CHUNK_SIZE : 0n;
-            
+
             try {
                 const logs = await publicClient.getContractEvents({
                     address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
