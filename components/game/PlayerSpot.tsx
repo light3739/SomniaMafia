@@ -49,15 +49,23 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
         setVolume(newVolume);
         // Try to find LiveKit audio element for this player
         // MicButton creates elements with id="audio-{identity}" where identity matches userName
-        const audioEl = document.getElementById(`audio-${player.name}`) as HTMLAudioElement;
+        let audioEl = document.getElementById(`audio-${player.name}`) as HTMLAudioElement | null;
+
+        // Fallback: try finding by address if identity strategy changes
+        if (!audioEl) {
+            audioEl = document.getElementById(`audio-${player.address}`) as HTMLAudioElement | null;
+        }
+
+        // Fallback: search by data-participant attribute
+        if (!audioEl) {
+            audioEl = document.querySelector(`audio[data-participant="${player.name}"]`) as HTMLAudioElement | null;
+        }
+
         if (audioEl) {
             audioEl.volume = newVolume;
+            console.log(`[PlayerSpot] Volume set to ${newVolume} for ${player.name}`);
         } else {
-            // Fallback: try finding by address if identity strategy changes
-            const audioElByAddr = document.getElementById(`audio-${player.address}`) as HTMLAudioElement;
-            if (audioElByAddr) {
-                audioElByAddr.volume = newVolume;
-            }
+            console.log(`[PlayerSpot] No audio element found for ${player.name} (address: ${player.address})`);
         }
     };
 
@@ -377,7 +385,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
 
                                                 <div className="flex-1 w-full">
                                                     <ElasticSlider
-                                                        startingValue={volume}
+                                                        defaultValue={1}
                                                         onChange={handleVolumeChange}
                                                         min={0}
                                                         max={1}
