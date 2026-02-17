@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { BackButton } from './ui/BackButton';
@@ -1711,6 +1711,93 @@ const DiscussionChatTestWrapper: React.FC = () => {
     );
 };
 
+// Wrapper for Game Feed Simulation
+const GameFeedSimulationTest: React.FC = () => {
+    const { setGameState, addLog } = useGameContext();
+    const [isSimulating, setIsSimulating] = useState(false);
+
+    // Initial setup
+    useEffect(() => {
+        setGameState({
+            phase: GamePhase.DAY,
+            dayCount: 1,
+            myPlayerId: TEST_ADDRESS,
+            players: generateMock16Players(TEST_ADDRESS),
+            logs: [], // Start empty
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: 0,
+            winner: null,
+            mafiaMessages: []
+        });
+    }, [setGameState]);
+
+    const simulateGameFeed = useCallback(async () => {
+        if (isSimulating) return;
+        setIsSimulating(true);
+
+        const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+        // Clear logs first
+        setGameState(prev => ({ ...prev, logs: [] }));
+        await delay(100);
+
+        addLog("Game Started. Roles Assigned.", "success");
+        await delay(800);
+        addLog("Night Phase Started.", "night");
+        await delay(1000);
+        addLog("Mafia discuss strategy.", "danger");
+        await delay(1500);
+        addLog("Day Phase Started.", "phase");
+        await delay(1000);
+        addLog("Morning Announcement: No one died.", "info");
+        await delay(1200);
+        addLog("Discussion Phase started.", "info");
+        await delay(800);
+        addLog("Player 1 is now speaking.", "info");
+        await delay(1500);
+        addLog("Player 2 is now speaking.", "info");
+        await delay(1500);
+        addLog("Voting Phase Started. Quorum needed: 7.", "warning");
+        await delay(1200);
+        addLog("Player 3 voted for Player 4.");
+        await delay(600);
+        addLog("Player 5 voted for Player 4.");
+        await delay(1000);
+        addLog("Player 4 eliminated.", "danger");
+        await delay(1500);
+        addLog("Night Phase Started.", "night");
+        await delay(1200);
+        addLog("Mafia targeted Player 6.", "danger");
+        await delay(1000);
+        addLog("Doctor saved Player 6.", "success");
+        await delay(1500);
+        addLog("Day Phase Started.", "phase");
+        await delay(1000);
+        addLog("Morning Announcement: Player 6 was attacked but saved!", "success");
+
+        setIsSimulating(false);
+    }, [addLog, setGameState, isSimulating]);
+
+    return (
+        <div className="w-full h-full relative">
+            <div className="fixed top-20 right-4 z-[1000] space-y-2">
+                <Button
+                    onClick={simulateGameFeed}
+                    disabled={isSimulating}
+                    isLoading={isSimulating}
+                    variant="outline-gold"
+                    className="bg-purple-900/80 border-purple-500/50 text-purple-200"
+                >
+                    {isSimulating ? 'Simulating...' : '▶ Start Feed Sim'}
+                </Button>
+            </div>
+            <GameLayout />
+        </div>
+    );
+};
+
 const TestPage: React.FC = () => {
     const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
@@ -1750,6 +1837,7 @@ const TestPage: React.FC = () => {
         { name: 'Voting Phase', group: 'Game Phases', component: <VotingPhaseTestWrapper /> },
         { name: 'Voting Visualization', group: 'Game Phases', component: <VotingVisualizationTestWrapper /> },
         { name: 'Voting Results', group: 'Game Phases', component: <PostVotingTransitionTestWrapper /> },
+        { name: 'Game Feed Simulation', group: 'Game Phases', component: <GameFeedSimulationTest /> },
 
         // Pages
         { name: 'MainPage', group: 'Pages', component: <MainPage onStart={() => console.log('Start')} /> },

@@ -7,7 +7,7 @@ import { privateKeyToAccount, nonceManager } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
-import { loadSession, createNewSession, markSessionRegistered } from '../services/sessionKeyService';
+import { loadSession, createNewSession, markSessionRegistered, getSessionAccount } from '../services/sessionKeyService';
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
 
@@ -290,7 +290,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     try {
                         localStorage.setItem(`secret_synced_${roomId}_${playerAddress.toLowerCase()}`, 'true');
                         localStorage.removeItem(`pending_sync_${roomId}_${playerAddress.toLowerCase()}`);
-                    } catch (_) {}
+                    } catch (_) { }
                     return; // success
                 } catch (err) {
                     console.warn(`[SyncSecret] Attempt ${attempt}/${MAX_RETRIES} failed:`, err);
@@ -1564,7 +1564,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Non-blocking server sync attempt
                 if (address) {
                     syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse)
-                        .catch(_ => {});
+                        .catch(_ => { });
                 }
                 return; // Swallow the error — role is done
             }
@@ -1722,28 +1722,29 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return { role: Role.CIVILIAN, isMafia: false };
         }
         if (!currentRoomId) return { role: Role.UNKNOWN, isMafia: false };
-        if (!walletClient) return { role: Role.UNKNOWN, isMafia: false };
 
         try {
             console.log(`[Investigation API] Fetching result for ${detective} -> ${target}`);
-            // Sign message to prove we are the detective
+            // Sign message using session key (no MetaMask popup) or fallback to main wallet
             const message = `investigate:${currentRoomId.toString()}:${target}`;
-            let signature: `0x${string}`;
-            let sessionKeyAddr: string | undefined;
 
-            // FIX: Use session key to sign (no MetaMask popup)
-            const session = loadSession();
-            if (session && session.registeredOnChain && Date.now() < session.expiresAt &&
-                session.mainWallet.toLowerCase() === detective.toLowerCase()) {
-                const sessionAccount = privateKeyToAccount(session.privateKey);
-                signature = await sessionAccount.signMessage({ message });
-                sessionKeyAddr = sessionAccount.address;
-                console.log('[Investigation] Signed with session key (no popup)');
+            let signature: string;
+            let signerAddress: string;
+
+            const sessionAccount = getSessionAccount();
+            if (sessionAccount) {
+                // Use session key — instant, no popup
+                signature = await sessionAccount.signMessage!({ message });
+                signerAddress = sessionAccount.address;
+                console.log(`[Investigation API] Signed with session key: ${signerAddress}`);
             } else if (walletClient) {
+                // Fallback to main wallet (MetaMask popup)
                 signature = await walletClient.signMessage({ message });
-                console.log('[Investigation] Signed with main wallet (MetaMask)');
+                signerAddress = detective;
+                console.log(`[Investigation API] Signed with main wallet: ${signerAddress}`);
             } else {
-                throw new Error('No wallet available for signing');
+                console.error('[Investigation API] No signer available');
+                return { role: Role.UNKNOWN, isMafia: false };
             }
 
             const response = await fetch('/api/game/investigate', {
@@ -1754,7 +1755,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     detectiveAddress: detective,
                     targetAddress: target,
                     signature,
-                    sessionKeyAddress: sessionKeyAddr,
+                    signerAddress // session key or main wallet address
                 })
             });
 
@@ -2404,7 +2405,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     const depositPool = Array.isArray(room) ? room[room.length - 2] : room.depositPool;
                     const phase = Number(Array.isArray(room) ? room[3] : room.phase);
-                    
+
                     console.log(`[Deposit Debug] Before claimRefund:`, {
                         roomId: currentRoomId.toString(),
                         phase,
