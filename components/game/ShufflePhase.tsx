@@ -138,40 +138,11 @@ export const ShufflePhase: React.FC = React.memo(() => {
 
             if (isNaN(currentIndex)) currentIndex = 0;
 
-            // 2. ЧИТАЕМ КОЛОДУ ЧЕРЕЗ СОБЫТИЯ (EVENTS), А НЕ ЧЕРЕЗ getDeck
-            // Это решает проблему с зависанием чтения огромного массива
+            // 2. READ DECK: Try getDeck first (always returns current state), then events as fallback
             let deck: string[] = [];
 
             if (currentIndex > 0 || revealedCount > 0) {
-                try {
-                    // Get current block number and limit range to 1000 blocks (Somnia RPC limit)
-                    const currentBlock = await publicClient.getBlockNumber();
-                    const fromBlock = currentBlock > 1000n ? currentBlock - 1000n : 0n;
-
-                    // Ищем все события DeckRevealed для этой комнаты
-                    const logs = await publicClient.getContractEvents({
-                        address: MAFIA_CONTRACT_ADDRESS,
-                        abi: MAFIA_ABI,
-                        eventName: 'DeckRevealed',
-                        args: { roomId: currentRoomId } as any,
-                        fromBlock: fromBlock
-                    });
-
-                    // Если события есть, берем колоду из самого последнего
-                    if (logs && logs.length > 0) {
-                        const lastLog = logs[logs.length - 1];
-                        // @ts-ignore
-                        deck = (lastLog.args as any).deck as string[];
-                        console.log(`[Event Sync] Loaded deck with ${deck.length} cards from logs`);
-                    }
-                } catch (err) {
-                    // Silently fall through to getDeck fallback
-                    console.warn("[Event Sync] Events not available, using direct read");
-                }
-            }
-
-            // Fallback: Если событий не нашли (или RPC глючит), пробуем прямой метод, но он может упасть
-            if (deck.length === 0 && (currentIndex > 0 || revealedCount > 0)) {
+                // PRIMARY: Direct contract read (most reliable - always returns current deck)
                 try {
                     deck = await publicClient.readContract({
                         address: MAFIA_CONTRACT_ADDRESS,
@@ -179,9 +150,36 @@ export const ShufflePhase: React.FC = React.memo(() => {
                         functionName: 'getDeck',
                         args: [currentRoomId],
                     }) as string[];
-                    console.log(`[Direct Sync] Loaded deck with ${deck.length} cards`);
+                    if (deck.length > 0) {
+                        console.log(`[Direct Sync] Loaded deck with ${deck.length} cards`);
+                    }
                 } catch (e) {
-                    console.warn("Direct getDeck failed, waiting for events...");
+                    console.warn("[Direct Sync] getDeck failed, trying events...");
+                }
+
+                // FALLBACK: Read from DeckRevealed events (10000 blocks ≈ 16 min on Somnia)
+                if (deck.length === 0) {
+                    try {
+                        const currentBlock = await publicClient.getBlockNumber();
+                        const fromBlock = currentBlock > 10000n ? currentBlock - 10000n : 0n;
+
+                        const logs = await publicClient.getContractEvents({
+                            address: MAFIA_CONTRACT_ADDRESS,
+                            abi: MAFIA_ABI,
+                            eventName: 'DeckRevealed',
+                            args: { roomId: currentRoomId } as any,
+                            fromBlock: fromBlock
+                        });
+
+                        if (logs && logs.length > 0) {
+                            const lastLog = logs[logs.length - 1];
+                            // @ts-ignore
+                            deck = (lastLog.args as any).deck as string[];
+                            console.log(`[Event Sync] Loaded deck with ${deck.length} cards from logs`);
+                        }
+                    } catch (err) {
+                        console.warn("[Event Sync] Events not available either");
+                    }
                 }
             }
 
@@ -192,9 +190,14 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 isMyTurnFromContract = currentShuffler.address.toLowerCase() === myPlayer.address.toLowerCase();
             }
 
+            // Debug: Log shuffle sync state
+            if (isMyTurnFromContract || deck.length === 0) {
+                console.log(`[Shuffle Sync] idx=${currentIndex}, deck=${deck.length} cards, isMyTurn=${isMyTurnFromContract}, shuffler=${currentShuffler?.name || '?'}`);
+            }
+
             // Если я не первый игрок, но колоды нет — блокируем ход
             if (isMyTurnFromContract && currentIndex > 0 && deck.length === 0) {
-                console.warn("My turn, but deck not synced yet.");
+                console.warn("[Shuffle Sync] ⚠️ My turn but deck is EMPTY! Blocking until deck syncs.");
                 isMyTurnFromContract = false;
             }
 
