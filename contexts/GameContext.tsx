@@ -1608,7 +1608,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('startVoting', [currentRoomId]);
-            addLog("Voting phase started!", "phase");
+            // Log comes from VotingStarted event handler (no duplicate)
             // OPTIMISTIC: Release spinner immediately
             setIsTxPending(false);
             confirmInBackground(hash, 'startVoting');
