@@ -205,8 +205,13 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 // STICKY MAX: Never allow index to go backwards
                 const safeIndex = Math.max(prev.currentShufflerIndex, currentIndex);
 
-                // If we already revealed locally, don't let RPC overwrite it with stale 'revealed=false'
+                // If we already revealed locally, don't let RPC overwrite it
                 if (prev.hasRevealed) {
+                    return { ...prev, currentShufflerIndex: safeIndex, deck: deck.length > 0 ? deck : prev.deck };
+                }
+
+                // If we're mid-commit+reveal, don't overwrite local state
+                if (prev.hasCommitted) {
                     return { ...prev, currentShufflerIndex: safeIndex, deck: deck.length > 0 ? deck : prev.deck };
                 }
 
@@ -275,7 +280,6 @@ export const ShufflePhase: React.FC = React.memo(() => {
             shuffleService.generateKeys(); // Generate my E/D keys
 
             // V4 Fix: Identify Active Slots (Alive players)
-            // Only these slots should participate in role shuffling
             const activeIndices = gameState.players
                 .map((p, i) => p.isAlive ? i : -1)
                 .filter(i => i !== -1);
@@ -283,26 +287,21 @@ export const ShufflePhase: React.FC = React.memo(() => {
             let newDeck: string[];
 
             if (shuffleState.currentShufflerIndex === 0) {
-                // I am the host (first player) - Generate fresh deck with proper role placement
+                // I am the host (first player) - Generate fresh deck
                 if (shuffleState.deck.length > 0) {
                     console.warn("Host sees existing deck, resetting...");
                 }
-
-                // Use new distributed generation
                 const initialDeck = ShuffleService.generateDistributedDeck(
                     gameState.players.map(p => ({ isAlive: p.isAlive })),
                     currentRoomId?.toString()
                 );
-                // Even though generateDistributedDeck shuffles internally, we do one more shuffle pass
-                // strictly on active indices to ensure consistency with the pipeline
                 const shuffled = shuffleService.shuffleSubarray(initialDeck, activeIndices);
                 newDeck = shuffleService.encryptDeck(shuffled);
             } else {
-                // I am a subsequent player - Shuffle existing deck BUT ONLY ACTIVE SLOTS
+                // Subsequent player - Shuffle existing deck
                 if (shuffleState.deck.length === 0) {
                     throw new Error("Deck is empty! Sync error.");
                 }
-                // Use shuffleSubarray to avoid moving Mafia card to a dead slot
                 const shuffled = shuffleService.shuffleSubarray(shuffleState.deck, activeIndices);
                 newDeck = shuffleService.encryptDeck(shuffled);
             }
@@ -310,28 +309,20 @@ export const ShufflePhase: React.FC = React.memo(() => {
             const salt = ShuffleService.generateSalt();
             const deckHash = ShuffleService.createDeckCommitHash(newDeck, salt);
 
-            // V4 Fix: Save state BEFORE transaction to prevent data loss
+            // Save state BEFORE transaction to prevent data loss
             localStorage.setItem(SHUFFLE_COMMIT_KEY, JSON.stringify({
-                deck: newDeck,
-                salt: salt,
-                hasCommitted: false // Not yet committed
+                deck: newDeck, salt: salt, hasCommitted: false
             }));
-
-            // V4 Fix: Save keys immediately
             shuffleService.saveKeys(currentRoomId.toString(), myPlayer.address);
 
-            // addLog("Committing deck hash...", "info");
+            // === STEP 1: COMMIT ===
+            console.log("[Shuffle] Step 1/2: Committing deck hash...");
             await commitDeckOnChain(deckHash);
 
-            // Update to committed=true
+            // Update localStorage
             localStorage.setItem(SHUFFLE_COMMIT_KEY, JSON.stringify({
-                deck: newDeck,
-                salt: salt,
-                hasCommitted: true
+                deck: newDeck, salt: salt, hasCommitted: true
             }));
-
-            setPendingDeck(newDeck);
-            setPendingSalt(salt);
 
             setShuffleState(prev => ({
                 ...prev,
@@ -339,22 +330,45 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 isMyTurn: true
             }));
 
-            // addLog("Commit successful! Click Reveal to complete.", "success");
+            console.log("[Shuffle] Commit success! Waiting 500ms before reveal...");
+
+            // === STEP 2: REVEAL (atomic, no separate effect needed) ===
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            console.log("[Shuffle] Step 2/2: Revealing deck...");
+            // Strip 0x prefix if present — keep consistent with new salt format
+            await revealDeckOnChain(newDeck, salt);
+
+            localStorage.removeItem(SHUFFLE_COMMIT_KEY);
+            setPendingDeck(null);
+            setPendingSalt(null);
+
+            setShuffleState(prev => ({
+                ...prev,
+                hasRevealed: true,
+                currentShufflerIndex: prev.currentShufflerIndex + 1
+            }));
+
+            console.log("[Shuffle] ✅ Commit+Reveal complete!");
+            setTimeout(fetchShuffleData, 200); // Quick re-fetch after reveal
 
         } catch (e: any) {
-            console.error("Commit failed:", e);
-            addLog(e.message || "Commit failed", "danger");
+            console.error("[Shuffle] Failed:", e);
+            addLog(e.message || "Shuffle failed", "danger");
+            // Save pending state for manual recovery via handleReveal
+            // (pendingDeck/pendingSalt might already be set from localStorage restore)
         } finally {
             setIsProcessing(false);
         }
-    }, [currentRoomId, myPlayer, isProcessing, shuffleState.currentShufflerIndex, shuffleState.deck, gameState.players.length, SHUFFLE_COMMIT_KEY, commitDeckOnChain, addLog]);
+    }, [currentRoomId, myPlayer, isProcessing, shuffleState.currentShufflerIndex, shuffleState.deck, gameState.players.length, SHUFFLE_COMMIT_KEY, commitDeckOnChain, revealDeckOnChain, addLog, fetchShuffleData]);
 
+    // Manual reveal — for recovery only (e.g., localStorage restore after page refresh mid-commit)
     const handleReveal = useCallback(async () => {
         if (!currentRoomId || !pendingDeck || !pendingSalt || isProcessing) return;
 
         setIsProcessing(true);
         try {
-            // addLog("Revealing deck...", "info");
+            console.log("[Shuffle Recovery] Revealing deck from saved state...");
             await revealDeckOnChain(pendingDeck, pendingSalt);
 
             localStorage.removeItem(SHUFFLE_COMMIT_KEY);
@@ -367,9 +381,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 currentShufflerIndex: prev.currentShufflerIndex + 1
             }));
 
-            // addLog("Deck revealed successfully!", "success");
-            setTimeout(fetchShuffleData, 200); // Quick re-fetch after reveal
-
+            setTimeout(fetchShuffleData, 200);
         } catch (e: any) {
             console.error("Reveal failed:", e);
             addLog(e.message || "Reveal failed", "danger");
@@ -383,6 +395,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
     const progress = Math.min((shuffleState.currentShufflerIndex / totalPlayers) * 100, 100);
 
     // AUTOMATION: Trigger handleMyTurn automatically if it's my turn
+    // handleMyTurn now does BOTH commit + reveal atomically
     useEffect(() => {
         const canExecuteAuto =
             shuffleState.isMyTurn &&
@@ -393,15 +406,15 @@ export const ShufflePhase: React.FC = React.memo(() => {
             gameState.players.length > 0;
 
         if (canExecuteAuto) {
-            console.log("[Shuffle Auto] Detected my turn. Starting automatic shuffle/reveal...");
+            console.log("[Shuffle Auto] My turn detected, starting commit+reveal...");
             handleMyTurn();
         }
     }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, gameState.players.length, handleMyTurn]);
 
-    // AUTO-REVEAL: Trigger handleReveal if we have committed but not revealed
-    // FIX #9: Add 2s delay to avoid nonce collision with commit TX
+    // RECOVERY: Auto-reveal if we have pending commit from localStorage restore
+    // (e.g., page was refreshed between commit and reveal)
     useEffect(() => {
-        const canAutoReveal =
+        const needsRecoveryReveal =
             shuffleState.isMyTurn &&
             shuffleState.hasCommitted &&
             !shuffleState.hasRevealed &&
@@ -410,14 +423,11 @@ export const ShufflePhase: React.FC = React.memo(() => {
             pendingDeck &&
             pendingSalt;
 
-        if (canAutoReveal) {
+        if (needsRecoveryReveal) {
+            console.log("[Shuffle Recovery] Found pending commit without reveal, auto-revealing...");
             const timer = setTimeout(() => {
-                // Re-check conditions after delay
-                if (!shuffleState.hasRevealed && !isProcessing && !isTxPending) {
-                    console.log("[Shuffle Auto] Detected commit complete. Starting automatic reveal (after 500ms delay)...");
-                    handleReveal();
-                }
-            }, 500); // 500ms — nonceManager handles nonce sequencing
+                handleReveal();
+            }, 1000);
             return () => clearTimeout(timer);
         }
     }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, pendingDeck, pendingSalt, handleReveal]);
