@@ -296,7 +296,16 @@ export const ShufflePhase: React.FC = React.memo(() => {
         setIsProcessing(true);
         try {
             const shuffleService = getShuffleService();
-            shuffleService.generateKeys(); // Generate my E/D keys
+            // CRITICAL: Only generate keys if we don't have them yet.
+            // If generateKeys() is called again (e.g., due to a re-render or race condition),
+            // it overwrites the keys that were already used to encrypt the deck on-chain.
+            // This causes all subsequent role decryptions to fail (wrong decryption key → wrong roles).
+            if (!shuffleService.hasKeys()) {
+                shuffleService.generateKeys();
+                console.log("[Shuffle] Generated fresh SRA keys");
+            } else {
+                console.log("[Shuffle] Reusing existing SRA keys");
+            }
 
             // V4 Fix: Identify Active Slots (Alive players)
             const activeIndices = gameState.players
