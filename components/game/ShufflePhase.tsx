@@ -1,5 +1,5 @@
 // components/game/ShufflePhase.tsx
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
@@ -44,6 +44,13 @@ export const ShufflePhase: React.FC = React.memo(() => {
     });
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
+
+    // REF GUARD: Prevents double-launch of handleMyTurn due to React batching delays.
+    // React's setState is async, so isProcessing may still be false when the auto-trigger
+    // effect re-fires. This synchronous ref is checked immediately.
+    const processingRef = useRef(false);
+    // Track last logged deck length to avoid spamming "Loaded deck with N cards" every 1.5s
+    const lastLoggedDeckRef = useRef<{ length: number; index: number }>({ length: 0, index: -1 });
 
     // Состояние для pending deck и salt (для reveal фазы)
     const [pendingDeck, setPendingDeck] = useState<string[] | null>(null);
@@ -112,6 +119,10 @@ export const ShufflePhase: React.FC = React.memo(() => {
     const fetchShuffleData = useCallback(async () => {
         if (!publicClient || !currentRoomId) return;
 
+        // Skip heavy contract reads while we're mid-commit+reveal. The polling would
+        // read stale data (deck not yet updated) and spam logs. Let handleMyTurn finish first.
+        if (processingRef.current) return;
+
         try {
             // 1. Получаем состояние комнаты (легкий запрос)
             const roomData = await publicClient.readContract({
@@ -151,7 +162,11 @@ export const ShufflePhase: React.FC = React.memo(() => {
                         args: [currentRoomId],
                     }) as string[];
                     if (deck.length > 0) {
-                        console.log(`[Direct Sync] Loaded deck with ${deck.length} cards`);
+                        // Only log when deck state actually changes to avoid spamming
+                        if (lastLoggedDeckRef.current.length !== deck.length || lastLoggedDeckRef.current.index !== currentIndex) {
+                            console.log(`[Direct Sync] Loaded deck with ${deck.length} cards (idx=${currentIndex})`);
+                            lastLoggedDeckRef.current = { length: deck.length, index: currentIndex };
+                        }
                     }
                 } catch (e) {
                     console.warn("[Direct Sync] getDeck failed, trying events...");
@@ -272,8 +287,12 @@ export const ShufflePhase: React.FC = React.memo(() => {
 
 
     const handleMyTurn = useCallback(async () => {
-        if (!currentRoomId || !myPlayer || isProcessing) return;
+        // Double-launch guard: check BOTH React state AND synchronous ref.
+        // The ref is needed because React batches setState, so isProcessing may still be
+        // false when the auto-trigger effect re-fires milliseconds after the first call.
+        if (!currentRoomId || !myPlayer || isProcessing || processingRef.current) return;
 
+        processingRef.current = true;
         setIsProcessing(true);
         try {
             const shuffleService = getShuffleService();
@@ -358,6 +377,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
             // Save pending state for manual recovery via handleReveal
             // (pendingDeck/pendingSalt might already be set from localStorage restore)
         } finally {
+            processingRef.current = false;
             setIsProcessing(false);
         }
     }, [currentRoomId, myPlayer, isProcessing, shuffleState.currentShufflerIndex, shuffleState.deck, gameState.players.length, SHUFFLE_COMMIT_KEY, commitDeckOnChain, revealDeckOnChain, addLog, fetchShuffleData]);
@@ -397,6 +417,10 @@ export const ShufflePhase: React.FC = React.memo(() => {
     // AUTOMATION: Trigger handleMyTurn automatically if it's my turn
     // handleMyTurn now does BOTH commit + reveal atomically
     useEffect(() => {
+        // Check the synchronous ref FIRST to avoid re-triggering while the previous
+        // handleMyTurn is still running (setState hasn't flushed isProcessing yet)
+        if (processingRef.current) return;
+
         const canExecuteAuto =
             shuffleState.isMyTurn &&
             !shuffleState.hasCommitted &&
