@@ -1661,8 +1661,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let signature: `0x${string}`;
             let sessionKeyAddr: string | undefined;
 
+            const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${playerAddress.toLowerCase()}`);
             const myPlayer = gameState.players.find(p => p.address.toLowerCase() === playerAddress.toLowerCase());
-            const myRoleStr = myPlayer?.role;
+            const myRoleStr = savedRole || myPlayer?.role;
 
             let myRoleNum: number | undefined;
             if (myRoleStr === Role.MAFIA) myRoleNum = 1;
@@ -1673,6 +1674,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${playerAddress.toLowerCase()}`);
 
             if (myRoleNum === undefined || !savedSalt) {
+                console.error(`[NightAction] Missing verification data. RoleNum=${myRoleNum}, savedRole=${savedRole}, salt=${savedSalt ? '***' : 'null'}`);
                 addLog("Missing role or salt. Please ensure your role is decrypted.", "danger");
                 setIsTxPending(false);
                 throw new Error("Missing role or salt for cryptographic verification");
