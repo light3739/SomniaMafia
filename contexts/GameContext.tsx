@@ -5,7 +5,7 @@ import { useAccount, useWriteContract, usePublicClient, useWalletClient, useWatc
 import { createWalletClient, http, parseEther, formatEther, parseEventLogs, toHex, pad, type WalletClient } from 'viem';
 import { privateKeyToAccount, nonceManager } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain } from '../contracts/config';
+import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain, GM_SERVER_URL } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
 import { loadSession, createNewSession, markSessionRegistered, getSessionAccount } from '../services/sessionKeyService';
 import { generateEndGameProof } from '../services/zkProof';
@@ -50,16 +50,12 @@ interface GameContextType {
     voteOnChain: (targetAddress: `0x${string}`) => Promise<void>;
 
     // Night (V4: Mafia uses consensus, Doctor/Detective use commit-reveal)
-    commitNightActionOnChain: (hash: string) => Promise<void>;
-    revealNightActionOnChain: (action: number, target: `0x${string}`, salt: string) => Promise<void>;
+    submitNightActionToGM: (actionType: 'kill' | 'heal' | 'check', targetAddress: string) => Promise<void>;
 
     revealRoleOnChain: (role: number, salt: string) => Promise<void>;
     tryEndGame: () => Promise<void>;
     claimVictory: () => Promise<void>;
     sendMafiaMessageOnChain: (content: MafiaChatMessage['content']) => Promise<void>;
-    // Mafia consensus kill (V4)
-    commitMafiaTargetOnChain: (targetHash: string) => Promise<void>;
-    revealMafiaTargetOnChain: (target: `0x${string}`, salt: string) => Promise<void>;
     forcePhaseTimeoutOnChain: () => Promise<void>;
     endGameAutomaticallyOnChain: () => Promise<void>;
     endGameZK: () => Promise<void>;
@@ -1650,94 +1646,67 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // V3: finalizeVoting removed - auto-triggers on last vote
 
-    // --- NIGHT PHASE (V3: auto-finalize) ---
+    // --- NIGHT PHASE (GM SERVER API) ---
 
-    const commitNightActionOnChain = useCallback(async (hash: string) => {
+    const submitNightActionToGM = useCallback(async (actionType: 'kill' | 'heal' | 'check', targetAddress: string) => {
         if (!currentRoomId) return;
+        if (!walletClient && !address) return;
+
         setIsTxPending(true);
         try {
-            const txHash = await sendGameTransaction('commitNightAction', [currentRoomId, hash as `0x${string}`]);
+            const playerAddress = address!;
+            console.log(`[GM API] Submitting night action: ${actionType} on ${targetAddress} by ${playerAddress}`);
+
+            const message = `night:${currentRoomId.toString()}:${actionType}:${targetAddress}`;
+            let signature: `0x${string}`;
+            let sessionKeyAddr: string | undefined;
+
+            const session = loadSession();
+            if (session && session.registeredOnChain && Date.now() < session.expiresAt &&
+                session.mainWallet.toLowerCase() === playerAddress.toLowerCase()) {
+                const sessionAccount = privateKeyToAccount(session.privateKey);
+                signature = await sessionAccount.signMessage({ message });
+                sessionKeyAddr = sessionAccount.address;
+                console.log('[GM API] Signed with session key');
+            } else if (walletClient) {
+                signature = await walletClient.signMessage({ message });
+                console.log('[GM API] Signed with main wallet');
+            } else {
+                throw new Error('No wallet available for signing');
+            }
+
+            const response = await fetch(`${GM_SERVER_URL}/night-action`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId: currentRoomId.toString(),
+                    playerAddress,
+                    actionType,
+                    targetAddress,
+                    signature
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to submit night action');
+            }
+
             // OPTIMISTIC: Mark committed immediately
             applyOptimisticUpdate({ hasNightCommitted: true });
-            setIsTxPending(false);
-            confirmInBackground(txHash, 'commitNightAction', () => {
-                applyOptimisticUpdate({ hasNightCommitted: false });
-            });
+            if (address) {
+                setVoteMap(prev => ({ ...prev, [address.toLowerCase()]: targetAddress.toLowerCase() }));
+            }
+            addLog(`Submitted ${actionType} action!`, "success");
+
         } catch (e: any) {
+            console.error('[Night Action Failed]', e);
             addLog(e.shortMessage || e.message, "danger");
-            setIsTxPending(false);
-            throw e; // Re-throw so caller knows it failed
-        }
-    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
-
-    const revealNightActionOnChain = useCallback(async (action: number, target: string, salt: string) => {
-        if (!currentRoomId) return;
-
-        // Strip 0x prefix if present — keep consistent with new salt format
-        const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
-
-        // DEBUG: Log what we're sending to contract
-        console.log('[Reveal TX]', {
-            roomId: Number(currentRoomId),
-            action,
-            target,
-            salt: cleanSalt,
-            saltLength: cleanSalt.length
-        });
-
-        try {
-            const hash = await sendGameTransaction('revealNightAction', [currentRoomId, action, target, cleanSalt]);
-            // OPTIMISTIC: Mark revealed immediately
-            applyOptimisticUpdate({ hasNightRevealed: true });
-            confirmInBackground(hash, 'revealNightAction', () => {
-                applyOptimisticUpdate({ hasNightRevealed: false });
-            });
-        } catch (e: any) {
-            console.error('[Reveal TX Failed]', e);
-            addLog(e.shortMessage || e.message, "danger");
-            throw e; // Re-throw so caller knows it failed
-        }
-    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
-
-    // --- V4: MAFIA CONSENSUS KILL FUNCTIONS ---
-
-    const commitMafiaTargetOnChain = useCallback(async (targetHash: string) => {
-        if (!currentRoomId) return;
-        setIsTxPending(true);
-        try {
-            const hash = await sendGameTransaction('commitMafiaTarget', [currentRoomId, targetHash as `0x${string}`]);
-            // OPTIMISTIC: Mark mafia commit immediately
-            applyOptimisticUpdate({ hasNightCommitted: true });
-            setIsTxPending(false);
-            confirmInBackground(hash, 'commitMafiaTarget', () => {
-                applyOptimisticUpdate({ hasNightCommitted: false });
-            });
-        } catch (e: any) {
-            addLog(e.shortMessage || e.message, "danger");
-            setIsTxPending(false);
             throw e;
-        }
-    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
-
-    const revealMafiaTargetOnChain = useCallback(async (target: string, salt: string) => {
-        if (!currentRoomId) return;
-        // Strip 0x prefix if present — keep consistent with new salt format
-        const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
-        setIsTxPending(true);
-        try {
-            const hash = await sendGameTransaction('revealMafiaTarget', [currentRoomId, target, cleanSalt]);
-            // OPTIMISTIC: Mark mafia reveal immediately
-            applyOptimisticUpdate({ hasNightRevealed: true });
+        } finally {
             setIsTxPending(false);
-            confirmInBackground(hash, 'revealMafiaTarget', () => {
-                applyOptimisticUpdate({ hasNightRevealed: false });
-            });
-        } catch (e: any) {
-            addLog(e.shortMessage || e.message, "danger");
-            setIsTxPending(false);
-            throw e;
         }
-    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
+    }, [currentRoomId, address, walletClient, applyOptimisticUpdate, addLog, setVoteMap]);
 
     const getInvestigationResultOnChain = useCallback(async (detective: string, target: string) => {
         if (isTestMode) {
@@ -2950,10 +2919,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         shareKeysToAllOnChain, commitRoleOnChain, confirmRoleOnChain,
         commitAndConfirmRoleOnChain,
         startVotingOnChain, voteOnChain,
-        commitNightActionOnChain, revealNightActionOnChain,
-        commitMafiaTargetOnChain, revealMafiaTargetOnChain,
-        forcePhaseTimeoutOnChain, getInvestigationResultOnChain, syncSecretWithServer, endGameAutomaticallyOnChain,
-        revealRoleOnChain, tryEndGame, claimVictory, endGameZK, claimRefund,
+        submitNightActionToGM,
+        getInvestigationResultOnChain, syncSecretWithServer, endGameAutomaticallyOnChain,
+        revealRoleOnChain, tryEndGame, claimVictory, endGameZK, claimRefund, forcePhaseTimeoutOnChain,
         sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList,
         addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
@@ -2969,9 +2937,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         createLobbyOnChain, joinLobbyOnChain, startGameOnChain,
         commitDeckOnChain, revealDeckOnChain, shareKeysToAllOnChain,
         commitRoleOnChain, confirmRoleOnChain, commitAndConfirmRoleOnChain,
-        startVotingOnChain, voteOnChain, commitNightActionOnChain,
-        revealNightActionOnChain, commitMafiaTargetOnChain, revealMafiaTargetOnChain,
-        forcePhaseTimeoutOnChain, getInvestigationResultOnChain, endGameAutomaticallyOnChain, revealRoleOnChain,
+        startVotingOnChain, voteOnChain, submitNightActionToGM,
+        getInvestigationResultOnChain, endGameAutomaticallyOnChain, revealRoleOnChain, forcePhaseTimeoutOnChain,
         tryEndGame, claimVictory, endGameZK, claimRefund, syncSecretWithServer, sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList, addLog,
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,

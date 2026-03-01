@@ -98,6 +98,11 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
     const lastSpeakerRef = useRef<string | null>(null);
     const discussionStartedRef = useRef(false);
     const votingTimeoutRef = useRef(false);
+    const latestDayCountRef = useRef(gameState.dayCount);
+
+    useEffect(() => {
+        latestDayCountRef.current = gameState.dayCount;
+    }, [gameState.dayCount]);
 
     // Voting phase timeout - auto-end voting when timer expires
     useEffect(() => {
@@ -169,11 +174,19 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
     // Fetch discussion state from backend
     const fetchDiscussionState = useCallback(async () => {
         if (!currentRoomId) return;
+        const currentFetchDayCount = latestDayCountRef.current; // Capture day count
         try {
             const response = await fetch(
-                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}`
+                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${currentFetchDayCount}&playerAddress=${myPlayer?.address || ''}`
             );
             const data = await response.json();
+
+            // Fix race condition: ignore responses from previous days/phases
+            if (latestDayCountRef.current !== currentFetchDayCount) {
+                console.log(`[DayPhase] Ignored stale discussion state for day ${currentFetchDayCount}`);
+                return null;
+            }
+
             setDiscussionState(data);
             return data;
         } catch (e) {
@@ -241,11 +254,11 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
     }, [currentRoomId, myPlayer?.address, fetchDiscussionState, gameState.dayCount]);
 
     // Initial phase log and discussion start
-    // Initial phase log and discussion start
     useEffect(() => {
         if (gameState.phase !== lastLoggedPhase.current) {
             if (isDayPhase) {
                 discussionStartedRef.current = false;
+                setDiscussionState(null); // Clear stale state from previous days
                 addLog("Day Phase: Discussion starting...", "info");
             } else if (isVotingPhase) {
                 playVotingStart(); // Play sound for everyone

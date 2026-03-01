@@ -49,29 +49,31 @@ const PostVotingTransition = dynamic(() => import('./PostVotingTransition').then
 const dayBg = "/assets/game_background_light.png";
 const nightBg = "/assets/game_background.png";
 
-// Coordinates for 14 players, clockwise starting from Top-Left
+// Coordinates for 16 players, clockwise starting from Top-Left
 const PLAYER_POSITIONS = [
-    // Top Row (Left to Right)
+    // Top Row (Left to Right) - 5 players
     { id: 'p1', x: 176, y: 89 },
-    { id: 'p2', x: 472, y: 89 },
-    { id: 'p3', x: 767, y: 89 },
-    { id: 'p4', x: 1062, y: 89 },
+    { id: 'p2', x: 398, y: 89 },
+    { id: 'p3', x: 619, y: 89 },
+    { id: 'p4', x: 841, y: 89 },
+    { id: 'p5', x: 1062, y: 89 },
 
-    // Right Col (Top to Bottom)
-    { id: 'p5', x: 1187, y: 256 },
-    { id: 'p6', x: 1187, y: 443 },
-    { id: 'p7', x: 1187, y: 630 },
+    // Right Col (Top to Bottom) - 3 players
+    { id: 'p6', x: 1187, y: 256 },
+    { id: 'p7', x: 1187, y: 443 },
+    { id: 'p8', x: 1187, y: 630 },
 
-    // Bottom Row (Right to Left)
-    { id: 'p8', x: 1062, y: 804 },
-    { id: 'p9', x: 767, y: 804 },
-    { id: 'p10', x: 459, y: 804 },
-    { id: 'p11', x: 176, y: 804 },
+    // Bottom Row (Right to Left) - 5 players
+    { id: 'p9', x: 1062, y: 804 },
+    { id: 'p10', x: 841, y: 804 },
+    { id: 'p11', x: 619, y: 804 },
+    { id: 'p12', x: 398, y: 804 },
+    { id: 'p13', x: 176, y: 804 },
 
-    // Left Col (Bottom to Top)
-    { id: 'p12', x: 51, y: 630 },
-    { id: 'p13', x: 51, y: 443 },
-    { id: 'p14', x: 51, y: 256 }
+    // Left Col (Bottom to Top) - 3 players
+    { id: 'p14', x: 51, y: 630 },
+    { id: 'p15', x: 51, y: 443 },
+    { id: 'p16', x: 51, y: 256 }
 ];
 
 const BASE_WIDTH = 1488;
