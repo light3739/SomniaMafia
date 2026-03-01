@@ -77,11 +77,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
     const {
         gameState,
         myPlayer,
-        commitNightActionOnChain,
-        revealNightActionOnChain,
-        commitMafiaTargetOnChain,
-        revealMafiaTargetOnChain,
-        getInvestigationResultOnChain,
+        submitNightActionToGM,
         forcePhaseTimeoutOnChain,
         addLog,
         isTxPending,
@@ -549,47 +545,12 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         }
 
         const committedTarget = selectedTarget;
-        const salt = ShuffleService.generateSalt();
-        let hash: string;
-
-        try {
-            if (myRole === Role.MAFIA) {
-                hash = ShuffleService.createMafiaTargetHash(committedTarget, salt);
-            } else {
-                hash = ShuffleService.createCommitHash(roleConfig.action, committedTarget, salt);
-            }
-        } catch (e: any) {
-            addLog("Failed to create commit hash", "danger");
-            return;
-        }
-
-        setNightState(prev => ({
-            ...prev,
-            commitHash: hash,
-            salt: salt,
-            hasCommitted: true,
-            committedTarget: committedTarget
-        }));
         setIsProcessing(true);
-
-        // FIX: Save salt BEFORE TX with hasCommitted=false to prevent permanent salt loss
-        // if page crashes between TX receipt and localStorage write
-        localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
-            salt,
-            commitHash: hash,
-            committedTarget: committedTarget,
-            action: roleConfig.action,
-            hasCommitted: false, // Not yet confirmed on-chain
-            hasRevealed: false
-        }));
 
         try {
             if (!isTestMode) {
-                if (myRole === Role.MAFIA) {
-                    await commitMafiaTargetOnChain(hash);
-                } else {
-                    await commitNightActionOnChain(hash);
-                }
+                const actionType = myRole === Role.MAFIA ? 'kill' : myRole === Role.DOCTOR ? 'heal' : 'check';
+                await submitNightActionToGM(actionType, committedTarget);
             } else {
                 await new Promise(resolve => setTimeout(resolve, 1500));
                 if (myRole === Role.MAFIA) {
@@ -607,171 +568,23 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 }));
             }
 
-            // Promote to committed=true after TX success
-            localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
-                salt,
-                commitHash: hash,
-                committedTarget: committedTarget,
-                action: roleConfig.action,
-                hasCommitted: true,
-                hasRevealed: false
-            }));
-
-            addLog("Night action committed!", "success");
-            setSelectedTarget(null);
-        } catch (e: any) {
-            // Remove pre-saved localStorage entry on TX failure
-            localStorage.removeItem(NIGHT_COMMIT_KEY);
             setNightState(prev => ({
                 ...prev,
-                commitHash: null,
-                salt: null,
-                hasCommitted: false,
-                committedTarget: null
+                hasCommitted: true,
+                committedTarget: committedTarget
             }));
-            addLog(e.shortMessage || e.message || "Commit failed", "danger");
+
+            addLog("Night action submitted!", "success");
+            setSelectedTarget(null);
+        } catch (e: any) {
+            addLog(e.message || "Submit failed", "danger");
         } finally {
             setIsProcessing(false);
             commitStartedRef.current = false;
         }
-    }, [selectedTarget, nightState.hasCommitted, myRole, gameState.phase, roleConfig.action, commitMafiaTargetOnChain, commitNightActionOnChain, NIGHT_COMMIT_KEY, addLog, playKillSound, playProtectSound, playInvestigateSound, address, setSelectedTarget, setGameState, isTestMode]);
+    }, [selectedTarget, nightState.hasCommitted, myRole, gameState.phase, roleConfig.action, submitNightActionToGM, addLog, playKillSound, playProtectSound, playInvestigateSound, address, setSelectedTarget, setGameState, isTestMode]);
 
-    const handleReveal = useCallback(async () => {
-        if (!nightState.committedTarget || !nightState.salt || nightState.hasRevealed || revealStartedRef.current) return;
-        revealStartedRef.current = true;
 
-        const previousHasRevealed = nightState.hasRevealed;
-
-        setNightState(prev => ({
-            ...prev,
-            hasRevealed: true
-        }));
-        setIsProcessing(true);
-
-        try {
-            if (!isTestMode) {
-                if (myRole === Role.MAFIA) {
-                    await revealMafiaTargetOnChain(
-                        nightState.committedTarget as `0x${string}`,
-                        nightState.salt
-                    );
-                } else {
-                    await revealNightActionOnChain(
-                        roleConfig.action,
-                        nightState.committedTarget as `0x${string}`,
-                        nightState.salt
-                    );
-                }
-            } else {
-                await new Promise(resolve => setTimeout(resolve, 1500));
-
-                if (myRole === Role.MAFIA) {
-                    setNightState(prev => ({ ...prev, mafiaRevealed: 1 }));
-
-                    setTimeout(() => {
-                        setNightState(prev => ({ ...prev, mafiaRevealed: 2 }));
-                        addLog("[Test] Fellow Mafia member revealed choice", "info");
-                        playApproveSound();
-                    }, 1500);
-
-                    setTimeout(() => {
-                        const consensusReached = Math.random() > 0.3; // 70% success in test mode
-                        setNightState(prev => ({
-                            ...prev,
-                            mafiaRevealed: 3,
-                            mafiaConsensusTarget: consensusReached ? prev.committedTarget : null
-                        }));
-                        if (consensusReached) {
-                            addLog("[Test] Consensus reached!", "success");
-                            playVoteSound();
-                        } else {
-                            addLog("[Test] Consensus failed: different targets chosen.", "warning");
-                            playRejectSound();
-                        }
-                    }, 3000);
-                }
-
-                setGameState(prev => ({
-                    ...prev,
-                    players: prev.players.map(p =>
-                        p.address.toLowerCase() === address?.toLowerCase()
-                            ? { ...p, hasNightRevealed: true }
-                            : p
-                    )
-                }));
-            }
-
-            localStorage.removeItem(NIGHT_COMMIT_KEY);
-
-            let investigationResult: Role | null = nightState.investigationResult;
-
-            if (isTestMode && myRole === Role.DETECTIVE && !investigationResult) {
-                investigationResult = Math.random() > 0.5 ? Role.MAFIA : Role.CIVILIAN;
-                addLog(`[Test] Player is actually ${investigationResult}`, investigationResult === Role.MAFIA ? "danger" : "success");
-            }
-
-            if (!isTestMode && myRole === Role.DETECTIVE && roleConfig.action === NightActionType.CHECK) {
-                addLog("Fetching investigation result from server...", "info");
-
-                const MAX_RETRIES = 5;
-                for (let i = 0; i < MAX_RETRIES; i++) {
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    // Check logic optimized: verifying action
-                    if (i > 0) addLog(`Verifying action on-chain (Attempt ${i + 1}/${MAX_RETRIES})...`, "info");
-
-                    const result = await getInvestigationResultOnChain(address || '', nightState.committedTarget || '');
-
-                    if (result && result.role !== Role.UNKNOWN) {
-                        investigationResult = result.role;
-                        const targetName = gameState.players.find(
-                            p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase()
-                        )?.name || 'Unknown';
-                        addLog(`Investigation complete: ${targetName} is ${result.isMafia ? 'EVIL' : 'INNOCENT'}!`, "success");
-                        break;
-                    }
-                }
-
-                if (!investigationResult) {
-                    addLog("Could not verify investigation result after multiple attempts.", "warning");
-                }
-            }
-
-            setNightState(prev => ({
-                ...prev,
-                hasRevealed: true,
-                investigationResult
-            }));
-            setSelectedTarget(null);
-            addLog("Night action revealed!", "success");
-        } catch (e: any) {
-            setNightState(prev => ({
-                ...prev,
-                hasRevealed: previousHasRevealed
-            }));
-            addLog(e.shortMessage || e.message || "Reveal failed", "danger");
-        } finally {
-            setIsProcessing(false);
-            revealStartedRef.current = false;
-        }
-    }, [nightState.committedTarget, nightState.salt, nightState.hasRevealed, nightState.commitHash, myRole, roleConfig.action, revealMafiaTargetOnChain, revealNightActionOnChain, NIGHT_COMMIT_KEY, getInvestigationResultOnChain, address, gameState.players, addLog, setSelectedTarget, isTestMode, playApproveSound, playVoteSound, setGameState, nightState.investigationResult]);
-
-    // Auto-reveal effect (formerly NightRevealAuto)
-    // FIX #8: Add 2s delay between commit TX confirming and reveal TX to avoid nonce collision
-    useEffect(() => {
-        if (nightState.hasCommitted && !nightState.hasRevealed && !isProcessing && !isTxPending) {
-            const saved = localStorage.getItem(NIGHT_COMMIT_KEY);
-            if (saved) {
-                const timer = setTimeout(() => {
-                    // Re-check conditions after delay (avoid stale trigger)
-                    if (!nightState.hasRevealed && !isProcessing && !isTxPending) {
-                        console.log("[NightPhase] Auto-revealing action (after 2s delay)...");
-                        handleReveal();
-                    }
-                }, 2000); // 2s delay to let nonce sync
-                return () => clearTimeout(timer);
-            }
-        }
-    }, [nightState.hasCommitted, nightState.hasRevealed, isProcessing, isTxPending, handleReveal, NIGHT_COMMIT_KEY]);
 
     const handleSuggestTarget = useCallback((addr: string) => {
         setSelectedTarget(addr as `0x${string}`);
