@@ -768,25 +768,6 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "sessionToMain",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "uint128",
         "name": "amount",
         "type": "uint128"
@@ -872,11 +853,6 @@
   },
   {
     "inputs": [],
-    "name": "ContractPaused",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "InvalidArrayLength",
     "type": "error"
   },
@@ -892,21 +868,6 @@
   },
   {
     "inputs": [],
-    "name": "InvalidSessionAddress",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidSessionKey",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NotParticipant",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "NotYourTurn",
     "type": "error"
   },
@@ -917,37 +878,12 @@
   },
   {
     "inputs": [],
-    "name": "PlayerInactive",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "Reentrancy",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "RoleAlreadyCommitted",
     "type": "error"
   },
   {
     "inputs": [],
     "name": "RoleNotCommitted",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "SessionExpired",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "SessionNotForThisRoom",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "WrongPhase",
     "type": "error"
   },
   {
@@ -1247,11 +1183,6 @@
   },
   {
     "inputs": [],
-    "name": "ContractPaused",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "DepositAlreadyRefunded",
     "type": "error"
   },
@@ -1262,32 +1193,7 @@
   },
   {
     "inputs": [],
-    "name": "InvalidSessionKey",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "NotAllRolesRevealed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NotParticipant",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "PhaseDeadlinePassed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "PlayerInactive",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "Reentrancy",
     "type": "error"
   },
   {
@@ -1297,22 +1203,7 @@
   },
   {
     "inputs": [],
-    "name": "RoleNotCommitted",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "SaltTooLong",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "SessionExpired",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "SessionNotForThisRoom",
     "type": "error"
   },
   {
@@ -1324,30 +1215,6 @@
     "inputs": [],
     "name": "WinConditionNotMet",
     "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "WrongPhase",
-    "type": "error"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "dayNumber",
-        "type": "uint256"
-      }
-    ],
-    "name": "DayStarted",
-    "type": "event"
   },
   {
     "anonymous": false,
@@ -1849,37 +1716,7 @@
   },
   {
     "inputs": [],
-    "name": "AlreadyCommitted",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "AlreadyRevealed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "ArrayTooLarge",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "ContractPaused",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "InvalidMafiaTargetReveal",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidReveal",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidSessionKey",
     "type": "error"
   },
   {
@@ -1909,86 +1746,8 @@
   },
   {
     "inputs": [],
-    "name": "NotParticipant",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "PhaseDeadlinePassed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "PlayerInactive",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "Reentrancy",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "RoleNotCommitted",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "SessionExpired",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "SessionNotForThisRoom",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "Unauthorized",
     "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "WrongPhase",
-    "type": "error"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "dayNumber",
-        "type": "uint256"
-      }
-    ],
-    "name": "DayStarted",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "winCondition",
-        "type": "string"
-      }
-    ],
-    "name": "GameEnded",
-    "type": "event"
   },
   {
     "anonymous": false,
@@ -2168,57 +1927,7 @@
         "type": "address"
       }
     ],
-    "name": "NightFinalized",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "killed",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "healed",
-        "type": "address"
-      }
-    ],
     "name": "NightResolvedByGM",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "reason",
-        "type": "string"
-      }
-    ],
-    "name": "PlayerEliminated",
     "type": "event"
   },
   {
@@ -2487,40 +2196,6 @@
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "ContractPaused",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "Reentrancy",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "WrongPhase",
-    "type": "error"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "winCondition",
-        "type": "string"
-      }
-    ],
-    "name": "GameEnded",
-    "type": "event"
   },
   {
     "inputs": [

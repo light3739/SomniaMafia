@@ -1788,18 +1788,57 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const forcePhaseTimeoutOnChain = useCallback(async () => {
         if (!currentRoomId) return;
         setIsTxPending(true);
+
         try {
+            // GM Server Night Resolution interception
+            if (gameState.phase === GamePhase.NIGHT) {
+                console.log(`[GM API] Resolving night manually...`);
+                let signature: `0x${string}`;
+                let callerAddress: string;
+
+                const message = `resolve-night:${currentRoomId.toString()}`;
+
+                const session = loadSession();
+                if (session && session.registeredOnChain && Date.now() < session.expiresAt && address && session.mainWallet.toLowerCase() === address.toLowerCase()) {
+                    const sessionAccount = privateKeyToAccount(session.privateKey);
+                    signature = await sessionAccount.signMessage({ message });
+                    callerAddress = sessionAccount.address;
+                } else if (walletClient && address) {
+                    signature = await walletClient.signMessage({ message });
+                    callerAddress = address;
+                } else {
+                    throw new Error('No wallet for signing');
+                }
+
+                const res = await fetch(`${GM_SERVER_URL}/resolve-night`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roomId: currentRoomId.toString(), signature, callerAddress })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'GM resolve failed');
+                }
+
+                addLog("Night resolved by GM!", "success");
+                await refreshPlayersList(currentRoomId);
+                return;
+            }
+
+            // Normal On-chain timeout for other phases
             const hash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
             addLog("Phase timeout triggered!", "warning");
             await publicClient?.waitForTransactionReceipt({ hash });
             await refreshPlayersList(currentRoomId);
-            setIsTxPending(false);
         } catch (e: any) {
-            addLog(e.shortMessage || e.message, "danger");
-            setIsTxPending(false);
+            console.error('[ForcePhaseTimeout Error]', e);
+            addLog(e.shortMessage || e.message || 'Timeout action failed', "danger");
             throw e;
+        } finally {
+            setIsTxPending(false);
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList, gameState.phase, walletClient, address]);
 
     // --- MAFIA CHAT (V4) ---
 
