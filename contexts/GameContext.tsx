@@ -1661,6 +1661,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let signature: `0x${string}`;
             let sessionKeyAddr: string | undefined;
 
+            const myPlayer = gameState.players.find(p => p.address.toLowerCase() === playerAddress.toLowerCase());
+            const myRoleStr = myPlayer?.role;
+
+            let myRoleNum: number | undefined;
+            if (myRoleStr === Role.MAFIA) myRoleNum = 1;
+            else if (myRoleStr === Role.DOCTOR) myRoleNum = 2;
+            else if (myRoleStr === Role.DETECTIVE) myRoleNum = 3;
+            else if (myRoleStr === Role.CIVILIAN) myRoleNum = 4;
+
+            const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${playerAddress.toLowerCase()}`);
+
+            if (myRoleNum === undefined || !savedSalt) {
+                addLog("Missing role or salt. Please ensure your role is decrypted.", "danger");
+                setIsTxPending(false);
+                throw new Error("Missing role or salt for cryptographic verification");
+            }
+
             const session = loadSession();
             if (session && session.registeredOnChain && Date.now() < session.expiresAt &&
                 session.mainWallet.toLowerCase() === playerAddress.toLowerCase()) {
@@ -1684,7 +1701,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     actionType,
                     targetAddress,
                     signature,
-                    signerAddress: sessionKeyAddr || playerAddress
+                    signerAddress: sessionKeyAddr || playerAddress,
+                    role: myRoleNum,
+                    salt: savedSalt
                 })
             });
 
