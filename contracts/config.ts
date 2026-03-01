@@ -5,7 +5,7 @@ export const VERIFIER_CONTRACT_ADDRESS = "0xfa208d4ce645c9ce9c1957267d172d3627b9
 export const MAFIA_ABI = MafiaDiamondABI;
 
 // GM Server URL
-export const GM_SERVER_URL = "http://213.21.253.190:3001";
+export const GM_SERVER_URL = "https://mafia-voice.serveminecraft.net/gm";
 
 // Somnia testnet chain config - centralized here to avoid duplication
 export const somniaChain = {
