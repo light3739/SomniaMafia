@@ -730,8 +730,8 @@ const VotingTimer: React.FC = React.memo(() => {
     const [timerMode, setTimerMode] = useState<'soft' | 'transition' | 'hard'>('soft');
     const hasAutoVotedRef = useRef(false);
 
-    // Contract: 180s (3m). Target: 60s (1m). Buffer: 120s.
-    const BUFFER = 120;
+    // Contract: 90s (1.5m). Target: 30s soft timer. Buffer: 60s hard timer.
+    const BUFFER = 60;
 
     // Primitives for dependency array stability
     const phaseDeadline = gameState.phaseDeadline;
