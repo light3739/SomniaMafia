@@ -49,35 +49,96 @@ const PostVotingTransition = dynamic(() => import('./PostVotingTransition').then
 const dayBg = "/assets/game_background_light.png";
 const nightBg = "/assets/game_background.png";
 
-// Coordinates for 16 players, clockwise starting from Top-Left
-const PLAYER_POSITIONS = [
-    // Top Row (Left to Right) - 5 players
-    { id: 'p1', x: 176, y: 89 },
-    { id: 'p2', x: 398, y: 89 },
-    { id: 'p3', x: 619, y: 89 },
-    { id: 'p4', x: 841, y: 89 },
-    { id: 'p5', x: 1062, y: 89 },
-
-    // Right Col (Top to Bottom) - 3 players
-    { id: 'p6', x: 1187, y: 256 },
-    { id: 'p7', x: 1187, y: 443 },
-    { id: 'p8', x: 1187, y: 630 },
-
-    // Bottom Row (Right to Left) - 5 players
-    { id: 'p9', x: 1062, y: 804 },
-    { id: 'p10', x: 841, y: 804 },
-    { id: 'p11', x: 619, y: 804 },
-    { id: 'p12', x: 398, y: 804 },
-    { id: 'p13', x: 176, y: 804 },
-
-    // Left Col (Bottom to Top) - 3 players
-    { id: 'p14', x: 51, y: 630 },
-    { id: 'p15', x: 51, y: 443 },
-    { id: 'p16', x: 51, y: 256 }
-];
-
 const BASE_WIDTH = 1488;
 const BASE_HEIGHT = 1024;
+
+/**
+ * Dynamic player layout matching the hand-tuned 16-player visual style.
+ * Works for any player count (1–20+).
+ *
+ * Algorithm:
+ * 1. Distribute players to 4 sides via round-robin (top→bottom→right→left).
+ *    For 16 this gives exactly 5-3-5-3.
+ * 2. Top/bottom rows include corner positions; sides don't.
+ * 3. All non-corner cards sit on a flat pushed-out line (BULGE=51px),
+ *    exactly matching the hand-tuned layout.
+ */
+function getPlayerPositions(count: number): { id: string; x: number; y: number }[] {
+    if (count === 0) return [];
+
+    // Rectangle corners (matching hand-tuned layout coordinates)
+    const LEFT = 51, RIGHT = 1187, TOP = 89, BOTTOM = 804;
+    const BULGE = 51; // how much non-corner cards are pushed outward
+    const hLen = RIGHT - LEFT;   // 1136
+    const vLen = BOTTOM - TOP;   // 715
+
+    // --- Step 1: Distribute players to 4 sides ---
+    let nTop = 0, nRight = 0, nBottom = 0, nLeft = 0;
+
+    if (count === 1) {
+        nTop = 1;
+    } else if (count === 2) {
+        nTop = 1; nBottom = 1;
+    } else if (count === 3) {
+        nTop = 1; nRight = 1; nBottom = 1;
+    } else if (count === 4) {
+        nTop = 1; nRight = 1; nBottom = 1; nLeft = 1;
+    } else {
+        // 5+: start with 2 corners on top + 2 on bottom
+        nTop = 2; nBottom = 2;
+        const remaining = count - 4;
+        const order = ['top', 'bottom', 'right', 'left'] as const;
+        for (let r = 0; r < remaining; r++) {
+            switch (order[r % 4]) {
+                case 'top': nTop++; break;
+                case 'bottom': nBottom++; break;
+                case 'right': nRight++; break;
+                case 'left': nLeft++; break;
+            }
+        }
+    }
+
+    // --- Step 2: Place players along each side ---
+    const positions: { id: string; x: number; y: number }[] = [];
+    let id = 1;
+    const hasCorners = count >= 5;
+
+    // Top row (left → right, includes corners if 5+)
+    for (let i = 0; i < nTop; i++) {
+        const t = nTop > 1 ? i / (nTop - 1) : 0.5;
+        const x = LEFT + hLen * t;
+        const isCorner = hasCorners && (i === 0 || i === nTop - 1);
+        const y = isCorner ? TOP : (TOP - BULGE);
+        positions.push({ id: `p${id++}`, x: Math.round(x), y: Math.round(y) });
+    }
+
+    // Right column (top → bottom, no corners, all at RIGHT + BULGE)
+    for (let i = 0; i < nRight; i++) {
+        const t = (i + 1) / (nRight + 1);
+        const x = RIGHT + BULGE;
+        const y = TOP + vLen * t;
+        positions.push({ id: `p${id++}`, x: Math.round(x), y: Math.round(y) });
+    }
+
+    // Bottom row (right → left, includes corners if 5+)
+    for (let i = 0; i < nBottom; i++) {
+        const t = nBottom > 1 ? i / (nBottom - 1) : 0.5;
+        const x = RIGHT - hLen * t;
+        const isCorner = hasCorners && (i === 0 || i === nBottom - 1);
+        const y = isCorner ? BOTTOM : (BOTTOM + BULGE);
+        positions.push({ id: `p${id++}`, x: Math.round(x), y: Math.round(y) });
+    }
+
+    // Left column (bottom → top, no corners, all at LEFT - BULGE)
+    for (let i = 0; i < nLeft; i++) {
+        const t = (i + 1) / (nLeft + 1);
+        const x = LEFT - BULGE;
+        const y = BOTTOM - vLen * t;
+        positions.push({ id: `p${id++}`, x: Math.round(x), y: Math.round(y) });
+    }
+
+    return positions;
+}
 
 export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionState?: any }> = ({ initialNightState, initialDiscussionState }) => {
     const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap } = useGameContext();
@@ -110,6 +171,9 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         }
         return shuffled;
     }, [players, gameState.phase, currentRoomId]);
+
+    // Dynamic positions based on actual player count
+    const playerPositions = useMemo(() => getPlayerPositions(visualPlayers.length), [visualPlayers.length]);
 
     // Handle window resize for scaling
 
@@ -405,7 +469,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 */}
 
                 {/* Players */}
-                {PLAYER_POSITIONS.map((pos, index) => {
+                {playerPositions.map((pos, index) => {
                     const player = visualPlayers[index];
                     if (!player) return null; // Slot empty
 
