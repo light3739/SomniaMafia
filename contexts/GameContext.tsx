@@ -1481,6 +1481,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log("Role already committed locally.");
         }
 
+        let roleEnumStr = "";
+        if (role === 1) roleEnumStr = Role.MAFIA;
+        else if (role === 2) roleEnumStr = Role.DOCTOR;
+        else if (role === 3) roleEnumStr = Role.DETECTIVE;
+        else if (role === 4) roleEnumStr = Role.CIVILIAN;
+
+        if (roleEnumStr && address) {
+            localStorage.setItem(`my_role_${currentRoomId}_${address.toLowerCase()}`, roleEnumStr);
+        }
+
         setIsTxPending(true);
         try {
             // FIX: If we have a saved salt but NOT confirmed on chain, we must complete the process.
