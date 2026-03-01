@@ -1683,7 +1683,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     playerAddress,
                     actionType,
                     targetAddress,
-                    signature
+                    signature,
+                    signerAddress: sessionKeyAddr || playerAddress
                 })
             });
 
