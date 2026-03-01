@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { BackButton } from './ui/BackButton';
@@ -10,7 +10,7 @@ import { SetupProfile } from './lobby_flow/SetupProfile';
 import { CreateLobby } from './lobby_flow/CreateLobby';
 import { JoinLobby } from './lobby_flow/JoinLobby';
 import { WaitingRoom } from './lobby_flow/WaitingRoom';
-import { GameLayout } from './game/GameLayout';
+import { GameLayout, getPlayerPositions } from './game/GameLayout';
 import { ShufflePhase } from './game/ShufflePhase';
 import { RoleReveal } from './game/RoleReveal';
 import { PlayerSpot } from './game/PlayerSpot';
@@ -592,6 +592,231 @@ const MafiaConsensusTestWrapper: React.FC = () => {
                 <div className="flex gap-2">
                     <button onClick={() => setConsensusTarget('Alice')} className="px-2 py-1 bg-green-900/50 text-green-300 rounded text-xs">Set Target: Alice</button>
                     <button onClick={() => setConsensusTarget(null)} className="px-2 py-1 bg-yellow-900/50 text-yellow-300 rounded text-xs">No Consensus</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ═══════════════════════════════════════════════════════════
+// LAYOUT CONSTRUCTOR — drag & drop player card positions
+// Uses real getPlayerPositions from GameLayout (HAND_TUNED + ellipse fallback)
+// ═══════════════════════════════════════════════════════════
+const BOARD_W = 1488;
+const BOARD_H = 1024;
+const CARD_W = 250;
+const CARD_H = 130;
+
+// Hand-tuned counts (must match HAND_TUNED keys in GameLayout.tsx)
+const HAND_TUNED_COUNTS = new Set([9, 10, 11, 12, 13, 14, 15, 16]);
+
+// Use the real positioning function from GameLayout
+function constructorInitPositions(count: number): { x: number; y: number }[] {
+    return getPlayerPositions(count).map(p => ({ x: p.x, y: p.y }));
+}
+
+const LayoutPreviewTestWrapper: React.FC = () => {
+    const names = ['You', 'Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace',
+        'Henry', 'Ivy', 'Jack', 'Kate', 'Leo', 'Mia', 'Nick', 'Olivia', 'Pete', 'Quinn', 'Rose', 'Sam'];
+
+    const [playerCount, setPlayerCount] = useState(16);
+    const [positions, setPositions] = useState(() => constructorInitPositions(16));
+    const [dragging, setDragging] = useState<number | null>(null);
+    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+    const [copied, setCopied] = useState(false);
+    const boardRef = useRef<HTMLDivElement>(null);
+
+    // Reset positions when count changes
+    const changeCount = useCallback((n: number) => {
+        setPlayerCount(n);
+        setPositions(constructorInitPositions(n));
+    }, []);
+
+    // Get board scale factor (board is scaled to fit in the viewport)
+    const getBoardScale = useCallback((): number => {
+        if (!boardRef.current) return 1;
+        return boardRef.current.offsetWidth / BOARD_W;
+    }, []);
+
+    // Convert screen coordinates to board coordinates
+    const screenToBoard = useCallback((screenX: number, screenY: number): { x: number; y: number } => {
+        if (!boardRef.current) return { x: 0, y: 0 };
+        const rect = boardRef.current.getBoundingClientRect();
+        const scale = getBoardScale();
+        return {
+            x: (screenX - rect.left) / scale,
+            y: (screenY - rect.top) / scale,
+        };
+    }, [getBoardScale]);
+
+    const handleMouseDown = useCallback((e: React.MouseEvent, index: number) => {
+        e.preventDefault();
+        const boardPos = screenToBoard(e.clientX, e.clientY);
+        setDragging(index);
+        setDragOffset({
+            x: boardPos.x - positions[index].x,
+            y: boardPos.y - positions[index].y,
+        });
+    }, [positions, screenToBoard]);
+
+    const handleMouseMove = useCallback((e: React.MouseEvent) => {
+        if (dragging === null) return;
+        const boardPos = screenToBoard(e.clientX, e.clientY);
+        setPositions(prev => {
+            const next = [...prev];
+            next[dragging] = {
+                x: Math.round(Math.max(0, Math.min(BOARD_W - CARD_W, boardPos.x - dragOffset.x))),
+                y: Math.round(Math.max(0, Math.min(BOARD_H - CARD_H, boardPos.y - dragOffset.y))),
+            };
+            return next;
+        });
+    }, [dragging, dragOffset, screenToBoard]);
+
+    const handleMouseUp = useCallback(() => {
+        setDragging(null);
+    }, []);
+
+    // Generate code output
+    const generateCode = useCallback(() => {
+        const lines = positions.map((p, i) =>
+            `    { id: 'p${i + 1}', x: ${p.x}, y: ${p.y} },`
+        ).join('\n');
+        return `// ${playerCount} players\nconst PLAYER_POSITIONS = [\n${lines}\n];`;
+    }, [positions, playerCount]);
+
+    const copyCode = useCallback(() => {
+        navigator.clipboard.writeText(generateCode());
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    }, [generateCode]);
+
+    return (
+        <div className="w-full h-full flex bg-black overflow-hidden">
+            {/* Board area */}
+            <div
+                className="flex-1 flex items-center justify-center p-4"
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+            >
+                <div
+                    ref={boardRef}
+                    className="relative border border-[#916A47]/30 rounded-lg overflow-hidden shadow-2xl"
+                    style={{
+                        width: '100%',
+                        maxWidth: '900px',
+                        aspectRatio: `${BOARD_W} / ${BOARD_H}`,
+                        backgroundImage: 'url(/assets/game_background.png)',
+                        backgroundSize: 'cover',
+                    }}
+                >
+                    {/* Center chat area indicator */}
+                    <div
+                        className="absolute border-2 border-dashed border-white/20 rounded-lg"
+                        style={{
+                            left: `${((BOARD_W / 2 - 300) / BOARD_W) * 100}%`,
+                            top: `${((BOARD_H / 2 - 200) / BOARD_H) * 100}%`,
+                            width: `${(600 / BOARD_W) * 100}%`,
+                            height: `${(400 / BOARD_H) * 100}%`,
+                        }}
+                    >
+                        <span className="absolute top-1 left-2 text-white/30 text-[10px]">Chat Area</span>
+                    </div>
+
+                    {/* Draggable player cards */}
+                    {positions.map((pos, i) => (
+                        <div
+                            key={i}
+                            className={`absolute cursor-grab select-none transition-shadow ${dragging === i ? 'cursor-grabbing shadow-2xl z-50 ring-2 ring-yellow-400' : 'z-10 hover:ring-1 hover:ring-white/50'
+                                }`}
+                            style={{
+                                left: `${(pos.x / BOARD_W) * 100}%`,
+                                top: `${(pos.y / BOARD_H) * 100}%`,
+                                width: `${(CARD_W / BOARD_W) * 100}%`,
+                                height: `${(CARD_H / BOARD_H) * 100}%`,
+                            }}
+                            onMouseDown={(e) => handleMouseDown(e, i)}
+                        >
+                            <div className="w-full h-full bg-[#2a1f14]/90 border border-[#916A47]/60 rounded-lg flex flex-col items-center justify-center backdrop-blur-sm">
+                                <span className="text-white font-bold text-[10px] leading-tight">{names[i] || `P${i + 1}`}</span>
+                                <span className="text-[#916A47] text-[8px] font-mono">#{i + 1}</span>
+                                <span className="text-white/40 text-[7px] font-mono">{pos.x},{pos.y}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Control panel */}
+            <div className="w-[320px] bg-gray-900/95 border-l border-[#916A47]/30 flex flex-col p-4 gap-4 overflow-y-auto">
+                <h3 className="text-[#916A47] font-bold text-lg">🔧 Layout Constructor</h3>
+
+                {/* Player count slider */}
+                <div className="flex flex-col gap-2">
+                    <label className="text-white/60 text-xs">Players: {playerCount}</label>
+                    <input
+                        type="range" min={2} max={20} value={playerCount}
+                        onChange={(e) => changeCount(Number(e.target.value))}
+                        className="w-full accent-[#916A47]"
+                    />
+                    <div className="flex flex-wrap gap-1">
+                        {Array.from({ length: 19 }, (_, i) => i + 2).map(n => (
+                            <button
+                                key={n} onClick={() => changeCount(n)}
+                                className={`px-2 py-0.5 rounded text-xs font-medium transition-all ${playerCount === n
+                                    ? 'bg-[#916A47] text-black'
+                                    : HAND_TUNED_COUNTS.has(n)
+                                        ? 'bg-[#916A47]/30 text-[#916A47] hover:bg-[#916A47]/50 ring-1 ring-[#916A47]/40'
+                                        : 'bg-white/10 text-white/70 hover:bg-white/20'
+                                    }`}
+                            >{n}</button>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${HAND_TUNED_COUNTS.has(playerCount)
+                                ? 'bg-green-500/20 text-green-400 ring-1 ring-green-500/30'
+                                : 'bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/30'
+                            }`}>
+                            {HAND_TUNED_COUNTS.has(playerCount) ? '✋ Hand-tuned' : '⚙️ Ellipse fallback'}
+                        </span>
+                    </div>
+                </div>
+
+                {/* Position list */}
+                <div className="flex flex-col gap-1">
+                    <span className="text-white/60 text-xs">Positions:</span>
+                    <div className="max-h-[200px] overflow-y-auto bg-black/50 rounded p-2 text-[10px] font-mono">
+                        {positions.map((p, i) => (
+                            <div key={i} className="text-white/70 flex gap-2">
+                                <span className="text-[#916A47] w-6">p{i + 1}</span>
+                                <span>x:{p.x} y:{p.y}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Code output */}
+                <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                        <span className="text-white/60 text-xs">Code output:</span>
+                        <button
+                            onClick={copyCode}
+                            className={`px-3 py-1 rounded text-xs font-bold transition-all ${copied
+                                ? 'bg-green-500 text-black'
+                                : 'bg-[#916A47] text-black hover:bg-[#a07a57]'
+                                }`}
+                        >
+                            {copied ? '✓ Copied!' : '📋 Copy Code'}
+                        </button>
+                    </div>
+                    <pre className="bg-black/70 rounded p-2 text-[9px] font-mono text-green-400/80 overflow-auto max-h-[250px] whitespace-pre leading-relaxed">
+                        {generateCode()}
+                    </pre>
+                </div>
+
+                <div className="text-white/30 text-[10px] mt-auto">
+                    Board: {BOARD_W}×{BOARD_H} • Card: {CARD_W}×{CARD_H}<br />
+                    Drag cards to position them, then copy the code.
                 </div>
             </div>
         </div>
@@ -1856,6 +2081,7 @@ const TestPage: React.FC = () => {
         { name: 'Shuffle Phase (Static)', group: 'Early Game', component: <ShufflePhaseTestWrapper /> },
         { name: 'Role Reveal (Static)', group: 'Early Game', component: <RoleRevealTestWrapper /> },
         { name: 'Player Spot', group: 'Early Game', component: <PlayerSpotTestWrapper /> },
+        { name: 'Layout Preview', group: 'Game Phases', component: <LayoutPreviewTestWrapper /> },
         { name: 'Speech Warning Glow', group: 'Game Components', component: <SpeechWarningGlowTestWrapper /> },
     ];
 
