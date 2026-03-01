@@ -107,6 +107,7 @@ uint256 public nextRoomId = 1;
 uint32 public constant TURN_TIMEOUT = 2 minutes;
 uint32 public constant PHASE_TIMEOUT = 3 minutes;
 uint32 public constant NIGHT_TIMEOUT = 1 minutes;
+uint32 public constant VOTING_TIMEOUT = 90 seconds;
 uint32 public constant SESSION_DURATION = 4 hours;
 uint32 public constant MAX_ARRAY_SIZE = 50;
 
@@ -561,7 +562,7 @@ function startVoting(uint256 roomId) external nonReentrant onlyActiveParticipant
     if (room.phase != GamePhase.DAY) revert WrongPhase();
     room.phase = GamePhase.VOTING;
     room.votedCount = 0;
-    room.phaseDeadline = uint32(block.timestamp + PHASE_TIMEOUT);
+    room.phaseDeadline = uint32(block.timestamp + VOTING_TIMEOUT);
     
     Player[] storage players = roomPlayers[roomId];
     for (uint8 i = 0; i < players.length; i++) {
