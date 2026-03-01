@@ -52,91 +52,158 @@ const nightBg = "/assets/game_background.png";
 const BASE_WIDTH = 1488;
 const BASE_HEIGHT = 1024;
 
+// ═══════════════════════════════════════════════════════════════
+// Hand-tuned positions for 9–16 players (rectangular-ish shape).
+// Symmetrized: LR mirror → x' = 1238 - x.  TB mirror (even N) → y' = 894 - y.
+// Based on user's drag-and-drop constructor coordinates.
+// ═══════════════════════════════════════════════════════════════
+const HAND_TUNED: Record<number, { x: number; y: number }[]> = {
+    9: [ // odd: 1 top, 4 right, 4 left (LR symmetric, rectangular)
+        { x: 619, y: 38 },     // p1  top-center
+        { x: 1058, y: 103 },   // p2  upper-right
+        { x: 1229, y: 376 },   // p3  right-upper
+        { x: 1181, y: 677 },   // p4  right-lower
+        { x: 831, y: 831 },    // p5  lower-right
+        { x: 407, y: 831 },    // p6  lower-left
+        { x: 57, y: 677 },     // p7  left-lower
+        { x: 9, y: 376 },      // p8  left-upper
+        { x: 180, y: 103 },    // p9  upper-left
+    ],
+    10: [ // even: fully LR + TB symmetric (rectangular)
+        { x: 810, y: 58 },     // p1  top-right
+        { x: 1160, y: 177 },   // p2  right-upper
+        { x: 1238, y: 447 },   // p3  right-center
+        { x: 1160, y: 717 },   // p4  right-lower
+        { x: 810, y: 836 },    // p5  bottom-right
+        { x: 428, y: 836 },    // p6  bottom-left
+        { x: 78, y: 717 },     // p7  left-lower
+        { x: 0, y: 447 },      // p8  left-center
+        { x: 78, y: 177 },     // p9  left-upper
+        { x: 428, y: 58 },     // p10 top-left
+    ],
+    11: [ // odd: 1 top, 5 right, 5 left (LR symmetric, rectangular)
+        { x: 619, y: 38 },     // p1  top-center
+        { x: 990, y: 78 },     // p2  upper-right
+        { x: 1207, y: 262 },   // p3  right-upper
+        { x: 1232, y: 505 },   // p4  right-center
+        { x: 1128, y: 741 },   // p5  right-lower
+        { x: 793, y: 839 },    // p6  lower-right
+        { x: 445, y: 839 },    // p7  lower-left
+        { x: 110, y: 741 },    // p8  left-lower
+        { x: 6, y: 505 },      // p9  left-center
+        { x: 31, y: 262 },     // p10 left-upper
+        { x: 248, y: 78 },     // p11 upper-left
+    ],
+    12: [ // even: fully LR + TB symmetric (rectangular)
+        { x: 779, y: 52 },     // p1  top-right
+        { x: 1102, y: 125 },   // p2  upper-right
+        { x: 1217, y: 341 },   // p3  right-upper
+        { x: 1217, y: 553 },   // p4  right-lower
+        { x: 1102, y: 769 },   // p5  lower-right
+        { x: 779, y: 842 },    // p6  bottom-right
+        { x: 459, y: 842 },    // p7  bottom-left
+        { x: 136, y: 769 },    // p8  lower-left
+        { x: 21, y: 553 },     // p9  left-lower
+        { x: 21, y: 341 },     // p10 left-upper
+        { x: 136, y: 125 },    // p11 upper-left
+        { x: 459, y: 52 },     // p12 top-left
+    ],
+    13: [ // odd: 1 top + 1 bottom, 5 right, 5 left (rectangular)
+        { x: 619, y: 38 },     // p1  top-center
+        { x: 1000, y: 58 },    // p2  upper-right
+        { x: 1210, y: 230 },   // p3  right-upper
+        { x: 1230, y: 447 },   // p4  right-center
+        { x: 1210, y: 664 },   // p5  right-lower
+        { x: 1000, y: 836 },   // p6  lower-right
+        { x: 619, y: 856 },    // p7  bottom-center
+        { x: 238, y: 836 },    // p8  lower-left
+        { x: 28, y: 664 },     // p9  left-lower
+        { x: 8, y: 447 },      // p10 left-center
+        { x: 28, y: 230 },     // p11 left-upper
+        { x: 238, y: 58 },     // p12 upper-left
+    ],
+    14: [ // even: fully LR + TB symmetric (rectangular)
+        { x: 778, y: 46 },     // p1  top-right
+        { x: 1104, y: 76 },    // p2  upper-right
+        { x: 1212, y: 267 },   // p3  right-upper
+        { x: 1238, y: 447 },   // p4  right-center
+        { x: 1212, y: 627 },   // p5  right-lower
+        { x: 1104, y: 818 },   // p6  lower-right
+        { x: 778, y: 848 },    // p7  bottom-right
+        { x: 460, y: 848 },    // p8  bottom-left
+        { x: 134, y: 818 },    // p9  lower-left
+        { x: 26, y: 627 },     // p10 left-lower
+        { x: 0, y: 447 },      // p11 left-center
+        { x: 26, y: 267 },     // p12 left-upper
+        { x: 134, y: 76 },     // p13 upper-left
+        { x: 460, y: 46 },     // p14 top-left
+    ],
+    15: [ // odd: 1 top, 7 right, 7 left (LR symmetric, rectangular)
+        { x: 619, y: 36 },     // p1  top-center
+        { x: 909, y: 37 },     // p2  upper-right
+        { x: 1187, y: 170 },   // p3  right-upper-1
+        { x: 1233, y: 347 },   // p4  right-upper-2
+        { x: 1232, y: 512 },   // p5  right-center
+        { x: 1200, y: 688 },   // p6  right-lower
+        { x: 1053, y: 848 },   // p7  lower-right
+        { x: 759, y: 860 },    // p8  bottom-right
+        { x: 479, y: 860 },    // p9  bottom-left
+        { x: 185, y: 848 },    // p10 lower-left
+        { x: 38, y: 688 },     // p11 left-lower
+        { x: 6, y: 512 },      // p12 left-center
+        { x: 5, y: 347 },      // p13 left-upper-2
+        { x: 51, y: 170 },     // p14 left-upper-1
+        { x: 329, y: 37 },     // p15 upper-left
+    ],
+    16: [ // rectangular 5-3-5-3 layout (user's original design)
+        { x: 51, y: 89 },      // p1  TL corner
+        { x: 335, y: 38 },     // p2  top-2
+        { x: 619, y: 38 },     // p3  top-center
+        { x: 903, y: 38 },     // p4  top-4
+        { x: 1187, y: 89 },    // p5  TR corner
+        { x: 1238, y: 256 },   // p6  right-1
+        { x: 1238, y: 443 },   // p7  right-center
+        { x: 1238, y: 630 },   // p8  right-3
+        { x: 1187, y: 804 },   // p9  BR corner
+        { x: 903, y: 855 },    // p10 bottom-4
+        { x: 619, y: 855 },    // p11 bottom-center
+        { x: 335, y: 855 },    // p12 bottom-2
+        { x: 51, y: 804 },     // p13 BL corner
+        { x: 0, y: 630 },      // p14 left-3
+        { x: 0, y: 443 },      // p15 left-center
+        { x: 0, y: 256 },      // p16 left-1
+    ],
+};
+
 /**
- * Dynamic player layout matching the hand-tuned 16-player visual style.
- * Works for any player count (1–20+).
- *
- * Algorithm:
- * 1. Distribute players to 4 sides via round-robin (top→bottom→right→left).
- *    For 16 this gives exactly 5-3-5-3.
- * 2. Top/bottom rows include corner positions; sides don't.
- * 3. All non-corner cards sit on a flat pushed-out line (BULGE=51px),
- *    exactly matching the hand-tuned layout.
+ * Player layout:
+ * - 9–16: hand-tuned rectangular positions (from drag-and-drop constructor, symmetrized)
+ * - 2–8 & 17+: regular N-gon on ellipse (flat-top for even N)
  */
-function getPlayerPositions(count: number): { id: string; x: number; y: number }[] {
+export function getPlayerPositions(count: number): { id: string; x: number; y: number }[] {
     if (count === 0) return [];
 
-    // Rectangle corners (matching hand-tuned layout coordinates)
-    const LEFT = 51, RIGHT = 1187, TOP = 89, BOTTOM = 804;
-    const BULGE = 51; // how much non-corner cards are pushed outward
-    const hLen = RIGHT - LEFT;   // 1136
-    const vLen = BOTTOM - TOP;   // 715
-
-    // --- Step 1: Distribute players to 4 sides ---
-    let nTop = 0, nRight = 0, nBottom = 0, nLeft = 0;
-
-    if (count === 1) {
-        nTop = 1;
-    } else if (count === 2) {
-        nTop = 1; nBottom = 1;
-    } else if (count === 3) {
-        nTop = 1; nRight = 1; nBottom = 1;
-    } else if (count === 4) {
-        nTop = 1; nRight = 1; nBottom = 1; nLeft = 1;
-    } else {
-        // 5+: start with 2 corners on top + 2 on bottom
-        nTop = 2; nBottom = 2;
-        const remaining = count - 4;
-        const order = ['top', 'bottom', 'right', 'left'] as const;
-        for (let r = 0; r < remaining; r++) {
-            switch (order[r % 4]) {
-                case 'top': nTop++; break;
-                case 'bottom': nBottom++; break;
-                case 'right': nRight++; break;
-                case 'left': nLeft++; break;
-            }
-        }
+    // Hand-tuned lookup
+    const tuned = HAND_TUNED[count];
+    if (tuned) {
+        return tuned.map((p, i) => ({ id: `p${i + 1}`, x: p.x, y: p.y }));
     }
 
-    // --- Step 2: Place players along each side ---
+    // Ellipse fallback
+    const CARD_W = 250, CARD_H = 130;
+    const centerX = BASE_WIDTH / 2;
+    const centerY = BASE_HEIGHT / 2;
+    const rx = centerX - CARD_W / 2;
+    const ry = centerY - CARD_H / 2 - 38;
+    const offset = count % 2 === 0 ? Math.PI / count : 0;
+
     const positions: { id: string; x: number; y: number }[] = [];
-    let id = 1;
-    const hasCorners = count >= 5;
-
-    // Top row (left → right, includes corners if 5+)
-    for (let i = 0; i < nTop; i++) {
-        const t = nTop > 1 ? i / (nTop - 1) : 0.5;
-        const x = LEFT + hLen * t;
-        const isCorner = hasCorners && (i === 0 || i === nTop - 1);
-        const y = isCorner ? TOP : (TOP - BULGE);
-        positions.push({ id: `p${id++}`, x: Math.round(x), y: Math.round(y) });
+    for (let i = 0; i < count; i++) {
+        const angle = -Math.PI / 2 + offset + (2 * Math.PI * i / count);
+        const x = Math.round(centerX + rx * Math.cos(angle) - CARD_W / 2);
+        const y = Math.round(centerY + ry * Math.sin(angle) - CARD_H / 2);
+        positions.push({ id: `p${i + 1}`, x, y });
     }
-
-    // Right column (top → bottom, no corners, all at RIGHT + BULGE)
-    for (let i = 0; i < nRight; i++) {
-        const t = (i + 1) / (nRight + 1);
-        const x = RIGHT + BULGE;
-        const y = TOP + vLen * t;
-        positions.push({ id: `p${id++}`, x: Math.round(x), y: Math.round(y) });
-    }
-
-    // Bottom row (right → left, includes corners if 5+)
-    for (let i = 0; i < nBottom; i++) {
-        const t = nBottom > 1 ? i / (nBottom - 1) : 0.5;
-        const x = RIGHT - hLen * t;
-        const isCorner = hasCorners && (i === 0 || i === nBottom - 1);
-        const y = isCorner ? BOTTOM : (BOTTOM + BULGE);
-        positions.push({ id: `p${id++}`, x: Math.round(x), y: Math.round(y) });
-    }
-
-    // Left column (bottom → top, no corners, all at LEFT - BULGE)
-    for (let i = 0; i < nLeft; i++) {
-        const t = (i + 1) / (nLeft + 1);
-        const x = LEFT - BULGE;
-        const y = BOTTOM - vLen * t;
-        positions.push({ id: `p${id++}`, x: Math.round(x), y: Math.round(y) });
-    }
-
     return positions;
 }
 
