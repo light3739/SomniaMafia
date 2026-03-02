@@ -2903,15 +2903,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     case 'NightFinalized':
                         if (args.killed && args.killed !== '0x0000000000000000000000000000000000000000') {
                             const killedStr = (args.killed as string).toLowerCase();
-                            let killedPlayer = playersRef.current.find(p => p.address.toLowerCase() === killedStr);
+                            const healedStr = args.healed ? (args.healed as string).toLowerCase() : '0x00';
 
-                            if (!killedPlayer) {
-                                console.warn("[NightFinalized] Killed player missing locally. Will refresh.");
+                            // If Doctor saved the Mafia target, nobody dies
+                            if (killedStr === healedStr) {
+                                addLog("Night Result: No one died last night.", "success");
+                            } else {
+                                let killedPlayer = playersRef.current.find(p => p.address.toLowerCase() === killedStr);
+
+                                if (!killedPlayer) {
+                                    console.warn("[NightFinalized] Killed player missing locally. Will refresh.");
+                                }
+
+                                const name = killedPlayer?.name || args.killed.slice(0, 6);
+                                addLog(`Night Result: ${name} was killed by Mafia!`, "danger");
                             }
-
-                            const name = killedPlayer?.name || args.killed.slice(0, 6);
-                            addLog(`Night Result: ${name} was killed by Mafia!`, "danger");
                         } else {
+                            // No mafia target at all
                             addLog("Night Result: No one died last night.", "success");
                         }
                         // Note: Don't log "Doctor saved" publicly — reveals doctor's role

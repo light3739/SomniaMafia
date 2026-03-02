@@ -118,7 +118,6 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
             layout
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: player.isAlive ? 1 : 0.5, scale: 1 }}
-            whileHover={player.isAlive && canAct ? { scale: 1.02, y: -2 } : {}}
             onClick={() => {
                 if (player.isAlive && canAct && onAction && !isHoveringMarks) {
                     playClickSound();

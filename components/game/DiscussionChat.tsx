@@ -38,18 +38,30 @@ export const ChatToggleButton: React.FC<{
     const roomRef = useRef<Room | null>(null);
     const prevMessagesCountRef = useRef(0);
     const { playChatMessageSound } = useSoundEffects();
+    const [internalUnreadCount, setInternalUnreadCount] = useState(0);
 
-    // Play sound when new message arrives (not from self)
+    // Reset unread count when chat is opened
+    useEffect(() => {
+        if (isExpanded) {
+            setInternalUnreadCount(0);
+        }
+    }, [isExpanded]);
+
+    // Play sound and track unread when new message arrives (not from self)
     useEffect(() => {
         if (messages.length > prevMessagesCountRef.current) {
             const lastMsg = messages[messages.length - 1];
-            // Play sound only for messages from others
+            // Only for messages from others
             if (lastMsg && lastMsg.senderAddress.toLowerCase() !== myPlayer?.address.toLowerCase()) {
                 playChatMessageSound();
+                // Increment unread count when chat is closed
+                if (!isExpanded) {
+                    setInternalUnreadCount(prev => prev + 1);
+                }
             }
         }
         prevMessagesCountRef.current = messages.length;
-    }, [messages, myPlayer?.address, playChatMessageSound]);
+    }, [messages, myPlayer?.address, playChatMessageSound, isExpanded]);
 
     // Scroll to bottom when new messages arrive
     useEffect(() => {
@@ -363,9 +375,9 @@ export const ChatToggleButton: React.FC<{
             {/* Toggle Button Container - matches Sound Panel style */}
             <div className={`
                 pointer-events-auto flex items-center justify-center p-1.5 
-                bg-black/60 backdrop-blur-xl border-2 border-white/20 rounded-full shadow-2xl 
-                transition-all hover:bg-black/80 hover:border-[#916A47]/60
-                ${isExpanded ? 'border-[#916A47]' : ''}
+                bg-black/60 backdrop-blur-xl border-2 rounded-full shadow-2xl 
+                transition-all hover:bg-black/80
+                ${isExpanded ? 'border-[#916A47]' : internalUnreadCount > 0 ? 'border-[#916A47]/60 shadow-[0_0_12px_rgba(145,106,71,0.3)]' : 'border-white/20 hover:border-[#916A47]/60'}
             `}>
                 <button
                     onClick={onToggle}
@@ -379,10 +391,14 @@ export const ChatToggleButton: React.FC<{
                     title="Discussion Chat"
                 >
                     <MessageCircle size={20} />
-                    {unreadCount > 0 && !isExpanded && (
-                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white">
-                            {unreadCount > 9 ? '9+' : unreadCount}
-                        </span>
+                    {internalUnreadCount > 0 && !isExpanded && (
+                        <>
+                            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white animate-bounce">
+                                {internalUnreadCount > 9 ? '9+' : internalUnreadCount}
+                            </span>
+                            {/* Pulsing ring for attention */}
+                            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full animate-ping opacity-50" />
+                        </>
                     )}
                 </button>
             </div>
