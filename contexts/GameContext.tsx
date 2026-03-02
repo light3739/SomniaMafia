@@ -1704,10 +1704,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 throw new Error('No wallet available for signing');
             }
 
-            const response = await fetch(`${GM_SERVER_URL}/night-action`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            const payload = JSON.stringify({
                     roomId: currentRoomId.toString(),
                     playerAddress,
                     actionType,
@@ -1716,12 +1713,36 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     signerAddress: sessionKeyAddr || playerAddress,
                     role: myRoleNum,
                     salt: savedSalt
-                })
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to submit night action');
+            // Retry with backoff for transient 403/5xx (role commit cache miss on GM)
+            let response: Response | undefined;
+            let lastError = '';
+            for (let attempt = 0; attempt < 3; attempt++) {
+                response = await fetch(`${GM_SERVER_URL}/night-action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: payload
+                });
+
+                if (response.ok) break;
+
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                lastError = errorData.error || 'Failed to submit night action';
+
+                // Only retry on 403 (role commit not found) or 5xx — don't retry 400/401
+                if (response.status !== 403 && response.status < 500) {
+                    throw new Error(lastError);
+                }
+
+                if (attempt < 2) {
+                    console.warn(`[GM API] Attempt ${attempt + 1} failed (${response.status}: ${lastError}). Retrying in ${(attempt + 1) * 2}s...`);
+                    await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
+                }
+            }
+
+            if (!response || !response.ok) {
+                throw new Error(lastError || 'Failed to submit night action after retries');
             }
 
             // OPTIMISTIC: Mark committed immediately

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:gm": "node scripts/test_gm_backend_smoke.js"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.19",
