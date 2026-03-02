@@ -39,6 +39,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const [lastUpdate, setLastUpdate] = useState<number>(0);
     const mountedRef = useRef(true);
     const lastFetchRef = useRef(0); // debounce: min 1.5s between fetches
+    const MAX_LOBBY_AGE_SEC = 15 * 60;
 
     // Core fetch function — no generation counter, just a simple mounted check + debounce
     const fetchRooms = useCallback(async (silent = false) => {
@@ -94,7 +95,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     if (!parsed) continue;
 
                     const isLobby = parsed.phase === 0;
-                    const isRecent = parsed.timestamp === 0 || (nowSec - parsed.timestamp) < 14400;
+                    const isRecent = parsed.timestamp === 0 || (nowSec - parsed.timestamp) < MAX_LOBBY_AGE_SEC;
                     const isValid = parsed.host !== '0x0000000000000000000000000000000000000000' && parsed.max > 0;
 
                     if (isLobby && isRecent && isValid) {
