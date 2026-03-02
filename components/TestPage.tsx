@@ -15,6 +15,7 @@ import { ShufflePhase } from './game/ShufflePhase';
 import { RoleReveal } from './game/RoleReveal';
 import { PlayerSpot } from './game/PlayerSpot';
 import { GamePhase, Role, Player, MafiaChatMessage } from '../types';
+import { GameLog } from './game/GameLog';
 import { VotingAnnouncement } from './game/VotingAnnouncement';
 import { PostVotingTransition } from './game/PostVotingTransition';
 import { NightAnnouncement } from './game/NightAnnouncement';
@@ -22,7 +23,7 @@ import { RoleCompositionAnnouncement } from './game/RoleCompositionAnnouncement'
 import { MafiaChat } from './game/MafiaChat';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../contexts/GameContext';
-import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X } from 'lucide-react';
+import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X, Vote, Moon } from 'lucide-react';
 import { MicButton } from './game/MicButton';
 import { useSoundEffects } from './ui/SoundEffects';
 import { GameHintsOverlay } from './game/GameHints';
@@ -1432,6 +1433,109 @@ const ShufflePhaseTestWrapper: React.FC = () => {
     );
 };
 
+// Wrapper for testing isolated GameLog (Game Feed) component
+const GameFeedTestWrapper: React.FC = () => {
+    const { setGameState, addLog, gameState } = useGameContext();
+
+    useEffect(() => {
+        setGameState({
+            phase: GamePhase.DAY,
+            dayCount: 1,
+            myPlayerId: TEST_ADDRESS,
+            players: generateMock16Players(TEST_ADDRESS),
+            logs: [],
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 120,
+            winner: null,
+            mafiaMessages: []
+        });
+    }, [setGameState]);
+
+    const injectLog = (message: string) => {
+        addLog(message, 'info');
+    };
+
+    return (
+        <div className="w-full h-full flex items-start justify-center gap-8 p-4">
+            {/* Control Panel */}
+            <div className="w-[300px] flex flex-col gap-4 bg-gray-900/80 p-5 rounded-xl border border-white/10 shrink-0">
+                <h3 className="text-white font-bold text-lg">Game Feed Controls</h3>
+
+                <div className="flex flex-col gap-2">
+                    <span className="text-white/60 text-xs font-bold uppercase tracking-wider">Night Results</span>
+                    <button onClick={() => injectLog('No one died last night.')} className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg text-left">
+                        Safe Night (No deaths)
+                    </button>
+                    <button onClick={() => injectLog('Player 5 was killed by the Mafia.')} className="px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-sm rounded-lg border border-rose-500/20 text-left">
+                        Mafia Kill
+                    </button>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                    <span className="text-white/60 text-xs font-bold uppercase tracking-wider">Discussion</span>
+                    <button onClick={() => injectLog('Discussion Phase started.')} className="px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-sm rounded-lg border border-amber-500/20 text-left">
+                        Start Discussion
+                    </button>
+                    <button onClick={() => injectLog('Player 2 is now speaking.')} className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg text-left">
+                        Player 2 speaks
+                    </button>
+                    <button onClick={() => injectLog('All players have spoken.')} className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg text-left">
+                        End Discussion
+                    </button>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                    <span className="text-white/60 text-xs font-bold uppercase tracking-wider">Voting</span>
+                    <button onClick={() => {
+                        injectLog('Voting Phase Started.');
+                        setGameState(prev => ({ ...prev, phase: GamePhase.VOTING }));
+                    }} className="px-3 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-200 text-sm rounded-lg border border-orange-500/20 text-left">
+                        Start Voting
+                    </button>
+                    <button onClick={() => {
+                        injectLog('Player 3 has been eliminated!');
+                    }} className="px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-sm rounded-lg border border-rose-500/20 text-left">
+                        Eliminate Player 3
+                    </button>
+                    <button onClick={() => {
+                        injectLog('No one was eliminated.');
+                    }} className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg text-left">
+                        Skip / Tie
+                    </button>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                    <span className="text-white/60 text-xs font-bold uppercase tracking-wider">Phase Ends</span>
+                    <button onClick={() => {
+                        injectLog('Night Phase Started.');
+                        setGameState(prev => ({ ...prev, phase: GamePhase.NIGHT }));
+                    }} className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-200 text-sm rounded-lg border border-blue-500/20 text-left">
+                        Night Falls
+                    </button>
+                </div>
+
+                <button onClick={() => {
+                    setGameState(prev => ({ ...prev, logs: [], dayCount: prev.dayCount + 1, phase: GamePhase.DAY }));
+                }} className="px-4 py-2 mt-2 bg-[#916A47] hover:bg-[#a67d55] text-white font-bold rounded-lg w-full">
+                    Reset & Next Day
+                </button>
+            </div>
+
+            {/* Game Feed Container */}
+            <div className="flex-1 max-w-[400px]">
+                <div className="h-[600px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative" style={{ backgroundImage: 'url(/assets/game_background.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                    <div className="relative h-full flex flex-col p-4 w-full">
+                        <GameLog />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // Wrapper for testing RoleReveal visual (static)
 const RoleRevealTestWrapper: React.FC = () => {
     const { setGameState } = useGameContext();
@@ -2160,6 +2264,7 @@ const TestPage: React.FC = () => {
         { name: 'Voting Visualization', group: 'Game Phases', component: <VotingVisualizationTestWrapper /> },
         { name: 'Voting Results', group: 'Game Phases', component: <PostVotingTransitionTestWrapper /> },
         { name: 'Game Feed Simulation', group: 'Game Phases', component: <GameFeedSimulationTest /> },
+        { name: 'Game Feed (Isolated)', group: 'Game Components', component: <GameFeedTestWrapper /> },
 
         // Pages
         { name: 'MainPage', group: 'Pages', component: <MainPage onStart={() => console.log('Start')} /> },
