@@ -305,6 +305,67 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [walletClient]);
 
+    const roleCommitSyncInProgressRef = useRef<Set<string>>(new Set());
+    const syncRoleCommitToGM = useCallback(async (
+        roomId: bigint,
+        playerAddress: string,
+        txHash: `0x${string}`
+    ) => {
+        const key = `${roomId.toString()}:${playerAddress.toLowerCase()}:${txHash.toLowerCase()}`;
+        if (roleCommitSyncInProgressRef.current.has(key)) return;
+        roleCommitSyncInProgressRef.current.add(key);
+
+        const MAX_RETRIES = 2;
+        try {
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const message = `sync-role-commit:${roomId.toString()}:${txHash}`;
+                    let signature: `0x${string}`;
+                    let signerAddress = playerAddress;
+
+                    const session = loadSession();
+                    if (
+                        session &&
+                        session.registeredOnChain &&
+                        Date.now() < session.expiresAt &&
+                        session.mainWallet.toLowerCase() === playerAddress.toLowerCase() &&
+                        session.roomId === Number(roomId)
+                    ) {
+                        const sessionAccount = privateKeyToAccount(session.privateKey);
+                        signature = await sessionAccount.signMessage({ message });
+                        signerAddress = sessionAccount.address;
+                    } else if (walletClient) {
+                        signature = await walletClient.signMessage({ message });
+                    } else {
+                        return;
+                    }
+
+                    const res = await fetch(`${GM_SERVER_URL}/role-commit-sync`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            roomId: roomId.toString(),
+                            playerAddress,
+                            txHash,
+                            signature,
+                            signerAddress,
+                        }),
+                    });
+
+                    if (!res.ok) throw new Error(`GM sync failed: ${res.status}`);
+                    console.log(`[RoleCommitSync] Synced tx ${txHash} to GM cache`);
+                    return;
+                } catch (err) {
+                    if (attempt < MAX_RETRIES) {
+                        await new Promise(r => setTimeout(r, 1200 * attempt));
+                    }
+                }
+            }
+        } finally {
+            roleCommitSyncInProgressRef.current.delete(key);
+        }
+    }, [walletClient]);
+
     // Wrapper для транзакций - использует session key если доступен
     const sendGameTransaction = useCallback(async (
         functionName: string,
@@ -1410,6 +1471,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     addLog("Role committed!", "success");
                     await publicClient?.waitForTransactionReceipt({ hash: txHash });
                     if (address) {
+                        syncRoleCommitToGM(currentRoomId, address, txHash)
+                            .catch(err => console.warn('[commitRole] GM role-commit sync failed (non-blocking):', err));
+                    }
+                    if (address) {
                         localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, saltToUse);
                     }
                 } catch (txErr: any) {
@@ -1447,7 +1512,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             throw e;
         }
-    }, [currentRoomId, address, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+    }, [currentRoomId, address, sendGameTransaction, addLog, publicClient, refreshPlayersList, syncRoleCommitToGM]);
 
     const confirmRoleOnChain = useCallback(async () => {
         if (!currentRoomId) return;
@@ -1515,6 +1580,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         const roleHash = ShuffleService.createRoleCommitHash(role, savedSalt);
                         const retryHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
                         addLog("Role committed & confirmed (recovery).", "success");
+                        if (address) {
+                            syncRoleCommitToGM(currentRoomId, address, retryHash)
+                                .catch(err => console.warn('[commitAndConfirm recovery] GM role-commit sync failed (non-blocking):', err));
+                        }
                         // OPTIMISTIC: confirm in background
                         confirmInBackground(retryHash, 'commitAndConfirmRole (recovery)');
                     } catch (retryErr: any) {
@@ -1531,6 +1600,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const roleHash = ShuffleService.createRoleCommitHash(role, saltToUse);
                     const txHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
                     addLog("Role committed & confirmed on-chain!", "success");
+                    if (address) {
+                        syncRoleCommitToGM(currentRoomId, address, txHash)
+                            .catch(err => console.warn('[commitAndConfirm] GM role-commit sync failed (non-blocking):', err));
+                    }
                     // OPTIMISTIC: confirm in background, save salt immediately
                     if (address) localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, saltToUse);
                     confirmInBackground(txHash, 'commitAndConfirmRole');
@@ -1605,7 +1678,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, address, publicClient, sendGameTransaction, addLog, confirmInBackground, myPlayer?.hasConfirmedRole]);
+    }, [currentRoomId, address, publicClient, sendGameTransaction, addLog, confirmInBackground, myPlayer?.hasConfirmedRole, syncRoleCommitToGM]);
 
     // --- DAY & VOTING ---
 
