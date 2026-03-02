@@ -13,6 +13,7 @@ import { Role } from '../../types';
 import { Button } from '../ui/Button';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye, Coins } from 'lucide-react';
+import { MicButton } from './MicButton';
 
 const RoleIcons: Record<Role, React.ReactNode> = {
     [Role.MAFIA]: <Skull className="w-5 h-5 text-rose-500" />,
@@ -421,6 +422,19 @@ export const GameOver: React.FC = React.memo(() => {
             transition={{ duration: 1 }}
             className="fixed inset-[-100vw] z-[100] flex items-center justify-center p-8 bg-black/80 backdrop-blur-xl pointer-events-auto"
         >
+            {/* Post-game Global Voice Chat */}
+            {currentRoomId && myPlayer && (
+                <div className="fixed top-6 right-6 z-[110] flex items-center gap-3 bg-black/50 backdrop-blur-md px-4 py-2 border border-white/10 rounded-full shadow-lg">
+                    <span className="text-white/60 text-xs font-medium uppercase tracking-wider">Post-Game Chat</span>
+                    <MicButton
+                        roomId={`${currentRoomId.toString()}-postgame`}
+                        userName={myPlayer.name}
+                        isMyTurn={true}
+                        freeTalk={true}
+                    />
+                </div>
+            )}
+
             <div className="w-full h-full flex flex-col items-center justify-center overflow-y-auto py-20">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}

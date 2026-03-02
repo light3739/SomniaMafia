@@ -18,12 +18,16 @@ import { GamePhase, Role, Player, MafiaChatMessage } from '../types';
 import { VotingAnnouncement } from './game/VotingAnnouncement';
 import { PostVotingTransition } from './game/PostVotingTransition';
 import { NightAnnouncement } from './game/NightAnnouncement';
+import { RoleCompositionAnnouncement } from './game/RoleCompositionAnnouncement';
 import { MafiaChat } from './game/MafiaChat';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../contexts/GameContext';
 import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X } from 'lucide-react';
 import { MicButton } from './game/MicButton';
 import { useSoundEffects } from './ui/SoundEffects';
+import { GameHintsOverlay } from './game/GameHints';
+
+type HintType = 'discussion' | 'voting' | 'night_mafia' | 'night_doctor' | 'night_detective' | 'night_civilian';
 
 // Wrapper for testing VotingAnnouncement state
 const VotingAnnouncementWrapper = () => {
@@ -43,6 +47,57 @@ const NightAnnouncementWrapper = () => {
         <div className="flex flex-col items-center gap-4">
             <Button onClick={() => setShow(true)}>Trigger Night Animation</Button>
             <NightAnnouncement show={show} onComplete={() => setShow(false)} />
+        </div>
+    );
+};
+
+// Wrapper for testing RoleCompositionAnnouncement
+const RoleCompositionAnnouncementWrapper = () => {
+    const [show, setShow] = useState(false);
+    const [playerCount, setPlayerCount] = useState(8);
+    const [stayOpen, setStayOpen] = useState(false);
+    return (
+        <div className="flex flex-col items-center gap-4">
+            <div className="flex items-center gap-3">
+                <label className="text-white/60 text-sm">Players: {playerCount}</label>
+                <input
+                    type="range" min={4} max={16} value={playerCount}
+                    onChange={(e) => setPlayerCount(Number(e.target.value))}
+                    className="w-40 accent-[#916A47]"
+                />
+            </div>
+            <div className="text-white/40 text-xs">
+                Mafia: {Math.max(1, Math.floor(playerCount / 4))},
+                Doctor: {playerCount >= 4 ? 1 : 0},
+                Detective: {playerCount >= 5 ? 1 : 0},
+                Civilian: {playerCount - Math.max(1, Math.floor(playerCount / 4)) - (playerCount >= 4 ? 1 : 0) - (playerCount >= 5 ? 1 : 0)}
+            </div>
+            <div className="flex items-center gap-4">
+                <Button onClick={() => setShow(true)}>Trigger Role Composition</Button>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                        type="checkbox"
+                        checked={stayOpen}
+                        onChange={(e) => setStayOpen(e.target.checked)}
+                        className="accent-[#916A47] w-4 h-4"
+                    />
+                    <span className="text-white/60 text-sm">Stay Open</span>
+                </label>
+            </div>
+            <RoleCompositionAnnouncement
+                show={show}
+                onComplete={() => { if (!stayOpen) setShow(false); }}
+                playerCount={playerCount}
+            />
+            {/* Manual close button when staying open */}
+            {show && stayOpen && (
+                <button
+                    onClick={() => setShow(false)}
+                    className="fixed top-6 right-6 z-[200] px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold shadow-xl transition-colors"
+                >
+                    ✕ Close Preview
+                </button>
+            )}
         </div>
     );
 };
@@ -2023,6 +2078,47 @@ const GameFeedSimulationTest: React.FC = () => {
     );
 };
 
+// Test wrapper for Game Hints — shows buttons to trigger each hint type
+const GameHintsTestWrapper: React.FC = () => {
+    const [activeHint, setActiveHint] = useState<HintType | null>(null);
+
+    const hints: { type: HintType; label: string; color: string }[] = [
+        { type: 'discussion', label: '🗣 Discussion', color: 'bg-amber-600 hover:bg-amber-500' },
+        { type: 'voting', label: '🗳 Voting', color: 'bg-orange-600 hover:bg-orange-500' },
+        { type: 'night_mafia', label: '🔪 Mafia Night', color: 'bg-rose-600 hover:bg-rose-500' },
+        { type: 'night_doctor', label: '🛡 Doctor Night', color: 'bg-teal-600 hover:bg-teal-500' },
+        { type: 'night_detective', label: '🔍 Detective Night', color: 'bg-sky-600 hover:bg-sky-500' },
+        { type: 'night_civilian', label: '😴 Civilian Night', color: 'bg-indigo-600 hover:bg-indigo-500' },
+    ];
+
+    return (
+        <div className="w-full flex flex-col items-center gap-6">
+            <h3 className="text-white/60 text-sm uppercase tracking-wider">Click a button to preview that hint</h3>
+            <div className="flex flex-wrap gap-3 justify-center">
+                {hints.map(h => (
+                    <button
+                        key={h.type}
+                        onClick={() => setActiveHint(h.type)}
+                        className={`px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors ${h.color}`}
+                    >
+                        {h.label}
+                    </button>
+                ))}
+            </div>
+            <button
+                onClick={() => setActiveHint(null)}
+                className="px-4 py-1.5 rounded-lg text-white/40 text-xs border border-white/10 hover:bg-white/5 transition-colors"
+            >
+                Dismiss
+            </button>
+            {/* Render inline (not fixed) so it's visible in the test area without sidebar overlap */}
+            <div className="w-full flex justify-center mt-4">
+                <GameHintsOverlay activeHint={activeHint} onDismiss={() => setActiveHint(null)} inline />
+            </div>
+        </div>
+    );
+};
+
 const TestPage: React.FC = () => {
     const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
@@ -2045,6 +2141,7 @@ const TestPage: React.FC = () => {
         { name: 'SystemLog', group: 'Game Components', component: <div className="h-60"><SystemLog logs={mockLogs as any} /></div> },
         { name: 'VotingAnnouncement', group: 'Game Components', component: <VotingAnnouncementWrapper /> },
         { name: 'NightAnnouncement', group: 'Game Components', component: <NightAnnouncementWrapper /> },
+        { name: 'Role Composition', group: 'Game Components', component: <RoleCompositionAnnouncementWrapper /> },
         { name: 'Mafia Chat', group: 'Game Components', component: <MafiaChatTestWrapper /> },
         { name: 'Mafia Consensus', group: 'Game Components', component: <MafiaConsensusTestWrapper /> },
         { name: 'Mic Button', group: 'Game Components', component: <MicButtonTestWrapper /> },
@@ -2083,6 +2180,7 @@ const TestPage: React.FC = () => {
         { name: 'Player Spot', group: 'Early Game', component: <PlayerSpotTestWrapper /> },
         { name: 'Layout Preview', group: 'Game Phases', component: <LayoutPreviewTestWrapper /> },
         { name: 'Speech Warning Glow', group: 'Game Components', component: <SpeechWarningGlowTestWrapper /> },
+        { name: 'Game Hints', group: 'Game Components', component: <GameHintsTestWrapper /> },
     ];
 
     const groupedComponents = components.reduce((acc, curr) => {

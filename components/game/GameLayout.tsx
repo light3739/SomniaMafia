@@ -12,7 +12,9 @@ import { VotingAnnouncement } from './VotingAnnouncement';
 import { NightAnnouncement } from './NightAnnouncement';
 import { MorningAnnouncement } from './MorningAnnouncement';
 import { SessionKeyBanner } from './SessionKeyBanner';
+import { RoleCompositionAnnouncement } from './RoleCompositionAnnouncement';
 import { GameUIOverlay } from './GameUIOverlay';
+import { useGameHints, GameHintsOverlay } from './GameHints';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { useSoundEffects } from '../ui/SoundEffects';
@@ -286,6 +288,7 @@ export function getPlayerPositions(count: number): { id: string; x: number; y: n
 export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionState?: any }> = ({ initialNightState, initialDiscussionState }) => {
     const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
+    const { activeHint, showHint, dismissHint } = useGameHints(currentRoomId?.toString());
     const players = gameState.players || [];
     const [scale, setScale] = useState(1);
 
@@ -323,6 +326,8 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     // Voting announcement state
     const [showVotingAnnouncement, setShowVotingAnnouncement] = useState(false);
     const [showMorningAnnouncement, setShowMorningAnnouncement] = useState(false);
+    const [showRoleComposition, setShowRoleComposition] = useState(false);
+    const [hasShownRoleComposition, setHasShownRoleComposition] = useState(false);
     const [lastMorningDay, setLastMorningDay] = useState<number | null>(null);
     const [lastVotingDay, setLastVotingDay] = useState<number | null>(null);
 
@@ -376,11 +381,51 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     useEffect(() => {
         const isDayStart = gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING;
         if (isDayStart && gameState.dayCount > 0 && gameState.dayCount !== lastMorningDay) {
-            playMorningTransition();
-            setShowMorningAnnouncement(true);
             setLastMorningDay(gameState.dayCount);
+
+            // On first day: show Role Composition FIRST, then Morning after it closes
+            if (gameState.dayCount === 1 && !hasShownRoleComposition) {
+                setShowRoleComposition(true);
+                setHasShownRoleComposition(true);
+            } else {
+                // Normal days: show Morning Announcement directly
+                playMorningTransition();
+                setShowMorningAnnouncement(true);
+            }
         }
-    }, [gameState.phase, gameState.dayCount, lastMorningDay, playMorningTransition]);
+    }, [gameState.phase, gameState.dayCount, lastMorningDay, playMorningTransition, hasShownRoleComposition]);
+
+    // ─── Game Hints: trigger on phase changes ───────────────────
+    useEffect(() => {
+        if (gameState.phase === GamePhase.DAY) {
+            showHint('discussion');
+        }
+    }, [gameState.phase === GamePhase.DAY]);
+
+    useEffect(() => {
+        if (gameState.phase === GamePhase.VOTING) {
+            showHint('voting');
+        }
+    }, [gameState.phase === GamePhase.VOTING]);
+
+    useEffect(() => {
+        if (gameState.phase === GamePhase.NIGHT && myPlayer?.role) {
+            switch (myPlayer.role) {
+                case Role.MAFIA:
+                    showHint('night_mafia');
+                    break;
+                case Role.DOCTOR:
+                    showHint('night_doctor');
+                    break;
+                case Role.DETECTIVE:
+                    showHint('night_detective');
+                    break;
+                default:
+                    showHint('night_civilian');
+                    break;
+            }
+        }
+    }, [gameState.phase === GamePhase.NIGHT, myPlayer?.role]);
 
     // Trigger Voting Announcement (Voting start)
     useEffect(() => {
@@ -464,6 +509,14 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
 
     const handleCloseNightAnnouncement = useCallback(() => setShowNightAnnouncement(false), []);
     const handleCloseMorningAnnouncement = useCallback(() => setShowMorningAnnouncement(false), []);
+    const handleCloseRoleComposition = useCallback(() => {
+        setShowRoleComposition(false);
+        // After Role Composition closes, show Morning Announcement ("DAY BREAKS")
+        setTimeout(() => {
+            playMorningTransition();
+            setShowMorningAnnouncement(true);
+        }, 300);
+    }, [playMorningTransition]);
     const handleCloseVotingAnnouncement = useCallback(() => setShowVotingAnnouncement(false), []);
 
     useEffect(() => {
@@ -576,7 +629,14 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 onComplete={handleCloseMorningAnnouncement}
             />
 
-            {/* 2. Critical Game Events (Voting is more important than Morning bg) */}
+            {/* 2. Role Composition (first day only, after morning) */}
+            <RoleCompositionAnnouncement
+                show={showRoleComposition}
+                onComplete={handleCloseRoleComposition}
+                playerCount={players.filter(p => p.isAlive).length}
+            />
+
+            {/* 3. Critical Game Events (Voting is more important than Morning bg) */}
             <VotingAnnouncement
                 show={showVotingAnnouncement}
                 onComplete={handleCloseVotingAnnouncement}
@@ -778,6 +838,9 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     </div>
                 </div>
             )}
+
+            {/* Game Hints Overlay */}
+            <GameHintsOverlay activeHint={activeHint} onDismiss={dismissHint} />
 
             {/* Game UI Overlay (Chat + Sound buttons) */}
             <GameUIOverlay />

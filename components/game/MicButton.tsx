@@ -9,6 +9,7 @@ interface MicButtonProps {
     roomId: string;
     userName?: string;
     isMyTurn: boolean;
+    freeTalk?: boolean; // When true, all players can talk freely (e.g. voting phase)
     className?: string;
 }
 
@@ -16,6 +17,7 @@ export function MicButton({
     roomId,
     userName = 'Player',
     isMyTurn,
+    freeTalk = false,
     className = '',
 }: MicButtonProps) {
     const [isConnected, setIsConnected] = useState(false);
@@ -234,15 +236,16 @@ export function MicButton({
         }
     }, [isMuted, isConnected]);
 
-    // Auto-mute when turn ends
+    // Auto-mute when turn ends (skip in freeTalk mode)
     useEffect(() => {
-        if (!isMyTurn && !isMuted && audioTrackRef.current) {
+        if (!freeTalk && !isMyTurn && !isMuted && audioTrackRef.current) {
             audioTrackRef.current.mute();
             setIsMuted(true);
         }
-    }, [isMyTurn, isMuted]);
+    }, [isMyTurn, isMuted, freeTalk]);
 
-    const isDisabled = !isMyTurn || isConnecting || !isConnected || !!error;
+    const canSpeak = freeTalk || isMyTurn;
+    const isDisabled = !canSpeak || isConnecting || !isConnected || !!error;
 
     return (
         <>
@@ -265,7 +268,7 @@ export function MicButton({
                 title={
                     error ? error :
                         !isConnected ? 'Connecting...' :
-                            !isMyTurn ? 'Not your turn' :
+                            !canSpeak ? 'Not your turn' :
                                 isMuted ? 'Click to speak' : 'Speaking (click to mute)'
                 }
             >
@@ -283,7 +286,7 @@ export function MicButton({
 
                 {/* Speaking pulse animation */}
                 <AnimatePresence>
-                    {!isMuted && isMyTurn && (
+                    {!isMuted && canSpeak && (
                         <motion.div
                             initial={{ scale: 1, opacity: 0.5 }}
                             animate={{ scale: 1.5, opacity: 0 }}
