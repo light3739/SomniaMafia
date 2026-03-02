@@ -1719,11 +1719,28 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let response: Response | undefined;
             let lastError = '';
             for (let attempt = 0; attempt < 3; attempt++) {
-                response = await fetch(`${GM_SERVER_URL}/night-action`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: payload
-                });
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 12000);
+                try {
+                    try {
+                        response = await fetch(`${GM_SERVER_URL}/night-action`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: payload,
+                            signal: controller.signal,
+                        });
+                    } catch (networkError: any) {
+                        const isAbort = networkError?.name === 'AbortError';
+                        lastError = isAbort ? 'GM server timeout (12s). Retrying...' : (networkError?.message || 'Network error');
+                        if (attempt < 2) {
+                            await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
+                            continue;
+                        }
+                        throw new Error(lastError);
+                    }
+                } finally {
+                    clearTimeout(timeoutId);
+                }
 
                 if (response.ok) break;
 
