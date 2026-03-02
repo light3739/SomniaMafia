@@ -49,6 +49,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
     // React's setState is async, so isProcessing may still be false when the auto-trigger
     // effect re-fires. This synchronous ref is checked immediately.
     const processingRef = useRef(false);
+    const autoKickMarkerRef = useRef<string>('');
     // Track last logged deck length to avoid spamming "Loaded deck with N cards" every 1.5s
     const lastLoggedDeckRef = useRef<{ length: number; index: number }>({ length: 0, index: -1 });
 
@@ -277,12 +278,103 @@ export const ShufflePhase: React.FC = React.memo(() => {
         }
     }, [currentRoomId, writeContractAsync, addLog]);
 
+    // AUTO-UNSTICK: after deadline, one deterministic alive player triggers timeout kick.
+    // This keeps shuffle from stalling during demos without spamming duplicate txs.
+    useEffect(() => {
+        if (!currentRoomId || !myPlayer || !shuffleState.phaseDeadline) return;
+
+        const checkAndKick = () => {
+            if (processingRef.current || isProcessing || isTxPending) return;
+
+            const nowSec = Math.floor(Date.now() / 1000);
+            const deadline = shuffleState.phaseDeadline;
+            const GRACE_SECONDS = 5;
+
+            if (nowSec <= deadline + GRACE_SECONDS) return;
+
+            const aliveSorted = [...gameState.players]
+                .filter((p) => p.isAlive)
+                .sort((a, b) => a.address.localeCompare(b.address));
+
+            const shouldTrigger =
+                aliveSorted.length > 0 &&
+                aliveSorted[0].address.toLowerCase() === myPlayer.address.toLowerCase();
+
+            if (!shouldTrigger) return;
+
+            const marker = `${currentRoomId.toString()}:${deadline}`;
+            if (autoKickMarkerRef.current === marker) return;
+            autoKickMarkerRef.current = marker;
+
+            addLog('Shuffle timeout reached. Auto-kicking stalled turn...', 'warning');
+            handleTimeoutKick().catch(() => {
+                autoKickMarkerRef.current = '';
+            });
+        };
+
+        checkAndKick();
+        const timer = setInterval(checkAndKick, 2000);
+        return () => clearInterval(timer);
+    }, [
+        currentRoomId,
+        myPlayer,
+        shuffleState.phaseDeadline,
+        gameState.players,
+        isProcessing,
+        isTxPending,
+        handleTimeoutKick,
+        addLog,
+    ]);
+
     // Polling
     useEffect(() => {
         fetchShuffleData();
         const interval = setInterval(fetchShuffleData, 1500);
         return () => clearInterval(interval);
     }, [fetchShuffleData]);
+
+    // MUST-HAVE: resync when user returns to tab or regains connection.
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (!document.hidden) {
+                fetchShuffleData();
+                if (currentRoomId) refreshPlayersList(currentRoomId);
+            }
+        };
+
+        const handleOnline = () => {
+            fetchShuffleData();
+            if (currentRoomId) refreshPlayersList(currentRoomId);
+            addLog('Connection restored. Syncing shuffle state...', 'info');
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
+        window.addEventListener('online', handleOnline);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibility);
+            window.removeEventListener('online', handleOnline);
+        };
+    }, [fetchShuffleData, refreshPlayersList, currentRoomId, addLog]);
+
+    // MUST-HAVE: warn before closing tab during own shuffle turn.
+    useEffect(() => {
+        const shouldWarn =
+            shuffleState.isMyTurn &&
+            !shuffleState.hasRevealed &&
+            !gameState.players.some((p) => p.address.toLowerCase() === myPlayer?.address?.toLowerCase() && !p.isAlive);
+
+        if (!shouldWarn) return;
+
+        const onBeforeUnload = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+            e.returnValue = 'Your shuffle turn is in progress. Leaving now may stall the game.';
+            return e.returnValue;
+        };
+
+        window.addEventListener('beforeunload', onBeforeUnload);
+        return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    }, [shuffleState.isMyTurn, shuffleState.hasRevealed, gameState.players, myPlayer?.address]);
 
 
 
