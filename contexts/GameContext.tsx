@@ -2342,6 +2342,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     console.error("[AutoWin ZK Debug] Simulation FAILED!");
                     console.error("Reason:", simErr.reason || simErr.shortMessage || "Unknown revert");
                     console.error("Full Error:", simErr);
+                    throw new Error(simErr.shortMessage || simErr.message || "Simulation failed");
                 }
 
                 addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");
