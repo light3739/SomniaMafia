@@ -686,8 +686,21 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                 ) : (
                                     // Standard Voting UI
                                     <>
-                                        {/* Voting Timer */}
-                                        <VotingTimer />
+                                        {/* Voting Timer + Mic Button */}
+                                        <div className="relative">
+                                            <VotingTimer />
+                                            {/* Free Talk Mic - All players can speak during voting */}
+                                            {currentRoomId && myPlayer && (
+                                                <div className="absolute right-[-70px] top-1/2 -translate-y-1/2">
+                                                    <MicButton
+                                                        roomId={`${currentRoomId}-vote`}
+                                                        userName={myPlayer.name}
+                                                        isMyTurn={false}
+                                                        freeTalk={true}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
 
                                         <Button
                                             onClick={handleVote}
