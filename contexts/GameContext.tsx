@@ -1850,7 +1850,30 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 if (!res.ok) {
                     const err = await res.json();
-                    throw new Error(err.error || 'GM resolve failed');
+                    const gmError = String(err?.error || 'GM resolve failed');
+
+                    // Fallback path: if GM has no actions to resolve, force timeout on-chain
+                    // so NIGHT still progresses to DAY instead of stalling.
+                    if (
+                        gmError.includes('No night actions submitted') ||
+                        gmError.includes('No valid night actions from alive players')
+                    ) {
+                        console.warn('[GM API] No actions in GM state, falling back to on-chain forcePhaseTimeout');
+                        addLog('No GM actions found. Forcing night timeout on-chain...', 'warning');
+
+                        const fallbackHash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
+                        await publicClient?.waitForTransactionReceipt({ hash: fallbackHash });
+                        await refreshPlayersList(currentRoomId);
+                        return;
+                    }
+
+                    // Already resolved on server side — just refresh UI state.
+                    if (gmError.includes('Night already resolved')) {
+                        await refreshPlayersList(currentRoomId);
+                        return;
+                    }
+
+                    throw new Error(gmError);
                 }
 
                 addLog("Night resolved by GM!", "success");
