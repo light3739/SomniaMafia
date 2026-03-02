@@ -95,56 +95,34 @@ export const NightActionFeedback: React.FC<NightActionFeedbackProps> = ({ myRole
             </div>
             <div className={`h-px w-full ${styles.separator} mb-3`} />
 
-            {/* MAFIA CONSENSUS UI */}
+            {/* MAFIA STATUS UI (GM Server flow) */}
             {myRole === Role.MAFIA && (
                 <>
-                    {/* Progress Bar */}
-                    <div className="mb-3">
-                        <div className="flex justify-between text-sm mb-2">
-                            <span className="text-rose-200/60">Committed: {nightState.mafiaCommitted}/{totalMafia}</span>
-                            <span className="text-rose-200/60">Revealed: {nightState.mafiaRevealed}/{totalMafia}</span>
+                    {nightState.mafiaConsensusTarget ? (
+                        <div className="p-4 bg-rose-900/40 rounded-xl">
+                            <p className="text-xs uppercase tracking-wider mb-2 text-rose-400">Kill Order Submitted</p>
+                            <p className="text-xl font-bold text-rose-400 text-center">
+                                {consensusTargetName} will be eliminated
+                            </p>
                         </div>
-                        {/* Visual progress bar */}
-                        <div className="h-1.5 bg-rose-950/50 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-rose-500 transition-all duration-500 ease-out"
-                                style={{ width: `${(nightState.mafiaRevealed / totalMafia) * 100}%` }}
-                            />
+                    ) : nightState.hasCommitted ? (
+                        <div className="p-3 bg-rose-900/20 rounded-lg">
+                            <div className="flex items-center gap-2">
+                                <Check className="w-4 h-4 text-rose-400" />
+                                <span className="text-rose-300 text-sm">
+                                    Kill order submitted to Game Master
+                                </span>
+                            </div>
+                            <p className="text-rose-200/40 text-xs mt-2">
+                                The target will be eliminated at dawn unless protected.
+                            </p>
                         </div>
-                    </div>
-
-                    {/* Waiting for other mafia - show if not all revealed yet */}
-                    {!allMafiaRevealed && (
+                    ) : (
                         <div className="p-3 bg-rose-900/20 rounded-lg">
                             <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 rounded-full bg-rose-500 animate-pulse" />
-                                <span className="text-rose-300 text-sm">
-                                    {!allMafiaCommitted
-                                        ? `Waiting for ${totalMafia - nightState.mafiaCommitted} more mafia to choose...`
-                                        : `Waiting for ${totalMafia - nightState.mafiaRevealed} more mafia to confirm...`
-                                    }
-                                </span>
+                                <span className="text-rose-300 text-sm">Waiting for action...</span>
                             </div>
-                        </div>
-                    )}
-
-                    {allMafiaRevealed && (
-                        <div className="p-4 bg-rose-900/40 rounded-xl">
-                            {nightState.mafiaConsensusTarget ? (
-                                <>
-                                    <p className="text-xs uppercase tracking-wider mb-2 text-rose-400">Kill Confirmed</p>
-                                    <p className="text-xl font-bold text-rose-400 text-center">
-                                        {consensusTargetName} will be eliminated
-                                    </p>
-                                </>
-                            ) : (
-                                <div className="text-left">
-                                    <p className="text-xs uppercase tracking-wider mb-2 text-amber-400">Consensus Failed</p>
-                                    <p className="text-lg font-bold text-amber-200 text-center">
-                                        No one was killed tonight
-                                    </p>
-                                </div>
-                            )}
                         </div>
                     )}
                 </>

@@ -78,6 +78,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         gameState,
         myPlayer,
         submitNightActionToGM,
+        getInvestigationResultOnChain,
         forcePhaseTimeoutOnChain,
         addLog,
         isTxPending,
@@ -554,7 +555,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             } else {
                 await new Promise(resolve => setTimeout(resolve, 1500));
                 if (myRole === Role.MAFIA) {
-                    setNightState(prev => ({ ...prev, mafiaCommitted: 3 }));
+                    setNightState(prev => ({ ...prev, mafiaCommitted: 3, mafiaRevealed: 3 }));
                     addLog("[Test] Other Mafia members have committed", "info");
                 }
 
@@ -562,27 +563,74 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     ...prev,
                     players: prev.players.map(p =>
                         p.address.toLowerCase() === address?.toLowerCase()
-                            ? { ...p, hasNightCommitted: true }
+                            ? { ...p, hasNightCommitted: true, hasNightRevealed: true }
                             : p
                     )
                 }));
             }
 
+            // GM model: submit = done (no separate reveal step)
             setNightState(prev => ({
                 ...prev,
                 hasCommitted: true,
+                hasRevealed: true,
                 committedTarget: committedTarget
             }));
 
             addLog("Night action submitted!", "success");
             setSelectedTarget(null);
+
+            // Detective: fetch investigation result after submit
+            if (myRole === Role.DETECTIVE && committedTarget) {
+                const fetchResult = async () => {
+                    if (isTestMode) {
+                        // Test mode: simulate random result
+                        const testResult = Math.random() > 0.5 ? Role.MAFIA : Role.CIVILIAN;
+                        const targetName = gameState.players.find(
+                            p => p.address.toLowerCase() === committedTarget.toLowerCase()
+                        )?.name || 'Unknown';
+                        addLog(`Investigation complete: ${targetName} is ${testResult === Role.MAFIA ? 'EVIL' : 'INNOCENT'}!`, "success");
+                        setNightState(prev => ({ ...prev, investigationResult: testResult }));
+                        return;
+                    }
+
+                    addLog("Fetching investigation result...", "info");
+                    const MAX_RETRIES = 5;
+                    for (let i = 0; i < MAX_RETRIES; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        if (i > 0) addLog(`Verifying action (Attempt ${i + 1}/${MAX_RETRIES})...`, "info");
+
+                        const result = await getInvestigationResultOnChain(address || '', committedTarget);
+
+                        if (result && result.role !== Role.UNKNOWN) {
+                            const targetName = gameState.players.find(
+                                p => p.address.toLowerCase() === committedTarget.toLowerCase()
+                            )?.name || 'Unknown';
+                            addLog(`Investigation complete: ${targetName} is ${result.isMafia ? 'EVIL' : 'INNOCENT'}!`, "success");
+                            setNightState(prev => ({ ...prev, investigationResult: result.role }));
+                            return;
+                        }
+                    }
+                    addLog("Could not verify investigation result after multiple attempts.", "warning");
+                };
+                // Fire and forget (don't block the commit success path)
+                fetchResult().catch(e => console.error('[Detective] Investigation fetch failed:', e));
+            }
+
+            // Mafia: set consensus target optimistically
+            if (myRole === Role.MAFIA) {
+                setNightState(prev => ({
+                    ...prev,
+                    mafiaConsensusTarget: committedTarget as `0x${string}`
+                }));
+            }
         } catch (e: any) {
             addLog(e.message || "Submit failed", "danger");
         } finally {
             setIsProcessing(false);
             commitStartedRef.current = false;
         }
-    }, [selectedTarget, nightState.hasCommitted, myRole, gameState.phase, roleConfig.action, submitNightActionToGM, addLog, playKillSound, playProtectSound, playInvestigateSound, address, setSelectedTarget, setGameState, isTestMode]);
+    }, [selectedTarget, nightState.hasCommitted, myRole, gameState.phase, roleConfig.action, submitNightActionToGM, getInvestigationResultOnChain, addLog, playKillSound, playProtectSound, playInvestigateSound, address, setSelectedTarget, setGameState, isTestMode, gameState.players]);
 
 
 

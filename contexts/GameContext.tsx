@@ -2674,18 +2674,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // V4: forcePhaseTimeout - kicks stalled player and advances phase
     const kickStalledPlayerOnChain = useCallback(async () => {
         if (!currentRoomId) return;
-        setIsTxPending(true);
-        try {
-            const hash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
-            addLog("Force timeout initiated...", "danger");
-            await publicClient?.waitForTransactionReceipt({ hash });
-            await refreshPlayersList(currentRoomId);
-            setIsTxPending(false);
-        } catch (e: any) {
-            addLog(e.shortMessage || e.message, "danger");
-            setIsTxPending(false);
-        }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList]);
+        // Delegate to forcePhaseTimeoutOnChain which handles GM Server interception for night phase
+        await forcePhaseTimeoutOnChain();
+    }, [currentRoomId, forcePhaseTimeoutOnChain]);
 
     // --- UNIFIED EVENT POLLING (REAL-TIME VIA WEBSOCKET/SMART POLLER) ---
     // [CRITICAL OPTIMIZATION] Replaced interval polling with useWatchBlockNumber.
