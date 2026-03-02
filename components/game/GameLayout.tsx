@@ -53,11 +53,44 @@ const BASE_WIDTH = 1488;
 const BASE_HEIGHT = 1024;
 
 // ═══════════════════════════════════════════════════════════════
-// Hand-tuned positions for 9–16 players (rectangular-ish shape).
+// Hand-tuned positions for 4–16 players (rectangular-ish shape).
 // Symmetrized: LR mirror → x' = 1238 - x.  TB mirror (even N) → y' = 894 - y.
 // Based on user's drag-and-drop constructor coordinates.
 // ═══════════════════════════════════════════════════════════════
 const HAND_TUNED: Record<number, { x: number; y: number }[]> = {
+    4: [ // even: square layout, LR + TB symmetric
+        { x: 869, y: 158 },    // p1  top-right
+        { x: 869, y: 736 },    // p2  bottom-right
+        { x: 369, y: 736 },    // p3  bottom-left
+        { x: 369, y: 158 },    // p4  top-left
+    ],
+    6: [ // even: 1 top, 2 sides, 1 bottom (LR + TB symmetric, tighter vertical gap)
+        { x: 619, y: 58 },     // p1  top-center
+        { x: 1130, y: 290 },   // p2  right-upper
+        { x: 1130, y: 604 },   // p3  right-lower
+        { x: 619, y: 836 },    // p4  bottom-center
+        { x: 108, y: 604 },    // p5  left-lower
+        { x: 108, y: 290 },    // p6  left-upper
+    ],
+    7: [ // odd: 1 top, 3 right, 3 left (LR symmetric)
+        { x: 619, y: 38 },     // p1  top-center
+        { x: 1166, y: 164 },   // p2  right-upper
+        { x: 1198, y: 558 },   // p3  right-lower
+        { x: 913, y: 856 },    // p4  bottom-right
+        { x: 325, y: 856 },    // p5  bottom-left
+        { x: 61, y: 561 },     // p6  left-lower       (LR: 1238-1198=40→61 close enough)
+        { x: 101, y: 165 },    // p7  left-upper       (LR: 1238-1166=72→101 close enough)
+    ],
+    8: [ // even: LR + TB symmetric (octagon-ish)
+        { x: 619, y: 38 },     // p1  top-center
+        { x: 1120, y: 114 },   // p2  upper-right
+        { x: 1208, y: 447 },   // p3  right-center
+        { x: 1150, y: 796 },   // p4  lower-right
+        { x: 619, y: 856 },    // p5  bottom-center
+        { x: 147, y: 803 },    // p6  lower-left       (LR: 1238-1120=118→147 ≈)
+        { x: 48, y: 449 },     // p7  left-center      (LR: 1238-1208=30→48 ≈)
+        { x: 141, y: 114 },    // p8  upper-left       (LR: 1238-1120=118→141 ≈)
+    ],
     9: [ // odd: 1 top, 4 right, 4 left (LR symmetric, rectangular)
         { x: 619, y: 38 },     // p1  top-center
         { x: 1058, y: 103 },   // p2  upper-right
@@ -83,16 +116,16 @@ const HAND_TUNED: Record<number, { x: number; y: number }[]> = {
     ],
     11: [ // odd: 1 top, 5 right, 5 left (LR symmetric, rectangular)
         { x: 619, y: 38 },     // p1  top-center
-        { x: 990, y: 78 },     // p2  upper-right
+        { x: 1013, y: 60 },    // p2  upper-right
         { x: 1207, y: 262 },   // p3  right-upper
-        { x: 1232, y: 505 },   // p4  right-center
-        { x: 1128, y: 741 },   // p5  right-lower
+        { x: 1217, y: 507 },   // p4  right-center
+        { x: 1149, y: 759 },   // p5  right-lower
         { x: 793, y: 839 },    // p6  lower-right
         { x: 445, y: 839 },    // p7  lower-left
-        { x: 110, y: 741 },    // p8  left-lower
-        { x: 6, y: 505 },      // p9  left-center
+        { x: 82, y: 754 },     // p8  left-lower
+        { x: 27, y: 505 },     // p9  left-center
         { x: 31, y: 262 },     // p10 left-upper
-        { x: 248, y: 78 },     // p11 upper-left
+        { x: 227, y: 63 },     // p11 upper-left
     ],
     12: [ // even: fully LR + TB symmetric (rectangular)
         { x: 779, y: 52 },     // p1  top-right
@@ -177,8 +210,8 @@ const HAND_TUNED: Record<number, { x: number; y: number }[]> = {
 
 /**
  * Player layout:
- * - 9–16: hand-tuned rectangular positions (from drag-and-drop constructor, symmetrized)
- * - 2–8 & 17+: regular N-gon on ellipse (flat-top for even N)
+ * - 4–16: hand-tuned rectangular positions (from drag-and-drop constructor, symmetrized)
+ * - 2–3, 5 & 17+: rectangular perimeter fallback
  */
 export function getPlayerPositions(count: number): { id: string; x: number; y: number }[] {
     if (count === 0) return [];
@@ -189,20 +222,63 @@ export function getPlayerPositions(count: number): { id: string; x: number; y: n
         return tuned.map((p, i) => ({ id: `p${i + 1}`, x: p.x, y: p.y }));
     }
 
-    // Ellipse fallback
+    // Rectangular perimeter fallback (matches hand-tuned style)
+    // Cards are placed along a rounded-rectangle perimeter that avoids the
+    // center chat area (600×600 at center of 1488×1024 board).
     const CARD_W = 250, CARD_H = 130;
-    const centerX = BASE_WIDTH / 2;
-    const centerY = BASE_HEIGHT / 2;
-    const rx = centerX - CARD_W / 2;
-    const ry = centerY - CARD_H / 2 - 38;
-    const offset = count % 2 === 0 ? Math.PI / count : 0;
+
+    // Usable area for card top-left corners (board minus one card size)
+    const maxX = BASE_WIDTH - CARD_W;   // 1238
+    const maxY = BASE_HEIGHT - CARD_H;  // 894
+
+    // Margins from edges (keep cards slightly inset)
+    const margin = 38;
+    const left = 0;
+    const right = maxX;
+    const top = margin;
+    const bottom = maxY - margin;         // ~856
+
+    // Perimeter segments: Top → Right → Bottom → Left
+    // Segment lengths (approximate)
+    const topLen = right - left;       // 1238
+    const rightLen = bottom - top;       // 818
+    const bottomLen = right - left;       // 1238
+    const leftLen = bottom - top;       // 818
+    const totalPerimeter = topLen + rightLen + bottomLen + leftLen;
+
+    // Distribute players evenly around the perimeter
+    // For odd count: start at top-center; for even: offset by half-step
+    const step = totalPerimeter / count;
+    // Start offset: place first player at top-center
+    const startOffset = (topLen / 2);
 
     const positions: { id: string; x: number; y: number }[] = [];
     for (let i = 0; i < count; i++) {
-        const angle = -Math.PI / 2 + offset + (2 * Math.PI * i / count);
-        const x = Math.round(centerX + rx * Math.cos(angle) - CARD_W / 2);
-        const y = Math.round(centerY + ry * Math.sin(angle) - CARD_H / 2);
-        positions.push({ id: `p${i + 1}`, x, y });
+        let d = (startOffset + i * step) % totalPerimeter;
+        let x: number, y: number;
+
+        if (d < topLen) {
+            // Top edge: left to right
+            x = left + d;
+            y = top;
+        } else if (d < topLen + rightLen) {
+            // Right edge: top to bottom
+            d -= topLen;
+            x = right;
+            y = top + d;
+        } else if (d < topLen + rightLen + bottomLen) {
+            // Bottom edge: right to left
+            d -= topLen + rightLen;
+            x = right - d;
+            y = bottom;
+        } else {
+            // Left edge: bottom to top
+            d -= topLen + rightLen + bottomLen;
+            x = left;
+            y = bottom - d;
+        }
+
+        positions.push({ id: `p${i + 1}`, x: Math.round(x), y: Math.round(y) });
     }
     return positions;
 }

@@ -608,7 +608,7 @@ const CARD_W = 250;
 const CARD_H = 130;
 
 // Hand-tuned counts (must match HAND_TUNED keys in GameLayout.tsx)
-const HAND_TUNED_COUNTS = new Set([9, 10, 11, 12, 13, 14, 15, 16]);
+const HAND_TUNED_COUNTS = new Set([4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
 
 // Use the real positioning function from GameLayout
 function constructorInitPositions(count: number): { x: number; y: number }[] {
@@ -774,8 +774,8 @@ const LayoutPreviewTestWrapper: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-2 mt-1">
                         <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${HAND_TUNED_COUNTS.has(playerCount)
-                                ? 'bg-green-500/20 text-green-400 ring-1 ring-green-500/30'
-                                : 'bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/30'
+                            ? 'bg-green-500/20 text-green-400 ring-1 ring-green-500/30'
+                            : 'bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/30'
                             }`}>
                             {HAND_TUNED_COUNTS.has(playerCount) ? '✋ Hand-tuned' : '⚙️ Ellipse fallback'}
                         </span>
