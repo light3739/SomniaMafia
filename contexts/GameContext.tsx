@@ -2779,9 +2779,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         } else {
                             addLog("Night Result: No one died last night.", "success");
                         }
-                        if (args.healed && args.healed !== '0x0000000000000000000000000000000000000000') {
-                            addLog("Doctor successfully saved the target!", "success");
-                        }
+                        // Note: Don't log "Doctor saved" publicly — reveals doctor's role
                         break;
 
                     case 'PlayerEliminated': {
