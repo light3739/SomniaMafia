@@ -584,34 +584,24 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             if (myRole === Role.DETECTIVE && committedTarget) {
                 const fetchResult = async () => {
                     if (isTestMode) {
-                        // Test mode: simulate random result
                         const testResult = Math.random() > 0.5 ? Role.MAFIA : Role.CIVILIAN;
-                        const targetName = gameState.players.find(
-                            p => p.address.toLowerCase() === committedTarget.toLowerCase()
-                        )?.name || 'Unknown';
-                        addLog(`Investigation complete: ${targetName} is ${testResult === Role.MAFIA ? 'EVIL' : 'INNOCENT'}!`, "success");
                         setNightState(prev => ({ ...prev, investigationResult: testResult }));
                         return;
                     }
 
-                    addLog("Fetching investigation result...", "info");
                     const MAX_RETRIES = 5;
                     for (let i = 0; i < MAX_RETRIES; i++) {
                         await new Promise(resolve => setTimeout(resolve, 2000));
-                        if (i > 0) addLog(`Verifying action (Attempt ${i + 1}/${MAX_RETRIES})...`, "info");
 
                         const result = await getInvestigationResultOnChain(address || '', committedTarget);
 
                         if (result && result.role !== Role.UNKNOWN) {
-                            const targetName = gameState.players.find(
-                                p => p.address.toLowerCase() === committedTarget.toLowerCase()
-                            )?.name || 'Unknown';
-                            addLog(`Investigation complete: ${targetName} is ${result.isMafia ? 'EVIL' : 'INNOCENT'}!`, "success");
+                            console.log(`[Detective] Investigation result: ${result.isMafia ? 'MAFIA' : 'INNOCENT'}`);
                             setNightState(prev => ({ ...prev, investigationResult: result.role }));
                             return;
                         }
                     }
-                    addLog("Could not verify investigation result after multiple attempts.", "warning");
+                    console.warn('[Detective] Could not verify investigation result after retries');
                 };
                 // Fire and forget (don't block the commit success path)
                 fetchResult().catch(e => console.error('[Detective] Investigation fetch failed:', e));
