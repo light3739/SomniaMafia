@@ -9,6 +9,7 @@ export const POST = withSignedRoute<{
     actionType: 'kill' | 'heal' | 'check';
     targetAddress: string;
     signature: string;
+    gmLegacySignature?: string;
     signerAddress?: string;
     role: number;
     salt: string;
@@ -40,7 +41,7 @@ export const POST = withSignedRoute<{
             playerAddress: body.playerAddress,
             actionType: body.actionType,
             targetAddress: body.targetAddress,
-            signature: body.signature,
+            signature: body.gmLegacySignature || body.signature,
             signerAddress,
             role: body.role,
             salt: body.salt,
