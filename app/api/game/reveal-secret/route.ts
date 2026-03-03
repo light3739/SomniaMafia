@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { verifyMessage } from 'viem';
+import { createPublicClient, http } from 'viem';
+import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
 import { ServerStore } from '@/services/serverStore';
+
+const publicClient = createPublicClient({
+    chain: somniaChain,
+    transport: http()
+});
 
 export async function POST(request: Request) {
     try {
@@ -22,7 +29,6 @@ export async function POST(request: Request) {
 
         // If main wallet verification fails and a session key address was provided,
         // verify against the session key address instead.
-        // Session keys are registered on-chain and authorized to act on behalf of the player.
         if (!valid && sessionKeyAddress) {
             valid = await verifyMessage({
                 address: sessionKeyAddress as `0x${string}`,
@@ -38,6 +44,50 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
         }
 
+        // If signed by session key, enforce on-chain ownership + validity checks
+        if (sessionKeyAddress) {
+            const signedByMainWallet = await verifyMessage({
+                address: address as `0x${string}`,
+                message,
+                signature: signature as `0x${string}`,
+            });
+
+            if (!signedByMainWallet) {
+                const sessionKeyData = await publicClient.readContract({
+                    address: MAFIA_CONTRACT_ADDRESS,
+                    abi: MAFIA_ABI,
+                    functionName: 'sessionKeys',
+                    args: [address as `0x${string}`],
+                }) as any;
+
+                const registeredSession = Array.isArray(sessionKeyData)
+                    ? sessionKeyData[0]
+                    : sessionKeyData.sessionAddress;
+                const expiresAt = Number(Array.isArray(sessionKeyData)
+                    ? sessionKeyData[1]
+                    : sessionKeyData.expiresAt);
+                const roomIdFromChain = Number(Array.isArray(sessionKeyData)
+                    ? sessionKeyData[2]
+                    : sessionKeyData.roomId);
+                const isActive = Boolean(Array.isArray(sessionKeyData)
+                    ? sessionKeyData[3]
+                    : sessionKeyData.isActive);
+
+                if (!registeredSession || registeredSession.toLowerCase() !== sessionKeyAddress.toLowerCase()) {
+                    return NextResponse.json({ error: 'Session key is not registered for this wallet' }, { status: 403 });
+                }
+
+                if (!isActive || expiresAt <= Math.floor(Date.now() / 1000)) {
+                    return NextResponse.json({ error: 'Session key is inactive or expired' }, { status: 403 });
+                }
+
+                const requestRoomId = Number(BigInt(rawRoomId));
+                if (roomIdFromChain !== requestRoomId) {
+                    return NextResponse.json({ error: 'Session key room mismatch' }, { status: 403 });
+                }
+            }
+        }
+
         // Validate role is a valid value (1-4)
         const roleNum = Number(role);
         if (![1, 2, 3, 4].includes(roleNum)) {
@@ -46,7 +96,10 @@ export async function POST(request: Request) {
 
         const roomId = BigInt(rawRoomId).toString();
         // Store the secret on the server
-        await ServerStore.storeSecret(roomId, address, roleNum, salt);
+        const storeResult = await ServerStore.storeSecret(roomId, address, roleNum, salt);
+        if (storeResult.status === 'conflict') {
+            return NextResponse.json({ error: 'Secret conflict detected for this player/room' }, { status: 409 });
+        }
 
         return NextResponse.json({ success: true });
     } catch (error: any) {
