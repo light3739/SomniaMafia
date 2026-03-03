@@ -8,8 +8,7 @@ import { GamePhase } from '@/types';
 import { Room, RoomEvent, DataPacket_Kind } from 'livekit-client';
 import { useSoundEffects } from '@/components/ui/SoundEffects';
 import { useWalletClient } from 'wagmi';
-import { loadSession } from '@/services/sessionKeyService';
-import { privateKeyToAccount } from 'viem/accounts';
+import { signRequest } from '@/services/requestSigning';
 
 interface ChatMessage {
     id: string;
@@ -135,34 +134,25 @@ export const ChatToggleButton: React.FC<{
                 const roomName = `${currentRoomId}-day`;
                 console.log('[ChatToggleButton] Getting token for room:', roomName);
 
-                const ts = Date.now();
-                const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-                    ? crypto.randomUUID().replace(/-/g, '')
-                    : `${Math.random().toString(36).slice(2)}${ts.toString(36)}`;
-
                 const playerAddress = myPlayer?.address || '';
                 const username = `${userNameRef.current}_chat`;
-                const tokenMessage = `token:${roomName}:${username}:${playerAddress.toLowerCase()}:${nonce}:${ts}`;
 
                 let signature: `0x${string}` | undefined;
                 let signerAddress: string | undefined;
+                let nonce: string | undefined;
+                let timestamp: number | undefined;
 
                 if (playerAddress) {
-                    const session = loadSession();
-                    if (
-                        session &&
-                        session.registeredOnChain &&
-                        Date.now() < session.expiresAt &&
-                        session.mainWallet.toLowerCase() === playerAddress.toLowerCase() &&
-                        session.roomId === Number(currentRoomId)
-                    ) {
-                        const sessionAccount = privateKeyToAccount(session.privateKey);
-                        signature = await sessionAccount.signMessage({ message: tokenMessage });
-                        signerAddress = sessionAccount.address;
-                    } else if (walletClient) {
-                        signature = await walletClient.signMessage({ message: tokenMessage });
-                        signerAddress = playerAddress;
-                    }
+                    const signed = await signRequest({
+                        address: playerAddress,
+                        roomId: Number(currentRoomId),
+                        walletClient,
+                        messageBase: `token:${roomName}:${username}:${playerAddress.toLowerCase()}`,
+                    });
+                    signature = signed.signature;
+                    signerAddress = signed.signerAddress;
+                    nonce = signed.nonce;
+                    timestamp = signed.timestamp;
                 }
 
                 const resp = await fetch('/api/token', {
@@ -176,7 +166,7 @@ export const ChatToggleButton: React.FC<{
                         signerAddress,
                         signature,
                         nonce,
-                        timestamp: ts,
+                        timestamp,
                     })
                 });
 

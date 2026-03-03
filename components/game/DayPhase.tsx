@@ -3,9 +3,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
-import { usePublicClient } from 'wagmi';
-import { privateKeyToAccount } from 'viem/accounts';
-import { loadSession } from '@/services/sessionKeyService';
+import { usePublicClient, useWalletClient } from 'wagmi';
+import { signRequest } from '@/services/requestSigning';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { GamePhase, Player } from '../../types';
 import { Button } from '../ui/Button';
@@ -61,6 +60,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
     } = useSoundEffects();
 
     const publicClient = usePublicClient();
+    const { data: walletClient } = useWalletClient();
     const [voteState, setVoteState] = useState<VoteState>({
         myVote: null,
         voteCounts: new Map(),
@@ -206,26 +206,12 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                 const actorAddress = myPlayer?.address;
                 if (!actorAddress) throw new Error('Missing player address');
 
-                const message = `discussion:${currentRoomId.toString()}:${gameState.dayCount}:start`;
-                let signature: `0x${string}`;
-                let signerAddress = actorAddress;
-
-                const session = loadSession();
-                if (
-                    session &&
-                    session.registeredOnChain &&
-                    Date.now() < session.expiresAt &&
-                    session.mainWallet.toLowerCase() === actorAddress.toLowerCase() &&
-                    session.roomId === Number(currentRoomId)
-                ) {
-                    const sessionAccount = privateKeyToAccount(session.privateKey);
-                    signature = await sessionAccount.signMessage({ message });
-                    signerAddress = sessionAccount.address;
-                } else if (walletClient) {
-                    signature = await walletClient.signMessage({ message });
-                } else {
-                    throw new Error('No wallet available to sign discussion start');
-                }
+                const signed = await signRequest({
+                    address: actorAddress,
+                    roomId: Number(currentRoomId),
+                    walletClient,
+                    messageBase: `discussion:${currentRoomId.toString()}:${gameState.dayCount}:start`,
+                });
 
                 await fetch('/api/game/discussion', {
                     method: 'POST',
@@ -235,8 +221,10 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                         dayCount: gameState.dayCount,
                         action: 'start',
                         playerAddress: actorAddress,
-                        signature,
-                        signerAddress,
+                        signature: signed.signature,
+                        signerAddress: signed.signerAddress,
+                        nonce: signed.nonce,
+                        timestamp: signed.timestamp,
                     })
                 });
             } else {
@@ -266,26 +254,12 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
             const actorAddress = myPlayer?.address;
             if (!actorAddress) throw new Error('Missing player address');
 
-            const message = `discussion:${currentRoomId.toString()}:${gameState.dayCount}:skip`;
-            let signature: `0x${string}`;
-            let signerAddress = actorAddress;
-
-            const session = loadSession();
-            if (
-                session &&
-                session.registeredOnChain &&
-                Date.now() < session.expiresAt &&
-                session.mainWallet.toLowerCase() === actorAddress.toLowerCase() &&
-                session.roomId === Number(currentRoomId)
-            ) {
-                const sessionAccount = privateKeyToAccount(session.privateKey);
-                signature = await sessionAccount.signMessage({ message });
-                signerAddress = sessionAccount.address;
-            } else if (walletClient) {
-                signature = await walletClient.signMessage({ message });
-            } else {
-                throw new Error('No wallet available to sign discussion skip');
-            }
+            const signed = await signRequest({
+                address: actorAddress,
+                roomId: Number(currentRoomId),
+                walletClient,
+                messageBase: `discussion:${currentRoomId.toString()}:${gameState.dayCount}:skip`,
+            });
 
             await fetch('/api/game/discussion', {
                 method: 'POST',
@@ -295,8 +269,10 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     dayCount: gameState.dayCount,
                     action: 'skip',
                     playerAddress: actorAddress,
-                    signature,
-                    signerAddress,
+                    signature: signed.signature,
+                    signerAddress: signed.signerAddress,
+                    nonce: signed.nonce,
+                    timestamp: signed.timestamp,
                 })
             });
             await fetchDiscussionState();
