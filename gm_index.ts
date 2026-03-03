@@ -21,6 +21,8 @@ import {
   clearNightState,
   getNightState,
   getAllNightStates,
+  markKnownMafia,
+  getKnownMafia,
   calculateMafiaConsensus,
   getDoctorHeal,
   type NightAction,
@@ -34,6 +36,27 @@ const PORT = Number(process.env.PORT) || 3001;
 const ZERO_ADDR = '0x0000000000000000000000000000000000000000' as Address;
 const AUTO_RESOLVE_IDLE_MS = Number(process.env.GM_AUTO_RESOLVE_IDLE_MS || 65000);
 const autoResolveTimers = new Map<bigint, NodeJS.Timeout>();
+
+interface InvestigationProof {
+  targetAddress: Address;
+  timestamp: number;
+}
+
+const investigationProofs = new Map<string, Map<string, InvestigationProof>>();
+
+const storeInvestigationProof = (roomId: bigint, detective: Address, target: Address) => {
+  const roomKey = roomId.toString();
+  let roomMap = investigationProofs.get(roomKey);
+  if (!roomMap) {
+    roomMap = new Map<string, InvestigationProof>();
+    investigationProofs.set(roomKey, roomMap);
+  }
+  roomMap.set(detective.toLowerCase(), { targetAddress: target, timestamp: Date.now() });
+};
+
+const getInvestigationProof = (roomId: bigint, detective: Address): InvestigationProof | null => {
+  return investigationProofs.get(roomId.toString())?.get(detective.toLowerCase()) || null;
+};
 
 const scheduleAutoResolve = (roomId: bigint) => {
   const existing = autoResolveTimers.get(roomId);
@@ -67,8 +90,16 @@ const scheduleAutoResolve = (roomId: bigint) => {
       if (state.actions.size === 0) return;
 
       const allActions = [...state.actions.values()];
-      const killTarget = calculateMafiaConsensus(allActions);
+      const knownMafia = getKnownMafia(roomId);
+      const expectedAliveMafia = [...knownMafia].filter((addr) => alivePlayers.has(addr)).length;
+      const killTarget = calculateMafiaConsensus(allActions, expectedAliveMafia);
       const healTarget = getDoctorHeal(allActions);
+
+      for (const action of allActions) {
+        if (action.actionType === 'check') {
+          storeInvestigationProof(roomId, action.playerAddress, action.targetAddress);
+        }
+      }
 
       console.log(
         `[auto-resolve] Room ${roomId}: kill=${killTarget}, heal=${healTarget}, actions=${allActions.length}`
@@ -96,6 +127,61 @@ app.get('/health', (_req, res) => {
     activeRooms: getAllNightStates().size,
     uptime: process.uptime(),
   });
+});
+
+// ─── Investigation Proof (GM-verified) ───────────────────
+app.post('/investigation-proof', async (req, res) => {
+  try {
+    const { roomId, detectiveAddress, targetAddress, signature, signerAddress } = req.body;
+
+    if (!roomId || !detectiveAddress || !targetAddress || !signature) {
+      return res.status(400).json({ error: 'Missing fields: roomId, detectiveAddress, targetAddress, signature' });
+    }
+
+    const rid = BigInt(roomId);
+    const detective = (detectiveAddress as string).toLowerCase() as Address;
+    const target = (targetAddress as string).toLowerCase() as Address;
+    const signer = ((signerAddress as string | undefined) || detectiveAddress).toLowerCase() as Address;
+    const message = `investigate:${roomId}:${targetAddress}`;
+
+    const valid = await verifyMessage({
+      address: signer,
+      message,
+      signature: signature as `0x${string}`,
+    });
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    if (signer !== detective) {
+      const sk = await getSessionKey(detective);
+      const nowSec = Math.floor(Date.now() / 1000);
+      const sessionRoomId = BigInt(sk.roomId);
+
+      if (
+        !sk.isActive ||
+        sk.sessionAddress.toLowerCase() !== signer ||
+        Number(sk.expiresAt) <= nowSec ||
+        sessionRoomId !== rid
+      ) {
+        return res.status(401).json({ error: 'Invalid session signer' });
+      }
+    }
+
+    const proof = getInvestigationProof(rid, detective);
+    if (!proof) {
+      return res.status(403).json({ error: 'No detective proof found for this room/night' });
+    }
+
+    if (proof.targetAddress.toLowerCase() !== target) {
+      return res.status(403).json({ error: 'Investigation target mismatch' });
+    }
+
+    return res.json({ ok: true, source: 'gm-proof', targetAddress: proof.targetAddress, timestamp: proof.timestamp });
+  } catch (err: any) {
+    console.error('[investigation-proof] Error:', err.message);
+    return res.status(500).json({ error: err.message || 'Investigation proof check failed' });
+  }
 });
 
 // ─── Sync Role Commit (trusted by tx receipt) ────────────
@@ -277,6 +363,11 @@ app.post('/night-action', async (req, res) => {
       return res.status(403).json({ error: 'Invalid role proof' });
     }
 
+    // Build trusted mafia set from successfully verified kill actions.
+    if (actionType === 'kill' && roleNum === ACTION_TO_ROLE.kill) {
+      markKnownMafia(rid, playerAddress as Address);
+    }
+
     // 6. Store the action
     const state = getOrCreateNightState(rid);
     if (state.resolved) {
@@ -368,8 +459,16 @@ app.post('/resolve-night', async (req, res) => {
 
     // Calculate consensus
     const allActions = [...state.actions.values()];
-    const killTarget = calculateMafiaConsensus(allActions);
+    const knownMafia = getKnownMafia(rid);
+    const expectedAliveMafia = [...knownMafia].filter((addr) => alivePlayers.has(addr)).length;
+    const killTarget = calculateMafiaConsensus(allActions, expectedAliveMafia);
     const healTarget = getDoctorHeal(allActions);
+
+    for (const action of allActions) {
+      if (action.actionType === 'check') {
+        storeInvestigationProof(rid, action.playerAddress, action.targetAddress);
+      }
+    }
 
     console.log(
       `[resolve] Room ${roomId}: kill=${killTarget}, heal=${healTarget}, actions=${allActions.length}`

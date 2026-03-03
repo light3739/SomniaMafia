@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createPublicClient, http, verifyMessage } from 'viem';
-import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
+import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL } from '@/contracts/config';
 import { ServerStore } from '@/services/serverStore';
 
 const publicClient = createPublicClient({
@@ -82,75 +82,29 @@ export async function POST(request: Request) {
 
         console.log(`[API/Investigate] Detective ${detectiveAddress} checking ${targetAddress} in Room #${roomId}`);
 
-        // 1. Verify the detective's action
-        // Try on-chain verification first (legacy commit-reveal flow)
-        // If not found, fall back to GM Server flow (signature already verified above)
-        let verifiedVia = 'GM-signature';
+        // 1. Strict verification via GM proof (server-side verified night action state)
+        const gmProofResponse = await fetch(`${GM_SERVER_URL}/investigation-proof`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roomId: rawRoomId,
+                detectiveAddress,
+                targetAddress,
+                signature,
+                signerAddress: actualSigner,
+            }),
+        });
 
-        try {
-            const currentBlock = await publicClient.getBlockNumber();
-            let revealEvent = null;
-            const CHUNK_SIZE = 990n;
-            const MAX_LOOKBACK = 5000n;
-
-            for (let offset = 0n; offset < MAX_LOOKBACK && !revealEvent; offset += CHUNK_SIZE) {
-                const toBlock = currentBlock - offset;
-                const fromBlock = toBlock > CHUNK_SIZE ? toBlock - CHUNK_SIZE : 0n;
-
-                try {
-                    const logs = await publicClient.getContractEvents({
-                        address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
-                        abi: MAFIA_ABI,
-                        eventName: 'NightActionRevealed',
-                        args: { roomId },
-                        fromBlock,
-                        toBlock
-                    });
-
-                    revealEvent = logs.find((log: any) =>
-                        log.args?.player?.toLowerCase() === detectiveAddress.toLowerCase() &&
-                        log.args?.action === ACTION_CHECK &&
-                        log.args?.target?.toLowerCase() === targetAddress.toLowerCase()
-                    ) || null;
-                } catch (e) {
-                    console.warn(`[API/Investigate] Event search failed for range ${fromBlock}-${toBlock}:`, e);
-                }
-            }
-
-            if (revealEvent) {
-                verifiedVia = 'Event';
-            } else {
-                // Fallback: try checking current mappings
-                const revealedAction = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
-                    abi: MAFIA_ABI,
-                    functionName: 'revealedActions',
-                    args: [roomId, detectiveAddress as `0x${string}`],
-                }) as number;
-
-                if (revealedAction === ACTION_CHECK) {
-                    verifiedVia = 'Mapping';
-                }
-            }
-        } catch (e) {
-            console.warn('[API/Investigate] On-chain verification failed, using GM-signature fallback:', e);
+        if (!gmProofResponse.ok) {
+            let gmError = 'Investigation proof not found';
+            try {
+                const payload = await gmProofResponse.json();
+                gmError = payload?.error || gmError;
+            } catch { }
+            return NextResponse.json({ error: gmError }, { status: gmProofResponse.status });
         }
 
-        // GM Server flow fallback: verify the caller is actually a detective via ServerStore
-        if (verifiedVia === 'GM-signature') {
-            const secrets = await ServerStore.getRoomSecrets(roomId.toString());
-            const detectiveSecret = secrets?.[detectiveAddress.toLowerCase()];
-            // Role 3 = DETECTIVE
-            if (!detectiveSecret || detectiveSecret.role !== 3) {
-                console.log(`[API/Investigate] GM fallback: ${detectiveAddress} is not a detective (role=${detectiveSecret?.role})`);
-                return NextResponse.json({
-                    error: 'Caller is not a detective in this room',
-                }, { status: 403 });
-            }
-            console.log(`[API/Investigate] GM fallback: verified ${detectiveAddress} as detective via ServerStore`);
-        }
-
-        console.log(`[API/Investigate] Verification SUCCESS via ${verifiedVia}`);
+        console.log('[API/Investigate] Verification SUCCESS via GM proof');
 
         // 2. Get target's role from ServerStore
         const secrets = await ServerStore.getRoomSecrets(roomId.toString());
