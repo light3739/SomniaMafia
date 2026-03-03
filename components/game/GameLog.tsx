@@ -29,13 +29,14 @@ export const GameLog: React.FC = React.memo(() => {
     const todayLogs = useMemo(() => {
         let startIndex = 0;
         for (let i = logs.length - 1; i >= 0; i--) {
-            if (logs[i].message.includes('Night Result:') || logs[i].message.includes('Game started!')) {
+            const msg = logs[i].message;
+            if (msg.includes(`Day ${dayCount} has begun`) || msg.includes('Game started!')) {
                 startIndex = i;
                 break;
             }
         }
         return logs.slice(startIndex);
-    }, [logs]);
+    }, [logs, dayCount]);
 
     // Parse structured events from log messages (current day only)
     const dayEvents = useMemo(() => {
