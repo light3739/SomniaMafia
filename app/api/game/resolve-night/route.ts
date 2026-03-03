@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GM_SERVER_URL } from '@/contracts/config';
 import { withSignedRoute } from '@/app/api/_lib/security';
+import { buildResolveNightMessage } from '@/services/signingSchema';
 
 export const POST = withSignedRoute<{
     roomId: string;
@@ -15,7 +16,7 @@ export const POST = withSignedRoute<{
     getRoomId: (body) => body.roomId,
     getActorAddress: (body) => body.playerAddress,
     getSignerAddress: (body) => body.callerAddress,
-    getMessage: ({ roomId, nonce, timestamp }) => `resolve-night:${roomId}:${nonce}:${timestamp}`,
+    getMessage: ({ roomId, nonce, timestamp }) => buildResolveNightMessage({ roomId, nonce, timestamp }),
 }, async ({ body, roomId }) => {
     const gmRes = await fetch(`${GM_SERVER_URL}/resolve-night`, {
         method: 'POST',

@@ -7,6 +7,10 @@ const redis = process.env.REDIS_URL
     ? new Redis(process.env.REDIS_URL)
     : null;
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const ALLOW_INSECURE_MEMORY_FALLBACK = process.env.ALLOW_INSECURE_MEMORY_FALLBACK === 'true';
+const FAIL_CLOSED_SECURITY_STORAGE = IS_PRODUCTION && !ALLOW_INSECURE_MEMORY_FALLBACK;
+
 if (redis) {
     redis.on('error', (err) => console.error('[ServerStore] Redis Connection Error:', err));
 }
@@ -20,8 +24,8 @@ const memoryStore: Record<string, Record<string, string>> = {};
 if (!redis && process.env.NODE_ENV === 'production') {
     console.error(
         '\n\n🚨🚨🚨 [ServerStore] CRITICAL: Redis is NOT configured in PRODUCTION!\n' +
-        'All player secrets will be stored in memory and LOST on server restart/redeploy.\n' +
-        'Set REDIS_URL environment variable immediately.\n🚨🚨🚨\n'
+        'Security-critical storage is now FAIL-CLOSED (no insecure memory fallback).\n' +
+        'Set REDIS_URL (or ALLOW_INSECURE_MEMORY_FALLBACK=true for emergency only).\n🚨🚨🚨\n'
     );
 }
 
@@ -45,6 +49,12 @@ export type StoreSecretResult =
  * This ensures win-conditions can be checked even if players go offline.
  */
 export class ServerStore {
+    private static ensureSecureStorageForCriticalPath(operation: string): void {
+        if (!redis && FAIL_CLOSED_SECURITY_STORAGE) {
+            throw new Error(`[ServerStore] ${operation} requires REDIS_URL in production`);
+        }
+    }
+
     /**
      * Consume one-time replay nonce for signed actions.
      * Returns true if nonce was accepted first time, false if already used.
@@ -56,6 +66,8 @@ export class ServerStore {
         nonce: string,
         ttlSeconds: number = REPLAY_NONCE_TTL_SECONDS
     ): Promise<boolean> {
+        this.ensureSecureStorageForCriticalPath('consumeReplayNonce');
+
         const normalizedRoomId = BigInt(roomId).toString();
         const key = `replay:${scope}:${normalizedRoomId}:${actorAddress.toLowerCase()}:${nonce}`;
 
@@ -91,6 +103,8 @@ export class ServerStore {
      * Uses a Hash structure: room:secrets:{roomId} -> {address: secret}
      */
     static async storeSecret(roomId: string, address: string, role: number, salt: string): Promise<StoreSecretResult> {
+        this.ensureSecureStorageForCriticalPath('storeSecret');
+
         const normalizedRoomId = BigInt(roomId).toString();
         const secret: PlayerSecret = { role };
         const key = `room:secrets:${normalizedRoomId}`;
@@ -142,6 +156,8 @@ export class ServerStore {
      * Retrieves all secrets for a specific room.
      */
     static async getRoomSecrets(roomId: string): Promise<Record<string, PlayerSecret> | null> {
+        this.ensureSecureStorageForCriticalPath('getRoomSecrets');
+
         const normalizedRoomId = BigInt(roomId).toString();
         const key = `room:secrets:${normalizedRoomId}`;
 

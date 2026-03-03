@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ServerStore } from '@/services/serverStore';
 import { withSignedRoute } from '@/app/api/_lib/security';
+import { buildAvatarMessage } from '@/services/signingSchema';
 
 /**
  * POST - Upload/update player avatar for a room
@@ -19,7 +20,12 @@ export const POST = withSignedRoute<{
     getRoomId: (body) => body.roomId,
     getActorAddress: (body) => body.address,
     getSignerAddress: (body) => body.signerAddress,
-    getMessage: ({ roomId, actorAddress, nonce, timestamp }) => `avatar:${roomId}:${actorAddress}:${nonce}:${timestamp}`,
+    getMessage: ({ roomId, actorAddress, nonce, timestamp }) => buildAvatarMessage({
+        roomId,
+        address: actorAddress,
+        nonce,
+        timestamp,
+    }),
 }, async ({ body, roomId }) => {
     if (!body.avatar.startsWith('data:image/')) {
         return NextResponse.json({ error: 'Avatar must be a base64 image data URL' }, { status: 400 });

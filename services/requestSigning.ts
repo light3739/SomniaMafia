@@ -24,9 +24,9 @@ export async function signRequest(params: {
     address: string;
     roomId?: number;
     walletClient?: SignCapableClient | null;
-    messageBase: string;
+    buildMessage: (input: { nonce: string; timestamp: number }) => string;
 }): Promise<SignedRequestMeta> {
-    const { address, roomId, walletClient, messageBase } = params;
+    const { address, roomId, walletClient, buildMessage } = params;
 
     if (!address) {
         throw new Error('Missing address for signing');
@@ -34,7 +34,7 @@ export async function signRequest(params: {
 
     const timestamp = Date.now();
     const nonce = generateNonce(timestamp);
-    const message = `${messageBase}:${nonce}:${timestamp}`;
+    const message = buildMessage({ nonce, timestamp });
 
     const normalizedAddress = address.toLowerCase();
     const session = loadSession();
