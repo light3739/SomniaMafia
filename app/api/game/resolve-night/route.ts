@@ -8,6 +8,7 @@ export const POST = withSignedRoute<{
     playerAddress: string;
     callerAddress: string;
     signature: string;
+    gmLegacySignature?: string;
     nonce: string;
     timestamp: number;
 }>({
@@ -23,8 +24,8 @@ export const POST = withSignedRoute<{
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             roomId,
-            signature: body.signature,
-            callerAddress: body.callerAddress,
+            signature: body.gmLegacySignature || body.signature,
+            callerAddress: body.playerAddress,
         }),
     });
 
