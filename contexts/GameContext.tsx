@@ -11,6 +11,7 @@ import { loadSession, createNewSession, markSessionRegistered, getSessionAccount
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
 import { signRequest } from '../services/requestSigning';
+import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage } from '../services/signingSchema';
 
 const shotSound = "/assets/mafia_shot.wav";
 
@@ -1226,7 +1227,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         address,
                         roomId: Number(finalRoomId),
                         walletClient,
-                        messageBase: `avatar:${finalRoomId.toString()}:${address.toLowerCase()}`,
+                        buildMessage: ({ nonce, timestamp }) => buildAvatarMessage({
+                            roomId: finalRoomId.toString(),
+                            address,
+                            nonce,
+                            timestamp,
+                        }),
                     });
 
                     await fetch('/api/game/avatar', {
@@ -1334,7 +1340,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         address,
                         roomId: Number(roomId),
                         walletClient,
-                        messageBase: `avatar:${roomId.toString()}:${address.toLowerCase()}`,
+                        buildMessage: ({ nonce, timestamp }) => buildAvatarMessage({
+                            roomId: roomId.toString(),
+                            address,
+                            nonce,
+                            timestamp,
+                        }),
                     });
 
                     await fetch('/api/game/avatar', {
@@ -1767,7 +1778,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 address: playerAddress,
                 roomId: Number(currentRoomId),
                 walletClient,
-                messageBase: `night:${currentRoomId.toString()}:${actionType}:${targetAddress}`,
+                buildMessage: ({ nonce, timestamp }) => buildNightActionMessage({
+                    roomId: currentRoomId.toString(),
+                    actionType,
+                    targetAddress,
+                    nonce,
+                    timestamp,
+                }),
             });
 
             const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${playerAddress.toLowerCase()}`);
@@ -1963,7 +1980,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     address,
                     roomId: Number(currentRoomId),
                     walletClient,
-                    messageBase: `resolve-night:${currentRoomId.toString()}`,
+                    buildMessage: ({ nonce, timestamp }) => buildResolveNightMessage({
+                        roomId: currentRoomId.toString(),
+                        nonce,
+                        timestamp,
+                    }),
                 });
                 signature = signed.signature;
                 callerAddress = signed.signerAddress;

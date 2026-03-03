@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useWalletClient } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
+import { buildDiscussionMessage } from '@/services/signingSchema';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { GamePhase, Player } from '../../types';
 import { Button } from '../ui/Button';
@@ -210,7 +211,13 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     address: actorAddress,
                     roomId: Number(currentRoomId),
                     walletClient,
-                    messageBase: `discussion:${currentRoomId.toString()}:${gameState.dayCount}:start`,
+                    buildMessage: ({ nonce, timestamp }) => buildDiscussionMessage({
+                        roomId: currentRoomId.toString(),
+                        dayCount: gameState.dayCount,
+                        action: 'start',
+                        nonce,
+                        timestamp,
+                    }),
                 });
 
                 await fetch('/api/game/discussion', {
@@ -258,7 +265,13 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                 address: actorAddress,
                 roomId: Number(currentRoomId),
                 walletClient,
-                messageBase: `discussion:${currentRoomId.toString()}:${gameState.dayCount}:skip`,
+                buildMessage: ({ nonce, timestamp }) => buildDiscussionMessage({
+                    roomId: currentRoomId.toString(),
+                    dayCount: gameState.dayCount,
+                    action: 'skip',
+                    nonce,
+                    timestamp,
+                }),
             });
 
             await fetch('/api/game/discussion', {

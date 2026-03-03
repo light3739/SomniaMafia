@@ -6,6 +6,7 @@ import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { Room, RoomEvent, Track, LocalAudioTrack, RemoteTrack, RemoteTrackPublication, RemoteParticipant } from 'livekit-client';
 import { useAccount, useWalletClient } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
+import { buildTokenMessage } from '@/services/signingSchema';
 
 interface MicButtonProps {
     roomId: string;
@@ -110,7 +111,13 @@ export function MicButton({
                             address: playerAddress,
                             roomId: parsedRoomId,
                             walletClient,
-                            messageBase: `token:${roomId}:${userNameRef.current}:${playerAddress.toLowerCase()}`,
+                            buildMessage: ({ nonce, timestamp }) => buildTokenMessage({
+                                room: roomId,
+                                username: userNameRef.current,
+                                playerAddress,
+                                nonce,
+                                timestamp,
+                            }),
                         });
                         signature = signed.signature;
                         signerAddress = signed.signerAddress;
