@@ -1221,13 +1221,42 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Upload avatar to server for other players to see
             if (avatarUrl && address) {
                 try {
+                    const ts = Date.now();
+                    const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+                        ? crypto.randomUUID().replace(/-/g, '')
+                        : `${Math.random().toString(36).slice(2)}${ts.toString(36)}`;
+                    const avatarMessage = `avatar:${finalRoomId.toString()}:${address.toLowerCase()}:${nonce}:${ts}`;
+                    let avatarSignature: `0x${string}`;
+                    let avatarSignerAddress = address;
+
+                    const avatarSession = loadSession();
+                    if (
+                        avatarSession &&
+                        avatarSession.registeredOnChain &&
+                        Date.now() < avatarSession.expiresAt &&
+                        avatarSession.mainWallet.toLowerCase() === address.toLowerCase() &&
+                        avatarSession.roomId === Number(finalRoomId)
+                    ) {
+                        const sessionAccount = privateKeyToAccount(avatarSession.privateKey);
+                        avatarSignature = await sessionAccount.signMessage({ message: avatarMessage });
+                        avatarSignerAddress = sessionAccount.address;
+                    } else if (walletClient) {
+                        avatarSignature = await walletClient.signMessage({ message: avatarMessage });
+                    } else {
+                        throw new Error('No wallet available to sign avatar upload');
+                    }
+
                     await fetch('/api/game/avatar', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             roomId: finalRoomId.toString(), // FIXED: Use finalRoomId
                             address,
-                            avatar: avatarUrl
+                            avatar: avatarUrl,
+                            signature: avatarSignature,
+                            signerAddress: avatarSignerAddress,
+                            nonce,
+                            timestamp: ts,
                         })
                     });
                     console.log('[Avatar Sync] Avatar uploaded to server');
@@ -1318,13 +1347,42 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Upload avatar to server for other players to see
             if (avatarUrl && address) {
                 try {
+                    const ts = Date.now();
+                    const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+                        ? crypto.randomUUID().replace(/-/g, '')
+                        : `${Math.random().toString(36).slice(2)}${ts.toString(36)}`;
+                    const avatarMessage = `avatar:${roomId.toString()}:${address.toLowerCase()}:${nonce}:${ts}`;
+                    let avatarSignature: `0x${string}`;
+                    let avatarSignerAddress = address;
+
+                    const avatarSession = loadSession();
+                    if (
+                        avatarSession &&
+                        avatarSession.registeredOnChain &&
+                        Date.now() < avatarSession.expiresAt &&
+                        avatarSession.mainWallet.toLowerCase() === address.toLowerCase() &&
+                        avatarSession.roomId === Number(roomId)
+                    ) {
+                        const sessionAccount = privateKeyToAccount(avatarSession.privateKey);
+                        avatarSignature = await sessionAccount.signMessage({ message: avatarMessage });
+                        avatarSignerAddress = sessionAccount.address;
+                    } else if (walletClient) {
+                        avatarSignature = await walletClient.signMessage({ message: avatarMessage });
+                    } else {
+                        throw new Error('No wallet available to sign avatar upload');
+                    }
+
                     await fetch('/api/game/avatar', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             roomId: roomId.toString(),
                             address,
-                            avatar: avatarUrl
+                            avatar: avatarUrl,
+                            signature: avatarSignature,
+                            signerAddress: avatarSignerAddress,
+                            nonce,
+                            timestamp: ts,
                         })
                     });
                     console.log('[Avatar Sync] Avatar uploaded to server');
@@ -1341,7 +1399,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, publicClient, writeContractAsync, addLog, refreshPlayersList]);
+    }, [playerName, address, publicClient, writeContractAsync, addLog, refreshPlayersList, avatarUrl, walletClient]);
 
     // --- SHUFFLE PHASE ---
 
