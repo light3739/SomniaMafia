@@ -10,6 +10,7 @@ import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
 import { loadSession, createNewSession, markSessionRegistered, getSessionAccount } from '../services/sessionKeyService';
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
+import { signRequest } from '../services/requestSigning';
 
 const shotSound = "/assets/mafia_shot.wav";
 
@@ -1221,30 +1222,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Upload avatar to server for other players to see
             if (avatarUrl && address) {
                 try {
-                    const ts = Date.now();
-                    const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-                        ? crypto.randomUUID().replace(/-/g, '')
-                        : `${Math.random().toString(36).slice(2)}${ts.toString(36)}`;
-                    const avatarMessage = `avatar:${finalRoomId.toString()}:${address.toLowerCase()}:${nonce}:${ts}`;
-                    let avatarSignature: `0x${string}`;
-                    let avatarSignerAddress = address;
-
-                    const avatarSession = loadSession();
-                    if (
-                        avatarSession &&
-                        avatarSession.registeredOnChain &&
-                        Date.now() < avatarSession.expiresAt &&
-                        avatarSession.mainWallet.toLowerCase() === address.toLowerCase() &&
-                        avatarSession.roomId === Number(finalRoomId)
-                    ) {
-                        const sessionAccount = privateKeyToAccount(avatarSession.privateKey);
-                        avatarSignature = await sessionAccount.signMessage({ message: avatarMessage });
-                        avatarSignerAddress = sessionAccount.address;
-                    } else if (walletClient) {
-                        avatarSignature = await walletClient.signMessage({ message: avatarMessage });
-                    } else {
-                        throw new Error('No wallet available to sign avatar upload');
-                    }
+                    const signed = await signRequest({
+                        address,
+                        roomId: Number(finalRoomId),
+                        walletClient,
+                        messageBase: `avatar:${finalRoomId.toString()}:${address.toLowerCase()}`,
+                    });
 
                     await fetch('/api/game/avatar', {
                         method: 'POST',
@@ -1253,10 +1236,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             roomId: finalRoomId.toString(), // FIXED: Use finalRoomId
                             address,
                             avatar: avatarUrl,
-                            signature: avatarSignature,
-                            signerAddress: avatarSignerAddress,
-                            nonce,
-                            timestamp: ts,
+                            signature: signed.signature,
+                            signerAddress: signed.signerAddress,
+                            nonce: signed.nonce,
+                            timestamp: signed.timestamp,
                         })
                     });
                     console.log('[Avatar Sync] Avatar uploaded to server');
@@ -1347,30 +1330,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Upload avatar to server for other players to see
             if (avatarUrl && address) {
                 try {
-                    const ts = Date.now();
-                    const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-                        ? crypto.randomUUID().replace(/-/g, '')
-                        : `${Math.random().toString(36).slice(2)}${ts.toString(36)}`;
-                    const avatarMessage = `avatar:${roomId.toString()}:${address.toLowerCase()}:${nonce}:${ts}`;
-                    let avatarSignature: `0x${string}`;
-                    let avatarSignerAddress = address;
-
-                    const avatarSession = loadSession();
-                    if (
-                        avatarSession &&
-                        avatarSession.registeredOnChain &&
-                        Date.now() < avatarSession.expiresAt &&
-                        avatarSession.mainWallet.toLowerCase() === address.toLowerCase() &&
-                        avatarSession.roomId === Number(roomId)
-                    ) {
-                        const sessionAccount = privateKeyToAccount(avatarSession.privateKey);
-                        avatarSignature = await sessionAccount.signMessage({ message: avatarMessage });
-                        avatarSignerAddress = sessionAccount.address;
-                    } else if (walletClient) {
-                        avatarSignature = await walletClient.signMessage({ message: avatarMessage });
-                    } else {
-                        throw new Error('No wallet available to sign avatar upload');
-                    }
+                    const signed = await signRequest({
+                        address,
+                        roomId: Number(roomId),
+                        walletClient,
+                        messageBase: `avatar:${roomId.toString()}:${address.toLowerCase()}`,
+                    });
 
                     await fetch('/api/game/avatar', {
                         method: 'POST',
@@ -1379,10 +1344,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             roomId: roomId.toString(),
                             address,
                             avatar: avatarUrl,
-                            signature: avatarSignature,
-                            signerAddress: avatarSignerAddress,
-                            nonce,
-                            timestamp: ts,
+                            signature: signed.signature,
+                            signerAddress: signed.signerAddress,
+                            nonce: signed.nonce,
+                            timestamp: signed.timestamp,
                         })
                     });
                     console.log('[Avatar Sync] Avatar uploaded to server');
@@ -1798,13 +1763,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const playerAddress = address!;
             console.log(`[GM API] Submitting night action: ${actionType} on ${targetAddress} by ${playerAddress}`);
 
-            const timestamp = Date.now();
-            const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-                ? crypto.randomUUID().replace(/-/g, '')
-                : `${Math.random().toString(36).slice(2)}${timestamp.toString(36)}`;
-            const message = `night:${currentRoomId.toString()}:${actionType}:${targetAddress}:${nonce}:${timestamp}`;
-            let signature: `0x${string}`;
-            let sessionKeyAddr: string | undefined;
+            const signed = await signRequest({
+                address: playerAddress,
+                roomId: Number(currentRoomId),
+                walletClient,
+                messageBase: `night:${currentRoomId.toString()}:${actionType}:${targetAddress}`,
+            });
 
             const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${playerAddress.toLowerCase()}`);
             const myPlayer = gameState.players.find(p => p.address.toLowerCase() === playerAddress.toLowerCase());
@@ -1825,31 +1789,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 throw new Error("Missing role or salt for cryptographic verification");
             }
 
-            const session = loadSession();
-            if (session && session.registeredOnChain && Date.now() < session.expiresAt &&
-                session.mainWallet.toLowerCase() === playerAddress.toLowerCase()) {
-                const sessionAccount = privateKeyToAccount(session.privateKey);
-                signature = await sessionAccount.signMessage({ message });
-                sessionKeyAddr = sessionAccount.address;
-                console.log('[GM API] Signed with session key');
-            } else if (walletClient) {
-                signature = await walletClient.signMessage({ message });
-                console.log('[GM API] Signed with main wallet');
-            } else {
-                throw new Error('No wallet available for signing');
-            }
+            console.log('[GM API] Request signed for night action');
 
             const payload = JSON.stringify({
                     roomId: currentRoomId.toString(),
                     playerAddress,
                     actionType,
                     targetAddress,
-                    signature,
-                    signerAddress: sessionKeyAddr || playerAddress,
+                        signature: signed.signature,
+                        signerAddress: signed.signerAddress,
                     role: myRoleNum,
                     salt: savedSalt,
-                    nonce,
-                    timestamp,
+                        nonce: signed.nonce,
+                        timestamp: signed.timestamp,
             });
 
             // Retry with backoff for transient 403/5xx (role commit cache miss on GM)
@@ -2003,23 +1955,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 let signature: `0x${string}`;
                 let callerAddress: string;
 
-                const timestamp = Date.now();
-                const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-                    ? crypto.randomUUID().replace(/-/g, '')
-                    : `${Math.random().toString(36).slice(2)}${timestamp.toString(36)}`;
-                const message = `resolve-night:${currentRoomId.toString()}:${nonce}:${timestamp}`;
-
-                const session = loadSession();
-                if (session && session.registeredOnChain && Date.now() < session.expiresAt && address && session.mainWallet.toLowerCase() === address.toLowerCase()) {
-                    const sessionAccount = privateKeyToAccount(session.privateKey);
-                    signature = await sessionAccount.signMessage({ message });
-                    callerAddress = sessionAccount.address;
-                } else if (walletClient && address) {
-                    signature = await walletClient.signMessage({ message });
-                    callerAddress = address;
-                } else {
+                if (!address) {
                     throw new Error('No wallet for signing');
                 }
+
+                const signed = await signRequest({
+                    address,
+                    roomId: Number(currentRoomId),
+                    walletClient,
+                    messageBase: `resolve-night:${currentRoomId.toString()}`,
+                });
+                signature = signed.signature;
+                callerAddress = signed.signerAddress;
 
                 const res = await fetch('/api/game/resolve-night', {
                     method: 'POST',
@@ -2029,8 +1976,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         playerAddress: address,
                         signature,
                         callerAddress,
-                        nonce,
-                        timestamp,
+                        nonce: signed.nonce,
+                        timestamp: signed.timestamp,
                     })
                 });
 

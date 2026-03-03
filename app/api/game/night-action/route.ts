@@ -1,126 +1,49 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, http, verifyMessage } from 'viem';
-import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL } from '@/contracts/config';
-import { ServerStore } from '@/services/serverStore';
+import { GM_SERVER_URL } from '@/contracts/config';
+import { withSignedRoute } from '@/app/api/_lib/security';
 
-const publicClient = createPublicClient({
-    chain: somniaChain,
-    transport: http()
-});
-
-const MAX_CLOCK_SKEW_MS = 2 * 60 * 1000; // 2 minutes
-const NONCE_MIN_LENGTH = 8;
-
-export async function POST(request: Request) {
-    try {
-        const {
-            roomId: rawRoomId,
-            playerAddress,
-            actionType,
-            targetAddress,
-            signature,
-            signerAddress,
-            role,
-            salt,
-            nonce,
-            timestamp,
-        } = await request.json();
-
-        if (!rawRoomId || !playerAddress || !actionType || !targetAddress || !signature || !nonce || !timestamp) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-        }
-
-        const roomId = BigInt(rawRoomId).toString();
-        const normalizedPlayer = String(playerAddress).toLowerCase();
-        const normalizedSigner = String(signerAddress || playerAddress).toLowerCase();
-
-        if (!['kill', 'heal', 'check'].includes(actionType)) {
-            return NextResponse.json({ error: 'Invalid actionType' }, { status: 400 });
-        }
-
-        const ts = Number(timestamp);
-        if (!Number.isFinite(ts)) {
-            return NextResponse.json({ error: 'Invalid timestamp' }, { status: 400 });
-        }
-        if (Math.abs(Date.now() - ts) > MAX_CLOCK_SKEW_MS) {
-            return NextResponse.json({ error: 'Request expired or clock skew too large' }, { status: 401 });
-        }
-
-        if (typeof nonce !== 'string' || nonce.length < NONCE_MIN_LENGTH || nonce.length > 128) {
-            return NextResponse.json({ error: 'Invalid nonce' }, { status: 400 });
-        }
-
-        const message = `night:${roomId}:${actionType}:${targetAddress}:${nonce}:${ts}`;
-        const sigValid = await verifyMessage({
-            address: normalizedSigner as `0x${string}`,
-            message,
-            signature: signature as `0x${string}`,
-        });
-
-        if (!sigValid) {
-            return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-        }
-
-        if (normalizedSigner !== normalizedPlayer) {
-            const sessionKeyData = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
-                abi: MAFIA_ABI,
-                functionName: 'sessionKeys',
-                args: [playerAddress as `0x${string}`],
-            }) as any;
-
-            const registeredSession = Array.isArray(sessionKeyData)
-                ? sessionKeyData[0]
-                : sessionKeyData.sessionAddress;
-            const expiresAt = Number(Array.isArray(sessionKeyData)
-                ? sessionKeyData[1]
-                : sessionKeyData.expiresAt);
-            const roomIdFromChain = Number(Array.isArray(sessionKeyData)
-                ? sessionKeyData[2]
-                : sessionKeyData.roomId);
-            const isActive = Boolean(Array.isArray(sessionKeyData)
-                ? sessionKeyData[3]
-                : sessionKeyData.isActive);
-
-            if (!registeredSession || registeredSession.toLowerCase() !== normalizedSigner) {
-                return NextResponse.json({ error: 'Session key is not registered for this player' }, { status: 403 });
-            }
-            if (!isActive || expiresAt <= Math.floor(Date.now() / 1000)) {
-                return NextResponse.json({ error: 'Session key inactive or expired' }, { status: 403 });
-            }
-            if (roomIdFromChain !== Number(roomId)) {
-                return NextResponse.json({ error: 'Session key room mismatch' }, { status: 403 });
-            }
-        }
-
-        const accepted = await ServerStore.consumeReplayNonce('night-action', roomId, normalizedPlayer, nonce);
-        if (!accepted) {
-            return NextResponse.json({ error: 'Replay detected: nonce already used' }, { status: 409 });
-        }
-
-        const gmRes = await fetch(`${GM_SERVER_URL}/night-action`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                roomId,
-                playerAddress,
-                actionType,
-                targetAddress,
-                signature,
-                signerAddress: normalizedSigner,
-                role,
-                salt,
-            }),
-        });
-
-        const gmPayload = await gmRes.json().catch(() => ({}));
-        if (!gmRes.ok) {
-            return NextResponse.json({ error: gmPayload?.error || 'GM rejected night action' }, { status: gmRes.status });
-        }
-
-        return NextResponse.json({ success: true, result: gmPayload });
-    } catch (error: any) {
-        console.error('[API/NightAction] Error:', error);
-        return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
+export const POST = withSignedRoute<{
+    roomId: string;
+    playerAddress: string;
+    actionType: 'kill' | 'heal' | 'check';
+    targetAddress: string;
+    signature: string;
+    signerAddress?: string;
+    role: number;
+    salt: string;
+    nonce: string;
+    timestamp: number;
+}>({
+    scope: 'night-action',
+    requiredFields: ['roomId', 'playerAddress', 'actionType', 'targetAddress', 'signature', 'nonce', 'timestamp'],
+    getRoomId: (body) => body.roomId,
+    getActorAddress: (body) => body.playerAddress,
+    getSignerAddress: (body) => body.signerAddress,
+    getMessage: ({ body, roomId, nonce, timestamp }) => `night:${roomId}:${body.actionType}:${body.targetAddress}:${nonce}:${timestamp}`,
+}, async ({ body, roomId, signerAddress }) => {
+    if (!['kill', 'heal', 'check'].includes(body.actionType)) {
+        return NextResponse.json({ error: 'Invalid actionType' }, { status: 400 });
     }
-}
+
+    const gmRes = await fetch(`${GM_SERVER_URL}/night-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            roomId,
+            playerAddress: body.playerAddress,
+            actionType: body.actionType,
+            targetAddress: body.targetAddress,
+            signature: body.signature,
+            signerAddress,
+            role: body.role,
+            salt: body.salt,
+        }),
+    });
+
+    const gmPayload = await gmRes.json().catch(() => ({}));
+    if (!gmRes.ok) {
+        return NextResponse.json({ error: gmPayload?.error || 'GM rejected night action' }, { status: gmRes.status });
+    }
+
+    return NextResponse.json({ success: true, result: gmPayload });
+});
