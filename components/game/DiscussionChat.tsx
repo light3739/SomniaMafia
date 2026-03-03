@@ -7,6 +7,9 @@ import { useGameContext } from '@/contexts/GameContext';
 import { GamePhase } from '@/types';
 import { Room, RoomEvent, DataPacket_Kind } from 'livekit-client';
 import { useSoundEffects } from '@/components/ui/SoundEffects';
+import { useWalletClient } from 'wagmi';
+import { loadSession } from '@/services/sessionKeyService';
+import { privateKeyToAccount } from 'viem/accounts';
 
 interface ChatMessage {
     id: string;
@@ -28,6 +31,7 @@ export const ChatToggleButton: React.FC<{
     canWrite?: boolean;
 }> = ({ isExpanded, onToggle, unreadCount = 0, canWrite = false }) => {
     const { gameState, myPlayer, currentRoomId } = useGameContext();
+    const { data: walletClient } = useWalletClient();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -131,13 +135,48 @@ export const ChatToggleButton: React.FC<{
                 const roomName = `${currentRoomId}-day`;
                 console.log('[ChatToggleButton] Getting token for room:', roomName);
 
+                const ts = Date.now();
+                const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+                    ? crypto.randomUUID().replace(/-/g, '')
+                    : `${Math.random().toString(36).slice(2)}${ts.toString(36)}`;
+
+                const playerAddress = myPlayer?.address || '';
+                const username = `${userNameRef.current}_chat`;
+                const tokenMessage = `token:${roomName}:${username}:${playerAddress.toLowerCase()}:${nonce}:${ts}`;
+
+                let signature: `0x${string}` | undefined;
+                let signerAddress: string | undefined;
+
+                if (playerAddress) {
+                    const session = loadSession();
+                    if (
+                        session &&
+                        session.registeredOnChain &&
+                        Date.now() < session.expiresAt &&
+                        session.mainWallet.toLowerCase() === playerAddress.toLowerCase() &&
+                        session.roomId === Number(currentRoomId)
+                    ) {
+                        const sessionAccount = privateKeyToAccount(session.privateKey);
+                        signature = await sessionAccount.signMessage({ message: tokenMessage });
+                        signerAddress = sessionAccount.address;
+                    } else if (walletClient) {
+                        signature = await walletClient.signMessage({ message: tokenMessage });
+                        signerAddress = playerAddress;
+                    }
+                }
+
                 const resp = await fetch('/api/token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         room: roomName,
                         // Add _chat suffix to avoid DUPLICATE_IDENTITY with MicButton
-                        username: `${userNameRef.current}_chat`
+                        username,
+                        playerAddress,
+                        signerAddress,
+                        signature,
+                        nonce,
+                        timestamp: ts,
                     })
                 });
 
@@ -209,7 +248,7 @@ export const ChatToggleButton: React.FC<{
                 roomRef.current = null;
             }
         };
-    }, [currentRoomId, gameState.phase, handleDataReceived]);
+    }, [currentRoomId, gameState.phase, handleDataReceived, myPlayer?.address, walletClient]);
 
     // Clean up on phase change
     useEffect(() => {

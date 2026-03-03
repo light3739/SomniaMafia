@@ -4,6 +4,9 @@ import { LiveKitRoom, RoomAudioRenderer, ControlBar, Chat } from "@livekit/compo
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Volume2, VolumeX, X, Loader2, Users } from 'lucide-react';
+import { useAccount, useWalletClient } from 'wagmi';
+import { loadSession } from '@/services/sessionKeyService';
+import { privateKeyToAccount } from 'viem/accounts';
 
 interface LiveKitVoiceChatProps {
     roomId: string;
@@ -24,6 +27,8 @@ export function LiveKitVoiceChat({
     onClose,
     showTextChat = false,
 }: LiveKitVoiceChatProps) {
+    const { address } = useAccount();
+    const { data: walletClient } = useWalletClient();
     const [token, setToken] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
@@ -37,9 +42,48 @@ export function LiveKitVoiceChat({
         (async () => {
             try {
                 setError(null);
+                const ts = Date.now();
+                const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+                    ? crypto.randomUUID().replace(/-/g, '')
+                    : `${Math.random().toString(36).slice(2)}${ts.toString(36)}`;
+
+                const playerAddress = address || '';
+                const tokenMessage = `token:${roomId}:${userName}:${playerAddress.toLowerCase()}:${nonce}:${ts}`;
+                let signature: `0x${string}` | undefined;
+                let signerAddress: string | undefined;
+
+                if (playerAddress) {
+                    const roomIdPrefix = roomId.split('-')[0];
+                    const parsedRoomId = Number(roomIdPrefix);
+                    const session = loadSession();
+                    if (
+                        session &&
+                        Number.isFinite(parsedRoomId) &&
+                        session.registeredOnChain &&
+                        Date.now() < session.expiresAt &&
+                        session.mainWallet.toLowerCase() === playerAddress.toLowerCase() &&
+                        session.roomId === parsedRoomId
+                    ) {
+                        const sessionAccount = privateKeyToAccount(session.privateKey);
+                        signature = await sessionAccount.signMessage({ message: tokenMessage });
+                        signerAddress = sessionAccount.address;
+                    } else if (walletClient) {
+                        signature = await walletClient.signMessage({ message: tokenMessage });
+                        signerAddress = playerAddress;
+                    }
+                }
+
                 const resp = await fetch("/api/token", {
                     method: "POST",
-                    body: JSON.stringify({ room: roomId, username: userName }),
+                    body: JSON.stringify({
+                        room: roomId,
+                        username: userName,
+                        playerAddress,
+                        signerAddress,
+                        signature,
+                        nonce,
+                        timestamp: ts,
+                    }),
                     headers: { "Content-Type": "application/json" },
                 });
 
@@ -59,7 +103,7 @@ export function LiveKitVoiceChat({
                 setError(e instanceof Error ? e.message : 'Failed to connect');
             }
         })();
-    }, [isActive, roomId, userName]);
+    }, [isActive, roomId, userName, address, walletClient]);
 
     if (!isActive) return null;
 
