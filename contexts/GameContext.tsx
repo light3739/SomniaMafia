@@ -1787,6 +1787,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }),
             });
 
+            let gmLegacySignature: `0x${string}` | undefined;
+            if (walletClient) {
+                const gmLegacyMessage = `night:${currentRoomId.toString()}:${actionType}:${targetAddress}`;
+                gmLegacySignature = await walletClient.signMessage({ message: gmLegacyMessage });
+            }
+
             const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${playerAddress.toLowerCase()}`);
             const myPlayer = gameState.players.find(p => p.address.toLowerCase() === playerAddress.toLowerCase());
             const myRoleStr = savedRole || myPlayer?.role;
@@ -1814,6 +1820,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     actionType,
                     targetAddress,
                         signature: signed.signature,
+                        gmLegacySignature,
                         signerAddress: signed.signerAddress,
                     role: myRoleNum,
                     salt: savedSalt,
@@ -1986,6 +1993,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         timestamp,
                     }),
                 });
+
+                let gmLegacySignature: `0x${string}` | undefined;
+                if (walletClient) {
+                    const gmLegacyMessage = `resolve-night:${currentRoomId.toString()}`;
+                    gmLegacySignature = await walletClient.signMessage({ message: gmLegacyMessage });
+                }
                 signature = signed.signature;
                 callerAddress = signed.signerAddress;
 
@@ -1996,6 +2009,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         roomId: currentRoomId.toString(),
                         playerAddress: address,
                         signature,
+                        gmLegacySignature,
                         callerAddress,
                         nonce: signed.nonce,
                         timestamp: signed.timestamp,
