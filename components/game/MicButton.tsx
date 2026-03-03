@@ -5,8 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { Room, RoomEvent, Track, LocalAudioTrack, RemoteTrack, RemoteTrackPublication, RemoteParticipant } from 'livekit-client';
 import { useAccount, useWalletClient } from 'wagmi';
-import { loadSession } from '@/services/sessionKeyService';
-import { privateKeyToAccount } from 'viem/accounts';
+import { signRequest } from '@/services/requestSigning';
 
 interface MicButtonProps {
     roomId: string;
@@ -97,34 +96,26 @@ export function MicButton({
             setError(null);
 
             try {
-                const ts = Date.now();
-                const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-                    ? crypto.randomUUID().replace(/-/g, '')
-                    : `${Math.random().toString(36).slice(2)}${ts.toString(36)}`;
-
                 const playerAddress = address || '';
-                const tokenMessage = `token:${roomId}:${userNameRef.current}:${playerAddress.toLowerCase()}:${nonce}:${ts}`;
                 let signature: `0x${string}` | undefined;
                 let signerAddress: string | undefined;
+                let nonce: string | undefined;
+                let timestamp: number | undefined;
 
                 if (playerAddress) {
                     const roomIdPrefix = roomId.split('-')[0];
                     const parsedRoomId = Number(roomIdPrefix);
-                    const session = loadSession();
-                    if (
-                        session &&
-                        Number.isFinite(parsedRoomId) &&
-                        session.registeredOnChain &&
-                        Date.now() < session.expiresAt &&
-                        session.mainWallet.toLowerCase() === playerAddress.toLowerCase() &&
-                        session.roomId === parsedRoomId
-                    ) {
-                        const sessionAccount = privateKeyToAccount(session.privateKey);
-                        signature = await sessionAccount.signMessage({ message: tokenMessage });
-                        signerAddress = sessionAccount.address;
-                    } else if (walletClient) {
-                        signature = await walletClient.signMessage({ message: tokenMessage });
-                        signerAddress = playerAddress;
+                    if (Number.isFinite(parsedRoomId)) {
+                        const signed = await signRequest({
+                            address: playerAddress,
+                            roomId: parsedRoomId,
+                            walletClient,
+                            messageBase: `token:${roomId}:${userNameRef.current}:${playerAddress.toLowerCase()}`,
+                        });
+                        signature = signed.signature;
+                        signerAddress = signed.signerAddress;
+                        nonce = signed.nonce;
+                        timestamp = signed.timestamp;
                     }
                 }
 
@@ -138,7 +129,7 @@ export function MicButton({
                         signerAddress,
                         signature,
                         nonce,
-                        timestamp: ts,
+                        timestamp,
                     }),
                     headers: { "Content-Type": "application/json" },
                 });
