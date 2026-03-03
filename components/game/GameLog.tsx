@@ -24,20 +24,18 @@ export const GameLog: React.FC = React.memo(() => {
     const alivePlayers = gameState.players.filter(p => p.isAlive);
     const logs = gameState.logs;
 
-    // ── Track day changes to clear feed ──────────────────────
-    // When day changes, snapshot the log index so we only parse new logs from this day
-    const prevDayRef = useRef(dayCount);
-    const dayStartLogIndex = useRef(0);
-
-    if (dayCount !== prevDayRef.current) {
-        prevDayRef.current = dayCount;
-        dayStartLogIndex.current = logs.length;
-    }
-
-    // Get only logs for the current day
+    // ── Get logs for the current day only ──────────────────────
+    // Finds the last index indicating the start of a day
     const todayLogs = useMemo(() => {
-        return logs.slice(dayStartLogIndex.current);
-    }, [logs, dayStartLogIndex.current]);
+        let startIndex = 0;
+        for (let i = logs.length - 1; i >= 0; i--) {
+            if (logs[i].message.includes('Night Result:') || logs[i].message.includes('Game started!')) {
+                startIndex = i;
+                break;
+            }
+        }
+        return logs.slice(startIndex);
+    }, [logs]);
 
     // Parse structured events from log messages (current day only)
     const dayEvents = useMemo(() => {
@@ -138,16 +136,16 @@ export const GameLog: React.FC = React.memo(() => {
     }, [alivePlayers.length, dayEvents.voteCasts]);
 
     // ── "Night falls" timed appearance during PostVotingTransition ──
-    // Show "Night falls" 3 seconds before the 10s PostVotingTransition ends (i.e. at 7s)
+    // Show "Night falls" 5 seconds after the 10s PostVotingTransition starts
     const [showNightFalls, setShowNightFalls] = useState(false);
     const nightFallsTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         if (showVotingResults && phase === GamePhase.NIGHT) {
-            // PostVotingTransition lasts 10s, show "Night falls" after 7s
+            // PostVotingTransition lasts 10s, show "Night falls" after 5s
             nightFallsTimerRef.current = setTimeout(() => {
                 setShowNightFalls(true);
-            }, 7000);
+            }, 5000);
 
             return () => {
                 if (nightFallsTimerRef.current) clearTimeout(nightFallsTimerRef.current);
@@ -162,6 +160,7 @@ export const GameLog: React.FC = React.memo(() => {
     const itemVariants = {
         hidden: { opacity: 0, y: 6 },
         visible: { opacity: 1, y: 0 },
+        exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } },
     };
 
     // Shared styles
@@ -193,14 +192,16 @@ export const GameLog: React.FC = React.memo(() => {
             {/* ── EVENT FEED ───────────────────────────────── */}
             <div className="flex-1 flex flex-col p-4 md:p-5 overflow-hidden">
                 <div className="flex flex-col gap-3 text-center">
-                    <AnimatePresence mode="popLayout">
+                    <AnimatePresence initial={false}>
                         {/* 1. Night Result */}
                         {dayEvents.nightResult && (
                             <motion.div
+                                layout
                                 key="night-result"
                                 variants={itemVariants}
                                 initial="hidden"
                                 animate="visible"
+                                exit="exit"
                                 transition={{ duration: 0.4, delay: 0.1 }}
                                 className="flex flex-col items-center gap-3"
                             >
@@ -218,10 +219,12 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* 2. Discussion Phase */}
                         {dayEvents.discussionStarted && (
                             <motion.div
+                                layout
                                 key="discussion"
                                 variants={itemVariants}
                                 initial="hidden"
                                 animate="visible"
+                                exit="exit"
                                 transition={{ duration: 0.4, delay: 0.2 }}
                             >
                                 <span className={BASE_TEXT}>
@@ -239,10 +242,12 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* 3. Voting Phase */}
                         {dayEvents.votingStarted && (
                             <motion.div
+                                layout
                                 key="voting"
                                 variants={itemVariants}
                                 initial="hidden"
                                 animate="visible"
+                                exit="exit"
                                 transition={{ duration: 0.4, delay: 0.3 }}
                             >
                                 <span className={BASE_TEXT}>
@@ -254,10 +259,12 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* 3b. Quorum Counter — always visible once voting starts (persists through results) */}
                         {dayEvents.votingStarted && (
                             <motion.div
+                                layout
                                 key="quorum"
                                 variants={itemVariants}
                                 initial="hidden"
                                 animate="visible"
+                                exit="exit"
                                 transition={{ duration: 0.5, delay: 0.35 }}
                             >
                                 <span className={BASE_TEXT}>
@@ -276,10 +283,12 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* 4. Voting Result (who was kicked) */}
                         {dayEvents.votingResult && (
                             <motion.div
+                                layout
                                 key="vote-result"
                                 variants={itemVariants}
                                 initial="hidden"
                                 animate="visible"
+                                exit="exit"
                                 transition={{ duration: 0.4, delay: 0.4 }}
                             >
                                 <span className={BASE_TEXT}>
@@ -296,10 +305,12 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* 5. Night Falls — shown 3s before PostVotingTransition ends, or from log */}
                         {(dayEvents.nightFallen || showNightFalls) && (
                             <motion.div
+                                layout
                                 key="night-falls"
                                 variants={itemVariants}
                                 initial="hidden"
                                 animate="visible"
+                                exit="exit"
                                 transition={{ duration: 0.6, delay: 0.5 }}
                             >
                                 <span className={`${FONT} text-[15px] font-[900] uppercase tracking-[0.15em] text-[#3b82f6] drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]`}>
@@ -307,14 +318,20 @@ export const GameLog: React.FC = React.memo(() => {
                                 </span>
                             </motion.div>
                         )}
+                        {/* Empty state */}
+                        {!dayEvents.nightResult && !dayEvents.discussionStarted && !dayEvents.votingStarted && !dayEvents.votingResult && !dayEvents.nightFallen && !showNightFalls && (
+                            <motion.div
+                                layout
+                                key="empty-state"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className="flex-1 flex flex-col items-center justify-center text-white/20 italic py-6"
+                            >
+                                <span className={`text-[12px] ${FONT}`}>Waiting for events...</span>
+                            </motion.div>
+                        )}
                     </AnimatePresence>
-
-                    {/* Empty state */}
-                    {!dayEvents.nightResult && !dayEvents.discussionStarted && !dayEvents.votingStarted && !dayEvents.votingResult && !dayEvents.nightFallen && !showNightFalls && (
-                        <div className="flex-1 flex flex-col items-center justify-center text-white/20 italic py-6">
-                            <span className={`text-[12px] ${FONT}`}>Waiting for events...</span>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
