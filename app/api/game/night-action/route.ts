@@ -45,6 +45,8 @@ export const POST = withSignedRoute<{
             signerAddress,
             role: body.role,
             salt: body.salt,
+            nonce: body.nonce,
+            timestamp: body.timestamp,
         }),
     });
 
