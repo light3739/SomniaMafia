@@ -29,10 +29,16 @@ if (!redis && process.env.NODE_ENV === 'production') {
  * Global expiration for game data (24 hours)
  */
 const GAME_DATA_TTL = 86400;
+const REPLAY_NONCE_TTL_SECONDS = 180;
 
 export interface PlayerSecret {
     role: number;
 }
+
+export type StoreSecretResult =
+    | { status: 'stored' }
+    | { status: 'exists_same' }
+    | { status: 'conflict'; existingRole: number };
 
 /**
  * ServerStore: Secure storage for player secrets using Redis.
@@ -40,30 +46,95 @@ export interface PlayerSecret {
  */
 export class ServerStore {
     /**
+     * Consume one-time replay nonce for signed actions.
+     * Returns true if nonce was accepted first time, false if already used.
+     */
+    static async consumeReplayNonce(
+        scope: string,
+        roomId: string,
+        actorAddress: string,
+        nonce: string,
+        ttlSeconds: number = REPLAY_NONCE_TTL_SECONDS
+    ): Promise<boolean> {
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `replay:${scope}:${normalizedRoomId}:${actorAddress.toLowerCase()}:${nonce}`;
+
+        if (!redis) {
+            const now = Date.now();
+            const fallbackBucketKey = '__replay_nonce__';
+            if (!memoryStore[fallbackBucketKey]) memoryStore[fallbackBucketKey] = {};
+
+            // Best-effort cleanup
+            for (const [nonceKey, expiryStr] of Object.entries(memoryStore[fallbackBucketKey])) {
+                const expiry = Number(expiryStr);
+                if (!Number.isFinite(expiry) || expiry <= now) {
+                    delete memoryStore[fallbackBucketKey][nonceKey];
+                }
+            }
+
+            if (memoryStore[fallbackBucketKey][key]) return false;
+            memoryStore[fallbackBucketKey][key] = String(now + ttlSeconds * 1000);
+            return true;
+        }
+
+        try {
+            const result = await redis.set(key, '1', 'EX', ttlSeconds, 'NX');
+            return result === 'OK';
+        } catch (e) {
+            console.error('[ServerStore] Redis error (consumeReplayNonce):', e);
+            return false;
+        }
+    }
+
+    /**
      * Stores a player's role and salt in Redis.
      * Uses a Hash structure: room:secrets:{roomId} -> {address: secret}
      */
-    static async storeSecret(roomId: string, address: string, role: number, salt: string) {
+    static async storeSecret(roomId: string, address: string, role: number, salt: string): Promise<StoreSecretResult> {
         const normalizedRoomId = BigInt(roomId).toString();
         const secret: PlayerSecret = { role };
         const key = `room:secrets:${normalizedRoomId}`;
+        const normalizedAddress = address.toLowerCase();
 
         if (!redis) {
             console.warn(`[ServerStore] Redis not configured. Using MEMORY fallback for Room #${roomId}`);
             if (!memoryStore[key]) memoryStore[key] = {};
-            memoryStore[key][address.toLowerCase()] = JSON.stringify(secret);
-            return;
+            const existing = memoryStore[key][normalizedAddress];
+            if (existing) {
+                const parsedExisting = JSON.parse(existing) as PlayerSecret;
+                if (parsedExisting.role !== role) {
+                    console.error(`[ServerStore] Secret conflict (memory) for Room #${roomId}, Player ${address}: existing=${parsedExisting.role}, new=${role}`);
+                    return { status: 'conflict', existingRole: parsedExisting.role };
+                }
+                return { status: 'exists_same' };
+            }
+
+            memoryStore[key][normalizedAddress] = JSON.stringify(secret);
+            return { status: 'stored' };
         }
 
         try {
+            const existing = await redis.hget(key, normalizedAddress);
+            if (existing) {
+                const parsedExisting = JSON.parse(existing) as PlayerSecret;
+                if (parsedExisting.role !== role) {
+                    console.error(`[ServerStore] Secret conflict (redis) for Room #${roomId}, Player ${address}: existing=${parsedExisting.role}, new=${role}`);
+                    return { status: 'conflict', existingRole: parsedExisting.role };
+                }
+                await redis.expire(key, GAME_DATA_TTL);
+                return { status: 'exists_same' };
+            }
+
             // hset expects string value for ioredis if passing record
-            await redis.hset(key, address.toLowerCase(), JSON.stringify(secret));
+            await redis.hset(key, normalizedAddress, JSON.stringify(secret));
             // Set/Refresh expiration so abandoned games get cleaned up
             await redis.expire(key, GAME_DATA_TTL);
 
             console.log(`[ServerStore] Redis: Stored secret for Room #${roomId}, Player ${address}`);
+            return { status: 'stored' };
         } catch (e) {
             console.error("[ServerStore] Redis error (store):", e);
+            throw e;
         }
     }
 

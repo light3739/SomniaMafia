@@ -1740,7 +1740,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const playerAddress = address!;
             console.log(`[GM API] Submitting night action: ${actionType} on ${targetAddress} by ${playerAddress}`);
 
-            const message = `night:${currentRoomId.toString()}:${actionType}:${targetAddress}`;
+            const timestamp = Date.now();
+            const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+                ? crypto.randomUUID().replace(/-/g, '')
+                : `${Math.random().toString(36).slice(2)}${timestamp.toString(36)}`;
+            const message = `night:${currentRoomId.toString()}:${actionType}:${targetAddress}:${nonce}:${timestamp}`;
             let signature: `0x${string}`;
             let sessionKeyAddr: string | undefined;
 
@@ -1785,7 +1789,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     signature,
                     signerAddress: sessionKeyAddr || playerAddress,
                     role: myRoleNum,
-                    salt: savedSalt
+                    salt: savedSalt,
+                    nonce,
+                    timestamp,
             });
 
             // Retry with backoff for transient 403/5xx (role commit cache miss on GM)
@@ -1796,7 +1802,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const timeoutId = setTimeout(() => controller.abort(), 12000);
                 try {
                     try {
-                        response = await fetch(`${GM_SERVER_URL}/night-action`, {
+                        response = await fetch('/api/game/night-action', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: payload,
@@ -1939,7 +1945,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 let signature: `0x${string}`;
                 let callerAddress: string;
 
-                const message = `resolve-night:${currentRoomId.toString()}`;
+                const timestamp = Date.now();
+                const nonce = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+                    ? crypto.randomUUID().replace(/-/g, '')
+                    : `${Math.random().toString(36).slice(2)}${timestamp.toString(36)}`;
+                const message = `resolve-night:${currentRoomId.toString()}:${nonce}:${timestamp}`;
 
                 const session = loadSession();
                 if (session && session.registeredOnChain && Date.now() < session.expiresAt && address && session.mainWallet.toLowerCase() === address.toLowerCase()) {
@@ -1953,10 +1963,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     throw new Error('No wallet for signing');
                 }
 
-                const res = await fetch(`${GM_SERVER_URL}/resolve-night`, {
+                const res = await fetch('/api/game/resolve-night', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ roomId: currentRoomId.toString(), signature, callerAddress })
+                    body: JSON.stringify({
+                        roomId: currentRoomId.toString(),
+                        playerAddress: address,
+                        signature,
+                        callerAddress,
+                        nonce,
+                        timestamp,
+                    })
                 });
 
                 if (!res.ok) {
