@@ -28,7 +28,7 @@ Featuring Zero-Knowledge Proofs for role verification, Session Keys for seamless
 ### Prerequisites
 
 - Node.js 18+
-- Redis (Optional, falls back to memory for dev)
+- Redis (Required in production for secure secrets/nonce storage)
 - Metamask (configured for Somnia Devnet)
 
 ### Environment Variables
@@ -41,7 +41,8 @@ NEXT_PUBLIC_MAFIA_ADDRESS=0x...
 NEXT_PUBLIC_ENABLE_TEST_MODE=false
 
 # Private (Backend)
-REDIS_URL=redis://... # Optional
+REDIS_URL=redis://... # Required in production
+# ALLOW_INSECURE_MEMORY_FALLBACK=true # Emergency/dev only, NOT recommended in production
 ```
 
 ### Installation

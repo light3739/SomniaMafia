@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Volume2, VolumeX, X, Loader2, Users } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
+import { buildTokenMessage } from '@/services/signingSchema';
 
 interface LiveKitVoiceChatProps {
     roomId: string;
@@ -55,7 +56,13 @@ export function LiveKitVoiceChat({
                             address: playerAddress,
                             roomId: parsedRoomId,
                             walletClient,
-                            messageBase: `token:${roomId}:${userName}:${playerAddress.toLowerCase()}`,
+                            buildMessage: ({ nonce, timestamp }) => buildTokenMessage({
+                                room: roomId,
+                                username: userName,
+                                playerAddress,
+                                nonce,
+                                timestamp,
+                            }),
                         });
                         signature = signed.signature;
                         signerAddress = signed.signerAddress;

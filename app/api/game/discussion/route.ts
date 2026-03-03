@@ -3,6 +3,7 @@ import { createPublicClient, http } from 'viem';
 import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
 import { ServerStore, DiscussionState } from '@/services/serverStore';
 import { verifySignedRequestBody } from '@/app/api/_lib/security';
+import { buildDiscussionMessage } from '@/services/signingSchema';
 
 const publicClient = createPublicClient({
     chain: somniaChain,
@@ -162,7 +163,13 @@ export async function POST(request: Request) {
                 getRoomId: (body) => body.roomId,
                 getActorAddress: (body) => body.playerAddress,
                 getSignerAddress: (body) => body.signerAddress,
-                getMessage: ({ body, roomId, nonce, timestamp }) => `discussion:${roomId}:${body.dayCount}:${body.action}:${nonce}:${timestamp}`,
+                getMessage: ({ body, roomId, nonce, timestamp }) => buildDiscussionMessage({
+                    roomId,
+                    dayCount: body.dayCount,
+                    action: body.action,
+                    nonce,
+                    timestamp,
+                }),
             });
 
             if (!verified.ok) {

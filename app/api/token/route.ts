@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
 import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
 import { verifySignedRequestBody } from '@/app/api/_lib/security';
+import { buildTokenMessage } from '@/services/signingSchema';
 
 const publicClient = createPublicClient({
     chain: somniaChain,
@@ -66,7 +67,13 @@ export async function POST(req: NextRequest) {
                 getActorAddress: (body) => body.playerAddress,
                 getSignerAddress: (body) => body.signerAddress,
                 getMessage: ({ body, nonce, timestamp }) =>
-                    `token:${body.room}:${body.username}:${String(body.playerAddress).toLowerCase()}:${nonce}:${timestamp}`,
+                    buildTokenMessage({
+                        room: body.room,
+                        username: body.username,
+                        playerAddress: String(body.playerAddress),
+                        nonce,
+                        timestamp,
+                    }),
             });
 
             if (!verified.ok) {

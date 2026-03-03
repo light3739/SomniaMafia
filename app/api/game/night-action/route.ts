@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GM_SERVER_URL } from '@/contracts/config';
 import { withSignedRoute } from '@/app/api/_lib/security';
+import { buildNightActionMessage } from '@/services/signingSchema';
 
 export const POST = withSignedRoute<{
     roomId: string;
@@ -19,7 +20,13 @@ export const POST = withSignedRoute<{
     getRoomId: (body) => body.roomId,
     getActorAddress: (body) => body.playerAddress,
     getSignerAddress: (body) => body.signerAddress,
-    getMessage: ({ body, roomId, nonce, timestamp }) => `night:${roomId}:${body.actionType}:${body.targetAddress}:${nonce}:${timestamp}`,
+    getMessage: ({ body, roomId, nonce, timestamp }) => buildNightActionMessage({
+        roomId,
+        actionType: body.actionType,
+        targetAddress: body.targetAddress,
+        nonce,
+        timestamp,
+    }),
 }, async ({ body, roomId, signerAddress }) => {
     if (!['kill', 'heal', 'check'].includes(body.actionType)) {
         return NextResponse.json({ error: 'Invalid actionType' }, { status: 400 });

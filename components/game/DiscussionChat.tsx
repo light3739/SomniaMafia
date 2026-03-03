@@ -9,6 +9,7 @@ import { Room, RoomEvent, DataPacket_Kind } from 'livekit-client';
 import { useSoundEffects } from '@/components/ui/SoundEffects';
 import { useWalletClient } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
+import { buildTokenMessage } from '@/services/signingSchema';
 
 interface ChatMessage {
     id: string;
@@ -147,7 +148,13 @@ export const ChatToggleButton: React.FC<{
                         address: playerAddress,
                         roomId: Number(currentRoomId),
                         walletClient,
-                        messageBase: `token:${roomName}:${username}:${playerAddress.toLowerCase()}`,
+                        buildMessage: ({ nonce, timestamp }) => buildTokenMessage({
+                            room: roomName,
+                            username,
+                            playerAddress,
+                            nonce,
+                            timestamp,
+                        }),
                     });
                     signature = signed.signature;
                     signerAddress = signed.signerAddress;
