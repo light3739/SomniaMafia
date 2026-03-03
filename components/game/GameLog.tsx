@@ -167,7 +167,8 @@ export const GameLog: React.FC = React.memo(() => {
     // Shared styles
     const FONT = "font-['Montserrat']";
     const BASE_TEXT = `${FONT} text-white/70 text-[13px] font-medium`;
-    const ACCENT = "text-[#916A47]"; // Gold accent for phase names & player names
+    const ACCENT = "text-[#916A47]"; // Gold accent for phase names
+    const PLAYER_NAME = "text-white"; // Solid white for player names
 
     return (
         <div className="flex flex-col h-full bg-[#0a0a0a]/80 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
@@ -204,8 +205,8 @@ export const GameLog: React.FC = React.memo(() => {
                             >
                                 <span className={BASE_TEXT}>
                                     {dayEvents.nightResult.type === 'safe'
-                                        ? 'No one died last night.'
-                                        : <><span className={`${ACCENT} font-bold`}>{dayEvents.nightResult.playerName}</span> was killed by the Mafia.</>
+                                        ? 'No one died last night'
+                                        : <><span className={`${PLAYER_NAME} font-bold`}>{dayEvents.nightResult.playerName}</span> was killed by the Mafia</>
                                     }
                                 </span>
                                 {/* Divider line after night result */}
@@ -224,11 +225,11 @@ export const GameLog: React.FC = React.memo(() => {
                             >
                                 <span className={BASE_TEXT}>
                                     {dayEvents.discussionFinished ? (
-                                        <><span className={`${ACCENT} font-bold uppercase`}>DISCUSSION PHASE</span> - All players have spoken.</>
+                                        <><span className={`${ACCENT} font-bold uppercase text-[13px]`}>DISCUSSION PHASE</span> - All players have spoken</>
                                     ) : dayEvents.currentSpeaker ? (
-                                        <><span className={`${ACCENT} font-bold uppercase`}>DISCUSSION PHASE</span> - <span className={`${ACCENT} font-bold`}>{dayEvents.currentSpeaker}</span> is speaking.</>
+                                        <><span className={`${ACCENT} font-bold uppercase text-[13px]`}>DISCUSSION PHASE</span> - <span className={`${PLAYER_NAME} font-bold`}>{dayEvents.currentSpeaker}</span> is speaking</>
                                     ) : (
-                                        <><span className={`${ACCENT} font-bold uppercase`}>DISCUSSION PHASE</span> - Waiting for speakers...</>
+                                        <><span className={`${ACCENT} font-bold uppercase text-[13px]`}>DISCUSSION PHASE</span> - Waiting for speakers...</>
                                     )}
                                 </span>
                             </motion.div>
@@ -244,7 +245,7 @@ export const GameLog: React.FC = React.memo(() => {
                                 transition={{ duration: 0.4, delay: 0.3 }}
                             >
                                 <span className={BASE_TEXT}>
-                                    <span className={`${ACCENT} font-bold uppercase`}>VOTING PHASE</span> has started.
+                                    <span className={`${ACCENT} font-bold uppercase text-[13px]`}>VOTING PHASE</span> has started
                                 </span>
                             </motion.div>
                         )}
@@ -259,7 +260,7 @@ export const GameLog: React.FC = React.memo(() => {
                                 transition={{ duration: 0.5, delay: 0.35 }}
                             >
                                 <span className={BASE_TEXT}>
-                                    <span className={`${ACCENT} font-bold uppercase`}>QUORUM</span>{' '}
+                                    <span className={`${ACCENT} font-bold uppercase text-[13px]`}>QUORUM</span>{' '}
                                     <span className={`font-mono font-bold tabular-nums ${quorumData.current >= quorumData.needed ? 'text-red-400' : 'text-white/90'}`}>
                                         {quorumData.current}
                                     </span>
@@ -283,9 +284,9 @@ export const GameLog: React.FC = React.memo(() => {
                                 <span className={BASE_TEXT}>
                                     {dayEvents.votingResult.type === 'eliminated'
                                         ? dayEvents.votingResult.playerName
-                                            ? <><span className={`${ACCENT} font-bold`}>{dayEvents.votingResult.playerName}</span> has been eliminated.</>
-                                            : 'A player has been eliminated.'
-                                        : 'No one was eliminated.'
+                                            ? <><span className={`${PLAYER_NAME} font-bold`}>{dayEvents.votingResult.playerName}</span> has been eliminated</>
+                                            : 'A player has been eliminated'
+                                        : 'No one was eliminated'
                                     }
                                 </span>
                             </motion.div>
@@ -300,7 +301,7 @@ export const GameLog: React.FC = React.memo(() => {
                                 animate="visible"
                                 transition={{ duration: 0.6, delay: 0.5 }}
                             >
-                                <span className={`${FONT} text-[13px] font-bold uppercase tracking-widest ${ACCENT}`}>
+                                <span className={`${FONT} text-[15px] font-[900] uppercase tracking-[0.15em] text-[#5bb4ff] drop-shadow-[0_0_8px_rgba(91,180,255,0.4)]`}>
                                     NIGHT FALLS
                                 </span>
                             </motion.div>
@@ -310,7 +311,7 @@ export const GameLog: React.FC = React.memo(() => {
                     {/* Empty state */}
                     {!dayEvents.nightResult && !dayEvents.discussionStarted && !dayEvents.votingStarted && !dayEvents.votingResult && !dayEvents.nightFallen && !showNightFalls && (
                         <div className="flex-1 flex flex-col items-center justify-center text-white/20 italic py-6">
-                            <span className={`text-[13px] ${FONT}`}>Waiting for events...</span>
+                            <span className={`text-[12px] ${FONT}`}>Waiting for events...</span>
                         </div>
                     )}
                 </div>
