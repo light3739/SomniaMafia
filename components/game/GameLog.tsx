@@ -166,7 +166,7 @@ export const GameLog: React.FC = React.memo(() => {
 
     // Shared styles
     const FONT = "font-['Montserrat']";
-    const BASE_TEXT = `${FONT} text-white/70 text-[13px] font-medium`;
+    const BASE_TEXT = `${FONT} text-white/70 text-[13px] font-normal`;
     const ACCENT = "text-[#916A47]"; // Gold accent for phase names
     const PLAYER_NAME = "text-white"; // Solid white for player names
 
@@ -206,7 +206,7 @@ export const GameLog: React.FC = React.memo(() => {
                                 <span className={BASE_TEXT}>
                                     {dayEvents.nightResult.type === 'safe'
                                         ? 'No one died last night'
-                                        : <><span className={`${PLAYER_NAME} font-bold`}>{dayEvents.nightResult.playerName}</span> was killed by the Mafia</>
+                                        : <><span className={`${PLAYER_NAME} font-[800]`}>{dayEvents.nightResult.playerName}</span> was killed by the Mafia</>
                                     }
                                 </span>
                                 {/* Divider line after night result */}
@@ -225,11 +225,11 @@ export const GameLog: React.FC = React.memo(() => {
                             >
                                 <span className={BASE_TEXT}>
                                     {dayEvents.discussionFinished ? (
-                                        <><span className={`${ACCENT} font-bold uppercase text-[13px]`}>DISCUSSION PHASE</span> - All players have spoken</>
+                                        <><span className={`${ACCENT} font-[900] uppercase text-[13px]`}>DISCUSSION PHASE</span> - All players have spoken</>
                                     ) : dayEvents.currentSpeaker ? (
-                                        <><span className={`${ACCENT} font-bold uppercase text-[13px]`}>DISCUSSION PHASE</span> - <span className={`${PLAYER_NAME} font-bold`}>{dayEvents.currentSpeaker}</span> is speaking</>
+                                        <><span className={`${ACCENT} font-[900] uppercase text-[13px]`}>DISCUSSION PHASE</span> - <span className={`${PLAYER_NAME} font-[800]`}>{dayEvents.currentSpeaker}</span> is speaking</>
                                     ) : (
-                                        <><span className={`${ACCENT} font-bold uppercase text-[13px]`}>DISCUSSION PHASE</span> - Waiting for speakers...</>
+                                        <><span className={`${ACCENT} font-[900] uppercase text-[13px]`}>DISCUSSION PHASE</span> - Waiting for speakers...</>
                                     )}
                                 </span>
                             </motion.div>
@@ -245,7 +245,7 @@ export const GameLog: React.FC = React.memo(() => {
                                 transition={{ duration: 0.4, delay: 0.3 }}
                             >
                                 <span className={BASE_TEXT}>
-                                    <span className={`${ACCENT} font-bold uppercase text-[13px]`}>VOTING PHASE</span> has started
+                                    <span className={`${ACCENT} font-[900] uppercase text-[13px]`}>VOTING PHASE</span> has started
                                 </span>
                             </motion.div>
                         )}
@@ -260,8 +260,8 @@ export const GameLog: React.FC = React.memo(() => {
                                 transition={{ duration: 0.5, delay: 0.35 }}
                             >
                                 <span className={BASE_TEXT}>
-                                    <span className={`${ACCENT} font-bold uppercase text-[13px]`}>QUORUM</span>{' '}
-                                    <span className={`font-mono font-bold tabular-nums ${quorumData.current >= quorumData.needed ? 'text-red-400' : 'text-white/90'}`}>
+                                    <span className={`${ACCENT} font-[900] uppercase text-[13px]`}>QUORUM</span>{' '}
+                                    <span className={`font-mono font-[800] tabular-nums ${quorumData.current >= quorumData.needed ? 'text-red-400' : 'text-white/90'}`}>
                                         {quorumData.current}
                                     </span>
                                     <span className="text-white/30 font-mono">/</span>
@@ -284,7 +284,7 @@ export const GameLog: React.FC = React.memo(() => {
                                 <span className={BASE_TEXT}>
                                     {dayEvents.votingResult.type === 'eliminated'
                                         ? dayEvents.votingResult.playerName
-                                            ? <><span className={`${PLAYER_NAME} font-bold`}>{dayEvents.votingResult.playerName}</span> has been eliminated</>
+                                            ? <><span className={`${PLAYER_NAME} font-[800]`}>{dayEvents.votingResult.playerName}</span> has been eliminated</>
                                             : 'A player has been eliminated'
                                         : 'No one was eliminated'
                                     }
