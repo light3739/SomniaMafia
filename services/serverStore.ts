@@ -32,7 +32,6 @@ const GAME_DATA_TTL = 86400;
 
 export interface PlayerSecret {
     role: number;
-    salt: string;
 }
 
 /**
@@ -46,7 +45,7 @@ export class ServerStore {
      */
     static async storeSecret(roomId: string, address: string, role: number, salt: string) {
         const normalizedRoomId = BigInt(roomId).toString();
-        const secret: PlayerSecret = { role, salt };
+        const secret: PlayerSecret = { role };
         const key = `room:secrets:${normalizedRoomId}`;
 
         if (!redis) {
