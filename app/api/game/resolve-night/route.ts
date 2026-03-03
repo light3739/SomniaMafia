@@ -26,6 +26,9 @@ export const POST = withSignedRoute<{
             roomId,
             signature: body.gmLegacySignature || body.signature,
             callerAddress: body.playerAddress,
+            signerAddress: body.callerAddress,
+            nonce: body.nonce,
+            timestamp: body.timestamp,
         }),
     });
 
