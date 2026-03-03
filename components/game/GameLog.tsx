@@ -167,7 +167,8 @@ export const GameLog: React.FC = React.memo(() => {
     // Shared styles
     const FONT = "font-['Montserrat']";
     const BASE_TEXT = `${FONT} text-white/70 text-[13px] font-normal`;
-    const ACCENT = "text-[#916A47]"; // Gold accent for phase names
+    const ACCENT = "text-[#916A47]"; // Gold accent for VOTING/QUORUM
+    const DISC_ACCENT = "text-[#cc9b6d]"; // Slightly different gold/orange for discussion
     const PLAYER_NAME = "text-white"; // Solid white for player names
 
     return (
@@ -205,8 +206,8 @@ export const GameLog: React.FC = React.memo(() => {
                             >
                                 <span className={BASE_TEXT}>
                                     {dayEvents.nightResult.type === 'safe'
-                                        ? 'No one died last night'
-                                        : <><span className={`${PLAYER_NAME} font-[800]`}>{dayEvents.nightResult.playerName}</span> was killed by the Mafia</>
+                                        ? <><span className="text-white font-[800]">No one</span> died last night</>
+                                        : <><span className={`${PLAYER_NAME} font-[800]`}>{dayEvents.nightResult.playerName}</span> was <span className="text-red-500 font-bold">killed</span> by the Mafia</>
                                     }
                                 </span>
                                 {/* Divider line after night result */}
@@ -225,11 +226,11 @@ export const GameLog: React.FC = React.memo(() => {
                             >
                                 <span className={BASE_TEXT}>
                                     {dayEvents.discussionFinished ? (
-                                        <><span className={`${ACCENT} font-[900] uppercase text-[13px]`}>DISCUSSION PHASE</span> - All players have spoken</>
+                                        <><span className={`${DISC_ACCENT} font-[900] uppercase text-[13px]`}>DISCUSSION PHASE</span> - All players have spoken</>
                                     ) : dayEvents.currentSpeaker ? (
-                                        <><span className={`${ACCENT} font-[900] uppercase text-[13px]`}>DISCUSSION PHASE</span> - <span className={`${PLAYER_NAME} font-[800]`}>{dayEvents.currentSpeaker}</span> is speaking</>
+                                        <><span className={`${DISC_ACCENT} font-[900] uppercase text-[13px]`}>DISCUSSION PHASE</span> - <span className={`${PLAYER_NAME} font-[800]`}>{dayEvents.currentSpeaker}</span> is speaking</>
                                     ) : (
-                                        <><span className={`${ACCENT} font-[900] uppercase text-[13px]`}>DISCUSSION PHASE</span> - Waiting for speakers...</>
+                                        <><span className={`${DISC_ACCENT} font-[900] uppercase text-[13px]`}>DISCUSSION PHASE</span> - Waiting for speakers...</>
                                     )}
                                 </span>
                             </motion.div>
@@ -284,9 +285,9 @@ export const GameLog: React.FC = React.memo(() => {
                                 <span className={BASE_TEXT}>
                                     {dayEvents.votingResult.type === 'eliminated'
                                         ? dayEvents.votingResult.playerName
-                                            ? <><span className={`${PLAYER_NAME} font-[800]`}>{dayEvents.votingResult.playerName}</span> has been eliminated</>
-                                            : 'A player has been eliminated'
-                                        : 'No one was eliminated'
+                                            ? <><span className={`${PLAYER_NAME} font-[800]`}>{dayEvents.votingResult.playerName}</span> has been <span className="text-orange-400 font-bold">eliminated</span></>
+                                            : <><span className="text-white font-[800]">A player</span> has been <span className="text-orange-400 font-bold">eliminated</span></>
+                                        : <><span className="text-white font-[800]">No one</span> was eliminated</>
                                     }
                                 </span>
                             </motion.div>
@@ -301,7 +302,7 @@ export const GameLog: React.FC = React.memo(() => {
                                 animate="visible"
                                 transition={{ duration: 0.6, delay: 0.5 }}
                             >
-                                <span className={`${FONT} text-[15px] font-[900] uppercase tracking-[0.15em] text-[#5bb4ff] drop-shadow-[0_0_8px_rgba(91,180,255,0.4)]`}>
+                                <span className={`${FONT} text-[15px] font-[900] uppercase tracking-[0.15em] text-[#3b82f6] drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]`}>
                                     NIGHT FALLS
                                 </span>
                             </motion.div>
