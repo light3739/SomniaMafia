@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, verifyMessage } from 'viem';
 import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
 import { ServerStore, DiscussionState } from '@/services/serverStore';
 
@@ -122,14 +122,37 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
     try {
-        const { roomId: rawRoomId, dayCount: rawDayCount, action, playerAddress } = await request.json();
+        const {
+            roomId: rawRoomId,
+            dayCount: rawDayCount,
+            action,
+            playerAddress,
+            signature,
+            signerAddress,
+        } = await request.json();
 
         if (!rawRoomId || !action) {
             return NextResponse.json({ error: 'Missing roomId or action' }, { status: 400 });
         }
 
+        if (!playerAddress || !signature) {
+            return NextResponse.json({ error: 'Missing playerAddress or signature' }, { status: 400 });
+        }
+
         const roomId = BigInt(rawRoomId).toString();
         const dayCount = rawDayCount ? parseInt(rawDayCount) : 1;
+        const actualSigner = (signerAddress || playerAddress).toLowerCase();
+
+        const message = `discussion:${roomId}:${dayCount}:${action}`;
+        const sigValid = await verifyMessage({
+            address: actualSigner as `0x${string}`,
+            message,
+            signature: signature as `0x${string}`,
+        });
+
+        if (!sigValid) {
+            return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+        }
 
         // Get alive players
         let alivePlayers: any[] = [];
@@ -151,6 +174,41 @@ export async function POST(request: Request) {
                 args: [BigInt(roomId)],
             }) as any;
             hostAddress = roomData.host;
+
+            // If signer is not main wallet, enforce valid session key binding to playerAddress
+            if (actualSigner !== playerAddress.toLowerCase()) {
+                const sessionKeyData = await publicClient.readContract({
+                    address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+                    abi: MAFIA_ABI,
+                    functionName: 'sessionKeys',
+                    args: [playerAddress as `0x${string}`],
+                }) as any;
+
+                const registeredSession = Array.isArray(sessionKeyData)
+                    ? sessionKeyData[0]
+                    : sessionKeyData.sessionAddress;
+                const expiresAt = Number(Array.isArray(sessionKeyData)
+                    ? sessionKeyData[1]
+                    : sessionKeyData.expiresAt);
+                const roomIdFromChain = Number(Array.isArray(sessionKeyData)
+                    ? sessionKeyData[2]
+                    : sessionKeyData.roomId);
+                const isActive = Boolean(Array.isArray(sessionKeyData)
+                    ? sessionKeyData[3]
+                    : sessionKeyData.isActive);
+
+                if (!registeredSession || registeredSession.toLowerCase() !== actualSigner) {
+                    return NextResponse.json({ error: 'Session key is not registered for playerAddress' }, { status: 403 });
+                }
+
+                if (!isActive || expiresAt <= Math.floor(Date.now() / 1000)) {
+                    return NextResponse.json({ error: 'Session key inactive or expired' }, { status: 403 });
+                }
+
+                if (roomIdFromChain !== Number(roomId)) {
+                    return NextResponse.json({ error: 'Session key room mismatch' }, { status: 403 });
+                }
+            }
         } catch (e) {
             if (roomId === '999') {
                 alivePlayers = Array(10).fill(null).map((_, i) => ({

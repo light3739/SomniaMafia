@@ -58,6 +58,14 @@ export async function POST(request: Request) {
                     ? sessionKeyData[3]  // Fourth element is isActive
                     : sessionKeyData.isActive;
 
+                const expiresAt = Number(Array.isArray(sessionKeyData)
+                    ? sessionKeyData[1]
+                    : sessionKeyData.expiresAt);
+
+                const roomIdFromChain = Number(Array.isArray(sessionKeyData)
+                    ? sessionKeyData[2]
+                    : sessionKeyData.roomId);
+
                 if (!registeredSession || registeredSession.toLowerCase() !== actualSigner.toLowerCase()) {
                     console.error(`[API/Investigate] Session key mismatch: registered=${registeredSession}, actual=${actualSigner}`);
                     return NextResponse.json({
@@ -67,7 +75,15 @@ export async function POST(request: Request) {
                 }
 
                 if (!isActive) {
-                    console.warn(`[API/Investigate] Session key ${actualSigner} is inactive/expired`);
+                    return NextResponse.json({ error: 'Session key is inactive' }, { status: 403 });
+                }
+
+                if (expiresAt <= Math.floor(Date.now() / 1000)) {
+                    return NextResponse.json({ error: 'Session key is expired' }, { status: 403 });
+                }
+
+                if (roomIdFromChain !== Number(roomId)) {
+                    return NextResponse.json({ error: 'Session key room mismatch' }, { status: 403 });
                 }
 
                 console.log(`[API/Investigate] Verified session key ${actualSigner} for detective ${detectiveAddress}`);
