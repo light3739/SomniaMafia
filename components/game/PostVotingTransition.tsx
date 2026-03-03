@@ -16,15 +16,17 @@ export const PostVotingTransition: React.FC = () => {
     }, [timeLeft]);
 
     return (
-        <div className="absolute inset-0 z-50 flex items-center justify-center">
-            <div className="max-w-2xl w-full flex flex-col items-center gap-4">
-                <motion.h2
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-2xl font-['Playfair_Display'] text-white"
-                >
-                    Voting Results
-                </motion.h2>
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-4 md:p-8">
+            <div className="max-w-2xl w-full">
+                <div className="text-center mb-4">
+                    <motion.h2
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-2xl font-['Playfair_Display'] text-white"
+                    >
+                        Voting Results
+                    </motion.h2>
+                </div>
 
                 <div className="mb-4 h-[360px] w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
                     <GameLog />
