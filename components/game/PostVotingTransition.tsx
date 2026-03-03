@@ -17,20 +17,24 @@ export const PostVotingTransition: React.FC = () => {
 
     return (
         <div className="absolute inset-0 z-50 flex items-center justify-center">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="w-[500px] flex flex-col items-center gap-4 p-6"
-            >
-                <h2 className="text-2xl font-['Playfair_Display'] text-white">
+            <div className="max-w-2xl w-full flex flex-col items-center gap-4">
+                <motion.h2
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-2xl font-['Playfair_Display'] text-white"
+                >
                     Voting Results
-                </h2>
+                </motion.h2>
 
-                <div className="w-full h-[300px] rounded-xl overflow-hidden relative">
+                <div className="mb-4 h-[360px] w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
                     <GameLog />
                 </div>
 
-                <div className="w-full py-2 flex justify-center">
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full py-2 flex justify-center"
+                >
                     <div className="flex items-center justify-center gap-3 px-6 py-2 bg-black/40 border border-[#916A47]/30 rounded-full text-white/50 select-none">
                         <Clock className="w-4 h-4 text-[#916A47]/70" />
                         <span className="text-lg font-mono font-bold text-white/80 tabular-nums">
@@ -41,8 +45,8 @@ export const PostVotingTransition: React.FC = () => {
                             Night Starting...
                         </span>
                     </div>
-                </div>
-            </motion.div>
+                </motion.div>
+            </div>
         </div>
     );
 };
