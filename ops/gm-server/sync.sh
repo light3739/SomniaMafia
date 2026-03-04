@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SOURCE_DIR="${GM_SOURCE_DIR:-/home/light/projects/SomniaSol/gm-server}"
+SOURCE_DIR="${GM_SOURCE_DIR:-${ROOT_DIR}/ops/gm-server/source}"
 TARGET_DIR="${ROOT_DIR}/ops/gm-server/workdir"
 
 if [[ ! -d "$SOURCE_DIR" ]]; then
