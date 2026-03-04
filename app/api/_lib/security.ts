@@ -208,7 +208,7 @@ export async function verifySignedRequestBody<TBody extends Record<string, any>>
     };
 }
 
-interface WithSignedRouteOptions<TBody extends Record<string, any>> extends Omit<VerifySignedRequestOptions<TBody>, 'body'> {}
+type WithSignedRouteOptions<TBody extends Record<string, any>> = Omit<VerifySignedRequestOptions<TBody>, 'body'>;
 
 export function withSignedRoute<TBody extends Record<string, any>>(
     options: WithSignedRouteOptions<TBody>,

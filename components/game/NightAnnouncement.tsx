@@ -9,10 +9,10 @@ interface NightAnnouncementProps {
 
 const StarField = React.memo(() => {
     const stars = useMemo(() => [...Array(20)].map((_, i) => ({
-        left: `${Math.random() * 100}%`,
-        top: `${Math.random() * 100}%`,
-        duration: 1.5 + Math.random(),
-        delay: Math.random() * 2,
+        left: `${(i * 19 + 3) % 100}%`,
+        top: `${(i * 11 + 29) % 100}%`,
+        duration: 1.5 + (i % 5) * 0.2,
+        delay: (i % 8) * 0.2,
     })), []);
 
     return (

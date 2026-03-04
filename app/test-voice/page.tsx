@@ -91,7 +91,7 @@ export default function TestVoicePage() {
                                 <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
                                     <li>Enter a room name (both you and your friend should use the same name)</li>
                                     <li>Enter your name</li>
-                                    <li>Click "Join Voice Chat"</li>
+                                    <li>Click &quot;Join Voice Chat&quot;</li>
                                     <li>Allow microphone access when prompted</li>
                                     <li>Your friend should do the same from another device/browser</li>
                                     <li>Test the text chat below the voice controls!</li>

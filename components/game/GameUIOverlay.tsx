@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BackgroundMusic } from '../ui/BackgroundMusic';
 import { ChatToggleButton } from './DiscussionChat';
 import { useGameContext } from '@/contexts/GameContext';
@@ -17,23 +17,6 @@ export const GameUIOverlay: React.FC = () => {
     // Track if it's my turn during discussion
     const [isMyTurn, setIsMyTurn] = useState(false);
 
-    // Fetch discussion state to check if it's my turn
-    const fetchDiscussionState = useCallback(async () => {
-        if (!currentRoomId || gameState.phase !== GamePhase.DAY) {
-            setIsMyTurn(false);
-            return;
-        }
-        try {
-            const response = await fetch(
-                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}`
-            );
-            const data = await response.json();
-            setIsMyTurn(data?.isMyTurn || false);
-        } catch (e) {
-            console.error('[GameUIOverlay] Failed to fetch discussion state:', e);
-        }
-    }, [currentRoomId, gameState.phase, gameState.dayCount, myPlayer?.address]);
-
     // Poll discussion state
     useEffect(() => {
         if (gameState.phase !== GamePhase.DAY) {
@@ -41,10 +24,26 @@ export const GameUIOverlay: React.FC = () => {
             return;
         }
 
+        const fetchDiscussionState = async () => {
+            if (!currentRoomId) {
+                setIsMyTurn(false);
+                return;
+            }
+            try {
+                const response = await fetch(
+                    `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}`
+                );
+                const data = await response.json();
+                setIsMyTurn(data?.isMyTurn || false);
+            } catch (e) {
+                console.error('[GameUIOverlay] Failed to fetch discussion state:', e);
+            }
+        };
+
         fetchDiscussionState();
         const interval = setInterval(fetchDiscussionState, 2000);
         return () => clearInterval(interval);
-    }, [gameState.phase, fetchDiscussionState]);
+    }, [currentRoomId, gameState.phase, gameState.dayCount, myPlayer?.address]);
 
     // Only show chat button during DAY phase
     const showChatButton = gameState.phase === GamePhase.DAY;

@@ -7,6 +7,7 @@ import Image from 'next/image';
 const lobbyBg = "/assets/lobby_background.png";
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { NetworkSelector } from '../ui/NetworkSelector';
 
 const AVATAR_STORAGE_KEY = 'mafia_player_avatar';
 const MAX_AVATAR_SIZE = 150; // pixels for compression
@@ -83,6 +84,8 @@ export const SetupProfile: React.FC = () => {
                 transition={{ duration: 0.4 }}
                 className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-8 py-10"
             >
+                <NetworkSelector />
+
                 {/* Profile Section */}
                 <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] relative flex flex-col items-center p-8 border border-white/10 shadow-2xl">
                     <h2 className="text-white/60 text-lg font-montserrat italic mb-6">Setup Your Profile</h2>

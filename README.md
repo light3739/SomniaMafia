@@ -1,6 +1,6 @@
 # Somnia Mafia 🕵️‍♂️
 
-A **V4 Web3 Social Deduction Game** built on the Somnia Blockchain.
+A **V4 Web3 Social Deduction Game** built for **Somnia Testnet** and **Avalanche Fuji**.
 Featuring Zero-Knowledge Proofs for role verification, Session Keys for seamless UX, and a synchronized game loop.
 
 ![Banner](/public/assets/mafia_shot.png)
@@ -39,6 +39,7 @@ Copy `.env.example` to `.env.local`:
 # Public (Frontend)
 NEXT_PUBLIC_MAFIA_ADDRESS=0x...
 NEXT_PUBLIC_ENABLE_TEST_MODE=false
+NEXT_PUBLIC_ACTIVE_NETWORK=avalanche_fuji # or somnia_testnet
 
 # Private (Backend)
 REDIS_URL=redis://... # Required in production
@@ -66,6 +67,37 @@ Open [http://localhost:3000](http://localhost:3000).
 1. **Build**: `npm run build`
 2. **Environment**: Ensure `NEXT_PUBLIC_MAFIA_ADDRESS` points to the correct deployment.
 3. **ZK Circuits**: Ensure `public/mafia_outcome.wasm` and `public/mafia_outcome_0001.zkey` are present.
+
+## GM Backend: Push/Deploy Runbook
+
+Use npm scripts from this repository:
+
+```bash
+npm run gm:sync
+npm run gm:build
+npm run gm:publish
+npm run gm:deploy
+```
+
+One-command release (publish + deploy):
+
+```bash
+npm run gm:release
+```
+
+Backend ops folder: `ops/gm-server`.
+
+## Contracts Location
+
+- Solidity sources:
+  - `contracts/SomniaMafia.sol`
+  - `Verifier_new.sol`
+- Frontend network/address/ABI wiring:
+  - `contracts/config.ts`
+- ABI files:
+  - `contracts/MafiaDiamondABI.json`
+  - `contracts/MafiaPortal.json`
+  - `contracts/IGroth16Verifier.json`
 
 ## Architecture Highlights
 
