@@ -8,8 +8,8 @@ import {
   getSessionKey,
   resolveNight,
   assertChainConfigOrThrow,
+  getChainConfig,
   GM_ADDRESS,
-  DIAMOND_ADDRESS,
   GamePhase,
   FLAGS,
   ACTION_TO_ROLE,
@@ -61,6 +61,7 @@ async function verifyAuthorizedSignature(params: {
   buildModernMessage: (nonce: string, timestamp: number) => string;
   nonce?: string;
   timestamp?: number;
+  chainId?: number;
 }): Promise<{ ok: true; signer: string } | { ok: false; error: string; status: number }> {
   const {
     roomId,
@@ -71,6 +72,7 @@ async function verifyAuthorizedSignature(params: {
     buildModernMessage,
     nonce,
     timestamp,
+    chainId,
   } = params;
 
   const normalizedPlayer = playerAddress.toLowerCase();
@@ -108,7 +110,7 @@ async function verifyAuthorizedSignature(params: {
   // If modern signature was from session key, verify it's valid for main wallet
   if (normalizedSigner !== normalizedPlayer) {
     try {
-      const session = await getSessionKey(normalizedPlayer as Address) as any;
+      const session = await getSessionKey(normalizedPlayer as Address, chainId) as any;
       const sessionAddress = String(session.sessionAddress || '').toLowerCase();
       const expiresAt = Number(session.expiresAt || 0);
       const sessionRoomId = Number(session.roomId || 0);
@@ -134,20 +136,19 @@ async function verifyAuthorizedSignature(params: {
 }
 
 // ─── Health ───────────────────────────────────────────────
-app.get('/health', (_req, res) => {
+app.get('/health', (_req: express.Request, res: express.Response) => {
   res.json({
     status: 'ok',
     gm: GM_ADDRESS,
-    diamond: DIAMOND_ADDRESS,
     activeRooms: getAllNightStates().size,
     uptime: process.uptime(),
   });
 });
 
 // ─── Investigation Proof (GM-verified) ───────────────────
-app.post('/investigation-proof', async (req, res) => {
+app.post('/investigation-proof', async (req: express.Request, res: express.Response) => {
   try {
-    const { roomId, detectiveAddress, targetAddress, signature, signerAddress, nonce, timestamp } = req.body;
+    const { roomId, detectiveAddress, targetAddress, signature, signerAddress, nonce, timestamp, chainId } = req.body;
 
     if (!roomId || !detectiveAddress || !targetAddress || !signature) {
       return res.status(400).json({ error: 'Missing fields: roomId, detectiveAddress, targetAddress, signature' });
@@ -184,7 +185,7 @@ app.post('/investigation-proof', async (req, res) => {
     }
 
     if (signer !== detective) {
-      const session = await getSessionKey(detective) as any;
+      const session = await getSessionKey(detective, chainId) as any;
       const sessionAddress = String(session.sessionAddress || '').toLowerCase();
       const expiresAt = Number(session.expiresAt || 0);
       const sessionRoomId = Number(session.roomId || 0);
@@ -221,9 +222,9 @@ app.post('/investigation-proof', async (req, res) => {
 
 // ─── Submit Night Action ──────────────────────────────────
 // Players call this instead of on-chain commitNightAction
-app.post('/night-action', async (req, res) => {
+app.post('/night-action', async (req: express.Request, res: express.Response) => {
   try {
-    const { roomId, playerAddress, actionType, targetAddress, signature, signerAddress, nonce, timestamp } = req.body;
+    const { roomId, playerAddress, actionType, targetAddress, signature, signerAddress, nonce, timestamp, chainId } = req.body;
 
     // Validate inputs
     if (!roomId || !playerAddress || !actionType || !targetAddress || !signature) {
@@ -235,17 +236,24 @@ app.post('/night-action', async (req, res) => {
     }
 
     const rid = BigInt(roomId);
+    const { diamond } = getChainConfig(chainId);
+    console.log(`[GM API] Processing night-action for Room:${rid} on Chain:${chainId || 'default(43113)'} Diamond:${diamond}`);
 
     // 1. Verify room is in NIGHT phase & uses GM mode
-    const room = await getRoom(rid);
-    if (room.phase !== GamePhase.NIGHT) {
-      return res.status(400).json({ error: 'Room is not in NIGHT phase' });
+    const room: any = await getRoom(rid, chainId);
+    const phase = Array.isArray(room) ? Number(room[3]) : Number(room.phase);
+    const actualRoomId = Array.isArray(room) ? room[0] : room.id;
+
+    console.log(`[GM API] Room state: Phase=${phase} (Target=${GamePhase.NIGHT}), ID=${actualRoomId}`);
+
+    if (phase !== GamePhase.NIGHT) {
+      return res.status(400).json({ error: `Room is not in NIGHT phase (current: ${phase})` });
     }
 
     // 2. Verify player is in the room and alive
-    const players = await getPlayers(rid);
+    const players = await getPlayers(rid, chainId);
     const player = players.find(
-      (p) => p.wallet.toLowerCase() === (playerAddress as string).toLowerCase()
+      (p: any) => p.wallet.toLowerCase() === (playerAddress as string).toLowerCase()
     );
     if (!player) {
       return res.status(400).json({ error: 'Player not in room' });
@@ -256,7 +264,7 @@ app.post('/night-action', async (req, res) => {
 
     // 3. Verify the target is valid
     const target = players.find(
-      (p) => p.wallet.toLowerCase() === (targetAddress as string).toLowerCase()
+      (p: any) => p.wallet.toLowerCase() === (targetAddress as string).toLowerCase()
     );
     if (!target) {
       return res.status(400).json({ error: 'Target not in room' });
@@ -276,6 +284,7 @@ app.post('/night-action', async (req, res) => {
       signerAddress,
       nonce,
       timestamp,
+      chainId,
       buildLegacyMessage: () => `night:${roomId}:${actionType}:${targetAddress}`,
       buildModernMessage: (n, ts) => `night:${roomId}:${actionType}:${targetAddress}:${n}:${ts}`,
     });
@@ -285,7 +294,7 @@ app.post('/night-action', async (req, res) => {
     }
 
     // 5. Verify player has committed a role on-chain (completed shuffle phase)
-    const committed = await hasCommittedRole(rid, playerAddress as Address);
+    const committed = await hasCommittedRole(rid, playerAddress as Address, chainId);
     if (!committed) {
       return res.status(403).json({ error: 'You have not committed a role on-chain' });
     }
@@ -333,9 +342,9 @@ app.post('/night-action', async (req, res) => {
 
 // ─── Resolve Night ────────────────────────────────────────
 // Called by frontend or auto-triggered when all actions are in
-app.post('/resolve-night', async (req, res) => {
+app.post('/resolve-night', async (req: express.Request, res: express.Response) => {
   try {
-    const { roomId, signature, callerAddress, signerAddress, nonce, timestamp } = req.body;
+    const { roomId, signature, callerAddress, signerAddress, nonce, timestamp, chainId } = req.body;
     if (!roomId) return res.status(400).json({ error: 'Missing roomId' });
 
     // Only GM or authenticated caller can trigger resolve
@@ -350,6 +359,7 @@ app.post('/resolve-night', async (req, res) => {
       signerAddress,
       nonce,
       timestamp,
+      chainId,
       buildLegacyMessage: () => `resolve-night:${roomId}`,
       buildModernMessage: (n, ts) => `resolve-night:${roomId}:${n}:${ts}`,
     });
@@ -368,9 +378,10 @@ app.post('/resolve-night', async (req, res) => {
     }
 
     // Verify room is still in NIGHT phase
-    const room = await getRoom(rid);
-    if (room.phase !== GamePhase.NIGHT) {
-      return res.status(400).json({ error: 'Room is not in NIGHT phase' });
+    const room: any = await getRoom(rid, chainId);
+    const phase = Array.isArray(room) ? Number(room[3]) : Number(room.phase);
+    if (phase !== GamePhase.NIGHT) {
+      return res.status(400).json({ error: `Room is not in NIGHT phase (current: ${phase})` });
     }
 
     // Calculate consensus
@@ -384,7 +395,7 @@ app.post('/resolve-night', async (req, res) => {
 
     // Submit to contract
     state.resolved = true;
-    const { hash } = await resolveNight(rid, killTarget, healTarget);
+    const { hash } = await resolveNight(rid, killTarget, healTarget, chainId);
 
     // Clean up
     clearNightState(rid);
@@ -407,7 +418,7 @@ app.post('/resolve-night', async (req, res) => {
 
 // ─── Get Night Status ─────────────────────────────────────
 // Frontend polls this to check how many actions are in
-app.get('/night-status/:roomId', (req, res) => {
+app.get('/night-status/:roomId', (req: express.Request, res: express.Response) => {
   const rid = BigInt(req.params.roomId);
   const state = getNightState(rid);
 
@@ -425,10 +436,11 @@ app.get('/night-status/:roomId', (req, res) => {
 });
 
 // ─── Get Room Info (convenience proxy) ────────────────────
-app.get('/room/:roomId', async (req, res) => {
+app.get('/room/:roomId', async (req: express.Request, res: express.Response) => {
   try {
     const rid = BigInt(req.params.roomId);
-    const [room, players] = await Promise.all([getRoom(rid), getPlayers(rid)]);
+    const chainId = req.query.chainId ? Number(req.query.chainId) : undefined;
+    const [room, players] = await Promise.all([getRoom(rid, chainId), getPlayers(rid, chainId)]);
     return res.json({
       room: {
         id: Number(room.id),
@@ -441,7 +453,7 @@ app.get('/room/:roomId', async (req, res) => {
         aliveCount: room.aliveCount,
         dayCount: room.dayCount,
       },
-      players: players.map((p) => ({
+      players: players.map((p: any) => ({
         wallet: p.wallet,
         nickname: p.nickname,
         active: !!(Number(p.flags) & FLAGS.ACTIVE),
@@ -459,7 +471,6 @@ async function start() {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`\n🎭 Mafia GM Server running on port ${PORT}`);
       console.log(`   GM Address: ${GM_ADDRESS}`);
-      console.log(`   Diamond:    ${DIAMOND_ADDRESS}`);
       console.log(`   Health:     http://0.0.0.0:${PORT}/health\n`);
     });
   } catch (error: any) {
