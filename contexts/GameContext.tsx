@@ -455,11 +455,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // SPEED FIX: Known gas limits for heavy functions — skip estimateContractGas
         // These are battle-tested values, estimation adds 500-2000ms latency
         // NOTE: Block gas limit on current chain is 15M — never exceed 14.5M
+        // NOTE: revealDeck, shareKeysToAll, endGameZK are NOT listed here because their
+        // gas usage varies heavily with player count / deck size. They get dynamically estimated.
         const MAX_BLOCK_GAS = 14_500_000n;
         const KNOWN_GAS_LIMITS: Record<string, bigint> = {
             commitDeck: 2_000_000n,
-            revealDeck: 14_500_000n,
-            shareKeysToAll: 14_500_000n,
             commitAndConfirmRole: 3_000_000n,
             commitNightAction: 1_500_000n,
             revealNightAction: 3_000_000n,
@@ -468,7 +468,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             vote: 2_000_000n,
             startVoting: 5_000_000n,
             revealRole: 5_000_000n,
-            endGameZK: 14_500_000n,
             forcePhaseTimeout: 10_000_000n,
             sendMafiaMessage: 2_000_000n,
             claimRefund: 3_000_000n,
