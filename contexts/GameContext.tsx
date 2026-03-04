@@ -84,6 +84,7 @@ interface GameContextType {
     // Vote visualization: voter address -> target address
     voteMap: Record<string, string>;
     setVoteMap: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+    runtimeContractAddress: `0x${string}`;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -3247,6 +3248,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending,
         playerMarks, setPlayerMark,
         voteMap, setVoteMap,
+        runtimeContractAddress,
         setCurrentRoomId
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, isTxConfirming, currentRoomId,

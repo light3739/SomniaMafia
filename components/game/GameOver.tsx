@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
 import { formatEther } from 'viem';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
+import { MAFIA_ABI } from '../../contracts/config';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { hexToString } from '../../services/cryptoUtils';
 import { Role } from '../../types';
@@ -53,7 +53,7 @@ const contractRoleToRole = (contractRole: number): Role => {
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = React.memo(() => {
-    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, claimRefund, isTxPending } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, claimRefund, isTxPending, runtimeContractAddress } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const router = useRouter();
@@ -75,19 +75,19 @@ export const GameOver: React.FC = React.memo(() => {
             try {
                 const [deposit, room, defaultDeposit] = await Promise.all([
                     publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
+                        address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'getPlayerDeposit',
                         args: [currentRoomId, address],
                     }) as Promise<bigint>,
                     publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
+                        address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'getRoom',
                         args: [currentRoomId],
                     }) as Promise<any>,
                     publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
+                        address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'getDefaultDeposit',
                     }) as Promise<bigint>,
@@ -157,13 +157,13 @@ export const GameOver: React.FC = React.memo(() => {
             // SPEED: Fetch deck and keys in parallel — saves one sequential RPC roundtrip
             const [deck, keysResult] = await Promise.all([
                 publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                    address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'getDeck',
                     args: [currentRoomId],
                 }) as Promise<string[]>,
                 publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                    address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'getAllKeysForMe',
                     args: [currentRoomId],
@@ -248,7 +248,7 @@ export const GameOver: React.FC = React.memo(() => {
             // Now: 1 multicall RPC call for all players
             const roleResults = await publicClient.multicall({
                 contracts: gameState.players.map(player => ({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                    address: runtimeContractAddress,
                     abi: MAFIA_ABI as any,
                     functionName: 'playerRoles' as const,
                     args: [currentRoomId, player.address],
