@@ -532,8 +532,14 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     hasVoted: prev.hasVoted || hasVoted
                 }));
             }
-        } catch (e) {
-            console.error("Failed to fetch votes:", e);
+        } catch (e: any) {
+            // Contract may revert if phase hasn't fully transitioned — expected, not an error
+            const msg = (e.message || '').toLowerCase();
+            if (msg.includes('revert') || msg.includes('0x5416eb98')) {
+                console.log("[DayPhase] voteCounts read unavailable (phase transition)");
+            } else {
+                console.warn("Failed to fetch votes:", e);
+            }
         }
     }, [publicClient, currentRoomId, gameState.players, myPlayer, isProcessing, isTxPending, setVoteMap]);
 
