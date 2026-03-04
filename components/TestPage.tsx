@@ -23,7 +23,7 @@ import { RoleCompositionAnnouncement } from './game/RoleCompositionAnnouncement'
 import { MafiaChat } from './game/MafiaChat';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../contexts/GameContext';
-import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X, Vote, Moon } from 'lucide-react';
+import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X } from 'lucide-react';
 import { MicButton } from './game/MicButton';
 import { useSoundEffects } from './ui/SoundEffects';
 import { GameHintsOverlay } from './game/GameHints';
@@ -629,7 +629,7 @@ const MafiaConsensusTestWrapper: React.FC = () => {
                 )}
                 {revealed === committed && revealed > 0 && !consensusTarget && (
                     <div className="mt-2 p-2 bg-yellow-900/30 rounded-lg">
-                        <span className="text-xs text-yellow-300">⚠️ No consensus - targets don't match!</span>
+                        <span className="text-xs text-yellow-300">⚠️ No consensus - targets don&apos;t match!</span>
                     </div>
                 )}
             </div>
@@ -1882,10 +1882,11 @@ const MicButtonTestWrapper: React.FC = () => {
 const DiscussionChatTestWrapper: React.FC = () => {
     const [isExpanded, setIsExpanded] = useState(true);
     const [canWrite, setCanWrite] = useState(true);
+    const initialMessageBaseTs = 1700000000000;
     const [messages, setMessages] = useState<{ id: string; sender: string; senderAddress: string; content: string; timestamp: number }[]>([
-        { id: '1', sender: 'Alice', senderAddress: '0x1111', content: 'Я думаю это Bob, потому что он молчит', timestamp: Date.now() - 30000 },
-        { id: '2', sender: 'Charlie', senderAddress: '0x2222', content: 'Согласен, Bob подозрителен', timestamp: Date.now() - 20000 },
-        { id: '3', sender: 'Bob', senderAddress: '0x3333', content: 'Я не мафия! Посмотрите на Dave!', timestamp: Date.now() - 10000 },
+        { id: '1', sender: 'Alice', senderAddress: '0x1111', content: 'Я думаю это Bob, потому что он молчит', timestamp: initialMessageBaseTs - 30000 },
+        { id: '2', sender: 'Charlie', senderAddress: '0x2222', content: 'Согласен, Bob подозрителен', timestamp: initialMessageBaseTs - 20000 },
+        { id: '3', sender: 'Bob', senderAddress: '0x3333', content: 'Я не мафия! Посмотрите на Dave!', timestamp: initialMessageBaseTs - 10000 },
     ]);
     const [inputValue, setInputValue] = useState('');
     const messagesEndRef = React.useRef<HTMLDivElement>(null);

@@ -189,7 +189,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
 
                         if (logs && logs.length > 0) {
                             const lastLog = logs[logs.length - 1];
-                            // @ts-ignore
+                            // @ts-expect-error event args are not strongly typed here
                             deck = (lastLog.args as any).deck as string[];
                             console.log(`[Event Sync] Loaded deck with ${deck.length} cards from logs`);
                         }

@@ -5,7 +5,7 @@ import { useAccount, useWriteContract, usePublicClient, useWalletClient, useWatc
 import { createWalletClient, http, parseEther, formatEther, parseEventLogs, toHex, pad, type WalletClient } from 'viem';
 import { privateKeyToAccount, nonceManager } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, somniaChain, GM_SERVER_URL } from '../contracts/config';
+import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL, AVALANCHE_FUJI, getDeploymentByChainId } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
 import { loadSession, createNewSession, markSessionRegistered, getSessionAccount } from '../services/sessionKeyService';
 import { generateEndGameProof } from '../services/zkProof';
@@ -160,7 +160,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const lastPhaseKeyRef = useRef<string>('');
 
     // Web3
-    const { address } = useAccount();
+    const { address, chainId } = useAccount();
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
     const { data: walletClient } = useWalletClient();
@@ -171,6 +171,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [playerMarks, setPlayerMarks] = useState<Record<string, 'mafia' | 'civilian' | 'question' | null>>({});
     // Vote map: stores who voted for whom (voter address -> target address)
     const [voteMap, setVoteMap] = useState<Record<string, string>>({});
+
+    const runtimeDeployment = useMemo(() => getDeploymentByChainId(chainId ?? null), [chainId]);
+    const runtimeChain = runtimeDeployment.chain;
+    const runtimeContractAddress = runtimeDeployment.contracts.MafiaDiamond as `0x${string}`;
+
+    const LOBBY_FUNDING_VALUE = useMemo(() => {
+        return chainId === AVALANCHE_FUJI.id ? parseEther('0.02') : parseEther('1');
+    }, [chainId]);
 
     const setPlayerMark = useCallback((address: string, mark: 'mafia' | 'civilian' | 'question' | null) => {
         setPlayerMarks(prev => ({
@@ -203,8 +211,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log(`[Session Debug] Creating new cached client for ${account.address}`);
             const client = createWalletClient({
                 account,
-                chain: somniaChain,
-                transport: http(somniaChain.rpcUrls.default.http[0], {
+                chain: runtimeChain,
+                transport: http(runtimeChain.rpcUrls.default.http[0], {
                     // SPEED: Tighter timeout — Somnia RPCs respond in <500ms normally
                     timeout: 8_000,
                     // SPEED: Fewer retries for faster failure detection (queue will retry anyway)
@@ -220,7 +228,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error("[Session Debug] Failed to create client:", err);
             return null;
         }
-    }, []);
+    }, [runtimeChain]);
 
     // Helper: sync role secret with server (includes signature verification)
     // FIX #10/#11: Retry with exponential backoff instead of fire-and-forget
@@ -476,7 +484,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 // 1. Спрашиваем у ноды, сколько нужно газа
                 const gasEstimate = await publicClient.estimateContractGas({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                    address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: functionName as any,
                     args: args as any,
@@ -516,12 +524,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     const sendStart = performance.now();
                     const hash = await sessionClient.writeContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
+                        address: runtimeContractAddress,
                         abi: MAFIA_ABI as any,
                         functionName: functionName as any,
                         args: args as any,
                         account: sessionClient.account!,
-                        chain: somniaChain,
+                        chain: runtimeChain,
                         gas: calculatedGas,
                         gasPrice: SOMNIA_GAS_PRICE, // SPEED: Skip eth_gasPrice RPC call
                         type: 'legacy',
@@ -553,14 +561,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const totalTime = Math.round(performance.now() - txStartTime);
             console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas} (prep took ${totalTime}ms)`);
             return writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: functionName as any,
                 args: args as any,
                 gas: calculatedGas,
             });
         }
-    }, [getSessionWalletClient, writeContractAsync, publicClient, address, isTestMode]);
+    }, [getSessionWalletClient, writeContractAsync, publicClient, address, isTestMode, runtimeContractAddress, runtimeChain]);
 
     const [gameState, setGameState] = useState<GameState>({
         phase: GamePhase.LOBBY,
@@ -1102,7 +1110,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             // 1. Предсказываем ID комнаты (читаем nextRoomId)
             const nextId = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'nextRoomId',
             }) as bigint;
@@ -1134,12 +1142,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let gasLimit = 50_000_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                    address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
                     args: [lobbyName, 16, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('1'),
+                    value: LOBBY_FUNDING_VALUE,
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -1149,7 +1157,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 5. АТОМАРНАЯ ТРАНЗАКЦИЯ (Create + Join + Fund)
             const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'createAndJoin',
                 args: [
@@ -1159,7 +1167,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     pubKeyHex as `0x${string}`,      // bytes publicKey
                     sessionAddress as `0x${string}`  // address sessionAddress
                 ],
-                value: parseEther('1'),
+                value: LOBBY_FUNDING_VALUE,
                 gas: gasLimit,
                 type: 'legacy',
             });
@@ -1263,7 +1271,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, lobbyName, publicClient, writeContractAsync, addLog, refreshPlayersList]);
+    }, [playerName, address, lobbyName, publicClient, writeContractAsync, addLog, refreshPlayersList, LOBBY_FUNDING_VALUE, runtimeContractAddress]);
 
     const joinLobbyOnChain = useCallback(async (roomId: number): Promise<boolean> => {
         if (!playerName || !address || !publicClient) { alert("Enter name and connect wallet!"); return false; }
@@ -1281,12 +1289,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let gasLimit = 50_000_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                    address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
                     account: address,
-                    value: parseEther('1'),
+                    value: LOBBY_FUNDING_VALUE,
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -1296,11 +1304,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 4. Join room with session key + fund it
             const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
-                value: parseEther('1'),
+                value: LOBBY_FUNDING_VALUE,
                 gas: gasLimit,
                 type: 'legacy',
             });
@@ -1375,7 +1383,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, publicClient, writeContractAsync, addLog, refreshPlayersList, avatarUrl, walletClient]);
+    }, [playerName, address, publicClient, writeContractAsync, addLog, refreshPlayersList, avatarUrl, walletClient, LOBBY_FUNDING_VALUE, runtimeContractAddress]);
 
     // --- SHUFFLE PHASE ---
 

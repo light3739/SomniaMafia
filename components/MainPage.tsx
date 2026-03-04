@@ -1,16 +1,19 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount } from 'wagmi';
+import { useChainId } from 'wagmi';
+import { NetworkSelector } from './ui/NetworkSelector';
 const somniaLogo = "/assets/somniayeal.png";
-const mafiaBg = "/assets/lobby_background.png";
 
 interface MainPageProps {
     onStart: () => void;
 }
 
 export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
+    const chainId = useChainId();
+    const networkLabel = chainId === 43113 ? 'Avalanche Fuji' : 'Somnia Testnet';
+
     return (
         <div className="relative w-full h-screen overflow-hidden font-sans flex items-center justify-center">
 
@@ -66,7 +69,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         }}
                         className="text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap"
                     >
-                        On Somnia Network
+                        On {networkLabel}
                     </p>
 
                     <Image
@@ -77,6 +80,10 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md"
                     />
                 </motion.div>
+
+                <div className="mt-4 flex items-center gap-2 bg-black/40 border border-white/15 rounded-xl px-3 py-2">
+                    <NetworkSelector />
+                </div>
 
                 {/* CONNECT / ENTER Button */}
                 <motion.div
@@ -89,7 +96,6 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         {({
                             account,
                             chain,
-                            openAccountModal,
                             openChainModal,
                             openConnectModal,
                             authenticationStatus,
@@ -140,6 +146,22 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                                     className="px-8 py-3 rounded-xl font-mono font-bold text-white bg-red-600 shadow-lg hover:scale-105 transition-all text-sm md:text-base tracking-wider ring-1 ring-red-400/50"
                                                 >
                                                     WRONG NETWORK
+                                                </button>
+                                            );
+                                        }
+
+                                        const preferredNetwork = typeof window !== 'undefined'
+                                            ? localStorage.getItem('mafia_selected_network')
+                                            : null;
+                                        const preferredChainId = preferredNetwork === 'somnia_testnet' ? 50312 : 43113;
+
+                                        if (chain.id !== preferredChainId) {
+                                            return (
+                                                <button
+                                                    onClick={openChainModal}
+                                                    className="px-8 py-3 rounded-xl font-mono font-bold text-white bg-orange-600 shadow-lg hover:scale-105 transition-all text-sm md:text-base tracking-wider ring-1 ring-orange-300/50"
+                                                >
+                                                    SWITCH NETWORK
                                                 </button>
                                             );
                                         }
