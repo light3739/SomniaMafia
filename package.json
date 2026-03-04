@@ -7,7 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:gm": "node scripts/test_gm_backend_smoke.js"
+    "test:gm": "node scripts/test_gm_backend_smoke.js",
+    "gm:sync": "bash ops/gm-server/sync.sh",
+    "gm:build": "bash ops/gm-server/build.sh",
+    "gm:deploy": "bash ops/gm-server/deploy-mafia.sh",
+    "gm:publish": "bash ops/gm-server/publish-repo.sh",
+    "gm:release": "bash ops/gm-server/publish-and-deploy.sh",
+    "push:front": "bash ops/git/push-frontend.sh",
+    "push:all": "bash ops/git/push-all.sh"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.19",

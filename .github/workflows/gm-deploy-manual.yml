@@ -1,0 +1,40 @@
+name: GM Deploy Manual
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GM_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.GM_SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Build frontend checks
+        run: |
+          npm ci
+          npx tsc --noEmit --pretty false
+
+      - name: Sync + Deploy GM
+        env:
+          GM_SSH_HOST: ${{ secrets.GM_SSH_HOST }}
+          GM_SSH_USER: ${{ secrets.GM_SSH_USER }}
+          GM_SSH_PORT: ${{ secrets.GM_SSH_PORT }}
+          GM_REMOTE_DIR: ${{ secrets.GM_REMOTE_DIR }}
+          GM_PM2_NAME: ${{ secrets.GM_PM2_NAME }}
+        run: |
+          npm run gm:sync
+          npm run gm:deploy
