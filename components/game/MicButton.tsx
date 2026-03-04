@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { Room, RoomEvent, Track, LocalAudioTrack, RemoteTrack, RemoteTrackPublication, RemoteParticipant } from 'livekit-client';
-import { useAccount, useWalletClient } from 'wagmi';
+import { useAccount, useWalletClient, useChainId } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
 import { buildTokenMessage } from '@/services/signingSchema';
 
@@ -24,11 +24,13 @@ export function MicButton({
     className = '',
 }: MicButtonProps) {
     const { address } = useAccount();
+    const chainId = useChainId();
     const { data: walletClient } = useWalletClient();
     const [isConnected, setIsConnected] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
     const [isMuted, setIsMuted] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
     const [participantCount, setParticipantCount] = useState(0);
 
     const roomRef = useRef<Room | null>(null);
@@ -79,7 +81,7 @@ export function MicButton({
         userNameRef.current = userName;
     }, [userName]);
 
-    // Connect to LiveKit room on mount
+    // Connect to LiveKit room on mount or retry
     useEffect(() => {
         if (!roomId) return;
 
@@ -92,7 +94,7 @@ export function MicButton({
         let cancelled = false;
 
         const connect = async () => {
-            console.log('[MicButton] Starting connection...');
+            console.log(`[MicButton] Starting connection to ${roomId} (attempt ${retryCount + 1})...`);
             setIsConnecting(true);
             setError(null);
 
@@ -126,7 +128,9 @@ export function MicButton({
                     }
                 }
 
-                // Get token from API
+                if (cancelled) return;
+
+                // Get token from API with chainId support
                 const resp = await fetch("/api/token", {
                     method: "POST",
                     body: JSON.stringify({
@@ -137,24 +141,28 @@ export function MicButton({
                         signature,
                         nonce,
                         timestamp,
+                        chainId, // CRITICAL: Send current chainId to server
                     }),
                     headers: { "Content-Type": "application/json" },
                 });
 
                 if (!resp.ok) {
-                    throw new Error(`Failed to get token: ${resp.status}`);
+                    const errorText = await resp.clone().text();
+                    try {
+                        const errJson = JSON.parse(errorText);
+                        throw new Error(errJson.error || `Server error ${resp.status}`);
+                    } catch {
+                        throw new Error(`Failed to get token: ${resp.status}`);
+                    }
                 }
 
                 const data = await resp.json();
-                if (data.error) {
-                    throw new Error(data.error);
-                }
+                if (data.error) throw new Error(data.error);
 
                 if (cancelled) return;
 
                 // Create and connect room
                 const room = new Room({
-                    // Auto-subscribe to audio tracks
                     adaptiveStream: true,
                     dynacast: true,
                 });
@@ -177,73 +185,60 @@ export function MicButton({
                     }
                 });
 
-                // Handle remote tracks - SUBSCRIBE TO AUDIO (use ref to avoid stale closure)
+                // Handle remote tracks
                 room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-                    if (!cancelled) {
-                        attachRemoteAudioRef.current(track, participant);
-                    }
+                    if (!cancelled) attachRemoteAudioRef.current(track, participant);
                 });
 
                 room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
-                    if (!cancelled) {
-                        detachRemoteAudioRef.current(track, participant);
-                    }
+                    if (!cancelled) detachRemoteAudioRef.current(track, participant);
                 });
 
-                // Track participant count
-                room.on(RoomEvent.ParticipantConnected, () => {
-                    setParticipantCount(room.remoteParticipants.size + 1);
-                });
+                // Connect to room (timeout after 15s)
+                const connectPromise = room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, data.token);
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), 15000));
 
-                room.on(RoomEvent.ParticipantDisconnected, () => {
-                    setParticipantCount(room.remoteParticipants.size + 1);
-                });
-
-                // Connect to room
-                await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, data.token);
+                await Promise.race([connectPromise, timeoutPromise]);
 
                 if (cancelled) {
                     room.disconnect();
                     return;
                 }
 
-                // Attach any existing remote audio tracks (use ref)
+                // Attach any existing remote audio tracks
                 room.remoteParticipants.forEach((participant) => {
                     participant.audioTrackPublications.forEach((publication) => {
-                        if (publication.track) {
-                            attachRemoteAudioRef.current(publication.track, participant);
-                        }
+                        if (publication.track) attachRemoteAudioRef.current(publication.track, participant);
                     });
                 });
 
                 // Create local audio track (muted by default)
-                const audioTrack = await room.localParticipant.createTracks({
-                    audio: true,
-                    video: false,
-                });
+                try {
+                    const audioTracks = await room.localParticipant.createTracks({ audio: true, video: false });
+                    const localAudioTrack = audioTracks.find(t => t.kind === Track.Kind.Audio) as LocalAudioTrack | undefined;
 
-                const localAudioTrack = audioTrack.find(t => t.kind === Track.Kind.Audio) as LocalAudioTrack | undefined;
-
-                if (localAudioTrack) {
-                    audioTrackRef.current = localAudioTrack;
-                    // Start muted
-                    await localAudioTrack.mute();
-                    setIsMuted(true);
-
-                    // Publish the track
-                    await room.localParticipant.publishTrack(localAudioTrack);
+                    if (localAudioTrack && !cancelled) {
+                        audioTrackRef.current = localAudioTrack;
+                        await localAudioTrack.mute();
+                        setIsMuted(true);
+                        await room.localParticipant.publishTrack(localAudioTrack);
+                    }
+                } catch (mediaErr) {
+                    console.warn('[MicButton] Mic access denied or not found:', mediaErr);
+                    // We stay connected (to hear others) even if we can't speak
                 }
 
-                setIsConnecting(false);
+                if (!cancelled) setIsConnecting(false);
             } catch (e: any) {
                 // Suppress noisy 'Client initiated disconnect' logs during phase-driven unmounts
-                const isUserDisconnect = e?.message?.includes('disconnect') || e?.name?.includes('ConnectionError');
+                const isUserDisconnect = e?.message?.includes('disconnect') || e?.name?.includes('ConnectionError') || e?.message?.includes('timeout');
                 if (!cancelled && !isUserDisconnect) {
                     console.error('[MicButton] Connection error:', e);
                     setError(e instanceof Error ? e.message : 'Failed to connect');
                 } else {
-                    console.log('[MicButton] Connection aborted/closed (expected during phase transition)');
+                    console.log('[MicButton] Connection aborted/closed/timed out (expected)');
                 }
+
                 if (!cancelled) {
                     setIsConnecting(false);
                 }
@@ -259,18 +254,16 @@ export function MicButton({
                 roomRef.current = null;
             }
             audioTrackRef.current = null;
-
-            // Clean up any remaining audio elements
-            if (audioContainerRef.current) {
-                audioContainerRef.current.innerHTML = '';
-            }
+            if (audioContainerRef.current) audioContainerRef.current.innerHTML = '';
         };
-    }, [roomId, address, walletClient]); // Only reconnect if roomId changes (userName stored in ref)
+    }, [roomId, address, walletClient, chainId, retryCount]);
 
-    // Toggle microphone
     const toggleMic = useCallback(async () => {
+        if (error) {
+            setRetryCount(prev => prev + 1);
+            return;
+        }
         if (!audioTrackRef.current || !isConnected) return;
-
         try {
             if (isMuted) {
                 await audioTrackRef.current.unmute();
@@ -282,9 +275,14 @@ export function MicButton({
         } catch (e) {
             console.error('[MicButton] Toggle mic error:', e);
         }
-    }, [isMuted, isConnected]);
+    }, [isMuted, isConnected, error]);
 
-    // Auto-mute when turn ends (skip in freeTalk mode)
+    const handleRetry = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
+        setRetryCount(prev => prev + 1);
+    }, []);
+
+    // Auto-mute when turn ends
     useEffect(() => {
         if (!freeTalk && !isMyTurn && !isMuted && audioTrackRef.current) {
             audioTrackRef.current.mute();
@@ -293,28 +291,29 @@ export function MicButton({
     }, [isMyTurn, isMuted, freeTalk]);
 
     const canSpeak = freeTalk || isMyTurn;
-    const isDisabled = !canSpeak || isConnecting || !isConnected || !!error;
+    const isDisabled = !canSpeak || isConnecting || (!isConnected && !error);
 
     return (
-        <>
+        <div className={`relative ${className}`}>
             <motion.button
                 onClick={toggleMic}
                 disabled={isDisabled}
                 className={`
-                relative w-14 h-14 rounded-full flex items-center justify-center
-                transition-all duration-300 shadow-lg
-                ${isDisabled
+                    relative w-14 h-14 rounded-full flex items-center justify-center
+                    transition-all duration-300 shadow-lg
+                    ${isDisabled
                         ? 'bg-gray-800/50 border border-gray-600/30 cursor-not-allowed opacity-50'
-                        : isMuted
-                            ? 'bg-gray-800/80 border-2 border-gray-500/50 hover:border-[#916A47]/70 hover:bg-gray-700/80'
-                            : 'bg-green-600 border-2 border-green-400/70 shadow-[0_0_20px_rgba(34,197,94,0.4)]'
+                        : error
+                            ? 'bg-red-900/40 border-2 border-red-500/50 hover:bg-red-800/60'
+                            : isMuted
+                                ? 'bg-gray-800/80 border-2 border-gray-500/50 hover:border-[#916A47]/70 hover:bg-gray-700/80'
+                                : 'bg-green-600 border-2 border-green-400/70 shadow-[0_0_20px_rgba(34,197,94,0.4)]'
                     }
-                ${className}
-            `}
+                `}
                 whileHover={!isDisabled ? { scale: 1.05 } : {}}
                 whileTap={!isDisabled ? { scale: 0.95 } : {}}
                 title={
-                    error ? error :
+                    error ? `${error} (Click to retry)` :
                         !isConnected ? 'Connecting...' :
                             !canSpeak ? 'Not your turn' :
                                 isMuted ? 'Click to speak' : 'Speaking (click to mute)'
@@ -334,15 +333,11 @@ export function MicButton({
 
                 {/* Speaking pulse animation */}
                 <AnimatePresence>
-                    {!isMuted && canSpeak && (
+                    {!isMuted && canSpeak && isConnected && (
                         <motion.div
                             initial={{ scale: 1, opacity: 0.5 }}
                             animate={{ scale: 1.5, opacity: 0 }}
-                            transition={{
-                                repeat: Infinity,
-                                duration: 1.5,
-                                ease: "easeOut"
-                            }}
+                            transition={{ repeat: Infinity, duration: 1.5, ease: "easeOut" }}
                             className="absolute inset-0 rounded-full bg-green-500"
                         />
                     )}
@@ -351,6 +346,11 @@ export function MicButton({
                 {/* Icon */}
                 {isConnecting ? (
                     <Loader2 className="w-6 h-6 text-[#916A47] animate-spin" />
+                ) : error ? (
+                    <div className="flex flex-col items-center justify-center">
+                        <MicOff className="w-5 h-5 text-red-500" />
+                        <span className="text-[8px] text-red-400 font-bold">RETRY</span>
+                    </div>
                 ) : isMuted ? (
                     <MicOff className={`w-6 h-6 ${isDisabled ? 'text-gray-500' : 'text-gray-300'}`} />
                 ) : (
@@ -364,6 +364,6 @@ export function MicButton({
                 className="hidden"
                 aria-hidden="true"
             />
-        </>
+        </div>
     );
 }
