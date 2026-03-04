@@ -12,14 +12,14 @@ if [[ ! -d "$SOURCE_DIR" ]]; then
 fi
 
 mkdir -p "$TARGET_DIR"
-rsync -a --delete \
-  --exclude node_modules \
-  --exclude dist \
-  --exclude .env \
-  --exclude .env.local \
-  --exclude .env.production \
-  --exclude .env.development \
-  --exclude .git \
-  "$SOURCE_DIR/" "$TARGET_DIR/"
+# Portable sync using cp
+rm -rf "$TARGET_DIR"
+mkdir -p "$TARGET_DIR"
+cp -rf "$SOURCE_DIR/." "$TARGET_DIR/"
+# Manual clean up of excluded items
+find "$TARGET_DIR" -type d -name "node_modules" -exec rm -rf {} +
+find "$TARGET_DIR" -type d -name "dist" -exec rm -rf {} +
+find "$TARGET_DIR" -type d -name ".git" -exec rm -rf {} +
+rm -f "$TARGET_DIR/.env"*
 
 echo "[sync] Synced gm-server to $TARGET_DIR"
