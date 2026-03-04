@@ -53,7 +53,7 @@ const contractRoleToRole = (contractRole: number): Role => {
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = React.memo(() => {
-    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, claimRefund, isTxPending, runtimeContractAddress } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, claimRefund, isTxPending, runtimeContractAddress, currencySymbol } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const router = useRouter();
@@ -98,10 +98,10 @@ export const GameOver: React.FC = React.memo(() => {
 
                 console.log(`[Deposit Debug] GameOver screen:`, {
                     roomId: currentRoomId.toString(),
-                    myDeposit: formatEther(deposit) + ' STT',
-                    depositPool: formatEther(depositPool) + ' STT',
-                    depositPerPlayer: formatEther(depositPerPlayer) + ' STT',
-                    defaultDeposit: formatEther(defaultDeposit) + ' STT',
+                    myDeposit: formatEther(deposit) + ' ' + currencySymbol,
+                    depositPool: formatEther(depositPool) + ' ' + currencySymbol,
+                    depositPerPlayer: formatEther(depositPerPlayer) + ' ' + currencySymbol,
+                    defaultDeposit: formatEther(defaultDeposit) + ' ' + currencySymbol,
                     canClaimRefund: deposit > 0n,
                     alreadyRefunded: deposit === 0n,
                 });
@@ -110,8 +110,8 @@ export const GameOver: React.FC = React.memo(() => {
                 if (deposit === 0n) {
                     console.log(`[Deposit Debug] Deposit is 0 at GameOver mount — contract auto-refunded during endGame.`, {
                         roomId: currentRoomId.toString(),
-                        depositPool: formatEther(depositPool) + ' STT',
-                        depositPerPlayer: formatEther(depositPerPlayer) + ' STT',
+                        depositPool: formatEther(depositPool) + ' ' + currencySymbol,
+                        depositPerPlayer: formatEther(depositPerPlayer) + ' ' + currencySymbol,
                     });
                     setRefundClaimed(true);
                     setRefundAutomatic(true);

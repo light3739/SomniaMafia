@@ -85,6 +85,7 @@ interface GameContextType {
     voteMap: Record<string, string>;
     setVoteMap: React.Dispatch<React.SetStateAction<Record<string, string>>>;
     runtimeContractAddress: `0x${string}`;
+    currencySymbol: string;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -411,17 +412,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // FIX: For gas-heavy functions (endGameZK), check session key balance
         // If balance is too low, fall back to main wallet to avoid "insufficient balance"
+        const currencySymbol = runtimeChain.nativeCurrency.symbol;
         if (canUseSession && session && publicClient && ['endGameZK'].includes(functionName)) {
             try {
                 const sessionBalance = await publicClient.getBalance({
                     address: session.address as `0x${string}`
                 });
-                const MIN_BALANCE_FOR_HEAVY_TX = parseEther('0.3'); // ~0.3 STT minimum for endGameZK
+                // SPEED: Reduced threshold to 0.01 (ZK TXs are typically ~0.005 on Somnia, slightly more on Fuji)
+                const MIN_BALANCE_FOR_HEAVY_TX = parseEther('0.01');
                 if (sessionBalance < MIN_BALANCE_FOR_HEAVY_TX) {
-                    console.warn(`[Session TX] Session key balance too low for ${functionName}: ${formatEther(sessionBalance)} STT. Falling back to main wallet.`);
+                    console.warn(`[Session TX] Session key balance too low for ${functionName}: ${formatEther(sessionBalance)} ${currencySymbol}. Falling back to main wallet.`);
                     canUseSession = false;
                 } else {
-                    console.log(`[Session TX] Session key balance OK for ${functionName}: ${formatEther(sessionBalance)} STT`);
+                    console.log(`[Session TX] Session key balance OK for ${functionName}: ${formatEther(sessionBalance)} ${currencySymbol}`);
                 }
             } catch (balErr) {
                 console.warn('[Session TX] Failed to check session balance, proceeding anyway:', balErr);
@@ -450,9 +453,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         let calculatedGas = 1_000_000n; // Fallback на случай сбоя оценки
         const txStartTime = performance.now();
 
-        // SPEED FIX: Use known gas price to skip eth_gasPrice RPC call
-        // Somnia testnet consistently reports 6 gwei — hardcode to save ~200ms per TX
-        const SOMNIA_GAS_PRICE = 6_000_000_000n; // 6 gwei
+        // SPEED FIX: Use known gas price to skip eth_gasPrice RPC call where possible
+        // Somnia testnet consistently reports 6 gwei. Avalanche Fuji varies but ~25-30 is safe.
+        const CURRENT_GAS_PRICE = runtimeChain.id === 50312
+            ? 6_000_000_000n
+            : 30_000_000_000n; // 30 gwei for Fuji/others as safe default
 
         // SPEED FIX: Known gas limits for heavy functions — skip estimateContractGas
         // These are battle-tested values, estimation adds 500-2000ms latency
@@ -469,7 +474,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             revealMafiaTarget: 5_000_000n,
             vote: 2_000_000n,
             startVoting: 5_000_000n,
-            revealRole: 5_000_000n,
+            revealRole: 1_200_000n, // Reduced from 5M to fit session key balance
             forcePhaseTimeout: 10_000_000n,
             sendMafiaMessage: 2_000_000n,
             claimRefund: 3_000_000n,
@@ -483,11 +488,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const sessionAddr = getSessionWalletClient()?.account?.address;
                 if (sessionAddr && publicClient) {
                     const bal = await publicClient.getBalance({ address: sessionAddr });
-                    const cost = knownLimit * SOMNIA_GAS_PRICE;
+                    const cost = knownLimit * CURRENT_GAS_PRICE;
                     if (bal >= cost) {
                         useKnownLimit = true;
                     } else {
-                        console.log(`[Gas] Session key balance (${bal}) can't cover known limit ${knownLimit} (cost=${cost}), using estimation instead`);
+                        console.log(`[Gas] Session key balance (${formatEther(bal)} ${currencySymbol}) can't cover known limit ${knownLimit} (cost=${formatEther(cost)} ${currencySymbol}), using estimation instead`);
                     }
                 } else {
                     useKnownLimit = true; // Can't check, assume OK
@@ -546,9 +551,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             address: getSessionWalletClient()!.account!.address
                         });
                         // Max gas = 80% of balance / gasPrice (leave 20% buffer)
-                        const maxAffordable = (sessionBalance * 80n / 100n) / SOMNIA_GAS_PRICE;
+                        const maxAffordable = (sessionBalance * 80n / 100n) / CURRENT_GAS_PRICE;
                         calculatedGas = maxAffordable > 0n ? maxAffordable : 3_000_000n;
-                        console.log(`[Gas] Session key fallback: balance=${sessionBalance}, maxAffordable gas=${calculatedGas}`);
+                        console.log(`[Gas] Session key fallback: balance=${formatEther(sessionBalance)} ${currencySymbol}, maxAffordable gas=${calculatedGas}`);
                     } catch (_balErr) {
                         calculatedGas = 3_000_000n; // Very conservative fallback
                     }
@@ -576,7 +581,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         account: sessionClient.account!,
                         chain: runtimeChain,
                         gas: calculatedGas,
-                        gasPrice: SOMNIA_GAS_PRICE, // SPEED: Skip eth_gasPrice RPC call
+                        gasPrice: CURRENT_GAS_PRICE, // SPEED: Skip eth_gasPrice RPC call
                         type: 'legacy',
                     });
                     const sendTime = Math.round(performance.now() - sendStart);
@@ -2317,9 +2322,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Automatically reveal my role on-chain after game ends (for trustless verification)
     const revealMyRoleAfterGameEnd = useCallback(async () => {
-        if (!currentRoomId || !myPlayer || !address) return;
+        if (!currentRoomId || !myPlayer || !address || !publicClient) return;
 
         try {
+            // FIX: Check if already revealed ON-CHAIN before submitting to avoid revert during estimation
+            const onChainRole = await publicClient.readContract({
+                address: MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'playerRoles',
+                args: [currentRoomId, address],
+            }) as number;
+
+            if (onChainRole !== 0) {
+                console.log("[RoleReveal] Role already revealed on-chain (contract state), skipping");
+                return;
+            }
+
             // Get saved salt from localStorage (set during commitRole phase)
             const salt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
             if (!salt) {
@@ -2340,13 +2358,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         } catch (e: any) {
             // Ignore "already revealed" errors - might have been revealed before
-            if (e.message?.includes("RoleAlreadyRevealed")) {
+            if (e.message?.includes("RoleAlreadyRevealed") || e.message?.includes("already revealed")) {
                 console.log("[RoleReveal] Already revealed, skipping");
                 return;
             }
             console.warn("[RoleReveal] Failed:", e);
         }
-    }, [currentRoomId, myPlayer, address, revealRoleOnChain, addLog]);
+    }, [currentRoomId, myPlayer, address, revealRoleOnChain, addLog, publicClient]);
 
 
     // V4: ZK End Game (Client generates proof of win)
@@ -3249,6 +3267,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         playerMarks, setPlayerMark,
         voteMap, setVoteMap,
         runtimeContractAddress,
+        currencySymbol: runtimeChain.nativeCurrency.symbol,
         setCurrentRoomId
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, isTxConfirming, currentRoomId,
@@ -3265,6 +3284,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         showVotingResults, setShowVotingResults,
         playerMarks, setPlayerMark,
         voteMap,
+        runtimeChain.nativeCurrency.symbol,
         setCurrentRoomId
     ]);
 
