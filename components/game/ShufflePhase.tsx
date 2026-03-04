@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { usePublicClient, useWriteContract } from 'wagmi';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
+import { MAFIA_ABI } from '../../contracts/config';
 import { Loader2, Check, Clock, Shuffle, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/Button';
 
@@ -28,7 +28,8 @@ export const ShufflePhase: React.FC = React.memo(() => {
         revealDeckOnChain,
         addLog,
         isTxPending,
-        refreshPlayersList
+        refreshPlayersList,
+        runtimeContractAddress
     } = useGameContext();
 
     const publicClient = usePublicClient();
@@ -74,7 +75,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                         // FIX: Cross-check with chain — maybe TX succeeded but localStorage wasn't updated
                         if (publicClient && currentRoomId && myPlayer?.address) {
                             publicClient.readContract({
-                                address: MAFIA_CONTRACT_ADDRESS,
+                                address: runtimeContractAddress,
                                 abi: MAFIA_ABI,
                                 functionName: 'getPlayerFlags',
                                 args: [currentRoomId, myPlayer.address as `0x${string}`],
@@ -127,7 +128,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
         try {
             // 1. Получаем состояние комнаты (легкий запрос)
             const roomData = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'getRoom',
                 args: [currentRoomId],
@@ -157,7 +158,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 // PRIMARY: Direct contract read (most reliable - always returns current deck)
                 try {
                     deck = await publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
+                        address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'getDeck',
                         args: [currentRoomId],
@@ -180,7 +181,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                         const fromBlock = currentBlock > 10000n ? currentBlock - 10000n : 0n;
 
                         const logs = await publicClient.getContractEvents({
-                            address: MAFIA_CONTRACT_ADDRESS,
+                            address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             eventName: 'DeckRevealed',
                             args: { roomId: currentRoomId } as any,
@@ -264,7 +265,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
         setIsProcessing(true);
         try {
             const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'forcePhaseTimeout',
                 args: [currentRoomId],
