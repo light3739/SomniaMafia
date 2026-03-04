@@ -1465,23 +1465,23 @@ const GameFeedTestWrapper: React.FC = () => {
 
                 <div className="flex flex-col gap-2">
                     <span className="text-white/60 text-xs font-bold uppercase tracking-wider">Night Results</span>
-                    <button onClick={() => injectLog('No one died last night.')} className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg text-left">
+                    <button onClick={() => injectLog('Night Result: No one died')} className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg text-left">
                         Safe Night (No deaths)
                     </button>
-                    <button onClick={() => injectLog('Player 5 was killed by the Mafia.')} className="px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-sm rounded-lg border border-rose-500/20 text-left">
+                    <button onClick={() => injectLog('Night Result: Player5 was killed')} className="px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-sm rounded-lg border border-rose-500/20 text-left">
                         Mafia Kill
                     </button>
                 </div>
 
                 <div className="flex flex-col gap-2">
                     <span className="text-white/60 text-xs font-bold uppercase tracking-wider">Discussion</span>
-                    <button onClick={() => injectLog('Discussion Phase started.')} className="px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-sm rounded-lg border border-amber-500/20 text-left">
+                    <button onClick={() => injectLog('Discussion Phase started')} className="px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-sm rounded-lg border border-amber-500/20 text-left">
                         Start Discussion
                     </button>
-                    <button onClick={() => injectLog('Player 2 is now speaking.')} className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg text-left">
+                    <button onClick={() => injectLog('Player2 is now speaking')} className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg text-left">
                         Player 2 speaks
                     </button>
-                    <button onClick={() => injectLog('All players have spoken.')} className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg text-left">
+                    <button onClick={() => injectLog('All players have spoken')} className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg text-left">
                         End Discussion
                     </button>
                 </div>
@@ -1489,18 +1489,22 @@ const GameFeedTestWrapper: React.FC = () => {
                 <div className="flex flex-col gap-2">
                     <span className="text-white/60 text-xs font-bold uppercase tracking-wider">Voting</span>
                     <button onClick={() => {
-                        injectLog('Voting Phase Started.');
+                        injectLog('Voting Phase Started');
                         setGameState(prev => ({ ...prev, phase: GamePhase.VOTING }));
                     }} className="px-3 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-200 text-sm rounded-lg border border-orange-500/20 text-left">
                         Start Voting
                     </button>
                     <button onClick={() => {
-                        injectLog('Player 3 has been eliminated!');
+                        injectLog('Player3 voted for Player4');
+                        injectLog('Player5 voted for Player4');
+                        injectLog('Player6 voted for Player4');
+                        injectLog('Player7 voted for Player4');
+                        injectLog('Player3 eliminated by vote');
                     }} className="px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-sm rounded-lg border border-rose-500/20 text-left">
                         Eliminate Player 3
                     </button>
                     <button onClick={() => {
-                        injectLog('No one was eliminated.');
+                        injectLog('Voting Finalized: No one was eliminated');
                     }} className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg text-left">
                         Skip / Tie
                     </button>
@@ -1509,7 +1513,7 @@ const GameFeedTestWrapper: React.FC = () => {
                 <div className="flex flex-col gap-2">
                     <span className="text-white/60 text-xs font-bold uppercase tracking-wider">Phase Ends</span>
                     <button onClick={() => {
-                        injectLog('Night Phase Started.');
+                        injectLog('Night has fallen');
                         setGameState(prev => ({ ...prev, phase: GamePhase.NIGHT }));
                     }} className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-200 text-sm rounded-lg border border-blue-500/20 text-left">
                         Night Falls
@@ -2125,42 +2129,67 @@ const GameFeedSimulationTest: React.FC = () => {
         const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
         // Clear logs first
-        setGameState(prev => ({ ...prev, logs: [] }));
+        setGameState(prev => ({ ...prev, logs: [], dayCount: 1, phase: GamePhase.DAY }));
         await delay(100);
 
-        addLog("Game Started. Roles Assigned.", "success");
-        await delay(800);
-        addLog("Night Phase Started.", "night");
-        await delay(1000);
-        addLog("Mafia discuss strategy.", "danger");
-        await delay(1500);
-        addLog("Day Phase Started.", "phase");
-        await delay(1000);
-        addLog("Morning Announcement: No one died.", "info");
-        await delay(1200);
-        addLog("Discussion Phase started.", "info");
-        await delay(800);
-        addLog("Player 1 is now speaking.", "info");
-        await delay(1500);
-        addLog("Player 2 is now speaking.", "info");
-        await delay(1500);
-        addLog("Voting Phase Started. Quorum needed: 7.", "warning");
-        await delay(1200);
-        addLog("Player 3 voted for Player 4.");
+        // ── Day 1 ──
+        addLog("Day 1 has begun", "phase");
         await delay(600);
-        addLog("Player 5 voted for Player 4.");
+        addLog("Night Result: No one died", "info");
         await delay(1000);
-        addLog("Player 4 eliminated.", "danger");
-        await delay(1500);
-        addLog("Night Phase Started.", "night");
+        addLog("Discussion Phase started", "info");
+        await delay(900);
+        addLog("Player1 is now speaking", "info");
         await delay(1200);
-        addLog("Mafia targeted Player 6.", "danger");
-        await delay(1000);
-        addLog("Doctor saved Player 6.", "success");
+        addLog("Player2 is now speaking", "info");
+        await delay(1200);
+        addLog("Player3 is now speaking", "info");
+        await delay(1200);
+        addLog("All players have spoken", "info");
+        await delay(800);
+        addLog("Voting Phase Started", "warning");
+        await delay(800);
+        addLog("Player1 voted for Player4");
+        await delay(500);
+        addLog("Player2 voted for Player4");
+        await delay(500);
+        addLog("Player5 voted for Player4");
+        await delay(500);
+        addLog("Player6 voted for Player4");
+        await delay(500);
+        addLog("Player7 voted for Player4");
+        await delay(800);
+        addLog("Player4 eliminated by vote", "danger");
         await delay(1500);
-        addLog("Day Phase Started.", "phase");
+        addLog("Night has fallen", "night");
+        await delay(1500);
+
+        // ── Day 2 ──
+        setGameState(prev => ({ ...prev, logs: [...prev.logs], dayCount: 2, phase: GamePhase.DAY }));
+        await delay(400);
+        addLog("Day 2 has begun", "phase");
+        await delay(600);
+        addLog("Night Result: Player6 was killed", "danger");
         await delay(1000);
-        addLog("Morning Announcement: Player 6 was attacked but saved!", "success");
+        addLog("Discussion Phase started", "info");
+        await delay(900);
+        addLog("Player1 is now speaking", "info");
+        await delay(1200);
+        addLog("Player3 is now speaking", "info");
+        await delay(1200);
+        addLog("All players have spoken", "info");
+        await delay(800);
+        addLog("Voting Phase Started", "warning");
+        await delay(800);
+        addLog("Player1 voted for Player2");
+        await delay(500);
+        addLog("Player3 voted for Player2");
+        await delay(500);
+        addLog("Player5 voted for Player2");
+        await delay(800);
+        addLog("Voting Finalized: No one was eliminated", "info");
+        await delay(1500);
+        addLog("Night has fallen", "night");
 
         setIsSimulating(false);
     }, [addLog, setGameState, isSimulating]);
