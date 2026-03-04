@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createPublicClient, http, type PublicClient, verifyMessage } from 'viem';
-import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
+import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, getDeploymentByChainId, ACTIVE_DEPLOYMENT } from '@/contracts/config';
 import { ServerStore } from '@/services/serverStore';
 
 export interface SecurityDependencies {
@@ -63,9 +63,10 @@ async function verifySessionKeyOwnership(
     actorAddress: string,
     signerAddress: string,
     validateRoomMatch: boolean,
+    contractAddress?: `0x${string}`
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
     const sessionRaw = await deps.publicClient.readContract({
-        address: MAFIA_CONTRACT_ADDRESS,
+        address: contractAddress || MAFIA_CONTRACT_ADDRESS,
         abi: MAFIA_ABI,
         functionName: 'sessionKeys',
         args: [actorAddress as `0x${string}`],
@@ -133,6 +134,17 @@ export async function verifySignedRequestBody<TBody extends Record<string, any>>
         }
     }
 
+    // Network Multi-chain Support
+    const chainId = Number(options.body.chainId) || ACTIVE_DEPLOYMENT.chainId;
+    const deployment = getDeploymentByChainId(chainId);
+
+    // Create network-specific public client if it's different from the default
+    const currentDeps = (chainId !== ACTIVE_DEPLOYMENT.chainId)
+        ? createSecurityDependencies({
+            publicClient: createPublicClient({ chain: deployment.chain, transport: http() })
+        })
+        : deps;
+
     const roomIdRaw = options.getRoomId(options.body);
     const roomId = BigInt(roomIdRaw as any).toString();
 
@@ -142,11 +154,11 @@ export async function verifySignedRequestBody<TBody extends Record<string, any>>
     const timestamp = Number(options.body.timestamp);
 
     if (options.requireReplayProtection !== false) {
-        if (!Number.isFinite(timestamp) || Math.abs(deps.now() - timestamp) > deps.maxClockSkewMs) {
+        if (!Number.isFinite(timestamp) || Math.abs(currentDeps.now() - timestamp) > currentDeps.maxClockSkewMs) {
             return { ok: false, status: 401, error: 'Request expired or invalid timestamp' };
         }
 
-        if (nonce.length < deps.nonceMinLength || nonce.length > 128) {
+        if (nonce.length < currentDeps.nonceMinLength || nonce.length > 128) {
             return { ok: false, status: 400, error: 'Invalid nonce' };
         }
     }
@@ -177,18 +189,19 @@ export async function verifySignedRequestBody<TBody extends Record<string, any>>
 
     if (signerAddress !== actorAddress) {
         const sessionCheck = await verifySessionKeyOwnership(
-            deps,
+            currentDeps,
             roomId,
             actorAddress,
             signerAddress,
             options.validateSessionRoomMatch !== false,
+            deployment.contracts.MafiaDiamond as `0x${string}`
         );
 
         if (!sessionCheck.ok) return sessionCheck;
     }
 
     if (options.requireReplayProtection !== false) {
-        const accepted = await deps.consumeReplayNonce(options.scope, roomId, actorAddress, nonce);
+        const accepted = await currentDeps.consumeReplayNonce(options.scope, roomId, actorAddress, nonce);
         if (!accepted) {
             return { ok: false, status: 409, error: 'Replay detected: nonce already used' };
         }
@@ -203,7 +216,7 @@ export async function verifySignedRequestBody<TBody extends Record<string, any>>
             signerAddress,
             nonce,
             timestamp,
-            deps,
+            deps: currentDeps,
         }
     };
 }
