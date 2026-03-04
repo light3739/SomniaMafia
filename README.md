@@ -68,6 +68,37 @@ Open [http://localhost:3000](http://localhost:3000).
 2. **Environment**: Ensure `NEXT_PUBLIC_MAFIA_ADDRESS` points to the correct deployment.
 3. **ZK Circuits**: Ensure `public/mafia_outcome.wasm` and `public/mafia_outcome_0001.zkey` are present.
 
+## GM Backend: Push/Deploy Runbook
+
+Use npm scripts from this repository:
+
+```bash
+npm run gm:sync
+npm run gm:build
+npm run gm:publish
+npm run gm:deploy
+```
+
+One-command release (publish + deploy):
+
+```bash
+npm run gm:release
+```
+
+Backend ops folder: `ops/gm-server`.
+
+## Contracts Location
+
+- Solidity sources:
+  - `contracts/SomniaMafia.sol`
+  - `Verifier_new.sol`
+- Frontend network/address/ABI wiring:
+  - `contracts/config.ts`
+- ABI files:
+  - `contracts/MafiaDiamondABI.json`
+  - `contracts/MafiaPortal.json`
+  - `contracts/IGroth16Verifier.json`
+
 ## Architecture Highlights
 
 ### The "Waterfall" Submission
