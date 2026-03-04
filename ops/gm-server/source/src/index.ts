@@ -416,6 +416,14 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
   }
 });
 
+// ─── Role Commit Sync (Stub) ──────────────────────────────
+// Frontend calls this to notify GM that a player has committed their role on-chain.
+app.post('/role-commit-sync', (req: express.Request, res: express.Response) => {
+  const { roomId, playerAddress, txHash } = req.body;
+  console.log(`[role-commit-sync] Room ${roomId}: Player ${playerAddress} committed role (tx: ${txHash})`);
+  return res.json({ ok: true });
+});
+
 // ─── Get Night Status ─────────────────────────────────────
 // Frontend polls this to check how many actions are in
 app.get('/night-status/:roomId', (req: express.Request, res: express.Response) => {
