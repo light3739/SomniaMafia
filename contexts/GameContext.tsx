@@ -505,11 +505,32 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
 
                 console.log(`[Gas] Estimated for ${functionName}: ${gasEstimate}, With Buffer: ${calculatedGas} (took ${estTime}ms)`);
-            } catch (e) {
-                console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
-                // Если оценка упала, используем высокий лимит для тяжелых функций
-                if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK', 'commitAndConfirmRole'].includes(functionName)) {
-                    calculatedGas = 14_500_000n; // max safe under 15M block limit
+            } catch (e: any) {
+                const errMsg = e?.message || e?.toString() || '';
+                // If estimation failed because contract REVERTED, don't waste gas — TX will also revert
+                const isContractRevert = errMsg.includes('reverted') || errMsg.includes('revert') ||
+                    errMsg.includes('execution reverted') || errMsg.includes('Error:');
+                if (isContractRevert) {
+                    console.error(`[Gas] Contract revert during estimation for ${functionName} — aborting TX.`, e);
+                    throw e; // Don't proceed, TX will definitely fail
+                }
+
+                console.warn(`[Gas] Estimation failed for ${functionName} (network error?), using safe fallback.`, e);
+                // For session key TXs: cap fallback to what balance can afford
+                if (canUseSession && publicClient && getSessionWalletClient()?.account) {
+                    try {
+                        const sessionBalance = await publicClient.getBalance({
+                            address: getSessionWalletClient()!.account!.address
+                        });
+                        // Max gas = 80% of balance / gasPrice (leave 20% buffer)
+                        const maxAffordable = (sessionBalance * 80n / 100n) / SOMNIA_GAS_PRICE;
+                        calculatedGas = maxAffordable > 0n ? maxAffordable : 3_000_000n;
+                        console.log(`[Gas] Session key fallback: balance=${sessionBalance}, maxAffordable gas=${calculatedGas}`);
+                    } catch (_balErr) {
+                        calculatedGas = 3_000_000n; // Very conservative fallback
+                    }
+                } else if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK', 'commitAndConfirmRole'].includes(functionName)) {
+                    calculatedGas = 14_500_000n; // main wallet can afford more
                 } else {
                     calculatedGas = 10_000_000n;
                 }
