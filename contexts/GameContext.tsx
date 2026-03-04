@@ -454,10 +454,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // SPEED FIX: Known gas limits for heavy functions — skip estimateContractGas
         // These are battle-tested values, estimation adds 500-2000ms latency
+        // NOTE: Block gas limit on current chain is 15M — never exceed 14.5M
+        const MAX_BLOCK_GAS = 14_500_000n;
         const KNOWN_GAS_LIMITS: Record<string, bigint> = {
             commitDeck: 2_000_000n,
-            revealDeck: 30_000_000n,
-            shareKeysToAll: 30_000_000n,
+            revealDeck: 14_500_000n,
+            shareKeysToAll: 14_500_000n,
             commitAndConfirmRole: 3_000_000n,
             commitNightAction: 1_500_000n,
             revealNightAction: 3_000_000n,
@@ -466,7 +468,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             vote: 2_000_000n,
             startVoting: 5_000_000n,
             revealRole: 5_000_000n,
-            endGameZK: 80_000_000n,
+            endGameZK: 14_500_000n,
             forcePhaseTimeout: 10_000_000n,
             sendMafiaMessage: 2_000_000n,
             claimRefund: 3_000_000n,
@@ -496,10 +498,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // 2. Добавляем буфер безопасности +50% (x1.5)
                 calculatedGas = (gasEstimate * 150n) / 100n;
 
-                // 3. Safety cap - if gas is crazy (revert symptom), don't scare MetaMask
-                const safetyCap = functionName === 'endGameZK' ? 80_000_000n : 30_000_000n;
+                // 3. Safety cap - never exceed block gas limit (15M on current chain)
+                const safetyCap = 14_500_000n;
                 if (calculatedGas > safetyCap) {
-                    console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at ${safetyCap} to avoid balance error (likely contract revert).`);
+                    console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at ${safetyCap} (block gas limit).`);
                     calculatedGas = safetyCap;
                 }
 
@@ -508,7 +510,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.warn(`[Gas] Estimation failed for ${functionName}, using safe fallback.`, e);
                 // Если оценка упала, используем высокий лимит для тяжелых функций
                 if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK', 'commitAndConfirmRole'].includes(functionName)) {
-                    calculatedGas = functionName === 'endGameZK' ? 60_000_000n : 50_000_000n;
+                    calculatedGas = 14_500_000n; // max safe under 15M block limit
                 } else {
                     calculatedGas = 10_000_000n;
                 }
@@ -1139,7 +1141,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log(`[SafeName] Original: "${playerName}", Used: "${safeName}"`);
 
             // 4. Оценка газа с буфером
-            let gasLimit = 50_000_000n;
+            let gasLimit = 14_500_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: runtimeContractAddress,
@@ -1286,7 +1288,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const { sessionAddress } = createNewSession(address, roomId);
 
             // 3. Оценка газа с буфером
-            let gasLimit = 50_000_000n;
+            let gasLimit = 14_500_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: runtimeContractAddress,
@@ -1392,7 +1394,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             // Оценка газа с буфером
-            let gasLimit = 50_000_000n;
+            let gasLimit = 14_500_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: MAFIA_CONTRACT_ADDRESS,
@@ -1817,16 +1819,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log('[GM API] Request signed for night action');
 
             const payload = JSON.stringify({
-                    roomId: currentRoomId.toString(),
-                    playerAddress,
-                    actionType,
-                    targetAddress,
-                        signature: signed.signature,
-                        signerAddress: signed.signerAddress,
-                    role: myRoleNum,
-                    salt: savedSalt,
-                        nonce: signed.nonce,
-                        timestamp: signed.timestamp,
+                roomId: currentRoomId.toString(),
+                playerAddress,
+                actionType,
+                targetAddress,
+                signature: signed.signature,
+                signerAddress: signed.signerAddress,
+                role: myRoleNum,
+                salt: savedSalt,
+                nonce: signed.nonce,
+                timestamp: signed.timestamp,
             });
 
             // Retry with backoff for transient 403/5xx (role commit cache miss on GM)
