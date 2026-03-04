@@ -11,6 +11,7 @@ export const POST = withSignedRoute<{
     gmLegacySignature?: string;
     nonce: string;
     timestamp: number;
+    chainId?: number;
 }>({
     scope: 'resolve-night',
     requiredFields: ['roomId', 'playerAddress', 'callerAddress', 'signature', 'nonce', 'timestamp'],
@@ -29,6 +30,7 @@ export const POST = withSignedRoute<{
             signerAddress: body.callerAddress,
             nonce: body.nonce,
             timestamp: body.timestamp,
+            chainId: body.chainId,
         }),
     });
 

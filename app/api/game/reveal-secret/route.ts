@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server';
-import { verifyMessage } from 'viem';
-import { createPublicClient, http } from 'viem';
-import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
+import { verifyMessage, createPublicClient, http } from 'viem';
+import { getDeploymentByChainId, ACTIVE_DEPLOYMENT, MAFIA_ABI } from '@/contracts/config';
 import { ServerStore } from '@/services/serverStore';
-
-const publicClient = createPublicClient({
-    chain: somniaChain,
-    transport: http()
-});
 
 export async function POST(request: Request) {
     try {
-        const { roomId: rawRoomId, address, role, salt, signature, sessionKeyAddress } = await request.json();
+        const { roomId: rawRoomId, address, role, salt, signature, sessionKeyAddress, chainId } = await request.json();
 
         if (!rawRoomId || !address || role === undefined || !salt || !signature) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -53,8 +47,12 @@ export async function POST(request: Request) {
             });
 
             if (!signedByMainWallet) {
-                const sessionKeyData = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                const requestChainId = Number(chainId || ACTIVE_DEPLOYMENT.chainId);
+                const deployment = getDeploymentByChainId(requestChainId);
+                const dynamicClient = createPublicClient({ chain: deployment.chain, transport: http() });
+
+                const sessionKeyData = await dynamicClient.readContract({
+                    address: deployment.contracts.MafiaDiamond as `0x${string}`,
                     abi: MAFIA_ABI,
                     functionName: 'sessionKeys',
                     args: [address as `0x${string}`],

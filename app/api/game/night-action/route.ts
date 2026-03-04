@@ -15,6 +15,7 @@ export const POST = withSignedRoute<{
     salt: string;
     nonce: string;
     timestamp: number;
+    chainId?: number;
 }>({
     scope: 'night-action',
     requiredFields: ['roomId', 'playerAddress', 'actionType', 'targetAddress', 'signature', 'nonce', 'timestamp'],
@@ -47,6 +48,7 @@ export const POST = withSignedRoute<{
             salt: body.salt,
             nonce: body.nonce,
             timestamp: body.timestamp,
+            chainId: body.chainId,
         }),
     });
 
