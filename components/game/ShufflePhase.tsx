@@ -474,9 +474,20 @@ export const ShufflePhase: React.FC = React.memo(() => {
 
         } catch (e: any) {
             console.error("[Shuffle] Failed:", e);
-            addLog(e.message || "Shuffle failed", "danger");
-            // Save pending state for manual recovery via handleReveal
-            // (pendingDeck/pendingSalt might already be set from localStorage restore)
+            const errMsg = e?.message || e?.toString() || '';
+            addLog(errMsg.substring(0, 120) || "Shuffle failed", "danger");
+
+            // If contract reverted (InvalidReveal, PhaseDeadlinePassed, etc.),
+            // clear saved state to prevent infinite recovery retry loops
+            const isContractRevert = errMsg.includes('reverted') || errMsg.includes('InvalidReveal') ||
+                errMsg.includes('PhaseDeadlinePassed') || errMsg.includes('revert');
+            if (isContractRevert) {
+                console.warn("[Shuffle] Contract revert — clearing saved state to prevent retry loop.");
+                localStorage.removeItem(SHUFFLE_COMMIT_KEY);
+                setPendingDeck(null);
+                setPendingSalt(null);
+            }
+            // Non-revert errors (network issues) keep saved state for manual recovery via handleReveal
         } finally {
             processingRef.current = false;
             setIsProcessing(false);
