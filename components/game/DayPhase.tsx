@@ -6,7 +6,7 @@ import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useWalletClient } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
 import { buildDiscussionMessage } from '@/services/signingSchema';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
+import { MAFIA_ABI } from '../../contracts/config';
 import { GamePhase, Player } from '../../types';
 import { Button } from '../ui/Button';
 import { Sun, Vote, Check, Clock, User, Skull, Mic, MicOff, ChevronRight } from 'lucide-react';
@@ -48,7 +48,8 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         selectedTarget,
         setSelectedTarget,
         isTestMode,
-        setVoteMap
+        setVoteMap,
+        runtimeContractAddress
     } = useGameContext();
     const {
         playClickSound,
@@ -459,7 +460,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                 if (publicClient && currentRoomId) {
                     try {
                         const roomData = await publicClient.readContract({
-                            address: MAFIA_CONTRACT_ADDRESS,
+                            address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'getRoom',
                             args: [currentRoomId],
@@ -498,7 +499,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
 
                 // Get vote count for this player
                 const count = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                    address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'voteCounts',
                     args: [BigInt(String(currentRoomId || 0)), player.address as `0x${string}`],
@@ -507,7 +508,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
 
                 // Get who this player voted for
                 const vote = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                    address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'votes',
                     args: [BigInt(String(currentRoomId || 0)), player.address as `0x${string}`],

@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
+import { MAFIA_ABI } from '../../contracts/config';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { hexToString } from '../../services/cryptoUtils';
 import { Role, Player, GamePhase } from '../../types';
@@ -87,7 +87,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         currentRoomId,
         sendMafiaMessageOnChain,
         isTestMode,
-        setGameState
+        setGameState,
+        runtimeContractAddress
     } = useGameContext();
     const { address } = useAccount();
     const { playKillSound, playProtectSound, playInvestigateSound, playApproveSound, playVoteSound, playRejectSound } = useSoundEffects();
@@ -137,14 +138,14 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
 
         try {
             const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys, hasClaimedMafia] = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'getPlayerFlags',
                 args: [currentRoomId, address as `0x${string}`],
             }) as [boolean, boolean, boolean, boolean, boolean, boolean, boolean];
 
             const [mafiaCommitted, mafiaRevealed, consensusTarget] = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'getMafiaConsensus',
                 args: [currentRoomId],
@@ -267,7 +268,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         try {
             // Get deck from contract
             const deck = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'getDeck',
                 args: [currentRoomId],
@@ -275,7 +276,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
 
             // Get all keys shared with me
             const [senders, keyBytes] = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'getAllKeysForMe',
                 args: [currentRoomId],
@@ -483,7 +484,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 if (publicClient && currentRoomId) {
                     try {
                         const roomData = await publicClient.readContract({
-                            address: MAFIA_CONTRACT_ADDRESS,
+                            address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'getRoom',
                             args: [currentRoomId],

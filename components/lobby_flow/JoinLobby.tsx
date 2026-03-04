@@ -31,7 +31,7 @@ function parseRoom(id: bigint, data: any): {
 }
 
 export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
-    const { setLobbyName, joinLobbyOnChain, isTxPending } = useGameContext();
+    const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress } = useGameContext();
     const router = useRouter();
     const publicClient = usePublicClient();
     const [rooms, setRooms] = useState<any[]>([]);
@@ -57,7 +57,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             if (initialRoomId) {
                 const roomId = BigInt(initialRoomId);
                 const roomData = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS, abi: MAFIA_ABI,
+                    address: runtimeContractAddress, abi: MAFIA_ABI,
                     functionName: 'getRoom', args: [roomId],
                 }) as any;
                 const parsed = parseRoom(roomId, roomData);
@@ -66,7 +66,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 }
             } else {
                 const nextId = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS, abi: MAFIA_ABI,
+                    address: runtimeContractAddress, abi: MAFIA_ABI,
                     functionName: 'nextRoomId',
                 }) as bigint;
 
@@ -82,7 +82,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     Array.from({ length: Number(scanEnd - start) }, (_, idx) => {
                         const i = scanEnd - 1n - BigInt(idx);
                         return publicClient.readContract({
-                            address: MAFIA_CONTRACT_ADDRESS, abi: MAFIA_ABI,
+                            address: runtimeContractAddress, abi: MAFIA_ABI,
                             functionName: 'getRoom', args: [i],
                         }).then(data => ({ i, data }));
                     })
@@ -133,18 +133,18 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         if (publicClient && !initialRoomId) {
             try {
                 unwatch1 = publicClient.watchContractEvent({
-                    address: MAFIA_CONTRACT_ADDRESS, abi: MAFIA_ABI,
+                    address: runtimeContractAddress, abi: MAFIA_ABI,
                     eventName: 'RoomCreated',
                     onLogs: () => { fetchRooms(true); },
                 });
-            } catch {}
+            } catch { }
             try {
                 unwatch2 = publicClient.watchContractEvent({
-                    address: MAFIA_CONTRACT_ADDRESS, abi: MAFIA_ABI,
+                    address: runtimeContractAddress, abi: MAFIA_ABI,
                     eventName: 'PlayerJoined',
                     onLogs: () => { fetchRooms(true); },
                 });
-            } catch {}
+            } catch { }
         }
 
         return () => {

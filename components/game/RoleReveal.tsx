@@ -66,7 +66,8 @@ export const RoleReveal: React.FC = React.memo(() => {
         syncSecretWithServer,
         addLog,
         isTxPending,
-        setGameState
+        setGameState,
+        runtimeContractAddress
     } = useGameContext();
 
     const publicClient = usePublicClient();
@@ -122,7 +123,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
         try {
             const deck = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'getDeck',
                 args: [currentRoomId],
@@ -138,7 +139,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } catch (e) {
             console.error("Failed to fetch deck:", e);
         }
-    }, [publicClient, currentRoomId, findMyCardIndex, myPlayer]);
+    }, [publicClient, currentRoomId, findMyCardIndex, myPlayer, runtimeContractAddress]);
 
     // V3.1: Собрать ВСЕ ключи от всех игроков - используем getAllKeysForMe
     const collectKeys = useCallback(async () => {
@@ -147,7 +148,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         try {
             // V3.1: getAllKeysForMe возвращает все ключи, которые другие игроки расшарили МНЕ
             const [senders, keyBytes] = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'getAllKeysForMe',
                 args: [currentRoomId],
@@ -174,7 +175,7 @@ export const RoleReveal: React.FC = React.memo(() => {
             console.error("Failed to collect keys:", e);
             return new Map();
         }
-    }, [publicClient, currentRoomId, myPlayer, address, addLog]);
+    }, [publicClient, currentRoomId, myPlayer, address, addLog, runtimeContractAddress]);
 
     // FIX: Use refs for isProcessing/isTxPending to avoid re-creating checkIfShared
     // (which causes the useEffect to restart the interval + fire immediately on every state change)
@@ -194,7 +195,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
         try {
             const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys, hasClaimedMafia] = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'getPlayerFlags',
                 args: [currentRoomId, address as `0x${string}`],
@@ -209,7 +210,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } catch (e) {
             console.error("Failed to check flags:", e);
         }
-    }, [publicClient, currentRoomId, address]);
+    }, [publicClient, currentRoomId, address, runtimeContractAddress]);
 
     // Check flags on mount and periodically
     useEffect(() => {
