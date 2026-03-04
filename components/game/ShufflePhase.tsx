@@ -126,13 +126,30 @@ export const ShufflePhase: React.FC = React.memo(() => {
         if (processingRef.current) return;
 
         try {
-            // 1. Получаем состояние комнаты (легкий запрос)
-            const roomData = await publicClient.readContract({
-                address: runtimeContractAddress,
-                abi: MAFIA_ABI,
-                functionName: 'getRoom',
-                args: [currentRoomId],
-            }) as any;
+            // 1 & 2 ATOMIC READ: Prevent RPC load balancing caching issues
+            const results = await publicClient.multicall({
+                contracts: [
+                    {
+                        address: runtimeContractAddress,
+                        abi: MAFIA_ABI as any,
+                        functionName: 'getRoom',
+                        args: [currentRoomId],
+                    },
+                    {
+                        address: runtimeContractAddress,
+                        abi: MAFIA_ABI as any,
+                        functionName: 'getDeck',
+                        args: [currentRoomId],
+                    }
+                ],
+                allowFailure: true
+            });
+
+            const roomDataResult = results[0];
+            const deckDataResult = results[1];
+
+            const roomData = roomDataResult.status === 'success' ? (roomDataResult.result as any) : null;
+            let deck = deckDataResult.status === 'success' ? (deckDataResult.result as string[]) : [];
 
             // Парсим индексы
             let currentIndex = 0;
@@ -151,27 +168,14 @@ export const ShufflePhase: React.FC = React.memo(() => {
 
             if (isNaN(currentIndex)) currentIndex = 0;
 
-            // 2. READ DECK: Try getDeck first (always returns current state), then events as fallback
-            let deck: string[] = [];
-
             if (currentIndex > 0 || revealedCount > 0) {
-                // PRIMARY: Direct contract read (most reliable - always returns current deck)
-                try {
-                    deck = await publicClient.readContract({
-                        address: runtimeContractAddress,
-                        abi: MAFIA_ABI,
-                        functionName: 'getDeck',
-                        args: [currentRoomId],
-                    }) as string[];
-                    if (deck.length > 0) {
-                        // Only log when deck state actually changes to avoid spamming
-                        if (lastLoggedDeckRef.current.length !== deck.length || lastLoggedDeckRef.current.index !== currentIndex) {
-                            console.log(`[Direct Sync] Loaded deck with ${deck.length} cards (idx=${currentIndex})`);
-                            lastLoggedDeckRef.current = { length: deck.length, index: currentIndex };
-                        }
+                // PRIMARY: Multicall result (most reliable - always returns current deck atomically with room data)
+                if (deck.length > 0) {
+                    // Only log when deck state actually changes to avoid spamming
+                    if (lastLoggedDeckRef.current.length !== deck.length || lastLoggedDeckRef.current.index !== currentIndex) {
+                        console.log(`[Direct Sync] Loaded deck with ${deck.length} cards (idx=${currentIndex})`);
+                        lastLoggedDeckRef.current = { length: deck.length, index: currentIndex };
                     }
-                } catch (e) {
-                    console.warn("[Direct Sync] getDeck failed, trying events...");
                 }
 
                 // FALLBACK: Read from DeckRevealed events (10000 blocks ≈ 16 min on Somnia)
