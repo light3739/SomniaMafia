@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Terminal, Activity } from 'lucide-react';
+import { Terminal } from 'lucide-react';
 import { LogEntry } from '../types';
 
 interface SystemLogProps {

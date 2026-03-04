@@ -8,7 +8,7 @@
 
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { createWalletClient, http, type Account, type WalletClient } from 'viem';
-import { somniaChain } from '../contracts/config';
+import { ACTIVE_NETWORK, NETWORKS, type SupportedNetwork } from '../contracts/config';
 
 interface StoredSession {
   privateKey: `0x${string}`;
@@ -20,6 +20,19 @@ interface StoredSession {
 }
 
 const STORAGE_KEY = 'somnia_mafia_session';
+
+function getSessionChain() {
+  if (typeof window === 'undefined') {
+    return NETWORKS[ACTIVE_NETWORK];
+  }
+
+  const saved = localStorage.getItem('mafia_selected_network') as SupportedNetwork | null;
+  if (saved && (saved === 'avalanche_fuji' || saved === 'somnia_testnet')) {
+    return NETWORKS[saved];
+  }
+
+  return NETWORKS[ACTIVE_NETWORK];
+}
 
 /**
  * Generate a new session key pair (done client-side)
@@ -93,11 +106,12 @@ export function createSessionWalletClient(): WalletClient | null {
   if (!session || !session.registeredOnChain) return null;
 
   const account = privateKeyToAccount(session.privateKey);
+  const chain = getSessionChain();
 
   return createWalletClient({
     account,
-    chain: somniaChain,
-    transport: http(),
+    chain,
+    transport: http(chain.rpcUrls.default.http[0]),
   });
 }
 
