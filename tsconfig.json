@@ -40,6 +40,8 @@
     "node_modules",
     "gm_index.ts",
     "gm_server.js",
-    "scripts/*"
+    "scripts/*",
+    "ops/gm-server/workdir/**",
+    ".github/**"
   ]
 }

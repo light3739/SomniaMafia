@@ -1,6 +1,6 @@
 # Somnia Mafia 🕵️‍♂️
 
-A **V4 Web3 Social Deduction Game** built on the Somnia Blockchain.
+A **V4 Web3 Social Deduction Game** built for **Somnia Testnet** and **Avalanche Fuji**.
 Featuring Zero-Knowledge Proofs for role verification, Session Keys for seamless UX, and a synchronized game loop.
 
 ![Banner](/public/assets/mafia_shot.png)
@@ -39,6 +39,7 @@ Copy `.env.example` to `.env.local`:
 # Public (Frontend)
 NEXT_PUBLIC_MAFIA_ADDRESS=0x...
 NEXT_PUBLIC_ENABLE_TEST_MODE=false
+NEXT_PUBLIC_ACTIVE_NETWORK=avalanche_fuji # or somnia_testnet
 
 # Private (Backend)
 REDIS_URL=redis://... # Required in production
