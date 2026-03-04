@@ -41,5 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 # gm-server local synced workspace
+ops/gm-server/workdir/
 ops/gm-server/workdir/**
 !ops/gm-server/workdir/.gitkeep
