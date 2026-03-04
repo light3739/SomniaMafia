@@ -60,11 +60,23 @@ const BASE_HEIGHT = 1024;
 // Based on user's drag-and-drop constructor coordinates.
 // ═══════════════════════════════════════════════════════════════
 const HAND_TUNED: Record<number, { x: number; y: number }[]> = {
+    3: [ // odd: triangle — 1 top-center, 2 bottom LR-symmetric
+        { x: 619, y: 38 },     // p1  top-center
+        { x: 1050, y: 800 },   // p2  bottom-right
+        { x: 188, y: 800 },    // p3  bottom-left       (LR: 1238-1050=188)
+    ],
     4: [ // even: square layout, LR + TB symmetric
         { x: 869, y: 158 },    // p1  top-right
         { x: 869, y: 736 },    // p2  bottom-right
         { x: 369, y: 736 },    // p3  bottom-left
         { x: 369, y: 158 },    // p4  top-left
+    ],
+    5: [ // odd: pentagon — 1 top-center, 2 sides, 2 bottom (LR-symmetric)
+        { x: 619, y: 38 },     // p1  top-center
+        { x: 1178, y: 290 },   // p2  right
+        { x: 1000, y: 800 },   // p3  bottom-right
+        { x: 238, y: 800 },    // p4  bottom-left       (LR: 1238-1000=238)
+        { x: 60, y: 290 },     // p5  left              (LR: 1238-1178=60)
     ],
     6: [ // even: 1 top, 2 sides, 1 bottom (LR + TB symmetric, tighter vertical gap)
         { x: 619, y: 58 },     // p1  top-center
@@ -212,8 +224,8 @@ const HAND_TUNED: Record<number, { x: number; y: number }[]> = {
 
 /**
  * Player layout:
- * - 4–16: hand-tuned rectangular positions (from drag-and-drop constructor, symmetrized)
- * - 2–3, 5 & 17+: rectangular perimeter fallback
+ * - 3–16: hand-tuned rectangular positions (from drag-and-drop constructor, symmetrized)
+ * - 2 & 17+: rectangular perimeter fallback
  */
 export function getPlayerPositions(count: number): { id: string; x: number; y: number }[] {
     if (count === 0) return [];
