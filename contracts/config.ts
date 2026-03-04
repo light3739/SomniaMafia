@@ -67,6 +67,12 @@ export function getDeployment(network: SupportedNetwork) {
     return DEPLOYMENTS[network];
 }
 
+export function getDeploymentByChainId(chainId?: number | null) {
+    if (chainId === AVALANCHE_FUJI.id) return DEPLOYMENTS.avalanche_fuji;
+    if (chainId === SOMNIA_TESTNET.id) return DEPLOYMENTS.somnia_testnet;
+    return ACTIVE_DEPLOYMENT;
+}
+
 export const DIAMOND_ADDRESS = ACTIVE_DEPLOYMENT.contracts.MafiaDiamond as `0x${string}`;
 
 export const FACETS = {
