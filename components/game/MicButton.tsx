@@ -235,10 +235,16 @@ export function MicButton({
                 }
 
                 setIsConnecting(false);
-            } catch (e) {
-                console.error('[MicButton] Connection error:', e);
-                if (!cancelled) {
+            } catch (e: any) {
+                // Suppress noisy 'Client initiated disconnect' logs during phase-driven unmounts
+                const isUserDisconnect = e?.message?.includes('disconnect') || e?.name?.includes('ConnectionError');
+                if (!cancelled && !isUserDisconnect) {
+                    console.error('[MicButton] Connection error:', e);
                     setError(e instanceof Error ? e.message : 'Failed to connect');
+                } else {
+                    console.log('[MicButton] Connection aborted/closed (expected during phase transition)');
+                }
+                if (!cancelled) {
                     setIsConnecting(false);
                 }
             }
