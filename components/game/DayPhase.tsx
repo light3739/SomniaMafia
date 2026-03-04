@@ -644,9 +644,9 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                                     </span>
                                                 </div>
                                             )}
-                                            {/* Mic Button - Integrated into timer block for better visibility */}
+                                            {/* Mic Button - Positioned to the right of timer */}
                                             {currentRoomId && myPlayer && (
-                                                <div className="flex justify-center mt-3">
+                                                <div className="absolute right-[-70px] top-1/2 -translate-y-1/2">
                                                     <MicButton
                                                         roomId={`${currentRoomId}-day`}
                                                         userName={myPlayer.name}
@@ -737,11 +737,11 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                     // Standard Voting UI
                                     <>
                                         {/* Voting Timer + Mic Button */}
-                                        <div className="w-full">
+                                        <div className="relative">
                                             <VotingTimer />
                                             {/* Free Talk Mic - All players can speak during voting */}
                                             {currentRoomId && myPlayer && (
-                                                <div className="flex justify-center mt-4">
+                                                <div className="absolute right-[-70px] top-1/2 -translate-y-1/2">
                                                     <MicButton
                                                         roomId={`${currentRoomId}-vote`}
                                                         userName={myPlayer.name}

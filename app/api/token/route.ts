@@ -1,7 +1,7 @@
 import { AccessToken } from 'livekit-server-sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
-import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
+import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, ACTIVE_DEPLOYMENT, getDeploymentByChainId } from '@/contracts/config';
 import { verifySignedRequestBody } from '@/app/api/_lib/security';
 import { buildTokenMessage } from '@/services/signingSchema';
 
@@ -22,6 +22,7 @@ function parseRoomId(room: string): string | null {
 
 export async function POST(req: NextRequest) {
     try {
+        const reqBody = await req.json();
         const {
             room,
             username,
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
             signature,
             nonce,
             timestamp,
-        } = await req.json();
+        } = reqBody;
 
         if (!room || !username) {
             return NextResponse.json(
@@ -41,6 +42,8 @@ export async function POST(req: NextRequest) {
 
         const roomId = parseRoomId(String(room));
         const isStrictGameRoom = !!roomId;
+        const chainId = Number(reqBody.chainId) || ACTIVE_DEPLOYMENT.chainId;
+        const deployment = getDeploymentByChainId(chainId);
 
         let normalizedPlayer = '';
 
@@ -52,16 +55,7 @@ export async function POST(req: NextRequest) {
             normalizedPlayer = String(playerAddress).toLowerCase();
             const verified = await verifySignedRequestBody({
                 scope: 'token-issue',
-                body: {
-                    room,
-                    username,
-                    roomId,
-                    playerAddress,
-                    signerAddress,
-                    signature,
-                    nonce,
-                    timestamp,
-                },
+                body: { ...reqBody, roomId }, // Ensure roomId is included for security check
                 requiredFields: ['room', 'username', 'roomId', 'playerAddress', 'signature', 'nonce', 'timestamp'],
                 getRoomId: (body) => body.roomId,
                 getActorAddress: (body) => body.playerAddress,
@@ -80,8 +74,14 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: verified.error }, { status: verified.status });
             }
 
-            const players = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+            // Create temporary public client for the correct chain
+            const chainClient = createPublicClient({
+                chain: deployment.chain,
+                transport: http()
+            });
+
+            const players = await chainClient.readContract({
+                address: deployment.contracts.MafiaDiamond as `0x${string}`,
                 abi: MAFIA_ABI,
                 functionName: 'getPlayers',
                 args: [BigInt(roomId)],
