@@ -41,6 +41,7 @@
     "gm_index.ts",
     "gm_server.js",
     "scripts/*",
+    "ops/gm-server/source/**",
     "ops/gm-server/workdir/**",
     ".github/**"
   ]
