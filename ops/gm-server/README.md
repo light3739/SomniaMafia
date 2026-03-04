@@ -37,7 +37,7 @@ npm run gm:release
 ```
 
 Env overrides:
-- `GM_SOURCE_DIR` (default `/home/light/projects/SomniaSol/gm-server`)
+- `GM_SOURCE_DIR` (default `ops/gm-server/source`)
 - `GM_SSH_HOST` (default `mafia`)
 - `GM_SSH_USER` (default `root`)
 - `GM_REMOTE_DIR` (default `/root/gm-server`)
