@@ -38,7 +38,7 @@ interface GameContextType {
 
     // Shuffle (V4: commit-reveal)
     startGameOnChain: () => Promise<void>;
-    commitDeckOnChain: (deckHash: string) => Promise<void>;
+    commitDeckOnChain: (deckHash: string) => Promise<`0x${string}` | undefined>;
     revealDeckOnChain: (deck: string[], salt: string) => Promise<void>;
 
     // Reveal (V3: batch share keys)
@@ -1448,23 +1448,39 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [currentRoomId, publicClient, address, addLog, confirmInBackground, writeContractAsync]);
 
     // V4: Deck commit-reveal
-    const commitDeckOnChain = useCallback(async (deckHash: string) => {
-        if (!currentRoomId) return;
+    const commitDeckOnChain = useCallback(async (deckHash: string): Promise<`0x${string}` | undefined> => {
+        if (!currentRoomId) return undefined;
         setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('commitDeck', [currentRoomId, deckHash]);
-            addLog("Deck hash committed!", "success");
-            // OPTIMISTIC: Mark deck as committed immediately, confirm in background
+            addLog("Deck hash committed! Waiting for confirmation...", "success");
             applyOptimisticUpdate({ hasDeckCommitted: true });
-            setIsTxPending(false);
-            confirmInBackground(hash, 'commitDeck', () => {
+
+            // CRITICAL: Wait for commit to be confirmed on-chain BEFORE returning.
+            // revealDeck will fail with InvalidReveal() if commit isn't mined yet.
+            try {
+                const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+                if (receipt?.status === 'reverted') {
+                    console.error("[commitDeck] ❌ TX reverted on-chain!");
+                    applyOptimisticUpdate({ hasDeckCommitted: false });
+                    addLog("Commit reverted on-chain!", "danger");
+                    throw new Error("commitDeck reverted");
+                }
+                console.log(`[commitDeck] ✅ Confirmed in block ${receipt?.blockNumber}`);
+            } catch (receiptErr) {
+                console.error("[commitDeck] Receipt wait failed:", receiptErr);
                 applyOptimisticUpdate({ hasDeckCommitted: false });
-            });
+                throw receiptErr;
+            }
+
+            setIsTxPending(false);
+            return hash;
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
+            throw e;
         }
-    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
+    }, [currentRoomId, publicClient, sendGameTransaction, addLog, applyOptimisticUpdate]);
 
     const revealDeckOnChain = useCallback(async (deck: string[], salt: string) => {
         if (!currentRoomId) return;
