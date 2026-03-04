@@ -474,7 +474,28 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
 
         const knownLimit = KNOWN_GAS_LIMITS[functionName];
+        let useKnownLimit = false;
         if (knownLimit && canUseSession) {
+            // Check if session key can actually afford this known limit
+            try {
+                const sessionAddr = getSessionWalletClient()?.account?.address;
+                if (sessionAddr && publicClient) {
+                    const bal = await publicClient.getBalance({ address: sessionAddr });
+                    const cost = knownLimit * SOMNIA_GAS_PRICE;
+                    if (bal >= cost) {
+                        useKnownLimit = true;
+                    } else {
+                        console.log(`[Gas] Session key balance (${bal}) can't cover known limit ${knownLimit} (cost=${cost}), using estimation instead`);
+                    }
+                } else {
+                    useKnownLimit = true; // Can't check, assume OK
+                }
+            } catch {
+                useKnownLimit = true; // Balance check failed, assume OK
+            }
+        }
+
+        if (useKnownLimit && knownLimit) {
             // SPEED: Skip gas estimation for session key TXs with known limits
             calculatedGas = knownLimit;
             console.log(`[Gas] Using known limit for ${functionName}: ${calculatedGas} (skipped estimation, saved ~500ms)`);
