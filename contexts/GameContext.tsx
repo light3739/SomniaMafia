@@ -288,6 +288,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             salt,
                             signature,
                             sessionKeyAddress, // optional: server uses this to verify session key sig
+                            chainId,
                         })
                     });
                     if (!res.ok) throw new Error(`Server responded ${res.status}`);
@@ -1297,6 +1298,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             signerAddress: signed.signerAddress,
                             nonce: signed.nonce,
                             timestamp: signed.timestamp,
+                            chainId,
                         })
                     });
                     console.log('[Avatar Sync] Avatar uploaded to server');
@@ -1886,6 +1888,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 salt: savedSalt,
                 nonce: signed.nonce,
                 timestamp: signed.timestamp,
+                chainId,
             });
 
             // Retry with backoff for transient 403/5xx (role commit cache miss on GM)

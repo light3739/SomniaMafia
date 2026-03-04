@@ -14,6 +14,7 @@ export const POST = withSignedRoute<{
     signerAddress?: string;
     nonce: string;
     timestamp: number;
+    chainId?: number;
 }>({
     scope: 'avatar-upload',
     requiredFields: ['roomId', 'address', 'avatar', 'signature', 'nonce', 'timestamp'],
