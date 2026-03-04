@@ -5,7 +5,6 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useChainId } from 'wagmi';
 import { NetworkSelector } from './ui/NetworkSelector';
 const somniaLogo = "/assets/somniayeal.png";
-const mafiaBg = "/assets/lobby_background.png";
 
 interface MainPageProps {
     onStart: () => void;
@@ -97,7 +96,6 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         {({
                             account,
                             chain,
-                            openAccountModal,
                             openChainModal,
                             openConnectModal,
                             authenticationStatus,

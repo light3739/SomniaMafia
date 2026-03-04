@@ -217,7 +217,7 @@ export const SessionKeyBanner = React.memo(({
                     No Session Key
                   </p>
                   <p className="text-xs text-white/60">
-                    You'll need to approve each action
+                    You&apos;ll need to approve each action
                   </p>
                 </>
               )}
@@ -312,7 +312,7 @@ export const SessionKeyBanner = React.memo(({
           <div className="px-3 pb-3 pt-0">
             <div className="pt-3 border-t border-orange-500/20">
               <p className="text-xs text-orange-400">
-                ⛽ Session key needs gas. Click "+0.02 STT" to fund it.
+                ⛽ Session key needs gas. Click &quot;+0.02 STT&quot; to fund it.
               </p>
             </div>
           </div>

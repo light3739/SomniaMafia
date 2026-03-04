@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import { User, Shield, Crosshair, Eye, Skull, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { Player, Role, cardVariants } from '../types';
 
@@ -60,7 +61,14 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, isMe, onAction, 
 
         {/* Avatar */}
         <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/10 relative z-10">
-          <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
+          <Image
+            src={player.avatarUrl || 'https://placehold.co/80x80'}
+            alt={player.name}
+            width={64}
+            height={64}
+            className="w-full h-full object-cover"
+            unoptimized
+          />
         </div>
 
         {/* Info */}
