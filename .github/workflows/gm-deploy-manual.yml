@@ -23,6 +23,12 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Checkout GM source repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh repo clone light3739/somnia-mafia-gm-server /tmp/gm-server-source
+
       - name: Build frontend checks
         run: |
           npm ci
@@ -30,6 +36,7 @@ jobs:
 
       - name: Sync + Deploy GM
         env:
+          GM_SOURCE_DIR: /tmp/gm-server-source
           GM_SSH_HOST: ${{ secrets.GM_SSH_HOST }}
           GM_SSH_USER: ${{ secrets.GM_SSH_USER }}
           GM_SSH_PORT: ${{ secrets.GM_SSH_PORT }}

@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount } from 'wagmi';
+import { useSwitchChain, useChainId } from 'wagmi';
+import { ACTIVE_NETWORK, NETWORKS, type SupportedNetwork } from '../contracts/config';
 const somniaLogo = "/assets/somniayeal.png";
 const mafiaBg = "/assets/lobby_background.png";
 
@@ -11,6 +12,31 @@ interface MainPageProps {
 }
 
 export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
+    const chainId = useChainId();
+    const { switchChainAsync } = useSwitchChain();
+    const [selectedNetwork, setSelectedNetwork] = useState<SupportedNetwork>(ACTIVE_NETWORK);
+
+    useEffect(() => {
+        const saved = typeof window !== 'undefined'
+            ? localStorage.getItem('mafia_selected_network') as SupportedNetwork | null
+            : null;
+        if (saved && (saved === 'avalanche_fuji' || saved === 'somnia_testnet')) {
+            setSelectedNetwork(saved);
+        }
+    }, []);
+
+    const selectedChain = useMemo(() => NETWORKS[selectedNetwork], [selectedNetwork]);
+    const networkLabel = selectedNetwork === 'avalanche_fuji' ? 'Avalanche Fuji' : 'Somnia Testnet';
+
+    const handleNetworkChange = async (network: SupportedNetwork) => {
+        setSelectedNetwork(network);
+        localStorage.setItem('mafia_selected_network', network);
+        try {
+            await switchChainAsync({ chainId: NETWORKS[network].id });
+        } catch {
+        }
+    };
+
     return (
         <div className="relative w-full h-screen overflow-hidden font-sans flex items-center justify-center">
 
@@ -66,7 +92,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         }}
                         className="text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap"
                     >
-                        On Somnia Network
+                        On {networkLabel}
                     </p>
 
                     <Image
@@ -77,6 +103,18 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md"
                     />
                 </motion.div>
+
+                <div className="mt-4 flex items-center gap-2 bg-black/40 border border-white/15 rounded-xl px-3 py-2">
+                    <span className="text-xs text-white/70 uppercase tracking-wider">Network</span>
+                    <select
+                        value={selectedNetwork}
+                        onChange={(e) => handleNetworkChange(e.target.value as SupportedNetwork)}
+                        className="bg-transparent text-sm text-white outline-none"
+                    >
+                        <option className="text-black" value="avalanche_fuji">Avalanche Fuji</option>
+                        <option className="text-black" value="somnia_testnet">Somnia Testnet</option>
+                    </select>
+                </div>
 
                 {/* CONNECT / ENTER Button */}
                 <motion.div
@@ -140,6 +178,17 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                                     className="px-8 py-3 rounded-xl font-mono font-bold text-white bg-red-600 shadow-lg hover:scale-105 transition-all text-sm md:text-base tracking-wider ring-1 ring-red-400/50"
                                                 >
                                                     WRONG NETWORK
+                                                </button>
+                                            );
+                                        }
+
+                                        if (chain.id !== selectedChain.id) {
+                                            return (
+                                                <button
+                                                    onClick={() => handleNetworkChange(selectedNetwork)}
+                                                    className="px-8 py-3 rounded-xl font-mono font-bold text-white bg-orange-600 shadow-lg hover:scale-105 transition-all text-sm md:text-base tracking-wider ring-1 ring-orange-300/50"
+                                                >
+                                                    SWITCH TO {networkLabel.toUpperCase()}
                                                 </button>
                                             );
                                         }
