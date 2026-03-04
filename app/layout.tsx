@@ -4,7 +4,6 @@ import { Providers } from "./providers";
 import "./globals.css";
 import { BackgroundMusic } from "@/components/ui/BackgroundMusic";
 import { SoundEffects } from "@/components/ui/SoundEffects";
-import Image from "next/image";
 
 const playfair = Playfair_Display({
   subsets: ["latin", "cyrillic"],

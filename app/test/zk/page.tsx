@@ -190,7 +190,7 @@ export default function ZKTestPage() {
                             if (decoded.eventName === 'RoomCreated') {
                                 foundId = (decoded.args as any).roomId.toString();
                             }
-                        } catch (e) { }
+                        } catch { }
                     });
 
                     if (foundId) {
@@ -353,7 +353,7 @@ export default function ZKTestPage() {
                         args: [BigInt(roomId), roleHash],
                     });
                     await publicClient?.waitForTransactionReceipt({ hash: tx1 });
-                } catch (e: any) {
+                } catch {
                     // Ignore already committed
                 }
 
@@ -366,7 +366,7 @@ export default function ZKTestPage() {
                         args: [BigInt(roomId)],
                     });
                     await publicClient?.waitForTransactionReceipt({ hash: tx2 });
-                } catch (e: any) {
+                } catch {
                     // Ignore
                 }
 
@@ -438,7 +438,7 @@ export default function ZKTestPage() {
         <div className="min-h-screen bg-black text-white p-8 font-sans">
             <h1 className="text-3xl font-bold mb-4 text-purple-400">ZK Proof Test Zone</h1>
             <p className="text-gray-400 mb-8 max-w-2xl">
-                Use this page to "fake" a full game by filling a room with local bots, starting it, and then verifying the ZK end-condition.
+                Use this page to &quot;fake&quot; a full game by filling a room with local bots, starting it, and then verifying the ZK end-condition.
             </p>
 
             <div className="flex flex-col lg:flex-row gap-8">

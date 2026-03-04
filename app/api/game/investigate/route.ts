@@ -8,9 +8,6 @@ const publicClient = createPublicClient({
     transport: http()
 });
 
-// NightActionType.CHECK = 3
-const ACTION_CHECK = 3;
-
 export async function POST(request: Request) {
     try {
         const { roomId: rawRoomId, detectiveAddress, targetAddress, signature, signerAddress } = await request.json();

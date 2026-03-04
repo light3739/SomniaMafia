@@ -8,14 +8,14 @@ interface MorningAnnouncementProps {
 }
 
 export const MorningAnnouncement = React.memo(({ show, onComplete }: MorningAnnouncementProps) => {
-    // Стабилизируем случайные значения для частиц, чтобы они не дергались при перерендере
+    // Deterministic particle values to keep render pure and stable
     const rays = React.useMemo(() => {
         return [...Array(8)].map((_, i) => ({
             id: i,
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-            duration: 2 + Math.random() * 2,
-            delay: Math.random() * 3
+            left: `${(i * 13 + 7) % 100}%`,
+            top: `${(i * 17 + 11) % 100}%`,
+            duration: 2 + (i % 3) * 0.6,
+            delay: i * 0.25
         }));
     }, []);
 
