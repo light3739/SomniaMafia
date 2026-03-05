@@ -16,9 +16,9 @@ export const PostVotingTransition: React.FC = () => {
     }, [timeLeft]);
 
     return (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-4 md:p-8">
-            <div className="max-w-2xl w-full">
-                <div className="text-center mb-4">
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-start pt-5 md:pt-6 p-4 md:p-8">
+            <div className="max-w-2xl w-full flex flex-col">
+                <div className="text-center mb-4 flex-shrink-0">
                     <motion.h2
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -28,14 +28,14 @@ export const PostVotingTransition: React.FC = () => {
                     </motion.h2>
                 </div>
 
-                <div className="mb-4 h-[360px] w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
+                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
                     <GameLog />
                 </div>
 
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="w-full py-2 flex justify-center"
+                    className="w-full py-2 flex justify-center flex-shrink-0"
                 >
                     <div className="flex items-center justify-center gap-3 px-6 py-2 bg-black/40 border border-[#916A47]/30 rounded-full text-white/50 select-none">
                         <Clock className="w-4 h-4 text-[#916A47]/70" />

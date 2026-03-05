@@ -582,14 +582,14 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
     };
 
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center p-4 md:p-8">
+        <div className="w-full h-full flex flex-col items-center justify-start p-4 md:p-8 pt-5 md:pt-6">
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="max-w-2xl w-full"
+                className="max-w-2xl w-full flex flex-col"
             >
                 {/* Header */}
-                <div className="text-center mb-4">
+                <div className="text-center mb-4 flex-shrink-0">
                     <h2 className="text-2xl font-['Playfair_Display'] text-white">
                         {isVotingPhase ? 'Elimination Vote' : 'Discussion Phase'}
                     </h2>
@@ -601,8 +601,8 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     )}
                 </div>
 
-                {/* Event Feed - Restored height */}
-                <div className="mb-4 h-[360px] w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
+                {/* Event Feed - fixed height, never moves */}
+                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
                     <GameLog />
                 </div>
 
