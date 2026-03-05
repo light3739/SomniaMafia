@@ -153,15 +153,9 @@ export const RoleCompositionAnnouncement = React.memo(({
                                         damping: 25
                                     }}
                                     className="flex items-center gap-4 px-5 py-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm"
-                                    style={{
-                                        boxShadow: `0 0 20px ${role.glowColor.replace('0.4', '0.08')}`
-                                    }}
                                 >
                                     {/* Icon */}
-                                    <div
-                                        className={`${role.color} shrink-0`}
-                                        style={{ filter: `drop-shadow(0 0 8px ${role.glowColor})` }}
-                                    >
+                                    <div className={`${role.color} shrink-0`}>
                                         {role.icon}
                                     </div>
 
@@ -180,7 +174,6 @@ export const RoleCompositionAnnouncement = React.memo(({
                                             stiffness: 300
                                         }}
                                         className={`${role.color} text-2xl font-bold font-mono tabular-nums`}
-                                        style={{ filter: `drop-shadow(0 0 6px ${role.glowColor})` }}
                                     >
                                         ×{role.count}
                                     </motion.span>
