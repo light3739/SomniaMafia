@@ -6,7 +6,7 @@ import { BackgroundMusic } from "@/components/ui/BackgroundMusic";
 import { SoundEffects } from "@/components/ui/SoundEffects";
 
 const cinzel = Cinzel({
-  subsets: ["latin", "cyrillic"],
+  subsets: ["latin", "latin-ext"],
   variable: "--font-cinzel",
 });
 
