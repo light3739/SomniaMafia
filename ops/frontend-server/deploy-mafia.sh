@@ -8,8 +8,36 @@ FRONT_SSH_HOST="${FRONT_SSH_HOST:-mafia}"
 FRONT_SSH_USER="${FRONT_SSH_USER:-root}"
 FRONT_SSH_PORT="${FRONT_SSH_PORT:-22}"
 FRONT_REMOTE_DIR="${FRONT_REMOTE_DIR:-/root/somnia-frontend}"
-SSH_TARGET="${FRONT_SSH_USER}@${FRONT_SSH_HOST}"
 SSH_OPTS=(-p "$FRONT_SSH_PORT" -o StrictHostKeyChecking=accept-new)
+
+pick_ssh_user() {
+  local candidates=("$FRONT_SSH_USER" root ubuntu)
+  local seen=""
+  local user
+
+  for user in "${candidates[@]}"; do
+    [[ -z "$user" ]] && continue
+    if [[ " $seen " == *" $user "* ]]; then
+      continue
+    fi
+    seen+=" $user"
+
+    if ssh "${SSH_OPTS[@]}" "${user}@${FRONT_SSH_HOST}" "echo ok" >/dev/null 2>&1; then
+      echo "$user"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+if ! RESOLVED_SSH_USER="$(pick_ssh_user)"; then
+  echo "[front:deploy] unable to authenticate with provided SSH key (tried: ${FRONT_SSH_USER}, root, ubuntu)"
+  exit 1
+fi
+
+SSH_TARGET="${RESOLVED_SSH_USER}@${FRONT_SSH_HOST}"
+echo "[front:deploy] using ssh user: ${RESOLVED_SSH_USER}"
 
 echo "[front:deploy] sync repo to ${FRONT_SSH_HOST}:${FRONT_REMOTE_DIR}"
 ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p '$FRONT_REMOTE_DIR'"
