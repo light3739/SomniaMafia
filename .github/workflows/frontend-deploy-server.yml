@@ -1,0 +1,78 @@
+name: Frontend Deploy Server
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify start (Telegram)
+        run: |
+          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              -d text="🚀 Frontend deploy started: ${{ github.repository }} @ ${{ github.ref_name }} | commit ${{ github.sha }}"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      - name: Build
+        run: npm run build
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GM_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          PORT="${{ secrets.GM_SSH_PORT }}"
+          if [ -z "$PORT" ]; then PORT=22; fi
+          ssh-keyscan -p "$PORT" -H "${{ secrets.GM_SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy frontend to server
+        env:
+          FRONT_SSH_HOST: ${{ secrets.GM_SSH_HOST }}
+          FRONT_SSH_USER: ${{ secrets.GM_SSH_USER }}
+          FRONT_SSH_PORT: ${{ secrets.GM_SSH_PORT }}
+          FRONT_REMOTE_DIR: ${{ secrets.FRONT_REMOTE_DIR }}
+        run: |
+          if [ -z "${FRONT_REMOTE_DIR}" ]; then
+            export FRONT_REMOTE_DIR=/root/somnia-frontend
+          fi
+          if [ -z "${FRONT_SSH_USER}" ]; then
+            export FRONT_SSH_USER=root
+          fi
+          if [ -z "${FRONT_SSH_PORT}" ]; then
+            export FRONT_SSH_PORT=22
+          fi
+          npm run front:deploy
+
+      - name: Notify success (Telegram)
+        if: ${{ success() }}
+        run: |
+          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              -d text="✅ Frontend deploy success: ${{ github.repository }} @ ${{ github.ref_name }}"
+          fi
+
+      - name: Notify failure (Telegram)
+        if: ${{ failure() }}
+        run: |
+          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              -d text="❌ Frontend deploy FAILED: ${{ github.repository }} @ ${{ github.ref_name }} | run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi

@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 
-const BASE_URL = process.env.GM_SERVER_URL || 'https://mafia-voice.serveminecraft.net/gm';
+const BASE_URL = process.env.GM_SERVER_URL || 'https://gm.mafiaonchain.live';
 
 async function safeJson(response) {
   try {

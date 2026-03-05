@@ -7,6 +7,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Notify start (Telegram)
+        run: |
+          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              -d text="🚀 GM deploy started: ${{ github.repository }} @ ${{ github.ref_name }} | commit ${{ github.sha }}"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -25,7 +33,7 @@ jobs:
 
       - name: Build frontend checks
         run: |
-          npm ci
+          npm ci --legacy-peer-deps
           npx tsc --noEmit --pretty false
 
       - name: Sync + Deploy GM
@@ -39,3 +47,21 @@ jobs:
         run: |
           npm run gm:sync
           npm run gm:deploy
+
+      - name: Notify success (Telegram)
+        if: ${{ success() }}
+        run: |
+          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              -d text="✅ GM deploy success: ${{ github.repository }} @ ${{ github.ref_name }}"
+          fi
+
+      - name: Notify failure (Telegram)
+        if: ${{ failure() }}
+        run: |
+          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              -d text="❌ GM deploy FAILED: ${{ github.repository }} @ ${{ github.ref_name }} | run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi

@@ -18,10 +18,11 @@ const montserrat = Montserrat({
 export const metadata = {
   title: "Onchain Mafia | Web3 Social Deduction",
   description: "A synchronized, ZK-powered Mafia game on the Somnia and Avalanche Blockchains. Play directly in your browser with session keys.",
+  metadataBase: new URL("https://mafiaonchain.live"),
   openGraph: {
     title: "Onchain Mafia",
     description: "Join the conspiracy. Identify the Mafia before it's too late.",
-    url: "https://somnia-mafia.vercel.app",
+    url: "https://mafiaonchain.live",
     siteName: "Onchain Mafia",
     images: [
       {
