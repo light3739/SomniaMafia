@@ -575,7 +575,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         return (
             <div className="w-full h-screen bg-black flex flex-col items-center justify-center gap-4 text-white">
                 <div className="fixed inset-0 z-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url(${dayBg})` }} />
-                <h2 className="text-2xl font-['Playfair_Display'] z-10">Game Session Not Found</h2>
+                <h2 className="text-2xl font-['Cinzel'] z-10">Game Session Not Found</h2>
                 <p className="text-white/50 z-10">Join or create a lobby to start playing</p>
                 <BackButton to="/setup" label="Back to Menu" />
             </div>
@@ -764,7 +764,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 <div className="flex items-center gap-4 pointer-events-auto">
                     <BackButton to="/lobby" className="" label="" exitGame onExitGame={claimRefund} isLoading={isTxPending} />
                     <div className="hidden md:block">
-                        <h1 className="text-white font-['Playfair_Display'] text-lg tracking-wider">Onchain Mafia</h1>
+                        <h1 className="text-white font-['Cinzel'] text-lg tracking-wider">Onchain Mafia</h1>
                     </div>
                 </div>
 

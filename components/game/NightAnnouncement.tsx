@@ -84,7 +84,7 @@ export const NightAnnouncement: React.FC<NightAnnouncementProps> = ({ show, onCo
                             <Moon className="w-20 h-20 text-indigo-300 mb-6 drop-shadow-[0_0_30px_rgba(129,140,248,0.5)]" />
                         </motion.div>
 
-                        <h1 className="text-6xl md:text-8xl font-['Playfair_Display'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-indigo-300 to-indigo-600 drop-shadow-[0_0_20px_rgba(129,140,248,0.5)]">
+                        <h1 className="text-6xl md:text-8xl font-['Cinzel'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-indigo-300 to-indigo-600 drop-shadow-[0_0_20px_rgba(129,140,248,0.5)]">
                             NIGHT
                         </h1>
                         <motion.div

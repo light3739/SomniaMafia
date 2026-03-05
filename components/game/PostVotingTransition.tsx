@@ -22,7 +22,7 @@ export const PostVotingTransition: React.FC = () => {
                     <motion.h2
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="text-2xl font-['Playfair_Display'] text-white"
+                        className="text-2xl font-['Cinzel'] text-white"
                     >
                         Voting Results
                     </motion.h2>

@@ -643,7 +643,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                         animate={{ opacity: 1, scale: 1 }}
                         className="text-center mb-2"
                     >
-                        <h2 className="text-2xl font-['Playfair_Display'] text-white mb-1">
+                        <h2 className="text-2xl font-['Cinzel'] text-white mb-1">
                             Night Phase
                         </h2>
                         <p className="text-white/40 text-[10px] tracking-wide">
@@ -702,7 +702,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                             exit={{ opacity: 0, scale: 0.95 }}
                             className="text-center mb-2"
                         >
-                            <h2 className="text-2xl font-['Playfair_Display'] text-white mb-1">
+                            <h2 className="text-2xl font-['Cinzel'] text-white mb-1">
                                 {myRole === Role.MAFIA && 'Choose your victim'}
                                 {myRole === Role.DOCTOR && 'Choose who to protect'}
                                 {myRole === Role.DETECTIVE && 'Choose who to investigate'}

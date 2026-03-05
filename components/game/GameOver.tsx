@@ -462,7 +462,7 @@ export const GameOver: React.FC = React.memo(() => {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 0.6 }}
-                            className={`text-4xl md:text-5xl font-['Playfair_Display'] mb-2 ${config.color}`}
+                            className={`text-4xl md:text-5xl font-['Cinzel'] mb-2 ${config.color}`}
                         >
                             {config.title}
                         </motion.h1>

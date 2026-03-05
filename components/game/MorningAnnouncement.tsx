@@ -75,7 +75,7 @@ export const MorningAnnouncement = React.memo(({ show, onComplete }: MorningAnno
                             <Sun className="w-24 h-24 text-yellow-500 mb-6 drop-shadow-[0_0_40px_rgba(234,179,8,0.6)]" />
                         </motion.div>
 
-                        <h1 className="text-6xl md:text-8xl font-['Playfair_Display'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-orange-400 to-amber-700 drop-shadow-[0_0_20px_rgba(234,179,8,0.4)]">
+                        <h1 className="text-6xl md:text-8xl font-['Cinzel'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-orange-400 to-amber-700 drop-shadow-[0_0_20px_rgba(234,179,8,0.4)]">
                             DAY BREAKS
                         </h1>
                         <motion.div

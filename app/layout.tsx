@@ -1,13 +1,13 @@
 import { DynamicBackground } from '@/components/ui/DynamicBackground';
-import { Playfair_Display, Montserrat } from "next/font/google";
+import { Cinzel, Montserrat } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 import { BackgroundMusic } from "@/components/ui/BackgroundMusic";
 import { SoundEffects } from "@/components/ui/SoundEffects";
 
-const playfair = Playfair_Display({
+const cinzel = Cinzel({
   subsets: ["latin", "cyrillic"],
-  variable: "--font-playfair",
+  variable: "--font-cinzel",
 });
 
 const montserrat = Montserrat({
@@ -52,7 +52,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${playfair.variable} ${montserrat.variable} antialiased bg-black text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden`}>
+      <body className={`${cinzel.variable} ${montserrat.variable} antialiased bg-black text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden`}>
         <Providers>
           <BackgroundMusic />
           <SoundEffects />

@@ -591,7 +591,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     animate={{ opacity: 1 }}
                     className="text-center mb-4 flex-shrink-0"
                 >
-                    <h2 className="text-2xl font-['Playfair_Display'] text-white">
+                    <h2 className="text-2xl font-['Cinzel'] text-white">
                         {isVotingPhase ? 'Elimination Vote' : 'Discussion Phase'}
                     </h2>
                     {isDayPhase && discussionState?.active && (

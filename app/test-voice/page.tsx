@@ -28,7 +28,7 @@ export default function TestVoicePage() {
                 <div className="text-center mb-8">
                     <div className="flex items-center justify-center gap-3 mb-4">
                         <Volume2 className="w-8 h-8 text-purple-400" />
-                        <h1 className="text-4xl font-['Playfair_Display'] text-white">
+                        <h1 className="text-4xl font-['Cinzel'] text-white">
                             Voice Chat Test
                         </h1>
                     </div>

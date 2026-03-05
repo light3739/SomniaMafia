@@ -40,7 +40,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                             textRendering="auto"
                             letterSpacing="1.44"
                             style={{
-                                fontFamily: '"Playfair Display", serif',
+                                fontFamily: '"Cinzel", serif',
                                 fontSize: '72px',
                                 fontStyle: 'italic',
                                 fontWeight: 900,
