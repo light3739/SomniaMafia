@@ -21,19 +21,19 @@ const montserrat = Montserrat({
 });
 
 export const metadata = {
-  title: "Somnia Mafia | Web3 Social Deduction",
-  description: "A synchronized, ZK-powered Mafia game on the Somnia Blockchain. Play directly in your browser with session keys.",
+  title: "Onchain Mafia | Web3 Social Deduction",
+  description: "A synchronized, ZK-powered Mafia game on the Somnia and Avalanche Blockchains. Play directly in your browser with session keys.",
   openGraph: {
-    title: "Somnia Mafia",
+    title: "Onchain Mafia",
     description: "Join the conspiracy. Identify the Mafia before it's too late.",
     url: "https://somnia-mafia.vercel.app",
-    siteName: "Somnia Mafia",
+    siteName: "Onchain Mafia",
     images: [
       {
         url: "/assets/lobby_background.png", // Fallback to lobby bg
         width: 1200,
         height: 630,
-        alt: "Somnia Mafia Game Board",
+        alt: "Onchain Mafia Game Board",
       },
     ],
     locale: "en_US",
@@ -41,8 +41,8 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Somnia Mafia",
-    description: "Web3 Social Deduction on Somnia",
+    title: "Onchain Mafia",
+    description: "Web3 Social Deduction",
     images: ["/assets/lobby_background.png"],
   },
   icons: {

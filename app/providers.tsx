@@ -25,7 +25,7 @@ import '@rainbow-me/rainbowkit/styles.css';
 const { wallets } = getDefaultWallets();
 
 const config = getDefaultConfig({
-    appName: 'Somnia Mafia',
+    appName: 'Onchain Mafia',
     projectId: 'YOUR_PROJECT_ID', // TODO: Add real project ID
     wallets: [
         ...wallets,

@@ -66,10 +66,10 @@ const HAND_TUNED: Record<number, { x: number; y: number }[]> = {
         { x: 188, y: 800 },    // p3  bottom-left       (LR: 1238-1050=188)
     ],
     4: [ // even: square layout, LR + TB symmetric
-        { x: 1082, y: 100 },   // p1  top-right
-        { x: 1082, y: 792 },   // p2  bottom-right
-        { x: 156, y: 792 },    // p3  bottom-left  (1238 - 1082 = 156)
-        { x: 156, y: 100 },    // p4  top-left
+        { x: 869, y: 158 },    // p1  top-right
+        { x: 869, y: 736 },    // p2  bottom-right
+        { x: 369, y: 736 },    // p3  bottom-left
+        { x: 369, y: 158 },    // p4  top-left
     ],
     5: [ // odd: pentagon — 1 top-center, 2 sides, 2 bottom (LR-symmetric)
         { x: 619, y: 38 },     // p1  top-center
@@ -78,13 +78,13 @@ const HAND_TUNED: Record<number, { x: number; y: number }[]> = {
         { x: 238, y: 800 },    // p4  bottom-left       (LR: 1238-1000=238)
         { x: 60, y: 290 },     // p5  left              (LR: 1238-1178=60)
     ],
-    6: [ // even: 1 top, 2 sides, 1 bottom (LR + TB symmetric)
+    6: [ // even: 1 top, 2 sides, 1 bottom (LR + TB symmetric, tighter vertical gap)
         { x: 619, y: 58 },     // p1  top-center
-        { x: 1124, y: 214 },   // p2  right-upper
-        { x: 1124, y: 660 },   // p3  right-lower (using y ~ middle of 670 and 660)
+        { x: 1130, y: 290 },   // p2  right-upper
+        { x: 1130, y: 604 },   // p3  right-lower
         { x: 619, y: 836 },    // p4  bottom-center
-        { x: 114, y: 660 },    // p5  left-lower  (1238 - 1124 = 114)
-        { x: 114, y: 214 },    // p6  left-upper  (1238 - 1124 = 114)
+        { x: 108, y: 604 },    // p5  left-lower
+        { x: 108, y: 290 },    // p6  left-upper
     ],
     7: [ // odd: 1 top, 3 right, 3 left (LR symmetric)
         { x: 619, y: 38 },     // p1  top-center
@@ -298,7 +298,7 @@ export function getPlayerPositions(count: number): { id: string; x: number; y: n
 }
 
 export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionState?: any }> = ({ initialNightState, initialDiscussionState }) => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap } = useGameContext();
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap, claimRefund } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const { activeHint, showHint, dismissHint } = useGameHints(currentRoomId?.toString());
     const players = gameState.players || [];
@@ -762,9 +762,9 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             <div className="fixed top-0 left-0 right-0 z-40 h-16 px-6 flex items-center justify-between pointer-events-none select-none">
                 {/* Left */}
                 <div className="flex items-center gap-4 pointer-events-auto">
-                    <BackButton to="/lobby" className="bg-black/40 p-2 rounded-full hover:bg-[#916A47]" label="" />
+                    <BackButton to="/lobby" className="" label="" exitGame onExitGame={claimRefund} isLoading={isTxPending} />
                     <div className="hidden md:block">
-                        <h1 className="text-white font-['Playfair_Display'] text-lg tracking-wider">Somnia Mafia</h1>
+                        <h1 className="text-white font-['Playfair_Display'] text-lg tracking-wider">Onchain Mafia</h1>
                     </div>
                 </div>
 
