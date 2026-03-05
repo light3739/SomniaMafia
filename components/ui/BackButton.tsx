@@ -120,7 +120,7 @@ export const BackButton: React.FC<BackButtonProps> = ({
                                 </div>
 
                                 {/* Title */}
-                                <h3 className="text-white text-lg font-['Playfair_Display'] font-bold tracking-wide mb-2">
+                                <h3 className="text-white text-lg font-['Cinzel'] font-bold tracking-wide mb-2">
                                     Leave Game?
                                 </h3>
 

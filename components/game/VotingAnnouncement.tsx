@@ -48,7 +48,7 @@ export const VotingAnnouncement = React.memo(({ show, onComplete }: VotingAnnoun
                         }}
                         className="relative z-10 flex flex-col items-center"
                     >
-                        <h1 className="text-6xl md:text-8xl font-['Playfair_Display'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-[#916A47] to-[#5e4026] drop-shadow-[0_0_20px_rgba(145,106,71,0.5)]">
+                        <h1 className="text-6xl md:text-8xl font-['Cinzel'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-[#916A47] to-[#5e4026] drop-shadow-[0_0_20px_rgba(145,106,71,0.5)]">
                             VOTING
                         </h1>
                         <motion.div

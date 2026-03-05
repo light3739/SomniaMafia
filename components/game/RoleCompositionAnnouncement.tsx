@@ -117,7 +117,7 @@ export const RoleCompositionAnnouncement = React.memo(({
                             initial={{ opacity: 0, y: -20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.2 }}
-                            className="text-3xl md:text-4xl font-['Playfair_Display'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-white via-white/90 to-white/50 mb-2"
+                            className="text-3xl md:text-4xl font-['Cinzel'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-white via-white/90 to-white/50 mb-2"
                         >
                             The Town Awakens
                         </motion.h2>
@@ -160,7 +160,7 @@ export const RoleCompositionAnnouncement = React.memo(({
                                     </div>
 
                                     {/* Name */}
-                                    <span className={`${role.color} font-['Playfair_Display'] font-semibold text-lg flex-1`}>
+                                    <span className={`${role.color} font-['Cinzel'] font-semibold text-lg flex-1`}>
                                         {role.name}
                                     </span>
 

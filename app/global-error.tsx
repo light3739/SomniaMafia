@@ -18,7 +18,7 @@ export default function GlobalError({
         <html>
             <body className="bg-black text-white flex flex-col items-center justify-center min-h-screen p-4 font-sans">
                 <div className="bg-[#1a1a1a] border border-red-900/50 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
-                    <h2 className="text-2xl font-[Playfair_Display] text-red-500 mb-4">Critical System Failure</h2>
+                    <h2 className="text-2xl font-[Cinzel] text-red-500 mb-4">Critical System Failure</h2>
                     <p className="text-white/70 mb-6">
                         An unexpected error has occurred in the Mafia protocol.
                     </p>
