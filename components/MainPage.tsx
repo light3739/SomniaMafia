@@ -25,31 +25,24 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
 
                 {/* Main Title */}
                 <div className="w-full max-w-[90vw] md:max-w-[800px]">
-                    <svg viewBox="0 0 600 120" className="w-full h-auto overflow-visible">
-                        <text
-                            x="50%"
-                            y="60%"
-                            dominantBaseline="middle"
-                            textAnchor="middle"
-                            fill="#ffffff"
-                            stroke="#000000"
-                            strokeWidth="2"
-                            strokeOpacity="0.8"
-                            strokeLinecap="square"
-                            strokeLinejoin="bevel"
-                            textRendering="auto"
-                            letterSpacing="1.44"
-                            style={{
-                                fontFamily: '"Cinzel", serif',
-                                fontSize: '72px',
-                                fontStyle: 'italic',
-                                fontWeight: 900,
-                                filter: 'drop-shadow(0px 4px 15px rgba(0,0,0,0.9)) drop-shadow(0px 0px 30px rgba(0,0,0,0.6))'
-                            }}
-                        >
-                            Onchain Mafia
-                        </text>
-                    </svg>
+                    <h1
+                        className="text-center font-bold italic tracking-widest text-[#ffffff]"
+                        style={{
+                            fontFamily: '"Cinzel", serif',
+                            fontSize: 'clamp(48px, 12vw, 100px)',
+                            textShadow: `
+                                2px 2px 0 #000, 
+                                -2px -2px 0 #000, 
+                                2px -2px 0 #000, 
+                                -2px 2px 0 #000,
+                                0px 4px 15px rgba(0,0,0,0.9),
+                                0px 0px 30px rgba(0,0,0,0.6)
+                            `,
+                            lineHeight: '1.2'
+                        }}
+                    >
+                        Onchain Mafia
+                    </h1>
                 </div>
 
                 {/* Subtitle Row */}
