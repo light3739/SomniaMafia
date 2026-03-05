@@ -215,10 +215,14 @@ export class ServerStore {
         const normalizedRoomId = BigInt(roomId).toString();
         const key = `room:discussion:${normalizedRoomId}:${dayCount}`;
 
-        if (!redis) {
+        const fallback = () => {
             const data = memoryStore[key];
             if (!data || !data['state']) return null;
             return JSON.parse(data['state']);
+        };
+
+        if (!redis) {
+            return fallback();
         }
 
         try {
@@ -226,8 +230,8 @@ export class ServerStore {
             if (!data) return null;
             return JSON.parse(data);
         } catch (e) {
-            console.error("[ServerStore] Redis error (getDiscussion):", e);
-            return null;
+            console.error("[ServerStore] Redis error (getDiscussion), falling back to memory:", e);
+            return fallback();
         }
     }
 
@@ -238,16 +242,21 @@ export class ServerStore {
         const normalizedRoomId = BigInt(roomId).toString();
         const key = `room:discussion:${normalizedRoomId}:${dayCount}`;
 
-        if (!redis) {
+        const fallback = () => {
             if (!memoryStore[key]) memoryStore[key] = {};
             memoryStore[key]['state'] = JSON.stringify(state);
+        };
+
+        if (!redis) {
+            fallback();
             return;
         }
 
         try {
             await redis.set(key, JSON.stringify(state), 'EX', GAME_DATA_TTL);
         } catch (e) {
-            console.error("[ServerStore] Redis error (setDiscussion):", e);
+            console.error("[ServerStore] Redis error (setDiscussion), falling back to memory:", e);
+            fallback();
         }
     }
 
