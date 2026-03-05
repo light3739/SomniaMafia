@@ -5,6 +5,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useChainId } from 'wagmi';
 import { NetworkSelector } from './ui/NetworkSelector';
 const somniaLogo = "/assets/somniayeal.png";
+const avalancheLogo = "/assets/avalanche-avax-logo.png";
 
 interface MainPageProps {
     onStart: () => void;
@@ -46,7 +47,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                 filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.5))'
                             }}
                         >
-                            Mafia Online
+                            Onchain Mafia
                         </text>
                     </svg>
                 </div>
@@ -71,14 +72,23 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     >
                         On {networkLabel}
                     </p>
-
-                    <Image
-                        src={somniaLogo}
-                        alt="Somnia"
-                        width={45}
-                        height={40}
-                        className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md"
-                    />
+                    {chainId === 43113 ? (
+                        <Image
+                            src={avalancheLogo}
+                            alt="Avalanche"
+                            width={45}
+                            height={40}
+                            className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md"
+                        />
+                    ) : (
+                        <Image
+                            src={somniaLogo}
+                            alt="Somnia"
+                            width={45}
+                            height={40}
+                            className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md"
+                        />
+                    )}
                 </motion.div>
 
                 <div className="mt-4 flex items-center gap-2 bg-black/40 border border-white/15 rounded-xl px-3 py-2">
@@ -187,6 +197,6 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                 </motion.div>
 
             </div>
-        </div>
+        </div >
     );
 };

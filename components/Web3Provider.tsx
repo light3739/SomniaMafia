@@ -15,7 +15,7 @@ import { defineChain } from 'viem';
 import { SOMNIA_TESTNET, AVALANCHE_FUJI } from '@/contracts/config';
 
 const config = getDefaultConfig({
-  appName: 'Somnia Mafia',
+  appName: 'Onchain Mafia',
   projectId: 'YOUR_PROJECT_ID',
   chains: [AVALANCHE_FUJI, SOMNIA_TESTNET],
   ssr: false,

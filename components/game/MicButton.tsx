@@ -230,13 +230,20 @@ export function MicButton({
 
                 if (!cancelled) setIsConnecting(false);
             } catch (e: any) {
-                // Suppress noisy 'Client initiated disconnect' logs during phase-driven unmounts
-                const isUserDisconnect = e?.message?.includes('disconnect') || e?.name?.includes('ConnectionError') || e?.message?.includes('timeout');
-                if (!cancelled && !isUserDisconnect) {
+                // Suppress ONLY clean user-initiated disconnects (component unmount etc.)
+                // Do NOT suppress timeouts or connection errors — user needs to retry
+                const isCleanDisconnect = e?.message?.includes('Client initiated disconnect');
+                if (!cancelled && !isCleanDisconnect) {
                     console.error('[MicButton] Connection error:', e);
                     setError(e instanceof Error ? e.message : 'Failed to connect');
-                } else {
-                    console.log('[MicButton] Connection aborted/closed/timed out (expected)');
+                } else if (isCleanDisconnect) {
+                    console.log('[MicButton] Connection cleanly closed (expected).');
+                }
+
+                // Always clean up room ref on error so retry can reconnect
+                if (roomRef.current) {
+                    try { roomRef.current.disconnect(); } catch { }
+                    roomRef.current = null;
                 }
 
                 if (!cancelled) {
