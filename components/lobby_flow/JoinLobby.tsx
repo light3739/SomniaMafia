@@ -209,7 +209,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 )}
 
                 <div className="flex items-center justify-between w-full">
-                    <h2 className="text-white text-3xl font-light tracking-widest uppercase">Live Sessions</h2>
+                    <h2 className="text-white text-3xl font-['Cinzel'] font-light tracking-widest uppercase">Live Sessions</h2>
                     <div className="flex items-center gap-3">
                         {lastUpdate > 0 && (
                             <span className="text-white/20 text-[10px] font-mono">

@@ -1,7 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { GameLog } from './GameLog';
 import { Clock } from 'lucide-react';
 
 export const PostVotingTransition: React.FC = () => {
@@ -16,39 +15,23 @@ export const PostVotingTransition: React.FC = () => {
     }, [timeLeft]);
 
     return (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-start pt-5 md:pt-6 p-4 md:p-8">
-            <div className="max-w-2xl w-full flex flex-col">
-                <div className="text-center mb-4 flex-shrink-0">
-                    <motion.h2
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-2xl font-['Cinzel'] text-white"
-                    >
-                        Voting Results
-                    </motion.h2>
+        <div className="absolute inset-x-0 bottom-0 z-50 flex flex-col items-center justify-end pb-4 pointer-events-none">
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex-shrink-0"
+            >
+                <div className="flex items-center justify-center gap-3 px-6 py-2 bg-black/60 backdrop-blur-md border border-[#916A47]/30 rounded-full text-white/50 select-none">
+                    <Clock className="w-4 h-4 text-[#916A47]/70" />
+                    <span className="text-lg font-mono font-bold text-white/80 tabular-nums">
+                        00:{timeLeft.toString().padStart(2, '0')}
+                    </span>
+                    <div className="w-[1px] h-4 bg-white/10 mx-1" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#916A47]">
+                        Night Starting...
+                    </span>
                 </div>
-
-                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm relative">
-                    <GameLog />
-                </div>
-
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="w-full py-2 flex justify-center flex-shrink-0"
-                >
-                    <div className="flex items-center justify-center gap-3 px-6 py-2 bg-black/40 border border-[#916A47]/30 rounded-full text-white/50 select-none">
-                        <Clock className="w-4 h-4 text-[#916A47]/70" />
-                        <span className="text-lg font-mono font-bold text-white/80 tabular-nums">
-                            00:{timeLeft.toString().padStart(2, '0')}
-                        </span>
-                        <div className="w-[1px] h-4 bg-white/10 mx-1" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#916A47]">
-                            Night Starting...
-                        </span>
-                    </div>
-                </motion.div>
-            </div>
+            </motion.div>
         </div>
     );
 };

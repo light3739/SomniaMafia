@@ -135,7 +135,7 @@ const HintCard: React.FC<{
             exit={{ opacity: 0, x: 16, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 340, damping: 28 }}
             className={`
-                relative w-[220px]
+                relative w-[300px]
                 bg-gradient-to-br ${config.bgGradient}
                 backdrop-blur-2xl
                 border ${config.borderColor}
@@ -144,16 +144,16 @@ const HintCard: React.FC<{
             `}
         >
             {/* Header */}
-            <div className="flex items-center justify-between px-3 pt-3 pb-1.5">
-                <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                <div className="flex items-center gap-2.5">
                     <div className={`shrink-0 ${config.accentColor}`}>
                         {config.icon}
                     </div>
                     <div>
-                        <h3 className={`font-bold text-[11px] leading-tight ${config.accentColor}`}>
+                        <h3 className={`font-bold text-[14px] leading-tight ${config.accentColor}`}>
                             {config.title}
                         </h3>
-                        <p className="text-white/35 text-[9px] leading-tight">
+                        <p className="text-white/35 text-[11px] leading-tight">
                             {config.description}
                         </p>
                     </div>
@@ -167,22 +167,22 @@ const HintCard: React.FC<{
             </div>
 
             {/* Steps */}
-            <div className="px-3 pb-3 pt-1 space-y-1.5">
+            <div className="px-4 pb-4 pt-1.5 space-y-2">
                 {config.steps.map((step, i) => (
                     <motion.div
                         key={i}
                         initial={{ opacity: 0, x: -8 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.1 + i * 0.08 }}
-                        className="flex items-start gap-2"
+                        className="flex items-start gap-2.5"
                     >
                         <span className={`
-                            flex items-center justify-center shrink-0 w-4 h-4 rounded-full text-[9px] font-bold mt-0.5
+                            flex items-center justify-center shrink-0 w-5 h-5 rounded-full text-[10px] font-bold mt-0.5
                             bg-white/5 ${config.accentColor}
                         `}>
                             {i + 1}
                         </span>
-                        <p className="text-white/65 text-[10px] leading-relaxed">
+                        <p className="text-white/65 text-[12px] leading-relaxed">
                             {step}
                         </p>
                     </motion.div>
@@ -207,17 +207,17 @@ const HintCard: React.FC<{
 // Draws an elbow line from the left edge of the hint to the gamefeed label
 const HintConnector: React.FC<{ color: string }> = ({ color }) => (
     <svg
-        className="absolute -left-[52px] top-[22px] pointer-events-none"
-        width="52"
+        className="absolute -left-[80px] top-[26px] pointer-events-none"
+        width="80"
         height="2"
-        viewBox="0 0 52 2"
+        viewBox="0 0 80 2"
         fill="none"
     >
         <line
-            x1="0" y1="1" x2="52" y2="1"
+            x1="0" y1="1" x2="80" y2="1"
             stroke={color}
             strokeWidth="1.5"
-            strokeDasharray="3 3"
+            strokeDasharray="4 4"
             opacity="0.5"
         />
     </svg>
@@ -281,7 +281,7 @@ export const GameHintsOverlay: React.FC<{
         <div
             className="fixed z-[150] pointer-events-none"
             style={{
-                left: `calc(50% + ${feedRightPx + 68}px)`,
+                left: `calc(50% + ${feedRightPx + 96}px)`,
                 top: '50%',
                 transform: 'translateY(-180px)',
             }}

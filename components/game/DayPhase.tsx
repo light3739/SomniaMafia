@@ -22,6 +22,7 @@ interface VoteState {
 interface DayPhaseProps {
     isNightTransition?: boolean;
     delaySeconds?: number;
+    hideActions?: boolean;
     initialDiscussionState?: {
         active: boolean;
         finished: boolean;
@@ -35,7 +36,7 @@ interface DayPhaseProps {
     };
 }
 
-export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition, delaySeconds, initialDiscussionState }) => {
+export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition, delaySeconds, hideActions, initialDiscussionState }) => {
     const {
         gameState,
         currentRoomId,
@@ -608,7 +609,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                 </div>
 
                 {/* Actions — min-h reserves space so feed never shifts */}
-                <div className="min-h-[140px] flex flex-col justify-start">
+                <div className={`min-h-[140px] flex flex-col justify-start transition-opacity duration-300 ${hideActions ? 'opacity-0 pointer-events-none' : ''}`}>
                     <AnimatePresence mode="sync">
 
                         {/* Discussion Phase UI */}

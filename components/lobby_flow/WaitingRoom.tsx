@@ -64,7 +64,7 @@ export const WaitingRoom: React.FC = () => {
                     <p className="text-[#916A47] text-[10px] uppercase tracking-[0.3em] font-bold mb-2">
                         Somnia Session #{currentRoomId?.toString() || '...'}
                     </p>
-                    <h1 className="text-white text-3xl font-light tracking-widest uppercase">
+                    <h1 className="text-white text-3xl font-['Cinzel'] font-light tracking-widest uppercase">
                         {lobbyName || 'Game Lobby'}
                     </h1>
                     <div className="flex items-center gap-2 mt-2">
