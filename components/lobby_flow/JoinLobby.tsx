@@ -6,6 +6,7 @@ import { BackButton } from '../ui/BackButton';
 import { usePublicClient, useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
+import { NetworkSelector } from '../ui/NetworkSelector';
 
 interface JoinLobbyProps {
     initialRoomId?: string | null;
@@ -174,8 +175,13 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-6 py-10">
                 <div className="w-full flex items-center justify-between">
-                    <BackButton />
-                    <ConnectButton accountStatus="avatar" chainStatus="icon" showBalance={false} />
+                    <div className="-ml-3">
+                        <BackButton />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <NetworkSelector compact />
+                        <ConnectButton accountStatus="avatar" chainStatus="none" showBalance={false} />
+                    </div>
                 </div>
 
                 {initialRoomId && !isLoading && (
@@ -220,11 +226,11 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     </div>
                 </div>
 
-                <div className="w-full flex flex-col gap-3">
+                <div className="w-full flex flex-col gap-3 min-h-[300px]">
                     {isLoading ? (
-                        <div className="text-white/40 text-center py-10">Scanning Somnia Network...</div>
+                        <div className="text-white/40 text-center flex-1 flex items-center justify-center bg-black/20 rounded-2xl border border-white/5 animate-pulse">Scanning Network...</div>
                     ) : rooms.length === 0 ? (
-                        <div className="text-white/40 text-center py-10 bg-black/20 rounded-2xl border border-white/5">
+                        <div className="text-white/40 text-center flex-1 flex flex-col items-center justify-center bg-black/20 rounded-2xl border border-white/5">
                             No active lobbies found. <br /> Be the first to create one!
                         </div>
                     ) : rooms.map((room) => (

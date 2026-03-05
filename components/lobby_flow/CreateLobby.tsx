@@ -5,6 +5,7 @@ import { useGameContext } from '../../contexts/GameContext';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
+import { NetworkSelector } from '../ui/NetworkSelector';
 
 export const CreateLobby: React.FC = () => {
     const {
@@ -34,12 +35,15 @@ export const CreateLobby: React.FC = () => {
                 exit={{ opacity: 0, x: -20 }}
                 className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-8 py-10"
             >
-                <div className="w-full flex items-center justify-start">
-                    <BackButton />
+                <div className="w-full flex items-center justify-between">
+                    <div className="-ml-3">
+                        <BackButton />
+                    </div>
+                    <NetworkSelector compact />
                 </div>
 
-                <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] p-8 border border-white/10 shadow-xl flex flex-col gap-6 items-center">
-                    <h2 className="text-white text-2xl font-['Montserrat']">Name Your Lobby</h2>
+                <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] p-8 border border-white/10 shadow-xl flex flex-col gap-6 items-center mt-2">
+                    <h2 className="text-white text-2xl font-['Cinzel']">Name Your Lobby</h2>
                     <Input
                         value={lobbyName}
                         onChange={(e) => setLobbyName(e.target.value)}

@@ -11,56 +11,59 @@ interface NetworkSelectorProps {
 export const NetworkSelector: React.FC<NetworkSelectorProps> = ({ compact = false }) => {
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
-  const [selectedNetwork, setSelectedNetwork] = useState<SupportedNetwork>(ACTIVE_NETWORK);
+  const [targetNetwork, setTargetNetwork] = useState<SupportedNetwork | null>(null);
 
-  useEffect(() => {
-    const saved = typeof window !== 'undefined'
-      ? localStorage.getItem('mafia_selected_network') as SupportedNetwork | null
-      : null;
+  // We rely fully on wagmi's chainId, no local selectedNetwork state!
+  const isAvalanche = chainId === NETWORKS.avalanche_fuji.id;
+  const isSomnia = chainId === NETWORKS.somnia_testnet.id;
 
-    if (saved && (saved === 'avalanche_fuji' || saved === 'somnia_testnet')) {
-      setSelectedNetwork(saved);
-      return;
-    }
-
-    if (chainId === NETWORKS.avalanche_fuji.id) {
-      setSelectedNetwork('avalanche_fuji');
-    } else if (chainId === NETWORKS.somnia_testnet.id) {
-      setSelectedNetwork('somnia_testnet');
-    }
-  }, [chainId]);
-
-  const selectedChain = useMemo(() => NETWORKS[selectedNetwork], [selectedNetwork]);
-  const isMismatch = chainId !== selectedChain.id;
-
-  const handleChange = async (network: SupportedNetwork) => {
-    setSelectedNetwork(network);
-    localStorage.setItem('mafia_selected_network', network);
+  const handleSwitch = async (network: SupportedNetwork) => {
+    if (targetNetwork) return;
+    setTargetNetwork(network);
     try {
       await switchChainAsync({ chainId: NETWORKS[network].id });
-    } catch {
+      localStorage.setItem('mafia_selected_network', network);
+    } catch (e) {
+      console.error("Failed to switch network", e);
+    } finally {
+      setTargetNetwork(null);
     }
   };
 
   return (
-    <div className={`flex items-center gap-2 rounded-full border border-white/10 bg-black/20 backdrop-blur-md shadow-lg transition-all hover:bg-black/30 hover:border-white/20 ${compact ? 'px-3 py-1' : 'px-4 py-2'}`}>
-      <span className={`text-white/60 font-sans uppercase tracking-widest font-semibold ${compact ? 'text-[9px]' : 'text-[10px]'}`}>Network</span>
-      <select
-        value={selectedNetwork}
-        onChange={(e) => handleChange(e.target.value as SupportedNetwork)}
-        className={`bg-transparent text-white font-sans font-medium outline-none cursor-pointer appearance-none pr-4 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M7%2010L12%2015L17%2010%22%20stroke%3D%22rgba(255,255,255,0.7)%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-right ${compact ? 'text-xs' : 'text-sm'}`}
-      >
-        <option className="bg-[#1A1210] text-[#ffb01d] font-sans" value="avalanche_fuji">Avalanche Fuji</option>
-        <option className="bg-[#1A1210] text-purple-300 font-sans" value="somnia_testnet">Somnia Testnet</option>
-      </select>
-      {isMismatch && (
+    <div className={`flex flex-col items-center justify-center ${compact ? 'w-full max-w-[280px]' : 'w-full max-w-[350px] mb-2'}`}>
+      <div className="relative w-full flex p-1.5 bg-[rgba(25,19,13,0.8)] backdrop-blur-md border border-white/10 rounded-[16px] shadow-2xl">
+
+        {/* Sliding background for active state */}
+        <div
+          className="absolute top-1.5 bottom-1.5 w-[calc(50%-0.375rem)] bg-[#4A3222] rounded-[12px] transition-all duration-500 ease-out z-0 shadow-inner border border-white/5"
+          style={{
+            left: '0.375rem',
+            transform: isAvalanche ? 'translateX(0%)' : isSomnia ? 'translateX(100%)' : 'translateX(0%)',
+            opacity: (isAvalanche || isSomnia) ? 1 : 0
+          }}
+        />
+
         <button
-          onClick={() => handleChange(selectedNetwork)}
-          className="ml-2 px-3 py-1 text-[10px] font-sans uppercase font-bold tracking-wider rounded-full bg-[#8B2E2E]/80 hover:bg-[#8B2E2E] border border-red-500/30 text-white transition-all shadow-[0_0_15px_rgba(139,46,46,0.4)]"
+          onClick={() => handleSwitch('avalanche_fuji')}
+          disabled={!!targetNetwork || isAvalanche}
+          className={`flex-1 py-3 px-2 font-sans font-semibold text-xs md:text-sm transition-all duration-300 z-10 flex flex-row items-center justify-center gap-1.5 rounded-[12px] whitespace-nowrap min-w-[110px] ${isAvalanche ? 'text-[#ffb01d] drop-shadow-md' : 'text-white/40 hover:text-white/60'
+            }`}
         >
-          Switch
+          {isAvalanche && <div className="w-1.5 h-1.5 shrink-0 rounded-full bg-[#ffb01d] shadow-[0_0_8px_#ffb01d]" />}
+          {targetNetwork === 'avalanche_fuji' ? 'Confirming...' : 'Avalanche Fuji'}
         </button>
-      )}
+
+        <button
+          onClick={() => handleSwitch('somnia_testnet')}
+          disabled={!!targetNetwork || isSomnia}
+          className={`flex-1 py-3 px-2 font-sans font-semibold text-xs md:text-sm transition-all duration-300 z-10 flex flex-row items-center justify-center gap-1.5 rounded-[12px] whitespace-nowrap min-w-[110px] ${isSomnia ? 'text-[#ffb01d] drop-shadow-md' : 'text-white/40 hover:text-white/60'
+            }`}
+        >
+          {isSomnia && <div className="w-1.5 h-1.5 shrink-0 rounded-full bg-[#ffb01d] shadow-[0_0_8px_#ffb01d]" />}
+          {targetNetwork === 'somnia_testnet' ? 'Confirming...' : 'Somnia Testnet'}
+        </button>
+      </div>
     </div>
   );
 };
