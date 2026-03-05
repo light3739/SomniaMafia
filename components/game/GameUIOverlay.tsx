@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { BackgroundMusic } from '../ui/BackgroundMusic';
 import { ChatToggleButton } from './DiscussionChat';
 import { useGameContext } from '@/contexts/GameContext';
+import { useAccount } from 'wagmi';
 import { GamePhase } from '@/types';
 
 /**
@@ -11,6 +12,7 @@ import { GamePhase } from '@/types';
  * Includes: BackgroundMusic with integrated Chat button
  */
 export const GameUIOverlay: React.FC = () => {
+    const { chainId } = useAccount();
     const { gameState, myPlayer, currentRoomId, isTxConfirming } = useGameContext();
     const [isChatExpanded, setIsChatExpanded] = useState(false);
 
@@ -31,7 +33,7 @@ export const GameUIOverlay: React.FC = () => {
             }
             try {
                 const response = await fetch(
-                    `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}`,
+                    `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}&chainId=${chainId || ''}`,
                     { cache: 'no-store' }
                 );
                 const data = await response.json();
