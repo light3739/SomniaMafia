@@ -45,6 +45,10 @@ export const BackButton: React.FC<BackButtonProps> = ({
             if (onExitGame) {
                 await onExitGame();
             }
+            // Always clear local storage so the game isn't re-loaded on browser back
+            sessionStorage.removeItem('currentRoomId');
+            localStorage.removeItem('currentRoomId');
+
             // Navigate after successful exit
             if (to) {
                 router.push(to);
@@ -53,7 +57,11 @@ export const BackButton: React.FC<BackButtonProps> = ({
             }
         } catch (err) {
             console.error('[ExitGame] Failed:', err);
-            // Don't navigate on error — user stays in game
+            // Even if the contract call fails (e.g. claimRefund rejects because game is active),
+            // we should still let the user leave the room UI locally.
+            sessionStorage.removeItem('currentRoomId');
+            localStorage.removeItem('currentRoomId');
+            router.push('/lobby');
         } finally {
             setIsExiting(false);
             setShowConfirm(false);
