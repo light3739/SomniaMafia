@@ -459,22 +459,37 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     }, [gameState.logs, gameState.phase]);
 
     // Trigger Night Announcement (Night Transition)
-    // Uses a direct single setTimeout instead of decrementing countdown
-    // to avoid drift accumulation over 10 iterations.
+    // Fires AFTER PostVotingTransition ends (showVotingResults goes true→false in NIGHT phase)
     const nightTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const prevShowVotingResultsRef = useRef(false);
     useEffect(() => {
-        if (gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDay) {
+        const wasShowingResults = prevShowVotingResultsRef.current;
+        prevShowVotingResultsRef.current = showVotingResults;
+
+        // Trigger when showVotingResults transitions from true → false AND we're in NIGHT phase
+        if (wasShowingResults && !showVotingResults && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDay) {
             setLastNightDay(gameState.dayCount);
             if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
             nightTimerRef.current = setTimeout(() => {
                 playNightTransition();
                 setShowNightAnnouncement(true);
-            }, 10000);
+            }, 500); // Brief pause after voting results fade
         }
+
+        // Fallback: If we enter NIGHT without showVotingResults (e.g. page reload during night)
+        if (!showVotingResults && !wasShowingResults && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDay) {
+            setLastNightDay(gameState.dayCount);
+            if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
+            nightTimerRef.current = setTimeout(() => {
+                playNightTransition();
+                setShowNightAnnouncement(true);
+            }, 1000);
+        }
+
         return () => {
             if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
         };
-    }, [gameState.phase, gameState.dayCount, lastNightDay, playNightTransition]);
+    }, [gameState.phase, gameState.dayCount, lastNightDay, playNightTransition, showVotingResults]);
 
     // Calculate last voting result from logs for the announcement
 
@@ -710,18 +725,16 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 {/* CENTER CONTENT (Day Phase, Vote, Logs etc) */}
                 {/* CENTER CONTENT (Day/Night/Voting) */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] flex items-center justify-center z-10">
-                    {/* Voting Results Transition - High Priority */}
-                    {showVotingResults && (
-                        <div className="w-full h-full z-20">
-                            <PostVotingTransition />
+                    {/* Day/Voting Phase Content — stays mounted during showVotingResults to avoid GameLog re-mount */}
+                    {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING || showVotingResults) && (
+                        <div className="w-full h-full">
+                            <DayPhase initialDiscussionState={initialDiscussionState} hideActions={showVotingResults} />
                         </div>
                     )}
 
-                    {/* Day/Voting Phase Content */}
-                    {!showVotingResults && !isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) && (
-                        <div className="w-full h-full">
-                            <DayPhase initialDiscussionState={initialDiscussionState} />
-                        </div>
+                    {/* Voting Results Transition — lightweight timer overlay on top */}
+                    {showVotingResults && (
+                        <PostVotingTransition />
                     )}
 
                     {/* Night Phase Content */}

@@ -183,7 +183,7 @@ export const GameLog: React.FC = React.memo(() => {
                     className="flex items-center gap-3"
                 >
                     <div className="w-8 h-[1px] bg-gradient-to-r from-transparent to-[#916A47]/60" />
-                    <h2 className={`text-base md:text-lg ${FONT} font-bold text-white tracking-wider uppercase`}>
+                    <h2 className={`text-base md:text-lg font-['Cinzel'] font-bold text-white tracking-wider uppercase`}>
                         Day {dayCount || 1}
                     </h2>
                     <div className="w-8 h-[1px] bg-gradient-to-l from-transparent to-[#916A47]/60" />
