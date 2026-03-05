@@ -263,7 +263,32 @@ export function MicButton({
             setRetryCount(prev => prev + 1);
             return;
         }
-        if (!audioTrackRef.current || !isConnected) return;
+        if (!isConnected) return;
+
+        // Try to create audio track if we don't have one (e.g., initial permission was denied or ignored)
+        if (!audioTrackRef.current && roomRef.current) {
+            setIsConnecting(true);
+            try {
+                const audioTracks = await roomRef.current.localParticipant.createTracks({ audio: true, video: false });
+                const localAudioTrack = audioTracks.find(t => t.kind === Track.Kind.Audio) as LocalAudioTrack | undefined;
+
+                if (localAudioTrack) {
+                    audioTrackRef.current = localAudioTrack;
+                    await localAudioTrack.unmute();
+                    setIsMuted(false);
+                    await roomRef.current.localParticipant.publishTrack(localAudioTrack);
+                }
+            } catch (mediaErr) {
+                console.warn('[MicButton] Mic access still denied:', mediaErr);
+                setError('Mic access denied');
+            } finally {
+                setIsConnecting(false);
+            }
+            return;
+        }
+
+        if (!audioTrackRef.current) return;
+
         try {
             if (isMuted) {
                 await audioTrackRef.current.unmute();
