@@ -31,7 +31,8 @@ export const GameUIOverlay: React.FC = () => {
             }
             try {
                 const response = await fetch(
-                    `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}`
+                    `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}`,
+                    { cache: 'no-store' }
                 );
                 const data = await response.json();
                 setIsMyTurn(data?.isMyTurn || false);

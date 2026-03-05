@@ -359,7 +359,8 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         if (!currentRoomId || gameState.phase !== GamePhase.DAY) return;
         try {
             const response = await fetch(
-                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}`
+                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}`,
+                { cache: 'no-store' }
             );
             const data = await response.json();
             if (data && data.active) {
