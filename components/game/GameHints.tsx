@@ -135,7 +135,7 @@ const HintCard: React.FC<{
             exit={{ opacity: 0, x: 16, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 340, damping: 28 }}
             className={`
-                relative w-[300px]
+                relative w-[340px]
                 bg-gradient-to-br ${config.bgGradient}
                 backdrop-blur-2xl
                 border ${config.borderColor}
@@ -207,14 +207,14 @@ const HintCard: React.FC<{
 // Draws an elbow line from the left edge of the hint to the gamefeed label
 const HintConnector: React.FC<{ color: string }> = ({ color }) => (
     <svg
-        className="absolute -left-[80px] top-[26px] pointer-events-none"
-        width="80"
+        className="absolute -left-[100px] top-[26px] pointer-events-none"
+        width="100"
         height="2"
-        viewBox="0 0 80 2"
+        viewBox="0 0 100 2"
         fill="none"
     >
         <line
-            x1="0" y1="1" x2="80" y2="1"
+            x1="0" y1="1" x2="100" y2="1"
             stroke={color}
             strokeWidth="1.5"
             strokeDasharray="4 4"
@@ -281,7 +281,7 @@ export const GameHintsOverlay: React.FC<{
         <div
             className="fixed z-[150] pointer-events-none"
             style={{
-                left: `calc(50% + ${feedRightPx + 96}px)`,
+                left: `calc(50% + ${feedRightPx + 16}px)`,
                 top: '50%',
                 transform: 'translateY(-180px)',
             }}

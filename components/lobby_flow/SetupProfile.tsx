@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Camera, Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -15,6 +15,12 @@ export const SetupProfile: React.FC = () => {
     const { playerName, setPlayerName, avatarUrl, setAvatarUrl } = useGameContext();
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [hydrated, setHydrated] = useState(false);
+
+    // Ensure client-side hydration is complete before enabling buttons
+    useEffect(() => {
+        setHydrated(true);
+    }, []);
 
     // Load saved avatar from localStorage on mount
     useEffect(() => {
@@ -128,14 +134,14 @@ export const SetupProfile: React.FC = () => {
                 <div className="w-full flex flex-col gap-4">
                     <Button
                         onClick={() => router.push('/create')}
-                        disabled={!playerName.trim()}
+                        disabled={!hydrated || !playerName.trim()}
                         className="w-full h-[60px] text-xl"
                     >
                         Create Game
                     </Button>
                     <Button
                         onClick={() => router.push('/join')}
-                        disabled={!playerName.trim()}
+                        disabled={!hydrated || !playerName.trim()}
                         variant="outline-gold"
                         className="w-full h-[60px] text-xl"
                     >
