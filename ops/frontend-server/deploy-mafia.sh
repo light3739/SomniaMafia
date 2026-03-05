@@ -8,7 +8,16 @@ FRONT_SSH_HOST="${FRONT_SSH_HOST:-mafia}"
 FRONT_SSH_USER="${FRONT_SSH_USER:-root}"
 FRONT_SSH_PORT="${FRONT_SSH_PORT:-22}"
 FRONT_REMOTE_DIR="${FRONT_REMOTE_DIR:-/root/somnia-frontend}"
-SSH_OPTS=(-p "$FRONT_SSH_PORT" -o StrictHostKeyChecking=accept-new)
+SSH_OPTS=(
+  -p "$FRONT_SSH_PORT"
+  -o StrictHostKeyChecking=accept-new
+  -o BatchMode=yes
+  -o ConnectTimeout=10
+  -o PreferredAuthentications=publickey
+  -o PasswordAuthentication=no
+  -o KbdInteractiveAuthentication=no
+  -o NumberOfPasswordPrompts=0
+)
 
 pick_ssh_user() {
   local candidates=("$FRONT_SSH_USER" root ubuntu)
