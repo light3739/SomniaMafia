@@ -39,56 +39,50 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     </h1>
                 </div>
 
-                {/* Subtitle Row - Infinite Marquee */}
+                {/* Subtitle Row - Vertical Scroll Slot Machine */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5, duration: 1 }}
-                    className="mt-[-10px] relative w-64 md:w-96 overflow-hidden bg-black/40 rounded-full backdrop-blur-md border border-white/10 shadow-xl"
-                    style={{ maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)' }}
+                    className="mt-[-10px] relative overflow-hidden bg-black/40 px-2 rounded-full backdrop-blur-md border border-white/10 shadow-xl h-[40px] md:h-[50px] lg:h-[60px] flex items-center justify-center w-[220px] md:w-[300px] lg:w-[380px]"
                 >
                     <motion.div
-                        animate={{ x: ["0%", "-50%"] }}
+                        animate={{ y: ["0%", "-50%"] }}
                         transition={{
                             repeat: Infinity,
                             ease: "linear",
-                            duration: 12,
+                            duration: 5,
+                            delay: 1.0
                         }}
-                        className="flex flex-row items-center w-max"
+                        className="flex flex-col items-center absolute top-0"
                     >
-                        {/* FIRST COPY */}
-                        <div className="flex flex-row items-center justify-center gap-6 px-3 py-1.5">
-                            <div className="flex items-center gap-2">
-                                <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[9px] md:text-[13px] whitespace-nowrap drop-shadow-md">
-                                    On Avalanche Fuji
-                                </p>
-                                <Image src={avalancheLogo} alt="Avalanche" width={30} height={30} className="h-4 md:h-6 w-auto object-contain drop-shadow-md" />
-                            </div>
-                            <div className="w-1 h-1 rounded-full bg-white/30" />
-                            <div className="flex items-center gap-2">
-                                <p className="font-sans text-[#b388ff] uppercase tracking-[0.2em] font-semibold text-[9px] md:text-[13px] whitespace-nowrap drop-shadow-md">
-                                    On Somnia Testnet
-                                </p>
-                                <Image src={somniaLogo} alt="Somnia" width={30} height={30} className="h-4 md:h-6 w-auto object-contain drop-shadow-md" />
-                            </div>
-                            <div className="w-1 h-1 rounded-full bg-white/30" />
+                        {/* ITEM 1 */}
+                        <div className="flex w-full flex-row items-center justify-center gap-3 h-[40px] md:h-[50px] lg:h-[60px]">
+                            <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
+                                On Avalanche Fuji
+                            </p>
+                            <Image src={avalancheLogo} alt="Avalanche" width={45} height={40} className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md" />
                         </div>
-                        {/* SECOND COPY (duplicate for seamless loop) */}
-                        <div className="flex flex-row items-center justify-center gap-6 px-3 py-1.5">
-                            <div className="flex items-center gap-2">
-                                <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[9px] md:text-[13px] whitespace-nowrap drop-shadow-md">
-                                    On Avalanche Fuji
-                                </p>
-                                <Image src={avalancheLogo} alt="Avalanche" width={30} height={30} className="h-4 md:h-6 w-auto object-contain drop-shadow-md" />
-                            </div>
-                            <div className="w-1 h-1 rounded-full bg-white/30" />
-                            <div className="flex items-center gap-2">
-                                <p className="font-sans text-[#b388ff] uppercase tracking-[0.2em] font-semibold text-[9px] md:text-[13px] whitespace-nowrap drop-shadow-md">
-                                    On Somnia Testnet
-                                </p>
-                                <Image src={somniaLogo} alt="Somnia" width={30} height={30} className="h-4 md:h-6 w-auto object-contain drop-shadow-md" />
-                            </div>
-                            <div className="w-1 h-1 rounded-full bg-white/30" />
+                        {/* ITEM 2 */}
+                        <div className="flex w-full flex-row items-center justify-center gap-3 h-[40px] md:h-[50px] lg:h-[60px]">
+                            <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
+                                On Somnia Testnet
+                            </p>
+                            <Image src={somniaLogo} alt="Somnia" width={45} height={40} className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md" />
+                        </div>
+                        {/* ITEM 1 COPY FOR SEAMLESS LOOP */}
+                        <div className="flex w-full flex-row items-center justify-center gap-3 h-[40px] md:h-[50px] lg:h-[60px]">
+                            <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
+                                On Avalanche Fuji
+                            </p>
+                            <Image src={avalancheLogo} alt="Avalanche" width={45} height={40} className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md" />
+                        </div>
+                        {/* ITEM 2 COPY */}
+                        <div className="flex w-full flex-row items-center justify-center gap-3 h-[40px] md:h-[50px] lg:h-[60px]">
+                            <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
+                                On Somnia Testnet
+                            </p>
+                            <Image src={somniaLogo} alt="Somnia" width={45} height={40} className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md" />
                         </div>
                     </motion.div>
                 </motion.div>
