@@ -197,7 +197,6 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* 1. Night Result */}
                         {dayEvents.nightResult && (
                             <motion.div
-                                layout
                                 key="night-result"
                                 variants={itemVariants}
                                 initial="hidden"
@@ -220,7 +219,6 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* 2. Discussion Phase */}
                         {dayEvents.discussionStarted && (
                             <motion.div
-                                layout
                                 key="discussion"
                                 variants={itemVariants}
                                 initial="hidden"
@@ -243,7 +241,6 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* 3. Voting Phase */}
                         {dayEvents.votingStarted && (
                             <motion.div
-                                layout
                                 key="voting"
                                 variants={itemVariants}
                                 initial="hidden"
@@ -260,7 +257,6 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* 3b. Quorum Counter — always visible once voting starts (persists through results) */}
                         {dayEvents.votingStarted && (
                             <motion.div
-                                layout
                                 key="quorum"
                                 variants={itemVariants}
                                 initial="hidden"
@@ -284,7 +280,6 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* 4. Voting Result (who was kicked) */}
                         {dayEvents.votingResult && (
                             <motion.div
-                                layout
                                 key="vote-result"
                                 variants={itemVariants}
                                 initial="hidden"
@@ -306,7 +301,6 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* 5. Night Falls — shown 3s before PostVotingTransition ends, or from log */}
                         {(dayEvents.nightFallen || showNightFalls) && (
                             <motion.div
-                                layout
                                 key="night-falls"
                                 variants={itemVariants}
                                 initial="hidden"
@@ -322,7 +316,6 @@ export const GameLog: React.FC = React.memo(() => {
                         {/* Empty state */}
                         {!dayEvents.nightResult && !dayEvents.discussionStarted && !dayEvents.votingStarted && !dayEvents.votingResult && !dayEvents.nightFallen && !showNightFalls && (
                             <motion.div
-                                layout
                                 key="empty-state"
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
