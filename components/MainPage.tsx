@@ -33,8 +33,8 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                             textAnchor="middle"
                             fill="#ffffff"
                             stroke="#000000"
-                            strokeWidth="0"
-                            strokeOpacity="0"
+                            strokeWidth="2"
+                            strokeOpacity="0.8"
                             strokeLinecap="square"
                             strokeLinejoin="bevel"
                             textRendering="auto"
@@ -44,7 +44,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                 fontSize: '72px',
                                 fontStyle: 'italic',
                                 fontWeight: 900,
-                                filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.5))'
+                                filter: 'drop-shadow(0px 4px 15px rgba(0,0,0,0.9)) drop-shadow(0px 0px 30px rgba(0,0,0,0.6))'
                             }}
                         >
                             Onchain Mafia
@@ -57,7 +57,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5, duration: 1 }}
-                    className="flex flex-row items-center justify-center gap-2 mt-[-10px] md:mt-[-20px]"
+                    className="flex flex-row items-center justify-center gap-2 mt-[-10px] md:mt-[-20px] bg-black/20 px-6 py-2 rounded-full backdrop-blur-sm border border-white/5"
                 >
                     <p
                         style={{
