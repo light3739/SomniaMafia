@@ -491,15 +491,15 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
     // Voting Logic (Polling)
     const fetchVoteCounts = useCallback(async () => {
         if (!publicClient || !currentRoomId) return;
-        try {
-            const counts = new Map<string, number>();
-            const newVoteMap: Record<string, string> = {};
+        const counts = new Map<string, number>();
+        const newVoteMap: Record<string, string> = {};
+        let anySuccess = false;
 
-            // Fetch votes for all alive players
-            for (const player of gameState.players) {
-                if (!player.isAlive) continue;
-
-                // Get vote count for this player
+        // Fetch votes for all alive players — each wrapped individually
+        // so one revert doesn't kill all vote data
+        for (const player of gameState.players) {
+            if (!player.isAlive) continue;
+            try {
                 const count = await publicClient.readContract({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
@@ -508,7 +508,6 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                 }) as unknown as bigint;
                 counts.set(player.address.toLowerCase(), Number(count));
 
-                // Get who this player voted for
                 const vote = await publicClient.readContract({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
@@ -519,30 +518,30 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                 if (vote && vote !== '0x0000000000000000000000000000000000000000') {
                     newVoteMap[player.address.toLowerCase()] = vote.toLowerCase();
                 }
+                anySuccess = true;
+            } catch (e: any) {
+                const msg = (e.message || '').toLowerCase();
+                if (!msg.includes('revert') && !msg.includes('0x5416eb98')) {
+                    console.warn(`[DayPhase] Failed to fetch vote for ${player.name}:`, e);
+                }
             }
+        }
 
-            // Update voteMap in context
+        // Only update if we got at least some data
+        if (anySuccess) {
             setVoteMap(newVoteMap);
+        }
 
-            if (isProcessing || isTxPending) return;
-            if (myPlayer) {
-                const myVote = newVoteMap[myPlayer.address.toLowerCase()];
-                const hasVoted = !!myVote;
-                setVoteState(prev => ({
-                    ...prev,
-                    voteCounts: counts,
-                    myVote: myVote || prev.myVote,
-                    hasVoted: prev.hasVoted || hasVoted
-                }));
-            }
-        } catch (e: any) {
-            // Contract may revert if phase hasn't fully transitioned — expected, not an error
-            const msg = (e.message || '').toLowerCase();
-            if (msg.includes('revert') || msg.includes('0x5416eb98')) {
-                console.log("[DayPhase] voteCounts read unavailable (phase transition)");
-            } else {
-                console.warn("Failed to fetch votes:", e);
-            }
+        if (isProcessing || isTxPending) return;
+        if (myPlayer && anySuccess) {
+            const myVote = newVoteMap[myPlayer.address.toLowerCase()];
+            const hasVoted = !!myVote;
+            setVoteState(prev => ({
+                ...prev,
+                voteCounts: counts,
+                myVote: myVote || prev.myVote,
+                hasVoted: prev.hasVoted || hasVoted
+            }));
         }
     }, [publicClient, currentRoomId, gameState.players, myPlayer, isProcessing, isTxPending, setVoteMap]);
 
@@ -552,7 +551,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
 
         if (isVotingPhase) {
             fetchVoteCounts();
-            const interval = setInterval(fetchVoteCounts, 3000);
+            const interval = setInterval(fetchVoteCounts, 2000);
             return () => clearInterval(interval);
         } else if (!showVotingResults) {
             // Clear vote map when leaving voting phase, BUT NOT during voting results display
