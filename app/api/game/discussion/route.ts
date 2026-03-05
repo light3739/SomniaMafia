@@ -5,6 +5,8 @@ import { ServerStore, DiscussionState } from '@/services/serverStore';
 import { verifySignedRequestBody } from '@/app/api/_lib/security';
 import { buildDiscussionMessage } from '@/services/signingSchema';
 
+export const dynamic = 'force-dynamic';
+
 const publicClient = createPublicClient({
     chain: somniaChain,
     transport: http()
