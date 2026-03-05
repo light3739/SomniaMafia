@@ -3122,6 +3122,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             console.log("[VotingFinalized] Results phase ended. Proceeding to Night.");
                             setShowVotingResults(false);
                             addLog("Night has fallen...", "night");
+                            // Clear votes directly at the end of the results phase
+                            setVoteMap({});
                         }, 10000); // 10 seconds
 
                         break;
