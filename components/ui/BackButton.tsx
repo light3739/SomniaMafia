@@ -108,7 +108,7 @@ export const BackButton: React.FC<BackButtonProps> = ({
                             exit={{ opacity: 0, scale: 0.9, y: 20 }}
                             transition={{ type: "spring", damping: 25, stiffness: 300 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="relative w-[380px] max-w-[90vw] bg-gradient-to-b from-[#1A1210] to-[#0D0907] border border-[#8B2E2E]/30 rounded-2xl shadow-[0_0_60px_rgba(139,46,46,0.15)] overflow-hidden"
+                            className="relative w-[380px] max-w-[90vw] bg-gradient-to-b from-[#1A1210] to-[#0D0907] border border-[#8B2E2E]/30 rounded-2xl overflow-hidden"
                         >
                             {/* Red glow at top */}
                             <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-[#8B2E2E]/10 to-transparent pointer-events-none" />
