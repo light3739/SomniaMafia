@@ -792,7 +792,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                         </div>
                     )}
 
-                    <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />
+                    {!isOverlayPhase && <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />}
                 </div>
             </div>
 

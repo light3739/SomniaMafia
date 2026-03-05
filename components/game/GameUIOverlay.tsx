@@ -63,7 +63,7 @@ export const GameUIOverlay: React.FC = () => {
     return (
         <>
             {/* Subtle confirming indicator — shows when TXs are being confirmed in background */}
-            {isTxConfirming && (
+            {isTxConfirming && gameState.phase !== GamePhase.SHUFFLING && gameState.phase !== GamePhase.REVEAL && gameState.phase !== GamePhase.LOBBY && (
                 <div className="fixed top-2 right-2 z-[200] flex items-center gap-1.5 px-3 py-1.5 bg-yellow-900/60 border border-yellow-500/30 rounded-full backdrop-blur-sm">
                     <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
                     <span className="text-yellow-300/80 text-[11px] font-medium">Confirming...</span>

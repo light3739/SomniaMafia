@@ -61,18 +61,11 @@ export const WaitingRoom: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col items-center text-center">
-                    <p className="text-[#916A47] text-[10px] uppercase tracking-[0.3em] font-bold mb-2">
-                        Somnia Session #{currentRoomId?.toString() || '...'}
-                    </p>
+
                     <h1 className="text-white text-3xl font-['Cinzel'] font-light tracking-widest uppercase">
                         {lobbyName || 'Game Lobby'}
                     </h1>
-                    <div className="flex items-center gap-2 mt-2">
-                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                        <span className="text-white/40 text-xs uppercase tracking-widest">
-                            Syncing with Smart Contract...
-                        </span>
-                    </div>
+
                 </div>
 
                 <div className="w-full bg-[rgba(15,10,5,0.85)] backdrop-blur-xl rounded-[32px] p-6 border border-white/5 shadow-2xl flex flex-col">
@@ -120,7 +113,6 @@ export const WaitingRoom: React.FC = () => {
 
                     <div className="pt-4 mt-4 border-t border-white/5 flex items-center justify-between">
                         <div className="text-white/40 text-[10px] uppercase tracking-tighter font-mono flex items-center gap-2">
-                            Status: ZK-Shuffle Secured
                             <button
                                 onClick={() => roomIdNumber && refreshPlayersList(BigInt(roomIdNumber))}
                                 className="hover:text-white transition-colors"
