@@ -142,7 +142,7 @@ export const GameLog: React.FC = React.memo(() => {
     const nightFallsTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
-        if (showVotingResults && phase === GamePhase.NIGHT) {
+        if (showVotingResults) {
             // PostVotingTransition lasts 10s, show "Night falls" after 5s
             nightFallsTimerRef.current = setTimeout(() => {
                 setShowNightFalls(true);
@@ -154,7 +154,7 @@ export const GameLog: React.FC = React.memo(() => {
         } else {
             setShowNightFalls(false);
         }
-    }, [showVotingResults, phase]);
+    }, [showVotingResults]);
 
 
     // Animation variants
