@@ -467,18 +467,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // gas usage varies heavily with player count / deck size. They get dynamically estimated.
         const MAX_BLOCK_GAS = 14_500_000n;
         const KNOWN_GAS_LIMITS: Record<string, bigint> = {
-            commitDeck: 2_000_000n,
-            commitAndConfirmRole: 3_000_000n,
-            commitNightAction: 1_500_000n,
-            revealNightAction: 3_000_000n,
-            commitMafiaTarget: 1_500_000n,
-            revealMafiaTarget: 5_000_000n,
-            vote: 2_000_000n,
-            startVoting: 5_000_000n,
-            revealRole: 1_200_000n, // Reduced from 5M to fit session key balance
-            forcePhaseTimeout: 10_000_000n,
-            sendMafiaMessage: 2_000_000n,
-            claimRefund: 3_000_000n,
+            commitDeck: 1_500_000n,
+            commitAndConfirmRole: 1_000_000n,
+            commitNightAction: 1_000_000n,
+            revealNightAction: 2_000_000n,
+            commitMafiaTarget: 1_000_000n,
+            revealMafiaTarget: 3_000_000n,
+            vote: 1_500_000n,
+            startVoting: 4_000_000n,
+            revealRole: 800_000n,
+            forcePhaseTimeout: 8_000_000n,
+            sendMafiaMessage: 1_500_000n,
+            claimRefund: 2_000_000n,
         };
 
         const knownLimit = KNOWN_GAS_LIMITS[functionName];
@@ -496,10 +496,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         console.log(`[Gas] Session key balance (${formatEther(bal)} ${currencySymbol}) can't cover known limit ${knownLimit} (cost=${formatEther(cost)} ${currencySymbol}), using estimation instead`);
                     }
                 } else {
-                    useKnownLimit = true; // Can't check, assume OK
+                    useKnownLimit = false; // Missing data, safer to estimate
                 }
             } catch {
-                useKnownLimit = true; // Balance check failed, assume OK
+                useKnownLimit = false; // RPC error during balance check, safer to estimate
             }
         }
 
