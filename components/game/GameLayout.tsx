@@ -66,10 +66,10 @@ const HAND_TUNED: Record<number, { x: number; y: number }[]> = {
         { x: 188, y: 800 },    // p3  bottom-left       (LR: 1238-1050=188)
     ],
     4: [ // even: square layout, LR + TB symmetric
-        { x: 869, y: 158 },    // p1  top-right
-        { x: 869, y: 736 },    // p2  bottom-right
-        { x: 369, y: 736 },    // p3  bottom-left
-        { x: 369, y: 158 },    // p4  top-left
+        { x: 1082, y: 106 },   // p1  top-right
+        { x: 1105, y: 786 },   // p2  bottom-right
+        { x: 177, y: 792 },    // p3  bottom-left
+        { x: 178, y: 100 },    // p4  top-left
     ],
     5: [ // odd: pentagon — 1 top-center, 2 sides, 2 bottom (LR-symmetric)
         { x: 619, y: 38 },     // p1  top-center
@@ -78,13 +78,13 @@ const HAND_TUNED: Record<number, { x: number; y: number }[]> = {
         { x: 238, y: 800 },    // p4  bottom-left       (LR: 1238-1000=238)
         { x: 60, y: 290 },     // p5  left              (LR: 1238-1178=60)
     ],
-    6: [ // even: 1 top, 2 sides, 1 bottom (LR + TB symmetric, tighter vertical gap)
+    6: [ // even: 1 top, 2 sides, 1 bottom
         { x: 619, y: 58 },     // p1  top-center
-        { x: 1130, y: 290 },   // p2  right-upper
-        { x: 1130, y: 604 },   // p3  right-lower
+        { x: 1124, y: 214 },   // p2  right-upper
+        { x: 1145, y: 670 },   // p3  right-lower
         { x: 619, y: 836 },    // p4  bottom-center
-        { x: 108, y: 604 },    // p5  left-lower
-        { x: 108, y: 290 },    // p6  left-upper
+        { x: 96, y: 660 },     // p5  left-lower
+        { x: 90, y: 214 },     // p6  left-upper
     ],
     7: [ // odd: 1 top, 3 right, 3 left (LR symmetric)
         { x: 619, y: 38 },     // p1  top-center
