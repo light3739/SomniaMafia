@@ -3101,7 +3101,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     case 'VotingFinalized':
                         if (args.eliminated !== '0x0000000000000000000000000000000000000000') {
-                            addLog(`Voting Finalized: Player eliminated!`, "danger");
+                            const elimStr = (args.eliminated as string).toLowerCase();
+                            const elimPlayer = playersRef.current.find(p => p.address.toLowerCase() === elimStr);
+                            const elimName = elimPlayer?.name || (args.eliminated as string).slice(0, 6) || "Unknown";
+                            addLog(`Voting Finalized: ${elimName} was eliminated!`, "danger");
                         } else {
                             addLog(`Voting Finalized: No one was eliminated.`, "warning");
                         }
