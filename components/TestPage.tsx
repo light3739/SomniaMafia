@@ -1336,7 +1336,7 @@ const RoleCardShowcaseTest: React.FC = () => {
                                 className="absolute inset-0 bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl flex flex-col items-center justify-center text-center"
                             >
                                 <Search className={`w-16 h-16 text-[#916A47] mb-4 ${revealPhase === 'revealing' ? 'animate-spin' : 'animate-bounce'}`} />
-                                <h3 className="text-2xl text-white font-['Playfair_Display'] mb-2">
+                                <h3 className="text-2xl text-white font-['Cinzel'] mb-2">
                                     {revealPhase === 'revealing' ? 'Decrypting...' : 'Encrypted Data'}
                                 </h3>
                                 <p className="text-white/40 text-sm">
@@ -1357,7 +1357,7 @@ const RoleCardShowcaseTest: React.FC = () => {
                                         initial={{ opacity: 0, y: 20 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: 0.3 }}
-                                        className={`text-5xl font-['Playfair_Display'] mb-6 ${config.color}`}
+                                        className={`text-5xl font-['Cinzel'] mb-6 ${config.color}`}
                                     >
                                         {selectedRole}
                                     </motion.h2>

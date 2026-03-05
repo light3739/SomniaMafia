@@ -531,7 +531,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                                         </svg>
                                     </motion.div>
                                 </div>
-                                <h2 className="text-2xl font-['Playfair_Display'] text-white mb-1">
+                                <h2 className="text-2xl font-['Cinzel'] text-white mb-1">
                                     Role Reveal
                                 </h2>
                                 <p className="text-white/40 text-[13px]">
@@ -640,7 +640,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.3 }}
-                                    className={`text-4xl font-['Playfair_Display'] mb-6 ${roleConfig.color}`}
+                                    className={`text-4xl font-['Cinzel'] mb-6 ${roleConfig.color}`}
                                 >
                                     {revealState.myRole}
                                 </motion.h2>

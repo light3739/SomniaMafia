@@ -641,7 +641,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                             </svg>
                         </motion.div>
                     </div>
-                    <h2 className="text-2xl font-['Playfair_Display'] text-white mb-1">
+                    <h2 className="text-2xl font-['Cinzel'] text-white mb-1">
                         Shuffling Deck
                     </h2>
                     <p className="text-white/40 text-[13px]">
