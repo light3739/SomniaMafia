@@ -68,6 +68,45 @@ Open [http://localhost:3000](http://localhost:3000).
 2. **Environment**: Ensure `NEXT_PUBLIC_MAFIA_ADDRESS` points to the correct deployment.
 3. **ZK Circuits**: Ensure `public/mafia_outcome.wasm` and `public/mafia_outcome_0001.zkey` are present.
 
+### Frontend on own server (Docker + Redis)
+
+This repo includes a production stack in `ops/frontend-server`.
+
+Run deploy from local machine:
+
+```bash
+npm run front:deploy
+```
+
+Defaults:
+- SSH host: `mafia`
+- Remote dir: `/root/somnia-frontend`
+- Frontend listens on `127.0.0.1:3000`
+- App Redis listens on `127.0.0.1:6380` (container internal `redis:6379`)
+
+Server env file:
+- `ops/frontend-server/.env.production` (auto-created from `.env.production.example` on first deploy)
+
+Important public vars:
+- `NEXT_PUBLIC_GM_SERVER_URL=https://gm.mafiaonchain.live`
+- `NEXT_PUBLIC_LIVEKIT_URL=https://livekit.mafiaonchain.live`
+
+### CI/CD deploy + Telegram alerts
+
+Workflow: `.github/workflows/frontend-deploy-server.yml`
+
+It sends Telegram notifications on:
+- deploy started
+- deploy success
+- deploy failure
+
+Required GitHub Secrets:
+- `GM_SSH_PRIVATE_KEY`
+- `GM_SSH_HOST`
+- `FRONT_REMOTE_DIR` (optional, defaults to `/root/somnia-frontend`)
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+
 ## GM Backend: Push/Deploy Runbook
 
 Use npm scripts from this repository:

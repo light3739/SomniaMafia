@@ -1,0 +1,26 @@
+services:
+  frontend:
+    build:
+      context: ../..
+      dockerfile: ops/frontend-server/Dockerfile
+    container_name: somnia-frontend
+    restart: unless-stopped
+    env_file:
+      - ./.env.production
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: somnia-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - somnia_redis_data:/data
+
+volumes:
+  somnia_redis_data:
