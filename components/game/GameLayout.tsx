@@ -347,7 +347,6 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const [showNightAnnouncement, setShowNightAnnouncement] = useState(false);
     const [lastNightDay, setLastNightDay] = useState<number | null>(null);
     const [lastPhase, setLastPhase] = useState<GamePhase | null>(null);
-    const [nightTransitionDelay, setNightTransitionDelay] = useState<number | null>(null);
 
     // Discussion state for tracking current speaker (for player card glow effect)
     const [discussionState, setDiscussionState] = useState<{
@@ -407,38 +406,8 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         }
     }, [gameState.phase, gameState.dayCount, lastMorningDay, playMorningTransition, hasShownRoleComposition]);
 
-    // ─── Game Hints: trigger on phase changes ───────────────────
-    useEffect(() => {
-        if (gameState.phase === GamePhase.DAY) {
-            showHint('discussion');
-        }
-    }, [gameState.phase === GamePhase.DAY]);
-
-    useEffect(() => {
-        if (gameState.phase === GamePhase.VOTING) {
-            showHint('voting');
-        }
-    }, [gameState.phase === GamePhase.VOTING]);
-
-    useEffect(() => {
-        if (gameState.phase === GamePhase.NIGHT && myPlayer?.role) {
-            switch (myPlayer.role) {
-                case Role.MAFIA:
-                    showHint('night_mafia');
-                    break;
-                case Role.DOCTOR:
-                    showHint('night_doctor');
-                    break;
-                case Role.DETECTIVE:
-                    showHint('night_detective');
-                    break;
-                default:
-                    showHint('night_civilian');
-                    break;
-            }
-        }
-    }, [gameState.phase === GamePhase.NIGHT, myPlayer?.role]);
-
+    // ─── Game Hints: triggered AFTER transition animations close ───
+    // (hints are shown in the close-handlers below, not on phase change)
     // Trigger Voting Announcement (Voting start)
     useEffect(() => {
         // Показываем анимацию если:
@@ -490,37 +459,46 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     }, [gameState.logs, gameState.phase]);
 
     // Trigger Night Announcement (Night Transition)
+    // Uses a direct single setTimeout instead of decrementing countdown
+    // to avoid drift accumulation over 10 iterations.
+    const nightTimerRef = useRef<NodeJS.Timeout | null>(null);
     useEffect(() => {
         if (gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDay) {
-            // Always start 10s delay to allow players to read voting results
-            console.log("[NightTransition] Starting 10s post-voting delay.");
-            setNightTransitionDelay(10);
             setLastNightDay(gameState.dayCount);
-        }
-    }, [gameState.phase, gameState.dayCount, lastNightDay]);
-
-    // Handle Night Delay Countdown
-    useEffect(() => {
-        if (nightTransitionDelay !== null) {
-            if (nightTransitionDelay > 0) {
-                const timer = setTimeout(() => {
-                    setNightTransitionDelay(prev => (prev !== null ? prev - 1 : null));
-                }, 1000);
-                return () => clearTimeout(timer);
-            } else {
-                // Delay finished -> Show Night Announcement
-                setNightTransitionDelay(null);
+            if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
+            nightTimerRef.current = setTimeout(() => {
                 playNightTransition();
                 setShowNightAnnouncement(true);
-            }
+            }, 10000);
         }
-    }, [nightTransitionDelay, playNightTransition]);
+        return () => {
+            if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
+        };
+    }, [gameState.phase, gameState.dayCount, lastNightDay, playNightTransition]);
 
     // Calculate last voting result from logs for the announcement
 
 
-    const handleCloseNightAnnouncement = useCallback(() => setShowNightAnnouncement(false), []);
-    const handleCloseMorningAnnouncement = useCallback(() => setShowMorningAnnouncement(false), []);
+    const handleCloseNightAnnouncement = useCallback(() => {
+        setShowNightAnnouncement(false);
+        // Show night hint AFTER the announcement finishes
+        if (myPlayer?.role) {
+            const nightHintMap: Record<string, Parameters<typeof showHint>[0]> = {
+                [Role.MAFIA]: 'night_mafia',
+                [Role.DOCTOR]: 'night_doctor',
+                [Role.DETECTIVE]: 'night_detective',
+            };
+            const hint = nightHintMap[myPlayer.role] ?? 'night_civilian';
+            showHint(hint);
+        }
+    }, [myPlayer?.role, showHint]);
+
+    const handleCloseMorningAnnouncement = useCallback(() => {
+        setShowMorningAnnouncement(false);
+        // Show discussion hint after morning transition finishes
+        showHint('discussion');
+    }, [showHint]);
+
     const handleCloseRoleComposition = useCallback(() => {
         setShowRoleComposition(false);
         // After Role Composition closes, show Morning Announcement ("DAY BREAKS")
@@ -529,7 +507,13 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             setShowMorningAnnouncement(true);
         }, 300);
     }, [playMorningTransition]);
-    const handleCloseVotingAnnouncement = useCallback(() => setShowVotingAnnouncement(false), []);
+
+    const handleCloseVotingAnnouncement = useCallback(() => {
+        setShowVotingAnnouncement(false);
+        // Show voting hint after voting announcement finishes
+        showHint('voting');
+    }, [showHint]);
+
 
     useEffect(() => {
         const handleResize = () => {
@@ -852,7 +836,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             )}
 
             {/* Game Hints Overlay */}
-            <GameHintsOverlay activeHint={activeHint} onDismiss={dismissHint} />
+            <GameHintsOverlay activeHint={activeHint} onDismiss={dismissHint} scale={scale} />
 
             {/* Game UI Overlay (Chat + Sound buttons) */}
             <GameUIOverlay />
