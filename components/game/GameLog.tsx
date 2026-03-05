@@ -17,20 +17,40 @@ import { GamePhase } from '../../types';
  * No boxes or emojis — clean text only.
  */
 export const GameLog: React.FC = React.memo(() => {
-    const { gameState, showVotingResults } = useGameContext();
+    const { gameState, showVotingResults, addLog } = useGameContext();
 
     const dayCount = gameState.dayCount;
     const phase = gameState.phase;
     const alivePlayers = gameState.players.filter(p => p.isAlive);
     const logs = gameState.logs;
 
+    // Fallback: If dayCount > 1 but there's no "Day N has begun" marker in logs,
+    // inject one synthetically. This handles page reloads mid-day where the
+    // DayStarted event was in an earlier block that won't be re-read.
+    const injectedDayRef = useRef<number>(0);
+    useEffect(() => {
+        if (dayCount <= 1 || injectedDayRef.current >= dayCount) return;
+        const dayPattern = /Day \d+ has begun/;
+        const hasCurrentDayMarker = logs.some(l => {
+            const match = l.message.match(/Day (\d+) has begun/);
+            return match && Number(match[1]) === dayCount;
+        });
+        if (!hasCurrentDayMarker && logs.length > 0) {
+            injectedDayRef.current = dayCount;
+            addLog(`Day ${dayCount} has begun`, "phase");
+        }
+    }, [dayCount, logs, addLog]);
+
     // ── Get logs for the current day only ──────────────────────
-    // Finds the last index indicating the start of a day
+    // Finds the last "Day N has begun" or "Game started!" marker and shows everything after it.
+    // Uses a regex to match ANY day number, not just the current dayCount,
+    // to handle timing desync between event polling and state polling.
     const todayLogs = useMemo(() => {
         let startIndex = 0;
+        const dayPattern = /Day \d+ has begun/;
         for (let i = logs.length - 1; i >= 0; i--) {
             const msg = logs[i].message;
-            if (msg.includes(`Day ${dayCount} has begun`) || msg.includes('Game started!')) {
+            if (dayPattern.test(msg) || msg.includes('Game started!')) {
                 startIndex = i;
                 break;
             }
