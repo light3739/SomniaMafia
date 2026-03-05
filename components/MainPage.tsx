@@ -2,8 +2,6 @@ import React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useChainId } from 'wagmi';
-import { NetworkSelector } from './ui/NetworkSelector';
 const somniaLogo = "/assets/somniayeal.png";
 const avalancheLogo = "/assets/avalanche-avax-logo.png";
 
@@ -12,8 +10,6 @@ interface MainPageProps {
 }
 
 export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
-    const chainId = useChainId();
-    const networkLabel = chainId === 43113 ? 'Avalanche Fuji' : 'Somnia Testnet';
 
     return (
         <div className="relative w-full h-screen overflow-hidden font-sans flex items-center justify-center">
@@ -31,12 +27,8 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                             fontFamily: '"Cinzel", serif',
                             fontSize: 'clamp(2.5rem, 8vw, 6.5rem)',
                             letterSpacing: '0.05em',
-                            paddingLeft: '0.05em', /* Perfectly balances letter-spacing so it stays mathematically centered */
+                            paddingLeft: '0.05em',
                             textShadow: `
-                                2px 2px 0 #000, 
-                                -2px -2px 0 #000, 
-                                2px -2px 0 #000, 
-                                -2px 2px 0 #000,
                                 0px 4px 15px rgba(0,0,0,0.9),
                                 0px 0px 30px rgba(0,0,0,0.6)
                             `,
@@ -47,48 +39,59 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     </h1>
                 </div>
 
-                {/* Subtitle Row */}
+                {/* Subtitle Row - Infinite Marquee */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5, duration: 1 }}
-                    className="flex flex-row items-center justify-center gap-2 mt-4 bg-black/40 px-6 py-2 rounded-full backdrop-blur-md border border-white/10 shadow-xl"
+                    className="mt-[-10px] relative w-64 md:w-96 overflow-hidden bg-black/40 rounded-full backdrop-blur-md border border-white/10 shadow-xl"
+                    style={{ maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)' }}
                 >
-                    <p
-                        style={{
-                            fontFamily: '"Montserrat", sans-serif',
-                            color: '#ffb01d',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.2em',
-                            fontWeight: 600,
-                            textShadow: '0px 2px 4px rgba(0,0,0,0.6)'
+                    <motion.div
+                        animate={{ x: ["0%", "-50%"] }}
+                        transition={{
+                            repeat: Infinity,
+                            ease: "linear",
+                            duration: 12,
                         }}
-                        className="text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap"
+                        className="flex flex-row items-center w-max"
                     >
-                        On {networkLabel}
-                    </p>
-                    {chainId === 43113 ? (
-                        <Image
-                            src={avalancheLogo}
-                            alt="Avalanche"
-                            width={45}
-                            height={40}
-                            className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md"
-                        />
-                    ) : (
-                        <Image
-                            src={somniaLogo}
-                            alt="Somnia"
-                            width={45}
-                            height={40}
-                            className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md"
-                        />
-                    )}
+                        {/* FIRST COPY */}
+                        <div className="flex flex-row items-center justify-center gap-6 px-3 py-1.5">
+                            <div className="flex items-center gap-2">
+                                <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[9px] md:text-[13px] whitespace-nowrap drop-shadow-md">
+                                    On Avalanche Fuji
+                                </p>
+                                <Image src={avalancheLogo} alt="Avalanche" width={30} height={30} className="h-4 md:h-6 w-auto object-contain drop-shadow-md" />
+                            </div>
+                            <div className="w-1 h-1 rounded-full bg-white/30" />
+                            <div className="flex items-center gap-2">
+                                <p className="font-sans text-[#b388ff] uppercase tracking-[0.2em] font-semibold text-[9px] md:text-[13px] whitespace-nowrap drop-shadow-md">
+                                    On Somnia Testnet
+                                </p>
+                                <Image src={somniaLogo} alt="Somnia" width={30} height={30} className="h-4 md:h-6 w-auto object-contain drop-shadow-md" />
+                            </div>
+                            <div className="w-1 h-1 rounded-full bg-white/30" />
+                        </div>
+                        {/* SECOND COPY (duplicate for seamless loop) */}
+                        <div className="flex flex-row items-center justify-center gap-6 px-3 py-1.5">
+                            <div className="flex items-center gap-2">
+                                <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[9px] md:text-[13px] whitespace-nowrap drop-shadow-md">
+                                    On Avalanche Fuji
+                                </p>
+                                <Image src={avalancheLogo} alt="Avalanche" width={30} height={30} className="h-4 md:h-6 w-auto object-contain drop-shadow-md" />
+                            </div>
+                            <div className="w-1 h-1 rounded-full bg-white/30" />
+                            <div className="flex items-center gap-2">
+                                <p className="font-sans text-[#b388ff] uppercase tracking-[0.2em] font-semibold text-[9px] md:text-[13px] whitespace-nowrap drop-shadow-md">
+                                    On Somnia Testnet
+                                </p>
+                                <Image src={somniaLogo} alt="Somnia" width={30} height={30} className="h-4 md:h-6 w-auto object-contain drop-shadow-md" />
+                            </div>
+                            <div className="w-1 h-1 rounded-full bg-white/30" />
+                        </div>
+                    </motion.div>
                 </motion.div>
-
-                <div className="mt-4 flex items-center gap-2 bg-black/40 border border-white/15 rounded-xl px-3 py-2">
-                    <NetworkSelector />
-                </div>
 
                 {/* CONNECT / ENTER Button */}
                 <motion.div
