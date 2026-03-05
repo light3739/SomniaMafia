@@ -4,6 +4,7 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
+import { useAccount } from 'wagmi';
 import { useGameContext } from '../../contexts/GameContext';
 import { GameLog } from './GameLog';
 import { PlayerSpot } from './PlayerSpot';
@@ -302,6 +303,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const { activeHint, showHint, dismissHint } = useGameHints(currentRoomId?.toString());
     const players = gameState.players || [];
+    const { chainId } = useAccount();
     const [scale, setScale] = useState(1);
 
     // Deterministic shuffle based on roomId for randomized seating
@@ -359,7 +361,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         if (!currentRoomId || gameState.phase !== GamePhase.DAY) return;
         try {
             const response = await fetch(
-                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}`,
+                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}&chainId=${chainId || ''}`,
                 { cache: 'no-store' }
             );
             const data = await response.json();

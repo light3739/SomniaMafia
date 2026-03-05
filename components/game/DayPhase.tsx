@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
-import { usePublicClient, useWalletClient } from 'wagmi';
+import { usePublicClient, useWalletClient, useAccount } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
 import { buildDiscussionMessage } from '@/services/signingSchema';
 import { MAFIA_ABI } from '../../contracts/config';
@@ -53,6 +53,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         runtimeContractAddress
     } = useGameContext();
     const { showVotingResults } = useGameContext();
+    const { chainId } = useAccount();
     const {
         playClickSound,
         playTypeSound,
@@ -183,7 +184,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         const currentFetchDayCount = latestDayCountRef.current; // Capture day count
         try {
             const response = await fetch(
-                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${currentFetchDayCount}&playerAddress=${myPlayer?.address || ''}`,
+                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${currentFetchDayCount}&playerAddress=${myPlayer?.address || ''}&chainId=${chainId || ''}`,
                 { cache: 'no-store' }
             );
             const data = await response.json();
@@ -236,6 +237,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                         signerAddress: signed.signerAddress,
                         nonce: signed.nonce,
                         timestamp: signed.timestamp,
+                        chainId,
                     })
                 });
             } else {
@@ -290,6 +292,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     signerAddress: signed.signerAddress,
                     nonce: signed.nonce,
                     timestamp: signed.timestamp,
+                    chainId,
                 })
             });
             await fetchDiscussionState();

@@ -840,19 +840,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const [playersResult, roomResult, mafiaResult] = await publicClient.multicall({
                 contracts: [
                     {
-                        address: MAFIA_CONTRACT_ADDRESS,
+                        address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'getPlayers',
                         args: [roomId],
                     },
                     {
-                        address: MAFIA_CONTRACT_ADDRESS,
+                        address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'getRoom',
                         args: [roomId],
                     },
                     {
-                        address: MAFIA_CONTRACT_ADDRESS,
+                        address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'getMafiaConsensus',
                         args: [roomId],
@@ -1447,7 +1447,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let gasLimit = 14_500_000n;
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                    address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'startGame',
                     args: [currentRoomId],
@@ -1460,7 +1460,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             const hash = await writeContractAsync({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'startGame',
                 args: [currentRoomId],
@@ -1729,7 +1729,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                         // Check if we are already confirmed
                         const flags = await publicClient?.readContract({
-                            address: MAFIA_CONTRACT_ADDRESS,
+                            address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'getPlayerFlags',
                             args: [currentRoomId, address as `0x${string}`],
@@ -2076,6 +2076,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         callerAddress,
                         nonce: signed.nonce,
                         timestamp: signed.timestamp,
+                        chainId,
                     })
                 });
 
@@ -2133,7 +2134,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!publicClient) return;
         try {
             const messages = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'getMafiaChat',
                 args: [roomId]
@@ -2265,7 +2266,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (address && publicClient) {
                 try {
                     const deposit = await publicClient.readContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
+                        address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'getPlayerDeposit',
                         args: [currentRoomId, address],
@@ -2328,7 +2329,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             // FIX: Check if already revealed ON-CHAIN before submitting to avoid revert during estimation
             const onChainRole = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'playerRoles',
                 args: [currentRoomId, address],
@@ -2395,7 +2396,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // FIX #6: Re-verify game state after delay — someone else may have ended it
             try {
                 const freshRoom = await publicClient.readContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                    address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'getRoom',
                     args: [currentRoomId],
@@ -2444,7 +2445,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 4. Simulate
             try {
                 await publicClient.simulateContract({
-                    address: MAFIA_CONTRACT_ADDRESS,
+                    address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'endGameZK',
                     args: args as any,
@@ -2479,13 +2480,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     const [deposit, room] = await Promise.all([
                         publicClient.readContract({
-                            address: MAFIA_CONTRACT_ADDRESS,
+                            address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'getPlayerDeposit',
                             args: [currentRoomId, address],
                         }) as Promise<bigint>,
                         publicClient.readContract({
-                            address: MAFIA_CONTRACT_ADDRESS,
+                            address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'getRoom',
                             args: [currentRoomId],
@@ -2598,7 +2599,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // SIMULATE CONTRACT FIRST
                 try {
                     await publicClient.simulateContract({
-                        address: MAFIA_CONTRACT_ADDRESS,
+                        address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'endGameZK',
                         args: args as any,
@@ -2628,13 +2629,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         try {
                             const [deposit, room] = await Promise.all([
                                 publicClient.readContract({
-                                    address: MAFIA_CONTRACT_ADDRESS,
+                                    address: runtimeContractAddress,
                                     abi: MAFIA_ABI,
                                     functionName: 'getPlayerDeposit',
                                     args: [roomId, address],
                                 }) as Promise<bigint>,
                                 publicClient.readContract({
-                                    address: MAFIA_CONTRACT_ADDRESS,
+                                    address: runtimeContractAddress,
                                     abi: MAFIA_ABI,
                                     functionName: 'getRoom',
                                     args: [roomId],
@@ -2734,14 +2735,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     const [deposit, balanceBefore, room] = await Promise.all([
                         publicClient.readContract({
-                            address: MAFIA_CONTRACT_ADDRESS,
+                            address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'getPlayerDeposit',
                             args: [currentRoomId, address],
                         }) as Promise<bigint>,
                         publicClient.getBalance({ address }),
                         publicClient.readContract({
-                            address: MAFIA_CONTRACT_ADDRESS,
+                            address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'getRoom',
                             args: [currentRoomId],
@@ -2757,7 +2758,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         myDeposit: formatEther(deposit) + ' STT',
                         depositPool: formatEther(depositPool) + ' STT',
                         myBalance: formatEther(balanceBefore) + ' STT',
-                        contractAddress: MAFIA_CONTRACT_ADDRESS,
+                        contractAddress: runtimeContractAddress,
                     });
 
                     if (deposit === 0n) {
@@ -2783,7 +2784,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const [balanceAfter, depositAfter] = await Promise.all([
                         publicClient.getBalance({ address }),
                         publicClient.readContract({
-                            address: MAFIA_CONTRACT_ADDRESS,
+                            address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'getPlayerDeposit',
                             args: [currentRoomId, address],
@@ -2981,7 +2982,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // We use low-level topics filtering: [topic0=null (any event), topic1=roomId]
             const roomIdTopic = pad(toHex(currentRoomId), { size: 32 });
             const rawLogs = await publicClient.getLogs({
-                address: MAFIA_CONTRACT_ADDRESS,
+                address: runtimeContractAddress,
                 topics: [
                     null,        // Any event signature
                     roomIdTopic  // topic[1] must match roomId

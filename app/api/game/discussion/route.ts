@@ -1,16 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
-import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
+import { MAFIA_ABI, getDeploymentByChainId, ACTIVE_DEPLOYMENT } from '@/contracts/config';
 import { ServerStore, DiscussionState } from '@/services/serverStore';
 import { verifySignedRequestBody } from '@/app/api/_lib/security';
 import { buildDiscussionMessage } from '@/services/signingSchema';
 
 export const dynamic = 'force-dynamic';
-
-const publicClient = createPublicClient({
-    chain: somniaChain,
-    transport: http()
-});
 
 const FLAG_ACTIVE = 2;
 const SPEAKER_DURATION = 60; // seconds per speaker
@@ -56,6 +51,13 @@ export async function GET(request: Request) {
         const roomId = BigInt(rawRoomId).toString();
         const rawDayCount = searchParams.get('dayCount');
         const dayCount = rawDayCount ? parseInt(rawDayCount) : 1;
+
+        const rawChainId = searchParams.get('chainId');
+        const requestChainId = rawChainId ? Number(rawChainId) : ACTIVE_DEPLOYMENT.chainId;
+        const deployment = getDeploymentByChainId(requestChainId);
+        const dynamicClient = createPublicClient({ chain: deployment.chain, transport: http() });
+        const contractAddress = deployment.contracts.MafiaDiamond;
+
         let state = await ServerStore.getDiscussionState(roomId, dayCount);
 
         if (!state) {
@@ -68,8 +70,8 @@ export async function GET(request: Request) {
         // Get alive players to determine speaker order
         let alivePlayers: any[] = [];
         try {
-            const players: any = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+            const players: any = await dynamicClient.readContract({
+                address: contractAddress as `0x${string}`,
                 abi: MAFIA_ABI,
                 functionName: 'getPlayers',
                 args: [BigInt(roomId)],
@@ -135,6 +137,7 @@ export async function POST(request: Request) {
             signerAddress,
             nonce,
             timestamp,
+            chainId,
         } = await request.json();
 
         if (!rawRoomId || !action) {
@@ -182,9 +185,15 @@ export async function POST(request: Request) {
         // Get alive players
         let alivePlayers: any[] = [];
         let hostAddress = '0x0000000000000000000000000000000000000000';
+
+        const requestChainId = chainId ? Number(chainId) : ACTIVE_DEPLOYMENT.chainId;
+        const deployment = getDeploymentByChainId(requestChainId);
+        const dynamicClient = createPublicClient({ chain: deployment.chain, transport: http() });
+        const contractAddress = deployment.contracts.MafiaDiamond;
+
         try {
-            const players: any = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+            const players: any = await dynamicClient.readContract({
+                address: contractAddress as `0x${string}`,
                 abi: MAFIA_ABI,
                 functionName: 'getPlayers',
                 args: [BigInt(roomId)],
@@ -192,8 +201,8 @@ export async function POST(request: Request) {
             const allShuffled = shufflePlayers(players, roomId);
             alivePlayers = allShuffled.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
 
-            const roomData = await publicClient.readContract({
-                address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
+            const roomData = await dynamicClient.readContract({
+                address: contractAddress as `0x${string}`,
                 abi: MAFIA_ABI,
                 functionName: 'getRoom',
                 args: [BigInt(roomId)],
