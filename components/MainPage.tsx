@@ -20,7 +20,12 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
             <div className="relative z-10 w-full flex flex-col items-center justify-center p-4">
 
                 {/* Main Title */}
-                <div className="w-full flex items-center justify-center">
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
+                    animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                    transition={{ duration: 1.5, ease: "easeOut" }}
+                    className="w-full flex items-center justify-center"
+                >
                     <h1
                         className="text-center font-bold italic text-[#ffffff] whitespace-nowrap"
                         style={{
@@ -37,7 +42,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     >
                         Onchain Mafia
                     </h1>
-                </div>
+                </motion.div>
 
                 {/* Subtitle Row - Vertical Scroll Slot Machine */}
                 <motion.div
@@ -52,7 +57,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                             repeat: Infinity,
                             ease: "linear",
                             duration: 5,
-                            delay: 1.0
+                            delay: 2.0
                         }}
                         className="flex flex-col items-center absolute top-0"
                     >
@@ -91,8 +96,8 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 1.5, duration: 0.5 }}
-                    className="mt-16"
+                    transition={{ delay: 2.5, duration: 0.5 }}
+                    className="mt-32 relative z-20"
                 >
                     <ConnectButton.Custom>
                         {({
