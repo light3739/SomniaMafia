@@ -3023,14 +3023,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     case 'DayStarted':
                         addLog(`Day ${args.dayNumber} has begun`, "phase");
+                        setVoteMap({});
                         break;
 
                     case 'VotingStarted':
                         addLog("Voting Phase Started", "phase");
+                        setVoteMap({});
                         break;
 
                     case 'NightStarted':
                         // Log moved to VotingFinalized timeout
+                        setVoteMap({});
                         break;
 
                     case 'NightFinalized':
@@ -3094,6 +3097,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             const targetName = target?.name || args.target.slice(0, 6);
 
                             addLog(`${voterName} voted for ${targetName}`, "info");
+
+                            // Update the global vote map so other players' votes become visible immediately
+                            setVoteMap(prev => ({ ...prev, [voterStr]: targetStr }));
                         } catch (e) {
                             console.error("[VoteCast] Error logging:", e);
                         }

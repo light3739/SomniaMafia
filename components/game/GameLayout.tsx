@@ -700,7 +700,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                                 onSetMark={setPlayerMark}
                                 isSpeaking={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase()}
                                 speechTimeRemaining={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase() ? discussionState.timeRemaining : 0}
-                                voters={gameState.phase === GamePhase.VOTING ? voters : []}
+                                voters={(gameState.phase === GamePhase.VOTING || showVotingResults) ? voters : []}
                             />
                         </div>
                     );
