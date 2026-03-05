@@ -24,12 +24,14 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
             <div className="relative z-10 w-full flex flex-col items-center justify-center p-4">
 
                 {/* Main Title */}
-                <div className="w-full max-w-[90vw] md:max-w-[800px]">
+                <div className="w-full flex items-center justify-center">
                     <h1
-                        className="text-center font-bold italic tracking-widest text-[#ffffff]"
+                        className="text-center font-bold italic text-[#ffffff] whitespace-nowrap"
                         style={{
                             fontFamily: '"Cinzel", serif',
-                            fontSize: 'clamp(48px, 12vw, 100px)',
+                            fontSize: 'clamp(2.5rem, 8vw, 6.5rem)',
+                            letterSpacing: '0.05em',
+                            paddingLeft: '0.05em', /* Perfectly balances letter-spacing so it stays mathematically centered */
                             textShadow: `
                                 2px 2px 0 #000, 
                                 -2px -2px 0 #000, 
@@ -50,7 +52,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5, duration: 1 }}
-                    className="flex flex-row items-center justify-center gap-2 mt-[-10px] md:mt-[-20px] bg-black/20 px-6 py-2 rounded-full backdrop-blur-sm border border-white/5"
+                    className="flex flex-row items-center justify-center gap-2 mt-4 bg-black/40 px-6 py-2 rounded-full backdrop-blur-md border border-white/10 shadow-xl"
                 >
                     <p
                         style={{
