@@ -52,6 +52,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         setVoteMap,
         runtimeContractAddress
     } = useGameContext();
+    const { showVotingResults } = useGameContext();
     const {
         playClickSound,
         playTypeSound,
@@ -553,11 +554,11 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
             fetchVoteCounts();
             const interval = setInterval(fetchVoteCounts, 3000);
             return () => clearInterval(interval);
-        } else {
-            // Clear vote map when leaving voting phase
+        } else if (!showVotingResults) {
+            // Clear vote map when leaving voting phase, BUT NOT during voting results display
             setVoteMap({});
         }
-    }, [fetchVoteCounts, isVotingPhase, setVoteMap, isTestMode]);
+    }, [fetchVoteCounts, isVotingPhase, setVoteMap, isTestMode, showVotingResults]);
 
 
 
@@ -590,17 +591,11 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-center mb-4 flex-shrink-0"
+                    className="text-center mb-4 flex-shrink-0 h-[40px] flex items-center justify-center"
                 >
                     <h2 className="text-2xl font-['Cinzel'] text-white">
-                        {isVotingPhase ? 'Elimination Vote' : 'Discussion Phase'}
+                        {hideActions ? 'Voting Results' : isVotingPhase ? 'Elimination Vote' : 'Discussion Phase'}
                     </h2>
-                    {isDayPhase && discussionState?.active && (
-                        <div className="flex items-center justify-center gap-2 mt-1 text-[#916A47] text-sm font-medium">
-                            <User className="w-4 h-4" />
-                            <span>Speaker {(discussionState?.currentSpeakerIndex || 0) + 1}/{discussionState?.totalSpeakers || alivePlayers.length}: {currentSpeaker?.name}</span>
-                        </div>
-                    )}
                 </motion.div>
 
                 {/* Event Feed — fixed height, fully isolated from buttons below */}
