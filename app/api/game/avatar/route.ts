@@ -3,6 +3,8 @@ import { ServerStore } from '@/services/serverStore';
 import { withSignedRoute } from '@/app/api/_lib/security';
 import { buildAvatarMessage } from '@/services/signingSchema';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * POST - Upload/update player avatar for a room
  */
