@@ -136,4 +136,4 @@ export const MAFIA_ABI = DIAMOND_ABI;
 export const somniaChain = ACTIVE_DEPLOYMENT.chain;
 
 // GM Server URL
-export const GM_SERVER_URL = "https://mafia-voice.serveminecraft.net/gm";
+export const GM_SERVER_URL = process.env.NEXT_PUBLIC_GM_SERVER_URL || "https://gm.mafiaonchain.live";
