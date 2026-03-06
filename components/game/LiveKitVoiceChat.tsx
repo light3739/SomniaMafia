@@ -33,7 +33,22 @@ function SafeTextChat({ displayName }: { displayName: string }) {
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const [chatError, setChatError] = useState<string | null>(null);
+    const [connectionState, setConnectionState] = useState<ConnectionState>(room.state);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        const handleConnectionStateChanged = (state: ConnectionState) => {
+            setConnectionState(state);
+            if (state === ConnectionState.Connected) {
+                setChatError(null);
+            }
+        };
+
+        room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
+        return () => {
+            room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
+        };
+    }, [room]);
 
     useEffect(() => {
         const handleData = (payload: Uint8Array, participant?: any) => {
@@ -69,10 +84,6 @@ function SafeTextChat({ displayName }: { displayName: string }) {
     const sendMessage = useCallback(async () => {
         const content = input.trim();
         if (!content || sending) return;
-        if (room.state !== ConnectionState.Connected) {
-            setChatError('Chat is reconnecting...');
-            return;
-        }
 
         setSending(true);
         setChatError(null);
@@ -116,8 +127,8 @@ function SafeTextChat({ displayName }: { displayName: string }) {
         <div className="mt-4 bg-purple-950/20 border border-purple-500/20 rounded-lg overflow-hidden">
             <div className="flex items-center gap-2 p-2 border-b border-purple-500/20 bg-purple-950/30">
                 <span className="text-purple-400 text-xs font-medium">Text Chat</span>
-                {room.state !== ConnectionState.Connected && (
-                    <span className="text-[10px] text-yellow-400/80 ml-auto">reconnecting...</span>
+                {connectionState !== ConnectionState.Connected && (
+                    <span className="text-[10px] text-yellow-400/80 ml-auto">{String(connectionState).toLowerCase()}...</span>
                 )}
             </div>
 
