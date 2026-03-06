@@ -560,11 +560,10 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
             fetchVoteCounts();
             const interval = setInterval(fetchVoteCounts, 1000);
             return () => clearInterval(interval);
-        } else if (!showVotingResults) {
-            // Clear vote map when leaving voting phase, BUT NOT during voting results display
-            setVoteMap({});
         }
-    }, [fetchVoteCounts, isVotingPhase, setVoteMap, isTestMode, showVotingResults]);
+        // DELETED: We don't clear voteMap here anymore to prevent race conditions.
+        // It is safely cleared in GameContext when showVotingResults actually ends.
+    }, [fetchVoteCounts, isVotingPhase, isTestMode]);
 
 
 

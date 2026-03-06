@@ -342,12 +342,12 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const [showMorningAnnouncement, setShowMorningAnnouncement] = useState(false);
     const [showRoleComposition, setShowRoleComposition] = useState(false);
     const [hasShownRoleComposition, setHasShownRoleComposition] = useState(false);
-    const [lastMorningDay, setLastMorningDay] = useState<number | null>(null);
-    const [lastVotingDay, setLastVotingDay] = useState<number | null>(null);
+    const lastMorningDayRef = useRef<number | null>(null);
+    const lastVotingDayRef = useRef<number | null>(null);
 
     // Night announcement state
     const [showNightAnnouncement, setShowNightAnnouncement] = useState(false);
-    const [lastNightDay, setLastNightDay] = useState<number | null>(null);
+    const lastNightDayRef = useRef<number | null>(null);
     const [lastPhase, setLastPhase] = useState<GamePhase | null>(null);
 
     // Discussion state for tracking current speaker (for player card glow effect)
@@ -394,8 +394,8 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     // Trigger Morning Announcement (Day start)
     useEffect(() => {
         const isDayStart = gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING;
-        if (isDayStart && gameState.dayCount > 0 && gameState.dayCount !== lastMorningDay) {
-            setLastMorningDay(gameState.dayCount);
+        if (isDayStart && gameState.dayCount > 0 && gameState.dayCount !== lastMorningDayRef.current) {
+            lastMorningDayRef.current = gameState.dayCount;
 
             // On first day: show Role Composition FIRST, then Morning after it closes
             if (gameState.dayCount === 1 && !hasShownRoleComposition) {
@@ -407,7 +407,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 setShowMorningAnnouncement(true);
             }
         }
-    }, [gameState.phase, gameState.dayCount, lastMorningDay, playMorningTransition, hasShownRoleComposition]);
+    }, [gameState.phase, gameState.dayCount, playMorningTransition, hasShownRoleComposition]);
 
     // ─── Game Hints: triggered AFTER transition animations close ───
     // (hints are shown in the close-handlers below, not on phase change)
@@ -418,19 +418,19 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         // 2. И мы еще не показывали её для этого дня ИЛИ фаза только что изменилась с DAY на VOTING
         const isVoting = gameState.phase === GamePhase.VOTING;
         const phaseChangedToVoting = isVoting && lastPhase !== GamePhase.VOTING;
-        const newDayVoting = isVoting && gameState.dayCount !== lastVotingDay;
+        const newDayVoting = isVoting && gameState.dayCount !== lastVotingDayRef.current;
 
         if (phaseChangedToVoting || newDayVoting) {
             // Если мы переходим из DAY в VOTING, показываем сразу. 
             // Если из NIGHT в VOTING (через рассвет), ждем завершения рассвета.
             const isTransitionFromDay = lastPhase === GamePhase.DAY;
-            const delay = isTransitionFromDay ? 0 : (gameState.dayCount === lastMorningDay ? 2000 : 0);
+            const delay = isTransitionFromDay ? 0 : (gameState.dayCount === lastMorningDayRef.current ? 2000 : 0);
 
             const timer = setTimeout(() => {
                 setShowVotingAnnouncement(true);
             }, delay);
 
-            setLastVotingDay(gameState.dayCount);
+            lastVotingDayRef.current = gameState.dayCount;
             setLastPhase(gameState.phase);
             return () => clearTimeout(timer);
         }
@@ -438,7 +438,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         if (gameState.phase !== lastPhase) {
             setLastPhase(gameState.phase);
         }
-    }, [gameState.phase, gameState.dayCount, lastVotingDay, lastMorningDay, lastPhase]);
+    }, [gameState.phase, gameState.dayCount, lastPhase]);
 
     const lastVotingDeadlineRef = useRef<number | null>(null);
 
@@ -470,8 +470,8 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         prevShowVotingResultsRef.current = showVotingResults;
 
         // Trigger when showVotingResults transitions from true → false AND we're in NIGHT phase
-        if (wasShowingResults && !showVotingResults && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDay) {
-            setLastNightDay(gameState.dayCount);
+        if (wasShowingResults && !showVotingResults && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current) {
+            lastNightDayRef.current = gameState.dayCount;
             if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
             nightTimerRef.current = setTimeout(() => {
                 playNightTransition();
@@ -480,8 +480,8 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         }
 
         // Fallback: If we enter NIGHT without showVotingResults (e.g. page reload during night)
-        if (!showVotingResults && !wasShowingResults && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDay) {
-            setLastNightDay(gameState.dayCount);
+        if (!showVotingResults && !wasShowingResults && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current) {
+            lastNightDayRef.current = gameState.dayCount;
             if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
             nightTimerRef.current = setTimeout(() => {
                 playNightTransition();
@@ -492,7 +492,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         return () => {
             if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
         };
-    }, [gameState.phase, gameState.dayCount, lastNightDay, playNightTransition, showVotingResults]);
+    }, [gameState.phase, gameState.dayCount, playNightTransition, showVotingResults]);
 
     // Calculate last voting result from logs for the announcement
 
