@@ -74,6 +74,7 @@ export const GameUIOverlay: React.FC = () => {
             )}
             {/* Background Music with Chat Button (chat panel is integrated in ChatToggleButton) */}
             <BackgroundMusic
+                isChatExpanded={isChatExpanded}
                 additionalButtons={
                     showChatButton ? (
                         <ChatToggleButton

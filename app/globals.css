@@ -70,27 +70,62 @@ button:disabled,
 
 /* RainbowKit Custom Overrides */
 [data-rk] [role="dialog"]>div {
-  background: #0D0907 !important;
+  background: rgba(13, 9, 7, 0.95) !important;
+  backdrop-filter: blur(20px) !important;
   border: 1px solid rgba(145, 106, 71, 0.3) !important;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8) !important;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.9) !important;
+  border-radius: 28px !important;
+  font-family: var(--font-sans) !important;
 }
 
 [data-rk] [role="dialog"] h1,
-[data-rk] [role="dialog"] h2 {
+[data-rk] [role="dialog"] h2,
+[data-rk] [role="dialog"] [style*="font-family"] {
   font-family: 'Cinzel', serif !important;
   letter-spacing: 0.05em !important;
 }
 
-[data-rk] button {
+/* Force everything else to Montserrat */
+[data-rk] [role="dialog"] div,
+[data-rk] [role="dialog"] span,
+[data-rk] [role="dialog"] p,
+[data-rk] [role="dialog"] button {
   font-family: 'Montserrat', sans-serif !important;
+}
+
+/* Rounding for wallet buttons */
+[data-rk] [role="dialog"] button {
+  border-radius: 16px !important;
 }
 
 [data-rk] [role="dialog"] div[data-testid="rk-connect-options"] button {
   background: rgba(25, 19, 13, 0.5) !important;
   border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  margin-bottom: 4px !important;
 }
 
 [data-rk] [role="dialog"] div[data-testid="rk-connect-options"] button:hover {
   background: rgba(145, 106, 71, 0.1) !important;
   border: 1px solid rgba(145, 106, 71, 0.3) !important;
+}
+
+/* Special case: hide balance from wallet button in lobby is already handled by prop,
+   but we can also ensure account modal metadata is styled */
+[data-rk] [role="dialog"] [class*="AccountModal"] div {
+  font-family: 'Montserrat', sans-serif !important;
+}
+
+/* Rounding for wallet icons and larger elements */
+[data-rk] [role="dialog"] [style*="border-radius"] {
+  border-radius: 20px !important;
+}
+
+[data-rk] [role="dialog"] [class*="ConnectOptions"] button {
+  border-radius: 18px !important;
+}
+
+/* Ensure the address/title uses Cinzel */
+[data-rk] [role="dialog"] [id*="rk-connect-title"],
+[data-rk] [role="dialog"] [id*="rk-account-address"] {
+  font-family: 'Cinzel', serif !important;
 }

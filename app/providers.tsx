@@ -63,7 +63,7 @@ const customTheme = darkTheme({
     accentColorForeground: 'white',
     borderRadius: 'large',
     fontStack: 'system',
-    overlayBlur: 'small',
+    overlayBlur: 'large',
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {

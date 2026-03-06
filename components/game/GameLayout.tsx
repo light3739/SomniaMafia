@@ -775,7 +775,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             )}
 
             {/* UI OVERLAYS (Fixed to Screen, ignoring scale) */}
-            <div className="fixed top-0 left-0 right-0 z-40 h-16 px-6 flex items-center justify-between pointer-events-none select-none">
+            <div className="fixed top-0 left-0 right-0 z-[100] h-16 px-6 flex items-center justify-between pointer-events-none select-none">
                 {/* Left */}
                 <div className="flex items-center gap-4 pointer-events-auto">
                     <BackButton to="/lobby" className="" label="" exitGame onExitGame={claimRefund} isLoading={isTxPending} />
