@@ -184,6 +184,12 @@ interface LiveKitVoiceChatProps {
     showTextChat?: boolean; // Show text chat alongside voice
 }
 
+function makeSessionIdentity(baseName: string): string {
+    const safeBase = (baseName || 'Player').replace(/\s+/g, '-');
+    const suffix = Math.random().toString(36).slice(2, 8);
+    return `${safeBase}-${suffix}`;
+}
+
 export function LiveKitVoiceChat({
     roomId,
     userName = 'Player',
@@ -199,16 +205,43 @@ export function LiveKitVoiceChat({
     const [error, setError] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
     const [sessionIdentity, setSessionIdentity] = useState('');
+    const [connectAttempt, setConnectAttempt] = useState(0);
+    const [roomState, setRoomState] = useState<ConnectionState>(ConnectionState.Disconnected);
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hasAutoReconnectedRef = useRef(false);
     const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL);
 
-    useEffect(() => {
-        const suffix = Math.random().toString(36).slice(2, 8);
-        setSessionIdentity(`${userName}-${suffix}`);
+    const triggerReconnect = useCallback((manual = false) => {
+        if (reconnectTimerRef.current) {
+            clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = null;
+        }
+        if (manual) {
+            hasAutoReconnectedRef.current = false;
+        }
+        setToken('');
+        setError(null);
+        setRoomState(ConnectionState.Connecting);
+        setSessionIdentity(makeSessionIdentity(userName));
+        setConnectAttempt((prev) => prev + 1);
     }, [userName]);
+
+    useEffect(() => {
+        setSessionIdentity(makeSessionIdentity(userName));
+    }, [userName]);
+
+    useEffect(() => {
+        return () => {
+            if (reconnectTimerRef.current) {
+                clearTimeout(reconnectTimerRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         if (!isActive || !roomId) {
             setToken("");
+            setRoomState(ConnectionState.Disconnected);
             return;
         }
 
@@ -271,12 +304,14 @@ export function LiveKitVoiceChat({
                 }
 
                 setToken(data.token);
+                setRoomState(ConnectionState.Connecting);
             } catch (e) {
                 console.error('[LiveKitVoiceChat] Error:', e);
                 setError(e instanceof Error ? e.message : 'Failed to connect');
+                setRoomState(ConnectionState.Disconnected);
             }
         })();
-    }, [isActive, roomId, userName, address, walletClient, sessionIdentity]);
+    }, [isActive, roomId, userName, address, walletClient, sessionIdentity, connectAttempt]);
 
     if (!isActive) return null;
 
@@ -343,10 +378,38 @@ export function LiveKitVoiceChat({
                         {token && !error && (
                             <div className="relative">
                                 <LiveKitRoom
+                                    key={`${roomId}-${sessionIdentity}-${connectAttempt}`}
                                     video={false}
                                     audio={true}
                                     token={token}
                                     serverUrl={livekitServerUrl}
+                                    onConnected={() => {
+                                        setRoomState(ConnectionState.Connected);
+                                        setError(null);
+                                        hasAutoReconnectedRef.current = false;
+                                    }}
+                                    onDisconnected={() => {
+                                        setRoomState(ConnectionState.Disconnected);
+                                        if (!isActive) return;
+                                        if (!hasAutoReconnectedRef.current) {
+                                            hasAutoReconnectedRef.current = true;
+                                            reconnectTimerRef.current = setTimeout(() => {
+                                                triggerReconnect(false);
+                                            }, 1200);
+                                        }
+                                    }}
+                                    onError={(eventError: Error) => {
+                                        const message = String(eventError?.message || '');
+                                        if (
+                                            message.includes('UnexpectedConnectionState') ||
+                                            message.includes('PC manager is closed')
+                                        ) {
+                                            setRoomState(ConnectionState.Disconnected);
+                                            setError('Connection dropped. Reconnecting...');
+                                            return;
+                                        }
+                                        setError(message || 'LiveKit connection error');
+                                    }}
                                     data-lk-theme="default"
                                     style={{
                                         minHeight: '200px',
@@ -370,6 +433,14 @@ export function LiveKitVoiceChat({
                                 <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
                                     <Users className="w-3 h-3" />
                                     <span>Voice room: {roomId}</span>
+                                    {roomState !== ConnectionState.Connected && (
+                                        <button
+                                            onClick={() => triggerReconnect(true)}
+                                            className="ml-2 px-2 py-1 rounded border border-purple-500/40 text-purple-300 hover:bg-purple-500/10"
+                                        >
+                                            Reconnect
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         )}
