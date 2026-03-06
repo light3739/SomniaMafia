@@ -86,18 +86,18 @@ export const SetupProfile: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.4 }}
-                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-8 py-10 my-auto"
+                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-8 py-6 md:py-10 my-auto"
             >
                 {/* Profile Section */}
-                <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] mt-6 relative flex flex-col items-center p-8 border border-white/10 shadow-2xl">
-                    <h2 className="text-white text-2xl font-['Cinzel'] mb-6">Setup Your Profile</h2>
+                <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] mt-6 relative flex flex-col items-center p-5 md:p-8 border border-white/10 shadow-2xl">
+                    <h2 className="text-white text-xl md:text-2xl font-['Cinzel'] mb-4 md:mb-6">Setup Your Profile</h2>
 
                     {/* Photo Input */}
                     <div
-                        className="relative group cursor-pointer mb-6"
+                        className="relative group cursor-pointer mb-4 md:mb-6"
                         onClick={() => fileInputRef.current?.click()}
                     >
-                        <div className="w-[150px] h-[150px] rounded-full border-2 border-[#916A47] shadow-xl overflow-hidden flex items-center justify-center bg-[#19130D] transition-transform group-hover:scale-105">
+                        <div className="w-[120px] h-[120px] md:w-[150px] md:h-[150px] rounded-full border-2 border-[#916A47] shadow-xl overflow-hidden flex items-center justify-center bg-[#19130D] transition-transform group-hover:scale-105">
                             {avatarUrl ? (
                                 <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                             ) : (
@@ -130,11 +130,11 @@ export const SetupProfile: React.FC = () => {
                 </div>
 
                 {/* Actions */}
-                <div className="w-full flex flex-col gap-4">
+                <div className="w-full flex flex-col gap-3 md:gap-4">
                     <Button
                         onClick={() => router.push('/create')}
                         disabled={!hydrated || !playerName.trim()}
-                        className="w-full h-[60px] text-xl"
+                        className="w-full h-[54px] md:h-[60px] text-lg md:text-xl"
                     >
                         Create Game
                     </Button>
@@ -142,7 +142,7 @@ export const SetupProfile: React.FC = () => {
                         onClick={() => router.push('/join')}
                         disabled={!hydrated || !playerName.trim()}
                         variant="outline-gold"
-                        className="w-full h-[60px] text-xl"
+                        className="w-full h-[54px] md:h-[60px] text-lg md:text-xl"
                     >
                         Connect to Lobby
                     </Button>
