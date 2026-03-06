@@ -194,11 +194,22 @@ export function MicButton({
                     if (!cancelled) detachRemoteAudioRef.current(track, participant);
                 });
 
-                // Connect to room (timeout after 15s)
-                const connectPromise = room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, data.token);
-                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), 15000));
+                // Connect to room (timeout after 15s) without unhandled promise races
+                await new Promise<void>((resolve, reject) => {
+                    const timeoutId = setTimeout(() => {
+                        reject(new Error('Connection timeout'));
+                    }, 15000);
 
-                await Promise.race([connectPromise, timeoutPromise]);
+                    room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, data.token)
+                        .then(() => {
+                            clearTimeout(timeoutId);
+                            resolve();
+                        })
+                        .catch((error) => {
+                            clearTimeout(timeoutId);
+                            reject(error);
+                        });
+                });
 
                 if (cancelled) {
                     room.disconnect();
@@ -232,7 +243,11 @@ export function MicButton({
             } catch (e: any) {
                 // Suppress ONLY clean user-initiated disconnects (component unmount etc.)
                 // Do NOT suppress timeouts or connection errors — user needs to retry
-                const isCleanDisconnect = e?.message?.includes('Client initiated disconnect');
+                const message = String(e?.message || '');
+                const isCleanDisconnect =
+                    message.includes('Client initiated disconnect') ||
+                    message.includes('UnexpectedConnectionState') ||
+                    message.includes('PC manager is closed');
                 if (!cancelled && !isCleanDisconnect) {
                     console.error('[MicButton] Connection error:', e);
                     setError(e instanceof Error ? e.message : 'Failed to connect');
