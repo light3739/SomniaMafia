@@ -225,7 +225,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     </div>
                 </div>
 
-                <div className="w-full flex flex-col gap-3 min-h-[300px] md:min-h-[500px]">
+                <div className="w-full flex flex-col gap-3 min-h-[200px] md:min-h-[300px]">
                     {isLoading ? (
                         <div className="text-white/40 text-center flex-1 flex items-center justify-center bg-black/20 rounded-2xl border border-white/5 animate-pulse">Scanning Network...</div>
                     ) : rooms.length === 0 ? (
