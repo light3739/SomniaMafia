@@ -54,7 +54,7 @@ export const WaitingRoom: React.FC = () => {
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10 my-auto"
+                className="relative z-10 w-full max-w-[800px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10 my-auto"
             >
                 <div className="w-full flex items-center justify-start">
                     <BackButton to="/setup" label="Exit to Menu" />
@@ -113,13 +113,7 @@ export const WaitingRoom: React.FC = () => {
 
                     <div className="pt-4 mt-4 border-t border-white/5 flex items-center justify-between">
                         <div className="text-white/40 text-[10px] uppercase tracking-tighter font-mono flex items-center gap-2">
-                            <button
-                                onClick={() => roomIdNumber && refreshPlayersList(BigInt(roomIdNumber))}
-                                className="hover:text-white transition-colors"
-                                title="Force Refresh"
-                            >
-                                ⟳
-                            </button>
+                            {/* Refresh button removed per user request */}
                         </div>
                         <div className="text-white/60 text-sm">
                             Players: <span className="text-[#916A47] font-bold">{gameState.players.length}/16</span>

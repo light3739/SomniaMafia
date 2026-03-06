@@ -3,6 +3,7 @@ import { useChainId, useSwitchChain, useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { NETWORKS, type SupportedNetwork } from '../../contracts/config';
 import { Wallet, ChevronDown, User } from 'lucide-react';
+import { useSoundEffects } from './SoundEffects';
 
 interface NetworkSelectorProps {
   compact?: boolean;
@@ -21,8 +22,10 @@ export const NetworkSelector: React.FC<NetworkSelectorProps> = ({
   const isAvalanche = chainId === NETWORKS.avalanche_fuji.id;
   const isSomnia = chainId === NETWORKS.somnia_testnet.id;
 
+  const { playMarkSound } = useSoundEffects();
   const handleSwitch = async (network: SupportedNetwork) => {
     if (targetNetwork) return;
+    playMarkSound();
     setTargetNetwork(network);
     try {
       await switchChainAsync({ chainId: NETWORKS[network].id });
