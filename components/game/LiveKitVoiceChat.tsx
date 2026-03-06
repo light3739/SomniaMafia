@@ -209,7 +209,7 @@ export function LiveKitVoiceChat({
     const [roomState, setRoomState] = useState<ConnectionState>(ConnectionState.Disconnected);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hasAutoReconnectedRef = useRef(false);
-    const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL);
+    const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL) || 'wss://livekit.mafiaonchain.live';
 
     const triggerReconnect = useCallback((manual = false) => {
         if (reconnectTimerRef.current) {
