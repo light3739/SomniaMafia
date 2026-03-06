@@ -371,7 +371,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                             animate={{ opacity: 1, scale: 1, y: 0 }}
                                             exit={{ opacity: 0, scale: 0, y: 10 }}
                                             transition={{ duration: 0.15, ease: "easeOut" }}
-                                            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 origin-bottom"
+                                            className="absolute bottom-full right-0 mb-2 z-50 origin-bottom-right"
                                             onClick={(e) => e.stopPropagation()}
                                         >
                                             <div className="bg-black/70 backdrop-blur-md rounded-xl p-3 flex items-center gap-3 w-[140px] border border-[#916A47]/30 shadow-xl">
@@ -394,7 +394,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                             </div>
                                             {/* Triangle pointer */}
                                             <div
-                                                className="absolute left-1/2 -translate-x-1/2 -bottom-2"
+                                                className="absolute right-2 -bottom-2"
                                                 style={{
                                                     width: 0,
                                                     height: 0,

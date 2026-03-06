@@ -14,7 +14,15 @@ export const AVALANCHE_FUJI = defineChain({
     id: 43113,
     name: 'Avalanche Fuji C-Chain',
     nativeCurrency: { name: 'Avalanche', symbol: 'AVAX', decimals: 18 },
-    rpcUrls: { default: { http: ['https://api.avax-test.network/ext/bc/C/rpc'] } },
+    rpcUrls: {
+        default: {
+            http: [
+                'https://api.avax-test.network/ext/bc/C/rpc',
+                'https://avalanche-fuji.drpc.org',
+                'https://avalanche-fuji-c-chain-rpc.publicnode.com'
+            ]
+        }
+    },
     blockExplorers: { default: { name: 'Snowtrace', url: 'https://testnet.snowtrace.io' } },
     testnet: true,
 });

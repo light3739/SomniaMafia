@@ -120,7 +120,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // FIX: Only restore roomId from storage on game-related pages
             // Prevents stale room polling on home/setup pages after a previous game
             const path = window.location.pathname;
-            const isGamePage = ['/game', '/lobby', '/waiting', '/join'].some(p => path.startsWith(p));
+            const isGamePage = ['/game', '/lobby', '/waiting', '/join', '/create', '/setup'].some(p => path.startsWith(p));
             if (!isGamePage) {
                 console.log('[RoomId] Not on game page, skipping roomId restore from storage');
                 return null;
