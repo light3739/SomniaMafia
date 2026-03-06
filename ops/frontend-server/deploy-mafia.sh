@@ -70,9 +70,19 @@ ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "
 
   LIVEKIT_API_KEY=\"\$(grep -E '^LIVEKIT_API_KEY=' .env.production | head -n1 | cut -d= -f2- || true)\"
   LIVEKIT_API_SECRET=\"\$(grep -E '^LIVEKIT_API_SECRET=' .env.production | head -n1 | cut -d= -f2- || true)\"
+  NEXT_PUBLIC_LIVEKIT_URL=\"\$(grep -E '^NEXT_PUBLIC_LIVEKIT_URL=' .env.production | head -n1 | cut -d= -f2- || true)\"
+  NEXT_PUBLIC_GM_SERVER_URL=\"\$(grep -E '^NEXT_PUBLIC_GM_SERVER_URL=' .env.production | head -n1 | cut -d= -f2- || true)\"
+  NEXT_PUBLIC_ACTIVE_NETWORK=\"\$(grep -E '^NEXT_PUBLIC_ACTIVE_NETWORK=' .env.production | head -n1 | cut -d= -f2- || true)\"
+
   if [ -z \"\$LIVEKIT_API_KEY\" ] || [ -z \"\$LIVEKIT_API_SECRET\" ] || [ \"\$LIVEKIT_API_SECRET\" = 'replace-with-livekit-secret' ]; then
     echo '[front:deploy] ERROR: missing LIVEKIT_API_KEY/LIVEKIT_API_SECRET in .env.production'
     echo '[front:deploy] set values matching livekit.yaml keys before deploy'
+    exit 1
+  fi
+
+  if [ -z \"\$NEXT_PUBLIC_LIVEKIT_URL\" ] || [ -z \"\$NEXT_PUBLIC_GM_SERVER_URL\" ] || [ -z \"\$NEXT_PUBLIC_ACTIVE_NETWORK\" ]; then
+    echo '[front:deploy] ERROR: missing required NEXT_PUBLIC_* vars in .env.production'
+    echo '[front:deploy] required: NEXT_PUBLIC_LIVEKIT_URL, NEXT_PUBLIC_GM_SERVER_URL, NEXT_PUBLIC_ACTIVE_NETWORK'
     exit 1
   fi
 
