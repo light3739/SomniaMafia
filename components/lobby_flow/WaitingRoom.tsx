@@ -48,13 +48,13 @@ export const WaitingRoom: React.FC = () => {
     };
 
     return (
-        <div className="relative w-full min-h-screen font-['Montserrat'] flex items-center justify-center p-4">
-
+        <div className="relative w-full h-screen font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
+            {/* Background is provided by RootLayout/DynamicBackground */}
 
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-6 py-10 mt-16"
+                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-6 py-10 my-auto"
             >
                 <div className="w-full flex items-center justify-start">
                     <BackButton to="/setup" label="Exit to Menu" />

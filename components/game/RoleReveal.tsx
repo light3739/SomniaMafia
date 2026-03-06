@@ -478,11 +478,11 @@ export const RoleReveal: React.FC = React.memo(() => {
     const keysNeeded = gameState.players.length - 1;
 
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center p-8">
+        <div className="w-full h-full flex flex-col items-center overflow-y-auto overflow-x-hidden p-8 custom-scrollbar">
             <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="max-w-lg w-full"
+                className="max-w-lg w-full my-auto"
             >
                 <AnimatePresence mode="wait">
                     {!revealState.isRevealed ? (
