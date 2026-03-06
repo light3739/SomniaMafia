@@ -8,6 +8,15 @@ import { useAccount, useWalletClient, useChainId } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
 import { buildTokenMessage } from '@/services/signingSchema';
 
+const LIVEKIT_CONNECT_TIMEOUT_MS = (() => {
+    const raw = process.env.NEXT_PUBLIC_LIVEKIT_CONNECT_TIMEOUT_MS;
+    const parsed = raw ? Number(raw) : NaN;
+    if (Number.isFinite(parsed) && parsed >= 10000) {
+        return parsed;
+    }
+    return 35000;
+})();
+
 interface MicButtonProps {
     roomId: string;
     userName?: string;
@@ -22,6 +31,30 @@ function normalizeLiveKitWsUrl(rawUrl?: string): string {
     if (rawUrl.startsWith('https://')) return rawUrl.replace('https://', 'wss://');
     if (rawUrl.startsWith('http://')) return rawUrl.replace('http://', 'ws://');
     return `wss://${rawUrl}`;
+}
+
+async function connectRoomWithTimeout(
+    room: Room,
+    serverUrl: string,
+    token: string,
+    options: { autoSubscribe: boolean; rtcConfig?: RTCConfiguration },
+    timeoutMs: number,
+): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+            reject(new Error('Connection timeout'));
+        }, timeoutMs);
+
+        room.connect(serverUrl, token, options)
+            .then(() => {
+                clearTimeout(timeoutId);
+                resolve();
+            })
+            .catch((error) => {
+                clearTimeout(timeoutId);
+                reject(error);
+            });
+    });
 }
 
 export function MicButton({
@@ -203,22 +236,43 @@ export function MicButton({
                     if (!cancelled) detachRemoteAudioRef.current(track, participant);
                 });
 
-                // Connect to room (timeout after 15s) without unhandled promise races
-                await new Promise<void>((resolve, reject) => {
-                    const timeoutId = setTimeout(() => {
-                        reject(new Error('Connection timeout'));
-                    }, 15000);
+                const defaultConnectOptions = { autoSubscribe: true };
+                try {
+                    await connectRoomWithTimeout(
+                        room,
+                        livekitServerUrl,
+                        data.token,
+                        defaultConnectOptions,
+                        LIVEKIT_CONNECT_TIMEOUT_MS,
+                    );
+                } catch (primaryConnectError: any) {
+                    const message = String(primaryConnectError?.message || '').toLowerCase();
+                    const shouldRetryWithRelay =
+                        message.includes('timeout') ||
+                        message.includes('timed out') ||
+                        message.includes('pc manager is closed') ||
+                        message.includes('could not establish') ||
+                        message.includes('connection failed');
 
-                    room.connect(livekitServerUrl, data.token)
-                        .then(() => {
-                            clearTimeout(timeoutId);
-                            resolve();
-                        })
-                        .catch((error) => {
-                            clearTimeout(timeoutId);
-                            reject(error);
-                        });
-                });
+                    if (!shouldRetryWithRelay) {
+                        throw primaryConnectError;
+                    }
+
+                    console.warn('[MicButton] Primary connect failed, retrying via TURN relay...', primaryConnectError);
+
+                    await connectRoomWithTimeout(
+                        room,
+                        livekitServerUrl,
+                        data.token,
+                        {
+                            autoSubscribe: true,
+                            rtcConfig: {
+                                iceTransportPolicy: 'relay',
+                            },
+                        },
+                        LIVEKIT_CONNECT_TIMEOUT_MS + 15000,
+                    );
+                }
 
                 if (cancelled) {
                     room.disconnect();
