@@ -211,6 +211,7 @@ export function LiveKitVoiceChat({
     const walletClientRef = useRef(walletClient);
     const userNameRef = useRef(userName);
     const [token, setToken] = useState("");
+    const [turnServers, setTurnServers] = useState<RTCIceServer[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
@@ -225,11 +226,14 @@ export function LiveKitVoiceChat({
     const lastReconnectAtRef = useRef(0);
     const isReconnectingRef = useRef(false);
 
-    // connectOptions: no iceTransportPolicy override — TURN on port 443 lets
-    // the browser ICE agent try host/srflx/relay naturally and pick the best path.
+    // connectOptions: include TURNS:443/tcp ICE server for VPN/firewall users.
+    // livekit-client APPENDS these to the server-provided ICE servers.
     const connectOptions = useMemo(() => ({
         autoSubscribe: true,
-    }), []);
+        rtcConfig: turnServers.length > 0 ? {
+            iceServers: turnServers,
+        } : undefined,
+    }), [turnServers]);
 
     /**
      * Schedule a reconnect with cooldown enforcement.
@@ -290,6 +294,7 @@ export function LiveKitVoiceChat({
     useEffect(() => {
         if (!isActive || !roomId || !sessionIdentity) {
             setToken("");
+            setTurnServers([]);
             setStatusMessage(null);
             setRoomState(ConnectionState.Disconnected);
             return;
@@ -357,6 +362,9 @@ export function LiveKitVoiceChat({
 
                 if (!cancelled) {
                     setToken(data.token);
+                    if (Array.isArray(data.turnServers)) {
+                        setTurnServers(data.turnServers);
+                    }
                     setRoomState(ConnectionState.Connecting);
                     setStatusMessage('Connecting to voice...');
                 }
