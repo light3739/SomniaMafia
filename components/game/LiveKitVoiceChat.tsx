@@ -191,6 +191,11 @@ function makeSessionIdentity(baseName: string): string {
     return `${safeBase}-${suffix}`;
 }
 
+function shouldStartRelayOnly(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    return /firefox/i.test(navigator.userAgent);
+}
+
 /** Minimum delay (ms) between automatic reconnect attempts */
 const RECONNECT_COOLDOWN_MS = 5000;
 /** Maximum number of automatic reconnect attempts before requiring manual action */
@@ -214,7 +219,7 @@ export function LiveKitVoiceChat({
     const userNameRef = useRef(userName);
     const [token, setToken] = useState("");
     const [turnServers, setTurnServers] = useState<RTCIceServer[]>([]);
-    const [relayOnly, setRelayOnly] = useState(false);
+    const [relayOnly, setRelayOnly] = useState(() => shouldStartRelayOnly());
     const [error, setError] = useState<string | null>(null);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
@@ -302,7 +307,7 @@ export function LiveKitVoiceChat({
     useEffect(() => { userNameRef.current = userName; }, [userName]);
 
     useEffect(() => {
-        setRelayOnly(false);
+        setRelayOnly(shouldStartRelayOnly());
         connectedAtRef.current = 0;
         autoReconnectCountRef.current = 0;
         lastReconnectAtRef.current = 0;
@@ -322,7 +327,7 @@ export function LiveKitVoiceChat({
         if (!isActive || !roomId || !sessionIdentity) {
             setToken("");
             setTurnServers([]);
-            setRelayOnly(false);
+            setRelayOnly(shouldStartRelayOnly());
             setStatusMessage(null);
             setRoomState(ConnectionState.Disconnected);
             return;
