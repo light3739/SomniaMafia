@@ -692,6 +692,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [gameState.phase]);
 
+
     // FIXED: Only auto-set myPlayerId from wallet if we're NOT in test mode
     // Test mode sets myPlayerId to a mock address; we shouldn't override it
     useEffect(() => {
@@ -2370,6 +2371,20 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.warn("[RoleReveal] Failed:", e);
         }
     }, [currentRoomId, myPlayer, address, revealRoleOnChain, addLog, publicClient]);
+
+    // FIX: Automatically reveal my role on-chain when the game ends
+    // This ensures roles are visible to everyone via the polling in GameOver screen,
+    // even for players who didn't trigger the end-game transaction themselves.
+    useEffect(() => {
+        if (gameState.phase === GamePhase.ENDED) {
+            console.log('[RoleReveal] Game ended phase detected, triggering auto-reveal...');
+            // Small initial delay to ensure contract state is stable
+            const timer = setTimeout(() => {
+                revealMyRoleAfterGameEnd();
+            }, 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [gameState.phase, revealMyRoleAfterGameEnd]);
 
 
     // V4: ZK End Game (Client generates proof of win)
