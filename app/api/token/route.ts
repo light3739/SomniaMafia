@@ -23,6 +23,8 @@ function parseRoomId(room: string): string | null {
 
 export async function POST(req: NextRequest) {
     try {
+        const userAgent = req.headers.get('user-agent')?.toLowerCase() || '';
+        const isFirefox = userAgent.includes('firefox');
         const reqBody = await req.json();
         const {
             room,
@@ -139,14 +141,16 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
             token,
-            turnServers: [{
-                urls: [
-                    `turns:${turnDomain}:443?transport=tcp`,
-                    `turn:${turnDomain}:443?transport=tcp`,
-                ],
-                username: turnUsername,
-                credential: turnCredential,
-            }],
+            turnServers: [
+                {
+                    urls: [
+                        `turns:${turnDomain}:443?transport=tcp`,
+                        ...(isFirefox ? [] : [`turn:${turnDomain}:443?transport=tcp`]),
+                    ],
+                    username: turnUsername,
+                    credential: turnCredential,
+                },
+            ],
         });
     } catch (error) {
         console.error('[LiveKit Token API] Error:', error);
