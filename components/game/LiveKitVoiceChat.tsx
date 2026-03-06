@@ -1,12 +1,159 @@
 "use client";
 
-import { LiveKitRoom, RoomAudioRenderer, ControlBar, Chat } from "@livekit/components-react";
-import { useEffect, useState } from "react";
+import { LiveKitRoom, RoomAudioRenderer, ControlBar, useRoomContext } from "@livekit/components-react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Volume2, VolumeX, X, Loader2, Users } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
 import { buildTokenMessage } from '@/services/signingSchema';
+import { ConnectionState, RoomEvent } from 'livekit-client';
+
+interface VoiceChatMessage {
+    id: string;
+    sender: string;
+    content: string;
+    mine: boolean;
+}
+
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+function SafeTextChat() {
+    const room = useRoomContext();
+    const [messages, setMessages] = useState<VoiceChatMessage[]>([]);
+    const [input, setInput] = useState('');
+    const [sending, setSending] = useState(false);
+    const [chatError, setChatError] = useState<string | null>(null);
+    const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        const handleData = (payload: Uint8Array, participant?: any) => {
+            try {
+                const text = decoder.decode(payload);
+                const data = JSON.parse(text);
+                if (data?.type !== 'chat' || typeof data?.content !== 'string') return;
+
+                setMessages((prev) => [
+                    ...prev,
+                    {
+                        id: `${Date.now()}_${participant?.identity || 'unknown'}`,
+                        sender: data.sender || participant?.identity || 'Player',
+                        content: data.content,
+                        mine: false,
+                    },
+                ]);
+            } catch {
+                // Ignore non-chat payloads
+            }
+        };
+
+        room.on(RoomEvent.DataReceived, handleData);
+        return () => {
+            room.off(RoomEvent.DataReceived, handleData);
+        };
+    }, [room]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    const sendMessage = useCallback(async () => {
+        const content = input.trim();
+        if (!content || sending) return;
+        if (room.state !== ConnectionState.Connected) {
+            setChatError('Chat is reconnecting...');
+            return;
+        }
+
+        setSending(true);
+        setChatError(null);
+        try {
+            const payload = encoder.encode(JSON.stringify({
+                type: 'chat',
+                sender: room.localParticipant?.identity || 'Player',
+                content,
+                timestamp: Date.now(),
+            }));
+
+            await room.localParticipant.publishData(payload, { reliable: true });
+
+            setMessages((prev) => [
+                ...prev,
+                {
+                    id: `${Date.now()}_self`,
+                    sender: 'You',
+                    content,
+                    mine: true,
+                },
+            ]);
+            setInput('');
+        } catch (error: any) {
+            const message = String(error?.message || '');
+            if (
+                message.includes('UnexpectedConnectionState') ||
+                message.includes('PC manager is closed') ||
+                message.includes('Client initiated disconnect')
+            ) {
+                setChatError('Connection closed. Rejoin room to continue chat.');
+                return;
+            }
+            setChatError('Failed to send message');
+        } finally {
+            setSending(false);
+        }
+    }, [input, room, sending]);
+
+    return (
+        <div className="mt-4 bg-purple-950/20 border border-purple-500/20 rounded-lg overflow-hidden">
+            <div className="flex items-center gap-2 p-2 border-b border-purple-500/20 bg-purple-950/30">
+                <span className="text-purple-400 text-xs font-medium">Text Chat</span>
+                {room.state !== ConnectionState.Connected && (
+                    <span className="text-[10px] text-yellow-400/80 ml-auto">reconnecting...</span>
+                )}
+            </div>
+
+            <div className="h-[200px] overflow-y-auto p-2 space-y-2 livekit-chat-custom">
+                {messages.length === 0 && (
+                    <p className="text-xs text-white/40 text-center mt-16">No messages yet</p>
+                )}
+                {messages.map((message) => (
+                    <div key={message.id} className={`flex ${message.mine ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] px-3 py-2 rounded-lg text-xs ${message.mine ? 'bg-purple-700/40 text-white' : 'bg-white/10 text-white/90'}`}>
+                            <p className="text-[10px] text-purple-300 mb-1">{message.sender}</p>
+                            <p>{message.content}</p>
+                        </div>
+                    </div>
+                ))}
+                <div ref={messagesEndRef} />
+            </div>
+
+            <div className="p-2 border-t border-purple-500/20 flex gap-2">
+                <input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            void sendMessage();
+                        }
+                    }}
+                    placeholder="Type a message"
+                    className="flex-1 bg-black/40 border border-purple-500/30 rounded-lg text-white px-3 py-2 text-xs focus:outline-none"
+                    maxLength={300}
+                />
+                <button
+                    onClick={() => void sendMessage()}
+                    disabled={sending || !input.trim()}
+                    className="px-3 py-2 rounded-lg text-xs bg-purple-600/50 text-white disabled:opacity-40"
+                >
+                    Send
+                </button>
+            </div>
+            {chatError && <p className="px-3 pb-2 text-[10px] text-red-300">{chatError}</p>}
+        </div>
+    );
+}
 
 interface LiveKitVoiceChatProps {
     roomId: string;
@@ -189,21 +336,7 @@ export function LiveKitVoiceChat({
                                         className="bg-gray-800/50 rounded-lg"
                                     />
 
-                                    {/* Text Chat */}
-                                    {showTextChat && (
-                                        <div className="mt-4 bg-purple-950/20 border border-purple-500/20 rounded-lg overflow-hidden">
-                                            <div className="flex items-center gap-2 p-2 border-b border-purple-500/20 bg-purple-950/30">
-                                                <span className="text-purple-400 text-xs font-medium">Text Chat</span>
-                                            </div>
-                                            <Chat
-                                                style={{
-                                                    height: '200px',
-                                                    background: 'transparent',
-                                                }}
-                                                className="livekit-chat-custom"
-                                            />
-                                        </div>
-                                    )}
+                                    {showTextChat && <SafeTextChat />}
                                 </LiveKitRoom>
 
                                 <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
