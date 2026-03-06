@@ -11,6 +11,10 @@ export default function TestVoicePage() {
     const [userName, setUserName] = useState('');
     const [isActive, setIsActive] = useState(false);
 
+    const normalizedRoomId = roomId.trim().startsWith('test-')
+        ? roomId.trim()
+        : `test-${roomId.trim()}`;
+
     const handleStart = () => {
         if (roomId.trim() && userName.trim()) {
             setIsActive(true);
@@ -102,10 +106,10 @@ export default function TestVoicePage() {
                         <div className="space-y-4">
                             {/* Active Voice Chat */}
                             <LiveKitVoiceChat
-                                roomId={roomId}
+                                roomId={normalizedRoomId}
                                 userName={userName}
                                 isActive={isActive}
-                                label={`Voice Room: ${roomId}`}
+                                label={`Voice Room: ${normalizedRoomId}`}
                                 className="w-full"
                                 showTextChat={true}
                             />
@@ -122,7 +126,7 @@ export default function TestVoicePage() {
                             {/* Info */}
                             <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
                                 <p className="text-sm text-green-300 text-center">
-                                    ✓ Connected to room: <span className="font-bold">{roomId}</span>
+                                    ✓ Connected to room: <span className="font-bold">{normalizedRoomId}</span>
                                 </p>
                                 <p className="text-xs text-gray-400 text-center mt-1">
                                     Try both voice and text chat!
