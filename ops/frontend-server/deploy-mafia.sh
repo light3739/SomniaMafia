@@ -86,8 +86,8 @@ ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "
     exit 1
   fi
 
-  docker compose -f docker-compose.yaml up -d --build
-  docker compose -f docker-compose.yaml ps
+  docker compose --env-file .env.production -f docker-compose.yaml up -d --build
+  docker compose --env-file .env.production -f docker-compose.yaml ps
 "
 
 echo "[front:deploy] done"
