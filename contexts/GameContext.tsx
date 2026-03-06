@@ -651,8 +651,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (prevPhase === GamePhase.VOTING && currentPhase === GamePhase.NIGHT) {
             setShowVotingResults(true);
-            // Auto-hide after 10s (matches PostVotingTransition timer)
-            const timer = setTimeout(() => setShowVotingResults(false), 10000);
+            // Auto-hide after 20s (matches PostVotingTransition timer)
+            const timer = setTimeout(() => setShowVotingResults(false), 20000);
             return () => clearTimeout(timer);
         }
 
