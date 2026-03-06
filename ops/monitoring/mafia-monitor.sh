@@ -66,14 +66,6 @@ check_container() {
   fi
 }
 
-check_port_udp() {
-  local key="$1"
-  local port="$2"
-  if ! ss -lun | grep -q ":${port} "; then
-    notify "$key" "🚨 UDP port ${port} is not listening"
-  fi
-}
-
 check_disk() {
   local used
   used="$(df -P / | awk 'NR==2 {gsub("%","",$5); print $5}')"
@@ -110,8 +102,6 @@ check_container "caddy_container" "livekit-prod-caddy-1"
 check_container "livekit_container" "livekit-prod-livekit-1"
 check_container "front_container" "somnia-frontend"
 check_container "front_redis_container" "somnia-redis"
-
-check_port_udp "turn_udp_port" "3478"
 
 check_disk
 check_mem
