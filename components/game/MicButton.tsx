@@ -16,6 +16,14 @@ interface MicButtonProps {
     className?: string;
 }
 
+function normalizeLiveKitWsUrl(rawUrl?: string): string {
+    if (!rawUrl) return 'wss://livekit.mafiaonchain.live';
+    if (rawUrl.startsWith('wss://') || rawUrl.startsWith('ws://')) return rawUrl;
+    if (rawUrl.startsWith('https://')) return rawUrl.replace('https://', 'wss://');
+    if (rawUrl.startsWith('http://')) return rawUrl.replace('http://', 'ws://');
+    return `wss://${rawUrl}`;
+}
+
 export function MicButton({
     roomId,
     userName = 'Player',
@@ -32,6 +40,7 @@ export function MicButton({
     const [error, setError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
     const [participantCount, setParticipantCount] = useState(0);
+    const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL);
 
     const roomRef = useRef<Room | null>(null);
     const audioTrackRef = useRef<LocalAudioTrack | null>(null);
@@ -200,7 +209,7 @@ export function MicButton({
                         reject(new Error('Connection timeout'));
                     }, 15000);
 
-                    room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, data.token)
+                    room.connect(livekitServerUrl, data.token)
                         .then(() => {
                             clearTimeout(timeoutId);
                             resolve();
