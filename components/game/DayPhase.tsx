@@ -598,13 +598,13 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     animate={{ opacity: 1 }}
                     className="text-center mb-4 flex-shrink-0 h-[40px] flex items-center justify-center"
                 >
-                    <h2 className="text-xl md:text-2xl font-['Cinzel'] text-white">
+                    <h2 className="text-2xl font-['Cinzel'] text-white">
                         {hideActions ? 'Voting Results' : isVotingPhase ? 'Elimination Vote' : 'Discussion Phase'}
                     </h2>
                 </motion.div>
 
                 {/* Event Feed — fixed height, fully isolated from buttons below */}
-                <div className="mb-3 md:mb-4 h-[280px] md:h-[360px] flex-shrink-0 w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm">
+                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm">
                     <GameLog
                         liveDiscussion={{
                             active: discussionState?.active,
@@ -631,31 +631,31 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                 {discussionState?.active ? (
                                     <>
                                         {/* Timer Display with Mic Button */}
-                                        <div className="relative w-full py-1.5 md:py-2 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20 flex items-center justify-center px-12 md:px-4">
+                                        <div className="relative w-full py-2 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
                                             {discussionState?.phase === 'initial_delay' ? (
                                                 <div className="flex items-center justify-center gap-2">
-                                                    <Clock className="w-3.5 h-3.5 text-[#916A47]" />
-                                                    <span className="text-xl md:text-2xl font-bold text-white tabular-nums">
+                                                    <Clock className="w-4 h-4 text-[#916A47]" />
+                                                    <span className="text-2xl font-bold text-white tabular-nums">
                                                         {smoothTimeRemaining}s
                                                     </span>
-                                                    <span className="text-[#916A47]/50 text-[9px] md:text-[10px] uppercase font-bold tracking-widest ml-1 md:ml-2">
-                                                        Starting...
+                                                    <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
+                                                        Starting Discussion...
                                                     </span>
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center justify-center gap-2">
-                                                    <Clock className="w-3.5 h-3.5 text-[#916A47]" />
-                                                    <span className="text-xl md:text-2xl font-bold text-white tabular-nums">
+                                                    <Clock className="w-4 h-4 text-[#916A47]" />
+                                                    <span className="text-2xl font-bold text-white tabular-nums">
                                                         {Math.floor(smoothTimeRemaining / 60)}:{String(smoothTimeRemaining % 60).padStart(2, '0')}
                                                     </span>
-                                                    <span className="text-[#916A47]/50 text-[9px] md:text-[10px] uppercase font-bold tracking-widest ml-1 md:ml-2 truncate max-w-[120px] md:max-w-none">
-                                                        {discussionState?.isMyTurn ? 'Your Turn' : `${currentSpeaker?.name || 'Player'}`}
+                                                    <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
+                                                        {discussionState?.isMyTurn ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
                                                     </span>
                                                 </div>
                                             )}
-                                            {/* Mic Button - Positioned absolutely inside or to the right depending on screen */}
+                                            {/* Mic Button - Positioned to the right of timer */}
                                             {currentRoomId && myPlayer && (
-                                                <div className="absolute right-2 md:right-[-70px] top-1/2 -translate-y-1/2 scale-90 md:scale-100">
+                                                <div className="absolute right-[-70px] top-1/2 -translate-y-1/2">
                                                     <MicButton
                                                         roomId={`${currentRoomId}-day`}
                                                         userName={myPlayer.name}
@@ -746,11 +746,11 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                     // Standard Voting UI
                                     <>
                                         {/* Voting Timer + Mic Button */}
-                                        <div className="relative flex items-center justify-center px-12 md:px-0">
+                                        <div className="relative">
                                             <VotingTimer />
                                             {/* Free Talk Mic - All players can speak during voting */}
                                             {currentRoomId && myPlayer && (
-                                                <div className="absolute right-2 md:right-[-70px] top-1/2 -translate-y-1/2 scale-90 md:scale-100">
+                                                <div className="absolute right-[-70px] top-1/2 -translate-y-1/2">
                                                     <MicButton
                                                         roomId={`${currentRoomId}-vote`}
                                                         userName={myPlayer.name}
@@ -767,7 +767,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                                             isLoading={isProcessing || isTxPending}
                                             disabled={!selectedTarget || isProcessing || isTxPending || voteState.hasVoted}
                                             variant={selectedTarget ? 'primary' : 'outline-gold'}
-                                            className="w-full h-[40px] md:h-[50px] text-base md:text-lg"
+                                            className="w-full h-[50px] text-lg"
                                         >
                                             {selectedTarget ? (
                                                 <>
