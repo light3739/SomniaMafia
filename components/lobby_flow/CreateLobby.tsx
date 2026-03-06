@@ -34,7 +34,7 @@ export const CreateLobby: React.FC = () => {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="relative z-10 w-full max-w-[800px] flex flex-col items-center gap-4 md:gap-8 py-6 md:py-10 my-auto"
+                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-8 py-6 md:py-10 my-auto"
             >
                 <div className="w-full flex items-center justify-between">
                     <div className="-ml-3">
