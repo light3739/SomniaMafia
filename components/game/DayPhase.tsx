@@ -603,7 +603,14 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
 
                 {/* Event Feed — fixed height, fully isolated from buttons below */}
                 <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm">
-                    <GameLog />
+                    <GameLog
+                        liveDiscussion={{
+                            active: discussionState?.active,
+                            finished: discussionState?.finished,
+                            currentSpeakerName: currentSpeaker?.name || null,
+                        }}
+                        forceVotingActive={isVotingPhase || showVotingResults}
+                    />
                 </div>
 
                 {/* Actions — min-h reserves space so feed never shifts */}
