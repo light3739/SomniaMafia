@@ -4,9 +4,9 @@ services:
       context: ../..
       dockerfile: ops/frontend-server/Dockerfile
       args:
-        NEXT_PUBLIC_GM_SERVER_URL: ${NEXT_PUBLIC_GM_SERVER_URL}
-        NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL}
-        NEXT_PUBLIC_ACTIVE_NETWORK: ${NEXT_PUBLIC_ACTIVE_NETWORK}
+        NEXT_PUBLIC_GM_SERVER_URL: ${NEXT_PUBLIC_GM_SERVER_URL:-https://gm.mafiaonchain.live}
+        NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-https://livekit.mafiaonchain.live}
+        NEXT_PUBLIC_ACTIVE_NETWORK: ${NEXT_PUBLIC_ACTIVE_NETWORK:-avalanche_fuji}
     container_name: somnia-frontend
     restart: unless-stopped
     env_file:
