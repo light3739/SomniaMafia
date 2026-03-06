@@ -16,7 +16,7 @@ import {
     QueryClient,
     QueryClientProvider,
 } from '@tanstack/react-query';
-import { WagmiProvider, http } from 'wagmi';
+import { WagmiProvider, http, fallback } from 'wagmi';
 import { SOMNIA_TESTNET, AVALANCHE_FUJI } from '../contracts/config';
 import { GameProvider } from '../contexts/GameContext';
 import { AudioProvider } from '../contexts/AudioContext';
@@ -39,8 +39,8 @@ const config = getDefaultConfig({
         AVALANCHE_FUJI,
     ],
     transports: {
-        [SOMNIA_TESTNET.id]: http(SOMNIA_TESTNET.rpcUrls.default.http[0]),
-        [AVALANCHE_FUJI.id]: http(AVALANCHE_FUJI.rpcUrls.default.http[0]),
+        [SOMNIA_TESTNET.id]: fallback(SOMNIA_TESTNET.rpcUrls.default.http.map(url => http(url))),
+        [AVALANCHE_FUJI.id]: fallback(AVALANCHE_FUJI.rpcUrls.default.http.map(url => http(url))),
     },
     // Use deployless multicall — works on ANY chain without needing Multicall3 deployed.
     // This sends multicall bytecode directly via eth_call, zero contract dependency.
