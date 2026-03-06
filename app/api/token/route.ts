@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { AccessToken } from 'livekit-server-sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
@@ -120,13 +121,30 @@ export async function POST(req: NextRequest) {
 
         const token = await at.toJwt();
 
+        // Generate TURN credentials (HMAC-SHA256 matching LiveKit's internal auth)
+        // so the frontend can add a TURNS:443/tcp ICE server for VPN/firewall users
+        const turnDomain = process.env.LIVEKIT_TURN_DOMAIN || 'turn.mafiaonchain.live';
+        const turnUsername = crypto.randomBytes(12).toString('base64url');
+        const turnCredential = crypto
+            .createHmac('sha256', apiSecret)
+            .update(turnUsername)
+            .digest('base64');
+
         console.log('[LiveKit Token API] Token generated:', {
             room,
             username,
-            tokenLength: token.length
+            tokenLength: token.length,
+            turnDomain,
         });
 
-        return NextResponse.json({ token });
+        return NextResponse.json({
+            token,
+            turnServers: [{
+                urls: [`turns:${turnDomain}:443?transport=tcp`],
+                username: turnUsername,
+                credential: turnCredential,
+            }],
+        });
     } catch (error) {
         console.error('[LiveKit Token API] Error:', error);
         return NextResponse.json(
