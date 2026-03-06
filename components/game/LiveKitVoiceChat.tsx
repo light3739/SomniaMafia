@@ -27,6 +27,29 @@ function normalizeLiveKitWsUrl(rawUrl?: string): string | undefined {
     return `wss://${rawUrl}`;
 }
 
+function shouldPreferSameOriginLiveKit(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    return /firefox/i.test(navigator.userAgent);
+}
+
+function buildLiveKitServerUrls(rawUrl?: string): string[] {
+    const urls: string[] = [];
+    const primary = normalizeLiveKitWsUrl(rawUrl) || 'wss://livekit.mafiaonchain.live';
+    const sameOrigin = typeof window !== 'undefined'
+        ? normalizeLiveKitWsUrl(`${window.location.origin}/livekit`)
+        : undefined;
+
+    if (shouldPreferSameOriginLiveKit() && sameOrigin) {
+        urls.push(sameOrigin);
+    }
+    urls.push(primary);
+    if (!shouldPreferSameOriginLiveKit() && sameOrigin) {
+        urls.push(sameOrigin);
+    }
+
+    return Array.from(new Set(urls.filter(Boolean))) as string[];
+}
+
 function SafeTextChat({ displayName }: { displayName: string }) {
     const room = useRoomContext();
     const [messages, setMessages] = useState<VoiceChatMessage[]>([]);
@@ -220,8 +243,10 @@ export function LiveKitVoiceChat({
     const [isMinimized, setIsMinimized] = useState(false);
     const [sessionIdentity] = useState(() => makeSessionIdentity(userName));
     const [connectAttempt, setConnectAttempt] = useState(0);
+    const [serverUrlIndex, setServerUrlIndex] = useState(0);
     const [roomState, setRoomState] = useState<ConnectionState>(ConnectionState.Disconnected);
-    const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL) || 'wss://livekit.mafiaonchain.live';
+    const livekitServerUrls = useMemo(() => buildLiveKitServerUrls(process.env.NEXT_PUBLIC_LIVEKIT_URL), []);
+    const livekitServerUrl = livekitServerUrls[Math.min(serverUrlIndex, livekitServerUrls.length - 1)] || 'wss://livekit.mafiaonchain.live';
 
     // Reconnect tracking refs (not state — avoids render cascades)
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -253,6 +278,21 @@ export function LiveKitVoiceChat({
             return true;
         });
     }, []);
+
+    const switchServerUrl = useCallback((reason: string) => {
+        let switched = false;
+        setServerUrlIndex((prev) => {
+            if (prev >= livekitServerUrls.length - 1) return prev;
+            switched = true;
+            return prev + 1;
+        });
+        if (switched) {
+            console.warn('[LiveKitVoiceChat] Switching signaling endpoint:', reason);
+            setStatusMessage('Switching voice endpoint...');
+            setError(null);
+        }
+        return switched;
+    }, [livekitServerUrls.length]);
 
     /**
      * Schedule a reconnect with cooldown enforcement.
@@ -303,6 +343,7 @@ export function LiveKitVoiceChat({
 
     useEffect(() => {
         setRelayOnly(false);
+        setServerUrlIndex(0);
         connectedAtRef.current = 0;
         autoReconnectCountRef.current = 0;
         lastReconnectAtRef.current = 0;
@@ -323,6 +364,7 @@ export function LiveKitVoiceChat({
             setToken("");
             setTurnServers([]);
             setRelayOnly(false);
+            setServerUrlIndex(0);
             setStatusMessage(null);
             setRoomState(ConnectionState.Disconnected);
             return;
@@ -474,7 +516,7 @@ export function LiveKitVoiceChat({
                         {token && !error && (
                             <div className="relative">
                                 <LiveKitRoom
-                                    key={`${roomId}-${sessionIdentity}-${connectAttempt}`}
+                                    key={`${roomId}-${sessionIdentity}-${connectAttempt}-${serverUrlIndex}`}
                                     video={false}
                                     audio={true}
                                     token={token}
@@ -494,6 +536,13 @@ export function LiveKitVoiceChat({
                                         connectedAtRef.current = 0;
                                         setRoomState(ConnectionState.Disconnected);
                                         if (!isActive) return;
+                                        if (
+                                            connectedForMs === 0 &&
+                                            switchServerUrl('signaling closed before ICE established')
+                                        ) {
+                                            scheduleReconnect(true);
+                                            return;
+                                        }
                                         if (
                                             !relayOnly &&
                                             turnServers.length > 0 &&
@@ -516,6 +565,10 @@ export function LiveKitVoiceChat({
                                             msg.includes('unexpectedconnectionstate') ||
                                             msg.includes('pc manager is closed')
                                         ) {
+                                            if (msg.includes('websocket is closed before') && switchServerUrl('websocket closed before established')) {
+                                                scheduleReconnect(true);
+                                                return;
+                                            }
                                             console.log('[LiveKitVoiceChat] Transient error (ignored):', msg.slice(0, 80));
                                             return;
                                         }
