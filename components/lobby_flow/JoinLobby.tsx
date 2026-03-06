@@ -170,10 +170,10 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     };
 
     return (
-        <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
+        <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10 my-auto">
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10">
                 <div className="w-full flex items-center justify-between">
                     <div className="-ml-3">
                         <BackButton to="/setup" />
