@@ -27,6 +27,29 @@ rsync -az --delete -e "ssh -p $SSH_PORT" \
   --exclude .git \
   "$WORKDIR/" "${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}/"
 
+echo "[deploy] Validating remote env"
+ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "
+  set -euo pipefail
+  cd '$REMOTE_DIR'
+  if [ ! -f .env ]; then
+    echo '[deploy] ERROR: missing .env on remote gm-server'
+    echo '[deploy] Copy .env.example to .env and set GM_PRIVATE_KEY'
+    exit 1
+  fi
+
+  GM_PRIVATE_KEY=\"\$(grep -E '^GM_PRIVATE_KEY=' .env | head -n1 | cut -d= -f2- || true)\"
+  if [ -z \"\$GM_PRIVATE_KEY\" ] || [ \"\$GM_PRIVATE_KEY\" = '0x0000000000000000000000000000000000000000000000000000000000000001' ]; then
+    echo '[deploy] ERROR: GM_PRIVATE_KEY is missing or insecure default in remote .env'
+    exit 1
+  fi
+
+  for key in AVAX_RPC_URL SOMNIA_RPC_URL AVAX_DIAMOND SOMNIA_DIAMOND; do
+    if ! grep -q \"^\${key}=\" .env; then
+      echo \"[deploy] WARNING: \${key} not set, built-in default will be used\"
+    fi
+  done
+"
+
 echo "[deploy] Installing and restarting pm2"
 ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "cd '$REMOTE_DIR' && npm ci && npm run build && pm2 restart '$PM2_NAME' || pm2 start dist/index.js --name '$PM2_NAME'"
 
