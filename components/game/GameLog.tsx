@@ -61,6 +61,11 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             const msg = logs[i].message;
             if (dayPattern.test(msg) || msg.includes('Game started!')) {
                 startIndex = i;
+                // FIX: If the immediately preceding log is the Night Result, include it in today's feed.
+                // Events often arrive in order: [NightFinalized] -> [DayStarted].
+                if (i > 0 && logs[i - 1].message.includes('Night Result:')) {
+                    startIndex = i - 1;
+                }
                 break;
             }
         }
