@@ -3,6 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { GamePhase } from '../../types';
 
+interface GameLogProps {
+    liveDiscussion?: {
+        active?: boolean;
+        finished?: boolean;
+        currentSpeakerName?: string | null;
+    };
+    forceVotingActive?: boolean;
+}
+
 /**
  * GameLog — Day-based game feed (no scroll).
  * Shows a clean, structured summary for the current day:
@@ -16,7 +25,7 @@ import { GamePhase } from '../../types';
  * Feed is cleared every new day (only shows current day events).
  * No boxes or emojis — clean text only.
  */
-export const GameLog: React.FC = React.memo(() => {
+export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, forceVotingActive = false }) => {
     const { gameState, showVotingResults, addLog } = useGameContext();
 
     const dayCount = gameState.dayCount;
@@ -107,10 +116,16 @@ export const GameLog: React.FC = React.memo(() => {
             }
 
             // Voting result
-            if (msg.includes('Voting Finalized: Player eliminated')) {
+            const votingFinalizedEliminatedMatch = msg.match(/^Voting Finalized:\s+(.+?)\s+was eliminated!?$/i);
+            if (votingFinalizedEliminatedMatch) {
+                votingResult = {
+                    type: 'eliminated',
+                    playerName: votingFinalizedEliminatedMatch[1]
+                };
+            } else if (msg.includes('Voting Finalized: Player eliminated')) {
                 votingResult = { type: 'eliminated' };
             } else if (msg.includes('eliminated') && log.type === 'danger' && !msg.includes('Night') && !msg.includes('Voting Finalized')) {
-                const nameMatch = msg.match(/^(.+?) eliminated/);
+                const nameMatch = msg.match(/^(.+?) eliminated[:\s]/);
                 if (nameMatch) {
                     votingResult = {
                         type: 'eliminated',
@@ -118,7 +133,7 @@ export const GameLog: React.FC = React.memo(() => {
                     };
                 }
             }
-            if (msg.includes('Voting Finalized: No one was eliminated')) {
+            if (msg.includes('Voting Finalized: No one was eliminated') || msg.includes('No one was eliminated')) {
                 votingResult = { type: 'no_one' };
             }
 
@@ -126,6 +141,24 @@ export const GameLog: React.FC = React.memo(() => {
             if (msg === 'Night has fallen...' || msg.includes('Night has fallen')) {
                 nightFallen = true;
             }
+        }
+
+        // Fallback for cases where event logs arrive late/out-of-order:
+        // keep phase indicator visible from live phase state.
+        if (liveDiscussion?.active) {
+            discussionStarted = true;
+            discussionFinished = false;
+            if (liveDiscussion.currentSpeakerName) {
+                currentSpeaker = liveDiscussion.currentSpeakerName;
+            }
+        } else if (liveDiscussion?.finished) {
+            discussionStarted = true;
+            discussionFinished = true;
+        } else if (!discussionStarted && phase === GamePhase.DAY) {
+            discussionStarted = true;
+        }
+        if (!votingStarted && (phase === GamePhase.VOTING || showVotingResults || forceVotingActive)) {
+            votingStarted = true;
         }
 
         return {
@@ -138,7 +171,7 @@ export const GameLog: React.FC = React.memo(() => {
             votingResult,
             nightFallen
         };
-    }, [todayLogs]);
+    }, [todayLogs, phase, showVotingResults, liveDiscussion, forceVotingActive]);
 
     // Compute quorum: max votes on any player / votes needed for elimination
     const quorumData = useMemo(() => {
