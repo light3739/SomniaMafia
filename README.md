@@ -91,6 +91,10 @@ Important public vars:
 - `NEXT_PUBLIC_GM_SERVER_URL=https://gm.mafiaonchain.live`
 - `NEXT_PUBLIC_LIVEKIT_URL=https://livekit.mafiaonchain.live`
 
+Required server vars for voice token API:
+- `LIVEKIT_API_KEY` (must match key in LiveKit `livekit.yaml`)
+- `LIVEKIT_API_SECRET` (must match secret in LiveKit `livekit.yaml`)
+
 ### CI/CD deploy + Telegram alerts
 
 Workflow: `.github/workflows/frontend-deploy-server.yml`
