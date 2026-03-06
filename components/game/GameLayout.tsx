@@ -3,7 +3,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount } from 'wagmi';
 import { useGameContext } from '../../contexts/GameContext';
 import { GameLog } from './GameLog';
@@ -610,7 +610,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
 
     // Determine which background to use
     const isNightPhase = gameState.phase === GamePhase.NIGHT;
-    const currentBg = isNightPhase ? nightBg : dayBg;
+    const isMobilePortrait = typeof window !== 'undefined' && window.innerWidth < 768 && window.innerHeight > window.innerWidth;
 
     if (players.length === 0 && !isTestMode) {
         return (
@@ -623,10 +623,292 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         );
     }
 
+    if (isMobilePortrait) {
+        return (
+            <div className="relative w-full h-screen overflow-hidden bg-[#050505] font-['Montserrat'] flex flex-col">
+                {/* 1. Background */}
+                <div className="fixed inset-0 z-0 pointer-events-none">
+                    <div className={`absolute inset-0 transition-opacity duration-1000 ${isNightPhase ? 'opacity-0' : 'opacity-100'}`}>
+                        <Image src={dayBg} alt="Day" fill className="object-cover" style={{ filter: 'grayscale(30%) brightness(30%)' }} />
+                    </div>
+                    <div className={`absolute inset-0 transition-opacity duration-1000 ${isNightPhase ? 'opacity-100' : 'opacity-0'}`}>
+                        <Image src={nightBg} alt="Night" fill className="object-cover" style={{ filter: 'grayscale(0%) brightness(20%)' }} />
+                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black z-10" />
+                </div>
+
+                {/* 2. Top Bar (HUD) */}
+                <div className="relative z-20 p-2 flex items-center justify-between">
+                    <BackButton to="/lobby" label="" exitGame={true} onExitGame={claimRefund} />
+                    <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />
+                    <div className="w-10" /> {/* Spacer */}
+                </div>
+
+                {/* 3. Players Grid (Top half) */}
+                <div className="relative z-20 flex-1 overflow-y-auto px-2 py-2 min-h-0">
+                    <div className="grid grid-cols-2 xs:grid-cols-3 gap-2 pb-4">
+                        {visualPlayers.map((player) => {
+                            if (!player) return null;
+                            const voters = Object.entries(voteMap)
+                                .filter(([_, target]) => target === player.address.toLowerCase())
+                                .map(([voterAddr]) => players.find(p => p.address.toLowerCase() === voterAddr))
+                                .filter((p): p is typeof players[0] => !!p);
+
+                            return (
+                                <motion.div
+                                    key={player.address}
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="scale-[0.8] origin-center -m-4"
+                                >
+                                    <PlayerSpot
+                                        player={player}
+                                        isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
+                                        onAction={handlePlayerAction}
+                                        canAct={canActOnPlayer(player)}
+                                        isSelected={selectedTarget?.toLowerCase() === player.address.toLowerCase()}
+                                        isNight={isNightPhase}
+                                        myRole={myPlayer?.role}
+                                        mark={playerMarks[player.address.toLowerCase()] || null}
+                                        onSetMark={setPlayerMark}
+                                        isSpeaking={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase()}
+                                        speechTimeRemaining={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase() ? discussionState.timeRemaining : 0}
+                                        voters={voters}
+                                    />
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* 4. Game Feed Area (Bottom half) - Sticky bottom */}
+                <div className="relative z-30 bg-black/40 backdrop-blur-xl border-t border-white/10 p-4 pb-8 flex flex-col gap-4 max-h-[60%] overflow-visible">
+                    <div className="w-full flex flex-col gap-4">
+                        <AnimatePresence mode="wait">
+                            {isOverlayPhase ? (
+                                <div key="overlay" className="py-8">
+                                    {(gameState.phase === GamePhase.SHUFFLING) && <ShufflePhase />}
+                                    {(gameState.phase === GamePhase.REVEAL) && <RoleReveal />}
+                                    {(gameState.phase === GamePhase.ENDED) && <GameOver />}
+                                </div>
+                            ) : (
+                                <div key="game" className="flex flex-col gap-3">
+                                    {(gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING || showVotingResults) && (
+                                        <div className="w-full">
+                                            <DayPhase initialDiscussionState={initialDiscussionState} hideActions={showVotingResults} />
+                                            {showVotingResults && <PostVotingTransition />}
+                                        </div>
+                                    )}
+                                    {(!showVotingResults && gameState.phase === GamePhase.NIGHT) && (
+                                        <div className="w-full">
+                                            <NightPhase />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    {/* Media tools */}
+                    <div className="flex justify-end gap-3 px-2">
+                        <GameUIOverlay />
+                    </div>
+                </div>
+
+                {/* Overlays */}
+                <NightAnnouncement show={showNightAnnouncement} onComplete={handleCloseNightAnnouncement} />
+                <MorningAnnouncement show={showMorningAnnouncement} onComplete={handleCloseMorningAnnouncement} />
+                <RoleCompositionAnnouncement show={showRoleComposition} onComplete={handleCloseRoleComposition} playerCount={players.filter(p => p.isAlive).length} />
+                <VotingAnnouncement show={showVotingAnnouncement} onComplete={handleCloseVotingAnnouncement} />
+                <GameHintsOverlay activeHint={activeHint} onDismiss={dismissHint} />
+
+                {/* Dev Tools */}
+                {isTestMode && (
+                    <div className="fixed top-20 right-4 z-[200] opacity-50 scale-75 origin-top-right">
+                        <div className="bg-black/80 p-2 rounded-xl flex flex-col gap-2 border border-white/20">
+                            <Button onClick={() => setGameState(p => ({ ...p, players: Array.from({ length: 16 }, (_, i) => ({ ...players[0], name: `P${i + 1}`, address: `0x${i}`, id: `p${i}` })) }))} variant="outline-gold" className="text-[10px] h-8">Sim 16</Button>
+                            <Button onClick={() => setGameState(p => ({ ...p, phase: p.phase === GamePhase.DAY ? GamePhase.VOTING : GamePhase.DAY }))} variant="outline-gold" className="text-[10px] h-8">Toggle Ph</Button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="relative w-full h-screen overflow-hidden bg-[#050505] font-['Montserrat'] flex items-center justify-center">
 
             {/* 1. ФОН (Fixed Background) - Smooth transition between day/night */}
+            <div className="fixed inset-0 z-0 pointer-events-none">
+                {/* Day Background */}
+                <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isNightPhase ? 'opacity-0' : 'opacity-100'}`}>
+                    <Image
+                        src={dayBg}
+                        alt="Day Background"
+                        fill
+                        priority
+                        className="object-cover"
+                        style={{ filter: 'grayscale(30%) brightness(40%)' }}
+                    />
+                </div>
+
+                {/* Night Background */}
+                <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isNightPhase ? 'opacity-100' : 'opacity-0'}`}>
+                    <Image
+                        src={nightBg}
+                        alt="Night Background"
+                        fill
+                        priority
+                        className="object-cover"
+                        style={{ filter: 'grayscale(0%) brightness(25%) contrast(100%)' }}
+                    />
+                </div>
+
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#000_100%)] z-10" />
+            </div>
+
+            {/* Overlays in order of priority (lower in code = higher z-index) */}
+            {/* 1. Environment Transitions */}
+            <NightAnnouncement
+                show={showNightAnnouncement}
+                onComplete={handleCloseNightAnnouncement}
+            />
+            <MorningAnnouncement
+                show={showMorningAnnouncement}
+                onComplete={handleCloseMorningAnnouncement}
+            />
+
+            {/* 2. Role Composition (first day only, after morning) */}
+            <RoleCompositionAnnouncement
+                show={showRoleComposition}
+                onComplete={handleCloseRoleComposition}
+                playerCount={players.filter(p => p.isAlive).length}
+            />
+
+            {/* 3. Critical Game Events (Voting is more important than Morning bg) */}
+            <VotingAnnouncement
+                show={showVotingAnnouncement}
+                onComplete={handleCloseVotingAnnouncement}
+            />
+
+            {/* 2. SCALABLE GAME CONTAINER */}
+            <div
+                className="relative transform-gpu transition-transform duration-200 ease-out"
+                style={{
+                    width: BASE_WIDTH,
+                    height: BASE_HEIGHT,
+                    transform: `scale(${scale})`,
+                    // We render it at full size then scale it down/up
+                    flexShrink: 0
+                }}
+            >
+                {/* Board Background/Table Area - matching user's "relative" container bg for visualization? 
+                        User code had: background: '#FFF2E2' and overflow: 'hidden'. 
+                        But usually we want transparent to see the rich game background. 
+                        I'll keep it transparent but maintain the layout structure. 
+                    */}
+
+                {/* Table Graphic (Optional - can be added here if needed to match the 'table' feel) */}
+
+
+
+                {/* HEADER HUD INSIDE SCALED CONTAINER? 
+                        Usually HUD is fixed to screen edges. But if we want it part of the "board layout" it goes here.
+                        Let's keep Header fixed to viewport for better UX on small screens, OR scaled?
+                        If we scale everything, the text might get too small.
+                        Let's keep the main HUD elements FIXED to the screen (outside this container) for usability,
+                        AND put the PLAYERS inside this container.
+                    */}
+
+                {/* Players */}
+                {playerPositions.map((pos, index) => {
+                    const player = visualPlayers[index];
+                    if (!player) return null; // Slot empty
+
+                    // Compute voters: players who voted for this player
+                    const voters = Object.entries(voteMap)
+                        .filter(([_, target]) => target === player.address.toLowerCase())
+                        .map(([voterAddr]) => players.find(p => p.address.toLowerCase() === voterAddr))
+                        .filter((p): p is typeof players[0] => !!p);
+
+                    return (
+                        <div
+                            key={player.id}
+                            className={`absolute transition-all duration-500 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`}
+                            style={{
+                                left: pos.x,
+                                top: pos.y,
+                                // Subtle scale for mobile, but not too small
+                                transform: typeof window !== 'undefined' && window.innerWidth < 768 ? 'scale(0.92)' : 'none',
+                                transformOrigin: 'center center'
+                            }}
+                        >
+                            <PlayerSpot
+                                player={player}
+                                isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
+                                onAction={handlePlayerAction}
+                                canAct={canActOnPlayer(player)}
+                                isSelected={selectedTarget?.toLowerCase() === player.address.toLowerCase()}
+                                isNight={isNightPhase}
+                                myRole={myPlayer?.role}
+                                mark={playerMarks[player.address.toLowerCase()] || null}
+                                onSetMark={setPlayerMark}
+                                isSpeaking={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase()}
+                                speechTimeRemaining={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase() ? discussionState.timeRemaining : 0}
+                                voters={voters}
+                            />
+                        </div>
+                    );
+                })}
+
+
+                {/* CENTER CONTENT (Day Phase, Vote, Logs etc) */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] flex items-center justify-center z-10">
+                    {/* Day/Voting Phase Content — stays mounted during showVotingResults to avoid GameLog re-mount */}
+                    {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING || showVotingResults) && (
+                        <div className="w-full h-full">
+                            <DayPhase initialDiscussionState={initialDiscussionState} hideActions={showVotingResults} />
+                        </div>
+                    )}
+
+                    {/* Voting Results Transition — lightweight timer overlay on top */}
+                    {showVotingResults && (
+                        <PostVotingTransition />
+                    )}
+
+                    {/* Night Phase Content */}
+                    {!showVotingResults && !isOverlayPhase && gameState.phase === GamePhase.NIGHT && (
+                        <div className="w-full h-full">
+                            <NightPhase />
+                        </div>
+                    )}
+
+                    {/* Lobby Phase - Show Log */}
+                    {!isOverlayPhase && gameState.phase === GamePhase.LOBBY && (
+                        <div className="w-full h-full max-h-[400px]">
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="mb-3 text-center pointer-events-none"
+                            >
+                                <span className="inline-block px-3 py-1 rounded-md bg-black/40 border border-[#916A47]/20 text-[#916A47] text-[10px] font-bold tracking-widest uppercase backdrop-blur-sm">
+                                    Live Feed
+                                </span>
+                            </motion.div>
+                            <div className="w-full h-full rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden border border-white/5 relative bg-[#050505]/60 backdrop-blur-sm">
+                                <GameLog />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+            </div>
+            {/* OVERLAYS (Shuffle, Reveal, GameOver) - Outside scalable container for full screen coverage */}
+            {isOverlayPhase && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+                    {renderPhaseContent()}
+                </div>
+            )}
             <div className="fixed inset-0 z-0 pointer-events-none">
                 {/* Day Background */}
                 <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isNightPhase ? 'opacity-0' : 'opacity-100'}`}>
