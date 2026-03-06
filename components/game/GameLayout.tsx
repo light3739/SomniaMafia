@@ -244,17 +244,16 @@ export function getPlayerPositions(count: number): { id: string; x: number; y: n
             // On mobile portrait, move side players closer to center to keep them on screen
             if (isMobilePortrait) {
                 // Base width 1488, center 744. 
-                // We want to keep them within roughly 744 +/- 450
+                // We want to avoid the center zone [444, 1044] while staying within screen.
                 const center = 744;
                 const offset = x - center;
-                if (Math.abs(offset) > 100) {
-                    // Stronger pull for portrait to avoid side gaps
-                    x = center + (offset * (isVerySmall ? 0.45 : 0.55));
-                }
+                const absOffset = Math.abs(offset);
 
-                // Adjust Y to push top/bottom rows slightly further apart to clear center feed
-                if (y < 200) y -= 40;
-                if (y > 700) y += 40;
+                if (absOffset > 450) {
+                    // Only pull if they are very far out on the wings
+                    // Pull factor 0.8 is much more subtle than 0.5
+                    x = center + (offset * 0.82);
+                }
             }
             return { id: `p${i + 1}`, x, y };
         });
@@ -727,7 +726,8 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                             style={{
                                 left: pos.x,
                                 top: pos.y,
-                                transform: typeof window !== 'undefined' && window.innerWidth < 768 ? 'scale(0.85)' : 'none',
+                                // Subtle scale for mobile, but not too small
+                                transform: typeof window !== 'undefined' && window.innerWidth < 768 ? 'scale(0.92)' : 'none',
                                 transformOrigin: 'center center'
                             }}
                         >
@@ -751,7 +751,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
 
 
                 {/* CENTER CONTENT (Day Phase, Vote, Logs etc) */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-[600px] h-[550px] flex items-center justify-center z-10">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] flex items-center justify-center z-10">
                     {/* Day/Voting Phase Content — stays mounted during showVotingResults to avoid GameLog re-mount */}
                     {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING || showVotingResults) && (
                         <div className="w-full h-full">
