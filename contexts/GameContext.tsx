@@ -3027,17 +3027,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     case 'DayStarted':
                         addLog(`Day ${args.dayNumber} has begun`, "phase");
-                        setVoteMap({});
                         break;
 
                     case 'VotingStarted':
                         addLog("Voting Phase Started", "phase");
-                        setVoteMap({});
                         break;
 
                     case 'NightStarted':
                         // Log moved to VotingFinalized timeout
-                        setVoteMap({});
                         break;
 
                     case 'NightFinalized':
