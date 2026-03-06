@@ -58,14 +58,29 @@ export const BackButton: React.FC<BackButtonProps> = ({
             }
         } catch (err) {
             console.error('[ExitGame] Failed:', err);
-            // Even if the contract call fails (e.g. claimRefund rejects because game is active),
-            // we should still let the user leave the room UI locally.
+        } finally {
+            // ALWAYS execute cleanup, even if contract call fails
+            const rid = sessionStorage.getItem('currentRoomId') || localStorage.getItem('currentRoomId');
+            if (rid && exitGame) {
+                try {
+                    const abandoned = JSON.parse(localStorage.getItem('mafia_abandoned_rooms') || '[]');
+                    if (!abandoned.includes(rid)) {
+                        abandoned.push(rid);
+                        localStorage.setItem('mafia_abandoned_rooms', JSON.stringify(abandoned.slice(-20))); // Keep last 20
+                    }
+                } catch (e) { }
+            }
+
             sessionStorage.removeItem('currentRoomId');
             localStorage.removeItem('currentRoomId');
-            router.push('/lobby');
-        } finally {
             setIsExiting(false);
             setShowConfirm(false);
+
+            if (to) {
+                router.push(to);
+            } else {
+                router.push('/lobby');
+            }
         }
     };
 
@@ -79,7 +94,7 @@ export const BackButton: React.FC<BackButtonProps> = ({
         <>
             <button
                 onClick={handleClick}
-                disabled={isLoading}
+                disabled={isLoading && !exitGame}
                 className={`group text-white/60 hover:text-white flex items-center gap-3 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
             >
                 <div className="w-10 h-10 rounded-full bg-black/50 border border-white/10 backdrop-blur-sm flex items-center justify-center transition-all group-hover:bg-[#8B2E2E]/40 group-hover:border-[#C94040]/50 group-hover:shadow-[0_0_15px_rgba(201,64,64,0.2)]">

@@ -115,7 +115,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // FIX #24: Try URL param first, then sessionStorage, then localStorage
             const urlParams = new URLSearchParams(window.location.search);
             const urlRoomId = urlParams.get('roomId');
-            if (urlRoomId) return BigInt(urlRoomId);
+            if (urlRoomId) {
+                const abandoned = JSON.parse(localStorage.getItem('mafia_abandoned_rooms') || '[]');
+                if (abandoned.includes(urlRoomId)) {
+                    console.log(`[RoomId] Room ${urlRoomId} in URL was abandoned, ignoring.`);
+                } else {
+                    return BigInt(urlRoomId);
+                }
+            }
 
             // FIX: Only restore roomId from storage on game-related pages
             // Prevents stale room polling on home/setup pages after a previous game
@@ -131,7 +138,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // Fallback: check localStorage (survives tab close)
             const lsSaved = localStorage.getItem('currentRoomId');
-            if (lsSaved) return BigInt(lsSaved);
+            if (lsSaved) {
+                const abandoned = JSON.parse(localStorage.getItem('mafia_abandoned_rooms') || '[]');
+                if (abandoned.includes(lsSaved)) {
+                    console.log(`[RoomId] Room ${lsSaved} was abandoned, skipping auto-restore.`);
+                    return null;
+                }
+                return BigInt(lsSaved);
+            }
         }
         return null;
     });
@@ -1340,6 +1354,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!playerName || !address || !publicClient) { alert("Enter name and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
+            // 0. Check abandonment
+            const abandoned = JSON.parse(localStorage.getItem('mafia_abandoned_rooms') || '[]');
+            if (abandoned.includes(roomId.toString())) {
+                addLog("You have already left this game session and cannot rejoin.", "danger");
+                setIsTxPending(false);
+                return false;
+            }
+
             // 1. Generate crypto keys
             const keyPair = await generateKeyPair();
             setKeys(keyPair);
