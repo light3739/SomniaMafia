@@ -139,7 +139,7 @@ export const GameOver: React.FC = React.memo(() => {
 
     // Расшифровать все роли в конце игры
     const revealAllRoles = useCallback(async () => {
-        if (!publicClient || !currentRoomId || isRevealing) return;
+        if (!publicClient || !currentRoomId || isRevealing || !address) return;
 
         if (isTestMode) {
             console.log('[GameOver] Test mode role reveal');
@@ -154,6 +154,11 @@ export const GameOver: React.FC = React.memo(() => {
 
         setIsRevealing(true);
         try {
+            const shuffleService = getShuffleService();
+            // SPEED: Ensure keys are loaded (critical for decryption after page refresh)
+            if (!shuffleService.hasKeys()) {
+                shuffleService.loadKeys(currentRoomId.toString(), address);
+            }
             // SPEED: Fetch deck and keys in parallel — saves one sequential RPC roundtrip
             const [deck, keysResult] = await Promise.all([
                 publicClient.readContract({
@@ -183,10 +188,7 @@ export const GameOver: React.FC = React.memo(() => {
                 }
             }
 
-            const shuffleService = getShuffleService();
             const roles = new Map<string, Role>();
-
-            // Расшифровываем все карты
             const hasMyKeys = shuffleService.hasKeys();
 
             for (let i = 0; i < deck.length && i < gameState.players.length; i++) {
@@ -204,7 +206,9 @@ export const GameOver: React.FC = React.memo(() => {
                         }
 
                         const role = ShuffleService.roleNumberToRole(encryptedCard, currentRoomId?.toString());
-                        roles.set(gameState.players[i].address.toLowerCase(), role);
+                        if (role !== Role.UNKNOWN) {
+                            roles.set(gameState.players[i].address.toLowerCase(), role);
+                        }
                     }
                 } catch (e: any) {
                     if (e.message !== "Keys not generated") {
@@ -330,10 +334,15 @@ export const GameOver: React.FC = React.memo(() => {
     }, [revealAllRoles]);
 
     // Poll for late on-chain reveals (other players may reveal after us)
+    const revealedRolesRef = useRef<Map<string, Role>>(revealedRoles);
     useEffect(() => {
-        // Start polling for 30 seconds
+        revealedRolesRef.current = revealedRoles;
+    }, [revealedRoles]);
+
+    useEffect(() => {
+        // Start polling for 60 seconds (people take time to reveal manually sometimes)
         let pollCount = 0;
-        const maxPolls = 10; // 10 polls * 3 seconds = 30 seconds
+        const maxPolls = 20; // 20 polls * 3 seconds = 60 seconds
 
         pollIntervalRef.current = setInterval(async () => {
             pollCount++;
@@ -346,7 +355,8 @@ export const GameOver: React.FC = React.memo(() => {
             }
 
             // Re-fetch on-chain roles to catch late reveals
-            await fetchOnChainRoles(revealedRoles);
+            // Pass the LATEST revealed roles from the ref to avoid stale closure
+            await fetchOnChainRoles(revealedRolesRef.current);
         }, 3000);
 
         return () => {
@@ -355,7 +365,7 @@ export const GameOver: React.FC = React.memo(() => {
                 pollIntervalRef.current = null;
             }
         };
-    }, [fetchOnChainRoles, revealedRoles]);
+    }, [fetchOnChainRoles]);
 
     // Музыка победы
     useEffect(() => {
@@ -510,7 +520,15 @@ export const GameOver: React.FC = React.memo(() => {
                                 const isDead = !player.isAlive;
                                 const onChainRole = onChainRoles.get(player.address.toLowerCase());
                                 const localRole = revealedRoles.get(player.address.toLowerCase());
-                                const role = onChainRole || localRole || player.role;
+                                // Priority: 
+                                // 1. On-chain revealed role (verified source)
+                                // 2. Local decryption (ShuffleService) 
+                                // 3. Previous gameState role (only if not UNKNOWN)
+                                let role = Role.UNKNOWN;
+                                if (onChainRole && onChainRole !== Role.UNKNOWN) role = onChainRole;
+                                else if (localRole && localRole !== Role.UNKNOWN) role = localRole;
+                                else if (player.role !== Role.UNKNOWN) role = player.role;
+
                                 const roleKnown = role !== Role.UNKNOWN;
                                 const isOnChain = !!onChainRole;
 
