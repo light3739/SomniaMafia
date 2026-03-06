@@ -638,15 +638,16 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 </div>
 
                 {/* 2. Top Bar (HUD) */}
-                <div className="relative z-20 p-2 flex items-center justify-between">
+                <div className="relative z-20 p-4 pb-2 flex items-center justify-between">
                     <BackButton to="/lobby" label="" exitGame={true} onExitGame={claimRefund} />
-                    <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />
-                    <div className="w-10" /> {/* Spacer */}
+                    <div className="flex items-center gap-2">
+                        <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />
+                    </div>
                 </div>
 
-                {/* 3. Players Grid (Top half) */}
-                <div className="relative z-20 flex-1 overflow-y-auto px-2 py-2 min-h-0">
-                    <div className="grid grid-cols-2 xs:grid-cols-3 gap-2 pb-4">
+                {/* 3. Players Row ("в строчку") */}
+                <div className="relative z-20 w-full overflow-x-auto no-scrollbar py-4 px-2 flex items-center gap-4 min-h-[160px]">
+                    <div className="flex gap-4 px-2">
                         {visualPlayers.map((player) => {
                             if (!player) return null;
                             const voters = Object.entries(voteMap)
@@ -659,31 +660,33 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                                     key={player.address}
                                     initial={{ opacity: 0, scale: 0.9 }}
                                     animate={{ opacity: 1, scale: 1 }}
-                                    className="scale-[0.8] origin-center -m-4"
+                                    className="flex-shrink-0"
                                 >
-                                    <PlayerSpot
-                                        player={player}
-                                        isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
-                                        onAction={handlePlayerAction}
-                                        canAct={canActOnPlayer(player)}
-                                        isSelected={selectedTarget?.toLowerCase() === player.address.toLowerCase()}
-                                        isNight={isNightPhase}
-                                        myRole={myPlayer?.role}
-                                        mark={playerMarks[player.address.toLowerCase()] || null}
-                                        onSetMark={setPlayerMark}
-                                        isSpeaking={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase()}
-                                        speechTimeRemaining={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase() ? discussionState.timeRemaining : 0}
-                                        voters={voters}
-                                    />
+                                    <div className="scale-[0.85] origin-center">
+                                        <PlayerSpot
+                                            player={player}
+                                            isMe={player.address.toLowerCase() === myPlayer?.address.toLowerCase()}
+                                            onAction={handlePlayerAction}
+                                            canAct={canActOnPlayer(player)}
+                                            isSelected={selectedTarget?.toLowerCase() === player.address.toLowerCase()}
+                                            isNight={isNightPhase}
+                                            myRole={myPlayer?.role}
+                                            mark={playerMarks[player.address.toLowerCase()] || null}
+                                            onSetMark={setPlayerMark}
+                                            isSpeaking={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase()}
+                                            speechTimeRemaining={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === player.address.toLowerCase() ? discussionState.timeRemaining : 0}
+                                            voters={voters}
+                                        />
+                                    </div>
                                 </motion.div>
                             );
                         })}
                     </div>
                 </div>
 
-                {/* 4. Game Feed Area (Bottom half) - Sticky bottom */}
-                <div className="relative z-30 bg-black/40 backdrop-blur-xl border-t border-white/10 p-4 pb-8 flex flex-col gap-4 max-h-[60%] overflow-visible">
-                    <div className="w-full flex flex-col gap-4">
+                {/* 4. Game Feed Area (Bottom half) */}
+                <div className="relative z-30 flex-1 flex flex-col min-h-0 overflow-hidden">
+                    <div className="flex-1 overflow-y-auto px-4 pb-20 no-scrollbar">
                         <AnimatePresence mode="wait">
                             {isOverlayPhase ? (
                                 <div key="overlay" className="py-8">
@@ -692,7 +695,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                                     {(gameState.phase === GamePhase.ENDED) && <GameOver />}
                                 </div>
                             ) : (
-                                <div key="game" className="flex flex-col gap-3">
+                                <div key="game" className="flex flex-col gap-3 py-4">
                                     {(gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING || showVotingResults) && (
                                         <div className="w-full">
                                             <DayPhase initialDiscussionState={initialDiscussionState} hideActions={showVotingResults} />
@@ -708,12 +711,16 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                             )}
                         </AnimatePresence>
                     </div>
-
-                    {/* Media tools */}
-                    <div className="flex justify-end gap-3 px-2">
-                        <GameUIOverlay />
-                    </div>
                 </div>
+
+                {/* Fixed controls - Session Key & Menu Overlay */}
+                {currentRoomId !== null && (
+                    <div className="fixed bottom-24 left-4 z-[60] scale-75 origin-bottom-left opacity-80">
+                        <SessionKeyBanner roomId={Number(currentRoomId)} />
+                    </div>
+                )}
+
+                <GameUIOverlay />
 
                 {/* Overlays */}
                 <NightAnnouncement show={showNightAnnouncement} onComplete={handleCloseNightAnnouncement} />
