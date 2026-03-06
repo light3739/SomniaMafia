@@ -68,6 +68,14 @@ ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "
     echo '[front:deploy] created .env.production from example (edit if needed)'
   fi
 
+  LIVEKIT_API_KEY=\"\$(grep -E '^LIVEKIT_API_KEY=' .env.production | head -n1 | cut -d= -f2- || true)\"
+  LIVEKIT_API_SECRET=\"\$(grep -E '^LIVEKIT_API_SECRET=' .env.production | head -n1 | cut -d= -f2- || true)\"
+  if [ -z \"\$LIVEKIT_API_KEY\" ] || [ -z \"\$LIVEKIT_API_SECRET\" ] || [ \"\$LIVEKIT_API_SECRET\" = 'replace-with-livekit-secret' ]; then
+    echo '[front:deploy] ERROR: missing LIVEKIT_API_KEY/LIVEKIT_API_SECRET in .env.production'
+    echo '[front:deploy] set values matching livekit.yaml keys before deploy'
+    exit 1
+  fi
+
   docker compose -f docker-compose.yaml up -d --build
   docker compose -f docker-compose.yaml ps
 "
