@@ -314,7 +314,8 @@ export function getPlayerPositions(count: number): { id: string; x: number; y: n
 }
 
 export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionState?: any }> = ({ initialNightState, initialDiscussionState }) => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap, claimRefund, isTestMode } = useGameContext();
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap, claimRefund } = useGameContext();
+    const isTestMode = typeof window !== 'undefined' && (window as any).isTestMode;
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const { activeHint, showHint, dismissHint } = useGameHints(currentRoomId?.toString());
     const players = gameState.players || [];
@@ -569,7 +570,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 newScale = Math.max(newScale, mobileScale);
             }
 
-            setScale(newScale);
+            setScale(newScale || 1);
         };
 
         window.addEventListener('resize', handleResize);
