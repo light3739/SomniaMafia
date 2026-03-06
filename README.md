@@ -95,6 +95,11 @@ Required server vars for voice token API:
 - `LIVEKIT_API_KEY` (must match key in LiveKit `livekit.yaml`)
 - `LIVEKIT_API_SECRET` (must match secret in LiveKit `livekit.yaml`)
 
+System health endpoint (sanitized env/runtime checks):
+- `GET /api/health/system`
+- Verifies presence of required frontend env vars and runtime dependencies
+- Checks Redis ping + GM `/health` + LiveKit `/rtc/validate` reachability
+
 ### CI/CD deploy + Telegram alerts
 
 Workflow: `.github/workflows/frontend-deploy-server.yml`
