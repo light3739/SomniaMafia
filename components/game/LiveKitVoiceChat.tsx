@@ -19,7 +19,15 @@ interface VoiceChatMessage {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-function SafeTextChat() {
+function normalizeLiveKitWsUrl(rawUrl?: string): string | undefined {
+    if (!rawUrl) return undefined;
+    if (rawUrl.startsWith('wss://') || rawUrl.startsWith('ws://')) return rawUrl;
+    if (rawUrl.startsWith('https://')) return rawUrl.replace('https://', 'wss://');
+    if (rawUrl.startsWith('http://')) return rawUrl.replace('http://', 'ws://');
+    return `wss://${rawUrl}`;
+}
+
+function SafeTextChat({ displayName }: { displayName: string }) {
     const room = useRoomContext();
     const [messages, setMessages] = useState<VoiceChatMessage[]>([]);
     const [input, setInput] = useState('');
@@ -71,7 +79,7 @@ function SafeTextChat() {
         try {
             const payload = encoder.encode(JSON.stringify({
                 type: 'chat',
-                sender: room.localParticipant?.identity || 'Player',
+                sender: displayName || room.localParticipant?.identity || 'Player',
                 content,
                 timestamp: Date.now(),
             }));
@@ -102,7 +110,7 @@ function SafeTextChat() {
         } finally {
             setSending(false);
         }
-    }, [input, room, sending]);
+    }, [displayName, input, room, sending]);
 
     return (
         <div className="mt-4 bg-purple-950/20 border border-purple-500/20 rounded-lg overflow-hidden">
@@ -179,12 +187,21 @@ export function LiveKitVoiceChat({
     const [token, setToken] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
+    const [sessionIdentity, setSessionIdentity] = useState('');
+    const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL);
+
+    useEffect(() => {
+        const suffix = Math.random().toString(36).slice(2, 8);
+        setSessionIdentity(`${userName}-${suffix}`);
+    }, [userName]);
 
     useEffect(() => {
         if (!isActive || !roomId) {
             setToken("");
             return;
         }
+
+        if (!sessionIdentity) return;
 
         (async () => {
             try {
@@ -222,7 +239,7 @@ export function LiveKitVoiceChat({
                     method: "POST",
                     body: JSON.stringify({
                         room: roomId,
-                        username: userName,
+                        username: sessionIdentity,
                         playerAddress,
                         signerAddress,
                         signature,
@@ -248,7 +265,7 @@ export function LiveKitVoiceChat({
                 setError(e instanceof Error ? e.message : 'Failed to connect');
             }
         })();
-    }, [isActive, roomId, userName, address, walletClient]);
+    }, [isActive, roomId, userName, address, walletClient, sessionIdentity]);
 
     if (!isActive) return null;
 
@@ -318,7 +335,7 @@ export function LiveKitVoiceChat({
                                     video={false}
                                     audio={true}
                                     token={token}
-                                    serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
+                                    serverUrl={livekitServerUrl}
                                     data-lk-theme="default"
                                     style={{
                                         minHeight: '200px',
@@ -336,7 +353,7 @@ export function LiveKitVoiceChat({
                                         className="bg-gray-800/50 rounded-lg"
                                     />
 
-                                    {showTextChat && <SafeTextChat />}
+                                    {showTextChat && <SafeTextChat displayName={userName} />}
                                 </LiveKitRoom>
 
                                 <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
