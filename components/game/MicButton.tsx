@@ -252,10 +252,14 @@ export function MicButton({
                     if (!cancelled) detachRemoteAudioRef.current(track, participant);
                 });
 
-                // Connect with natural ICE negotiation — TURN on port 443
-                // lets the browser try host/srflx/relay and pick the best path
-                const defaultConnectOptions = {
+                // Connect with natural ICE negotiation — also add TURNS:443/tcp
+                // ICE server for VPN/firewall users (credentials from token API)
+                const extraIceServers: RTCIceServer[] = Array.isArray(data.turnServers) ? data.turnServers : [];
+                const defaultConnectOptions: { autoSubscribe: boolean; rtcConfig?: RTCConfiguration } = {
                     autoSubscribe: true,
+                    ...(extraIceServers.length > 0 ? {
+                        rtcConfig: { iceServers: extraIceServers },
+                    } : {}),
                 };
                 await connectRoomWithTimeout(
                     room,
