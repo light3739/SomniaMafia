@@ -201,17 +201,21 @@ export function LiveKitVoiceChat({
 }: LiveKitVoiceChatProps) {
     const { address } = useAccount();
     const { data: walletClient } = useWalletClient();
+    const addressRef = useRef(address);
+    const walletClientRef = useRef(walletClient);
+    const userNameRef = useRef(userName);
     const [token, setToken] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
     const [sessionIdentity, setSessionIdentity] = useState('');
     const [connectAttempt, setConnectAttempt] = useState(0);
     const [roomState, setRoomState] = useState<ConnectionState>(ConnectionState.Disconnected);
+    const [forceRelay, setForceRelay] = useState(false);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hasAutoReconnectedRef = useRef(false);
     const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL) || 'wss://livekit.mafiaonchain.live';
 
-    const triggerReconnect = useCallback((manual = false) => {
+    const triggerReconnect = useCallback((manual = false, relay = forceRelay) => {
         if (reconnectTimerRef.current) {
             clearTimeout(reconnectTimerRef.current);
             reconnectTimerRef.current = null;
@@ -219,11 +223,24 @@ export function LiveKitVoiceChat({
         if (manual) {
             hasAutoReconnectedRef.current = false;
         }
+        setForceRelay(relay);
         setToken('');
         setError(null);
         setRoomState(ConnectionState.Connecting);
         setSessionIdentity(makeSessionIdentity(userName));
         setConnectAttempt((prev) => prev + 1);
+    }, [forceRelay, userName]);
+
+    useEffect(() => {
+        addressRef.current = address;
+    }, [address]);
+
+    useEffect(() => {
+        walletClientRef.current = walletClient;
+    }, [walletClient]);
+
+    useEffect(() => {
+        userNameRef.current = userName;
     }, [userName]);
 
     useEffect(() => {
@@ -250,7 +267,7 @@ export function LiveKitVoiceChat({
         (async () => {
             try {
                 setError(null);
-                const playerAddress = address || '';
+                const playerAddress = addressRef.current || '';
                 let signature: `0x${string}` | undefined;
                 let signerAddress: string | undefined;
                 let nonce: string | undefined;
@@ -263,10 +280,10 @@ export function LiveKitVoiceChat({
                         const signed = await signRequest({
                             address: playerAddress,
                             roomId: parsedRoomId,
-                            walletClient,
+                            walletClient: walletClientRef.current,
                             buildMessage: ({ nonce, timestamp }) => buildTokenMessage({
                                 room: roomId,
-                                username: userName,
+                                username: userNameRef.current,
                                 playerAddress,
                                 nonce,
                                 timestamp,
@@ -311,7 +328,7 @@ export function LiveKitVoiceChat({
                 setRoomState(ConnectionState.Disconnected);
             }
         })();
-    }, [isActive, roomId, userName, address, walletClient, sessionIdentity, connectAttempt]);
+    }, [isActive, roomId, sessionIdentity, connectAttempt]);
 
     if (!isActive) return null;
 
@@ -383,6 +400,12 @@ export function LiveKitVoiceChat({
                                     audio={true}
                                     token={token}
                                     serverUrl={livekitServerUrl}
+                                    connectOptions={{
+                                        autoSubscribe: true,
+                                        rtcConfig: forceRelay
+                                            ? { iceTransportPolicy: 'relay' }
+                                            : undefined,
+                                    }}
                                     onConnected={() => {
                                         setRoomState(ConnectionState.Connected);
                                         setError(null);
@@ -391,6 +414,7 @@ export function LiveKitVoiceChat({
                                     onDisconnected={() => {
                                         setRoomState(ConnectionState.Disconnected);
                                         if (!isActive) return;
+                                        if (reconnectTimerRef.current) return;
                                         if (!hasAutoReconnectedRef.current) {
                                             hasAutoReconnectedRef.current = true;
                                             reconnectTimerRef.current = setTimeout(() => {
@@ -400,6 +424,21 @@ export function LiveKitVoiceChat({
                                     }}
                                     onError={(eventError: Error) => {
                                         const message = String(eventError?.message || '');
+                                        const normalized = message.toLowerCase();
+
+                                        if (
+                                            !forceRelay &&
+                                            (normalized.includes('could not establish pc connection') ||
+                                                normalized.includes('pc connection') ||
+                                                normalized.includes('connection failed') ||
+                                                normalized.includes('ice'))
+                                        ) {
+                                            setRoomState(ConnectionState.Disconnected);
+                                            setError('Restricted network detected. Retrying via TURN relay...');
+                                            triggerReconnect(false, true);
+                                            return;
+                                        }
+
                                         if (
                                             message.includes('UnexpectedConnectionState') ||
                                             message.includes('PC manager is closed')
