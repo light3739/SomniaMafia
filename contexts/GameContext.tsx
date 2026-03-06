@@ -1992,9 +1992,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // OPTIMISTIC: Mark committed immediately
             applyOptimisticUpdate({ hasNightCommitted: true });
-            if (address) {
-                setVoteMap(prev => ({ ...prev, [address.toLowerCase()]: targetAddress.toLowerCase() }));
-            }
+            // Night action target should NOT be added to voteMap (which is for public votes only)
+
             addLog(`Submitted ${actionType} action!`, "success");
 
         } catch (e: any) {
@@ -2393,15 +2392,26 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // Get role from myPlayer (locally decrypted)
-            const roleNum = getRoleNumber(myPlayer.role);
+            let roleNum = getRoleNumber(myPlayer.role);
+
+            // FALLBACK #1: If myPlayer.role is UNKNOWN, check localStorage (common after page refresh)
+            if (roleNum === 0 && address) {
+                const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${address.toLowerCase()}`);
+                if (savedRole) {
+                    const roleMap: Record<string, number> = { 'MAFIA': 1, 'DOCTOR': 2, 'DETECTIVE': 3, 'CIVILIAN': 4 };
+                    roleNum = roleMap[savedRole] || 0;
+                    console.log(`[RoleReveal] Recovered role from localStorage for reveal: ${savedRole} -> ${roleNum}`);
+                }
+            }
+
             if (roleNum === 0) {
-                console.warn("[RoleReveal] Unknown role, skipping reveal");
+                console.warn("[RoleReveal] Unknown role even after fallback, skipping reveal");
                 return;
             }
 
             addLog("Revealing your role on-chain...", "info");
             await revealRoleOnChain(roleNum, salt);
-            addLog(`Role revealed: ${myPlayer.role}`, "success");
+            addLog("Role revealed on-chain!", "success");
 
         } catch (e: any) {
             // Ignore "already revealed" errors - might have been revealed before
@@ -2416,14 +2426,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // FIX: Automatically reveal my role on-chain when the game ends
     // This ensures roles are visible to everyone via the polling in GameOver screen,
     // even for players who didn't trigger the end-game transaction themselves.
+    const hasAttemptedRevealRef = useRef(false);
     useEffect(() => {
-        if (gameState.phase === GamePhase.ENDED) {
+        if (gameState.phase === GamePhase.ENDED && !hasAttemptedRevealRef.current) {
             console.log('[RoleReveal] Game ended phase detected, triggering auto-reveal...');
+            hasAttemptedRevealRef.current = true;
+
             // Small initial delay to ensure contract state is stable
             const timer = setTimeout(() => {
-                revealMyRoleAfterGameEnd();
+                revealMyRoleAfterGameEnd().catch(e => {
+                    console.error("[RoleReveal] Auto-reveal failed:", e);
+                    // allow retry once on next tick if it was a transient error? 
+                    // No, let's keep it simple for now.
+                });
             }, 2000);
             return () => clearTimeout(timer);
+        } else if (gameState.phase !== GamePhase.ENDED) {
+            hasAttemptedRevealRef.current = false;
         }
     }, [gameState.phase, revealMyRoleAfterGameEnd]);
 
