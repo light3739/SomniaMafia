@@ -58,11 +58,19 @@ const config = getDefaultConfig({
 
 const queryClient = new QueryClient();
 
+const customTheme = darkTheme({
+    accentColor: '#916A47',
+    accentColorForeground: 'white',
+    borderRadius: 'large',
+    fontStack: 'system',
+    overlayBlur: 'small',
+});
+
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
         <WagmiProvider config={config}>
             <QueryClientProvider client={queryClient}>
-                <RainbowKitProvider theme={darkTheme()}>
+                <RainbowKitProvider theme={customTheme}>
                     <AudioProvider>
                         <GameProvider>
                             {children}

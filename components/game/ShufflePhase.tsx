@@ -574,7 +574,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
     }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, pendingDeck, pendingSalt, handleReveal]);
 
     return useMemo(() => (
-        <div className="w-full h-full flex flex-col items-center overflow-y-auto overflow-x-hidden p-8 custom-scrollbar">
+        <div className="w-full h-[100dvh] flex flex-col items-center overflow-y-auto overflow-x-hidden p-8 custom-scrollbar">
             <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}

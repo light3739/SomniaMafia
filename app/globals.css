@@ -15,6 +15,15 @@ body {
   color: rgb(var(--foreground-rgb));
   background: transparent;
   min-height: 100vh;
+  min-height: 100dvh;
+  /* Dynamic viewport height for mobile browsers */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Support for notches on modern phones */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Ensure all buttons and clickable elements show the pointer cursor */
@@ -50,4 +59,38 @@ button:disabled,
 .scrollbar-thin::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(145, 106, 71, 0.5);
+}
+
+/* Firefox Support for Scrollbars */
+.scrollbar-thin,
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(145, 106, 71, 0.3) rgba(145, 106, 71, 0.05);
+}
+
+/* RainbowKit Custom Overrides */
+[data-rk] [role="dialog"]>div {
+  background: #0D0907 !important;
+  border: 1px solid rgba(145, 106, 71, 0.3) !important;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8) !important;
+}
+
+[data-rk] [role="dialog"] h1,
+[data-rk] [role="dialog"] h2 {
+  font-family: 'Cinzel', serif !important;
+  letter-spacing: 0.05em !important;
+}
+
+[data-rk] button {
+  font-family: 'Montserrat', sans-serif !important;
+}
+
+[data-rk] [role="dialog"] div[data-testid="rk-connect-options"] button {
+  background: rgba(25, 19, 13, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-rk] [role="dialog"] div[data-testid="rk-connect-options"] button:hover {
+  background: rgba(145, 106, 71, 0.1) !important;
+  border: 1px solid rgba(145, 106, 71, 0.3) !important;
 }
