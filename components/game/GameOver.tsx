@@ -420,7 +420,7 @@ export const GameOver: React.FC = React.memo(() => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1 }}
-            className="fixed inset-[-100vw] z-[100] flex items-center justify-center p-8 bg-black/80 backdrop-blur-xl pointer-events-auto"
+            className="fixed inset-0 z-[100] flex flex-col items-center p-8 bg-black/80 backdrop-blur-xl pointer-events-auto overflow-y-auto overflow-x-hidden custom-scrollbar"
         >
             {/* Post-game Global Voice Chat */}
             {currentRoomId && myPlayer && (
@@ -435,12 +435,12 @@ export const GameOver: React.FC = React.memo(() => {
                 </div>
             )}
 
-            <div className="w-full h-full flex flex-col items-center justify-center overflow-y-auto py-20">
+            <div className="w-full flex-1 flex flex-col items-center justify-center py-20 my-auto">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ type: "spring", duration: 0.8 }}
-                    className="max-w-2xl w-full"
+                    className="max-w-2xl w-full my-auto"
                 >
                     {/* Winner Banner */}
                     <motion.div

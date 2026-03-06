@@ -26,14 +26,14 @@ export const CreateLobby: React.FC = () => {
     };
 
     return (
-        <div className="relative w-full min-h-screen font-['Montserrat'] flex items-center justify-center p-4">
-
+        <div className="relative w-full h-screen font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
+            {/* Background is provided by RootLayout/DynamicBackground */}
 
             <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-8 py-10"
+                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-8 py-10 my-auto"
             >
                 <div className="w-full flex items-center justify-between">
                     <div className="-ml-3">

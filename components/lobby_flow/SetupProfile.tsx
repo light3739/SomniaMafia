@@ -78,16 +78,15 @@ export const SetupProfile: React.FC = () => {
     };
 
     return (
-        <div className="relative w-full min-h-screen font-montserrat flex items-center justify-center p-4">
-            {/* Fixed Background */}
-
+        <div className="relative w-full h-screen font-montserrat flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
+            {/* Fixed Background handled by DynamicBackground */}
 
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.4 }}
-                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-8 py-10"
+                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-8 py-10 my-auto"
             >
                 {/* Profile Section */}
                 <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] mt-6 relative flex flex-col items-center p-8 border border-white/10 shadow-2xl">

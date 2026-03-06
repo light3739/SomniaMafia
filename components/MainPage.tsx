@@ -12,12 +12,11 @@ interface MainPageProps {
 export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
 
     return (
-        <div className="relative w-full h-screen overflow-hidden font-sans flex items-center justify-center">
-
-
+        <div className="relative w-full h-screen overflow-y-auto overflow-x-hidden font-sans flex flex-col items-center custom-scrollbar">
+            {/* Background is provided by RootLayout/DynamicBackground */}
 
             {/* Content Container */}
-            <div className="relative z-10 w-full flex flex-col items-center justify-center p-4">
+            <div className="relative z-10 w-full flex flex-col items-center justify-center p-4 my-auto min-h-full">
 
                 {/* Main Title */}
                 <motion.div
