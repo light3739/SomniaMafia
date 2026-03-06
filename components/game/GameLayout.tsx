@@ -19,7 +19,7 @@ import { useGameHints, GameHintsOverlay } from './GameHints';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { useSoundEffects } from '../ui/SoundEffects';
-import { GamePhase, Role } from '../../types';
+import { GamePhase, Role, Player } from '../../types';
 
 // Dynamic imports for heavy components (code splitting)
 const ShufflePhase = dynamic(() => import('./ShufflePhase').then(m => m.ShufflePhase), {
@@ -549,6 +549,15 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
 
 
     useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('test')) {
+                (window as any).isTestMode = true;
+            }
+        }
+    }, []);
+
+    useEffect(() => {
         const handleResize = () => {
             const windowWidth = window.innerWidth;
             const windowHeight = window.innerHeight;
@@ -832,6 +841,53 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                             variant="outline-gold"
                             className="h-8 px-3 text-[10px]"
                             onClick={() => {
+                                const dummyPlayers: Player[] = Array.from({ length: 15 }, (_, i) => ({
+                                    id: `dummy-${i}`,
+                                    name: `Player ${i + 2}`,
+                                    address: `0x${Math.random().toString(16).slice(2, 42).padEnd(40, '0')}` as `0x${string}`,
+                                    role: Role.CIVILIAN,
+                                    isAlive: true,
+                                    avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${i}`,
+                                    votesReceived: 0,
+                                    status: 'connected',
+                                    hasConfirmedRole: true,
+                                    hasDeckCommitted: true,
+                                    hasVoted: false,
+                                    hasNightCommitted: false,
+                                    hasNightRevealed: false
+                                }));
+
+                                const me: Player = players[0] || {
+                                    id: 'me',
+                                    name: 'Haiman',
+                                    address: '0x1234567890123456789012345678901234567890' as `0x${string}`,
+                                    role: Role.MAFIA,
+                                    isAlive: true,
+                                    avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=me`,
+                                    votesReceived: 0,
+                                    status: 'connected',
+                                    hasConfirmedRole: true,
+                                    hasDeckCommitted: true,
+                                    hasVoted: false,
+                                    hasNightCommitted: false,
+                                    hasNightRevealed: false
+                                };
+
+                                setGameState(prev => ({
+                                    ...prev,
+                                    phase: GamePhase.DAY,
+                                    dayCount: 1,
+                                    players: [me, ...dummyPlayers]
+                                }));
+                                addLog("[Test] Simulating 16 Players", "success");
+                            }}
+                        >
+                            Sim: 16 Players
+                        </Button>
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px]"
+                            onClick={() => {
                                 setGameState(prev => ({
                                     ...prev,
                                     phase: GamePhase.ENDED,
@@ -863,6 +919,37 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                             }}
                         >
                             Win: Town
+                        </Button>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px]"
+                            onClick={() => {
+                                setGameState(prev => ({
+                                    ...prev,
+                                    phase: prev.phase === GamePhase.DAY ? GamePhase.VOTING : GamePhase.DAY
+                                }));
+                            }}
+                        >
+                            Toggle Day/Vote
+                        </Button>
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px]"
+                            onClick={() => {
+                                setGameState(prev => {
+                                    const alive = prev.players.filter(p => p.isAlive && p.id !== 'me');
+                                    if (!alive.length) return prev;
+                                    const victim = alive[Math.floor(Math.random() * alive.length)];
+                                    return {
+                                        ...prev,
+                                        players: prev.players.map(p => p.id === victim.id ? { ...p, isAlive: false } : p)
+                                    };
+                                });
+                            }}
+                        >
+                            Kill Random
                         </Button>
                     </div>
                 </div>
