@@ -227,8 +227,20 @@ export const ChatToggleButton: React.FC<{
                 });
                 console.log('[ChatToggleButton] room.connect() completed');
 
-            } catch (e) {
-                console.error('[ChatToggleButton] Connection error:', e);
+            } catch (e: any) {
+                const message = String(e?.message || '');
+                const isExpectedCleanupError =
+                    cancelled ||
+                    message.includes('Client initiated disconnect') ||
+                    message.includes('UnexpectedConnectionState') ||
+                    message.includes('PC manager is closed');
+
+                if (!isExpectedCleanupError) {
+                    console.error('[ChatToggleButton] Connection error:', e);
+                } else {
+                    console.log('[ChatToggleButton] Connection closed during cleanup.');
+                }
+
                 if (!cancelled) {
                     setIsConnecting(false);
                 }
