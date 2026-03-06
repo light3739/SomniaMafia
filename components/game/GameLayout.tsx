@@ -234,6 +234,7 @@ export function getPlayerPositions(count: number): { id: string; x: number; y: n
     // Cards are placed along a rounded-rectangle perimeter that avoids the
     // center chat area (600×600 at center of 1488×1024 board).
     const isMobilePortrait = typeof window !== 'undefined' && window.innerWidth < 768 && window.innerHeight > window.innerWidth;
+    const isVerySmall = typeof window !== 'undefined' && window.innerWidth < 400;
 
     const tuned = HAND_TUNED[count];
     if (tuned) {
@@ -243,13 +244,17 @@ export function getPlayerPositions(count: number): { id: string; x: number; y: n
             // On mobile portrait, move side players closer to center to keep them on screen
             if (isMobilePortrait) {
                 // Base width 1488, center 744. 
-                // We want to keep them within roughly 744 +/- 500
+                // We want to keep them within roughly 744 +/- 450
                 const center = 744;
                 const offset = x - center;
-                if (Math.abs(offset) > 300) {
-                    // Pull towards center
-                    x = center + (offset * 0.65);
+                if (Math.abs(offset) > 100) {
+                    // Stronger pull for portrait to avoid side gaps
+                    x = center + (offset * (isVerySmall ? 0.45 : 0.55));
                 }
+
+                // Adjust Y to push top/bottom rows slightly further apart to clear center feed
+                if (y < 200) y -= 40;
+                if (y > 700) y += 40;
             }
             return { id: `p${i + 1}`, x, y };
         });
@@ -722,7 +727,8 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                             style={{
                                 left: pos.x,
                                 top: pos.y,
-                                // PlayerSpot components are fixed size 250x130, so we just position them
+                                transform: typeof window !== 'undefined' && window.innerWidth < 768 ? 'scale(0.85)' : 'none',
+                                transformOrigin: 'center center'
                             }}
                         >
                             <PlayerSpot
@@ -745,8 +751,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
 
 
                 {/* CENTER CONTENT (Day Phase, Vote, Logs etc) */}
-                {/* CENTER CONTENT (Day/Night/Voting) */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] flex items-center justify-center z-10">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-[600px] h-[550px] flex items-center justify-center z-10">
                     {/* Day/Voting Phase Content — stays mounted during showVotingResults to avoid GameLog re-mount */}
                     {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING || showVotingResults) && (
                         <div className="w-full h-full">
@@ -825,9 +830,9 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 </div>
             )}
 
-            {/* Test Controls - Bottom Right */}
+            {/* Test Controls - Bottom Right (shifted on mobile to avoid music bar) */}
             {isTestMode && (
-                <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 p-4 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 text-white pointer-events-auto">
+                <div className="fixed bottom-24 md:bottom-4 right-4 z-[200] flex flex-col gap-1.5 p-3 md:p-4 bg-black/80 backdrop-blur-md rounded-2xl border border-white/10 text-white pointer-events-auto scale-90 md:scale-100 origin-bottom-right">
                     <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">Dev Tools</div>
                     <div className="flex gap-2">
                         <Button
