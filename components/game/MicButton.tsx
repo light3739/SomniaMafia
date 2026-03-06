@@ -75,9 +75,25 @@ export function MicButton({
     const [participantCount, setParticipantCount] = useState(0);
     const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL);
 
+    const addressRef = useRef(address);
+    const chainIdRef = useRef(chainId);
+    const walletClientRef = useRef(walletClient);
+
     const roomRef = useRef<Room | null>(null);
     const audioTrackRef = useRef<LocalAudioTrack | null>(null);
     const audioContainerRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        addressRef.current = address;
+    }, [address]);
+
+    useEffect(() => {
+        chainIdRef.current = chainId;
+    }, [chainId]);
+
+    useEffect(() => {
+        walletClientRef.current = walletClient;
+    }, [walletClient]);
 
     // Function to attach remote audio track to DOM for playback
     const attachRemoteAudio = useCallback((track: RemoteTrack, participant: RemoteParticipant) => {
@@ -141,7 +157,7 @@ export function MicButton({
             setError(null);
 
             try {
-                const playerAddress = address || '';
+                const playerAddress = addressRef.current || '';
                 let signature: `0x${string}` | undefined;
                 let signerAddress: string | undefined;
                 let nonce: string | undefined;
@@ -154,7 +170,7 @@ export function MicButton({
                         const signed = await signRequest({
                             address: playerAddress,
                             roomId: parsedRoomId,
-                            walletClient,
+                            walletClient: walletClientRef.current,
                             buildMessage: ({ nonce, timestamp }) => buildTokenMessage({
                                 room: roomId,
                                 username: userNameRef.current,
@@ -183,7 +199,7 @@ export function MicButton({
                         signature,
                         nonce,
                         timestamp,
-                        chainId, // CRITICAL: Send current chainId to server
+                        chainId: chainIdRef.current, // CRITICAL: Send current chainId to server
                     }),
                     headers: { "Content-Type": "application/json" },
                 });
@@ -341,7 +357,7 @@ export function MicButton({
             audioTrackRef.current = null;
             if (audioContainerRef.current) audioContainerRef.current.innerHTML = '';
         };
-    }, [roomId, address, walletClient, chainId, retryCount]);
+    }, [roomId, retryCount, livekitServerUrl]);
 
     const toggleMic = useCallback(async () => {
         if (error) {
