@@ -135,7 +135,7 @@ const HintCard: React.FC<{
             exit={{ opacity: 0, x: 16, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 340, damping: 28 }}
             className={`
-                relative w-[340px]
+                relative w-full md:w-[340px]
                 bg-gradient-to-br ${config.bgGradient}
                 backdrop-blur-2xl
                 border ${config.borderColor}
@@ -274,8 +274,24 @@ export const GameHintsOverlay: React.FC<{
         );
     }
 
-    // Main game: right of 600px center panel accounting for board scale.
-    // Real right edge of feed in viewport = 50vw + 300*scale px
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+
+    // Mobile/Tablet mode: bottom-centered (above actions/chat)
+    if (isMobile) {
+        return (
+            <div className="fixed bottom-[18%] left-4 right-4 z-[150] pointer-events-none flex justify-center">
+                <AnimatePresence mode="wait">
+                    {activeHint && (
+                        <div key={activeHint} className="w-full max-w-[420px]">
+                            <HintCard config={config} onDismiss={onDismiss} />
+                        </div>
+                    )}
+                </AnimatePresence>
+            </div>
+        );
+    }
+
+    // Desktop: right of 600px center panel
     const feedRightPx = 300 * scale;
     return (
         <div
