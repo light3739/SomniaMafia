@@ -8,6 +8,11 @@ FRONT_SSH_HOST="${FRONT_SSH_HOST:-mafia}"
 FRONT_SSH_USER="${FRONT_SSH_USER:-root}"
 FRONT_SSH_PORT="${FRONT_SSH_PORT:-22}"
 FRONT_REMOTE_DIR="${FRONT_REMOTE_DIR:-/root/somnia-frontend}"
+FRONT_PREFLIGHT_URL="${FRONT_PREFLIGHT_URL:-https://mafiaonchain.live/api/health/system}"
+FRONT_ALLOW_UNHEALTHY_DEPLOY="${FRONT_ALLOW_UNHEALTHY_DEPLOY:-false}"
+FRONT_DEPLOY_NICE="${FRONT_DEPLOY_NICE:-10}"
+FRONT_DEPLOY_IONICE_CLASS="${FRONT_DEPLOY_IONICE_CLASS:-2}"
+FRONT_DEPLOY_IONICE_LEVEL="${FRONT_DEPLOY_IONICE_LEVEL:-7}"
 SSH_OPTS=(
   -p "$FRONT_SSH_PORT"
   -o StrictHostKeyChecking=accept-new
@@ -18,6 +23,44 @@ SSH_OPTS=(
   -o KbdInteractiveAuthentication=no
   -o NumberOfPasswordPrompts=0
 )
+
+preflight_or_fail() {
+  echo "[front:deploy] preflight check: $FRONT_PREFLIGHT_URL"
+  local json
+  json="$(curl -fsS --max-time 8 "$FRONT_PREFLIGHT_URL" || true)"
+
+  if [[ -z "$json" ]]; then
+    echo "[front:deploy] ERROR: preflight health endpoint is unreachable"
+    if [[ "$FRONT_ALLOW_UNHEALTHY_DEPLOY" != "true" ]]; then
+      echo "[front:deploy] set FRONT_ALLOW_UNHEALTHY_DEPLOY=true for emergency override"
+      exit 1
+    fi
+    echo "[front:deploy] WARNING: continuing due to FRONT_ALLOW_UNHEALTHY_DEPLOY=true"
+    return
+  fi
+
+  local ok
+  if command -v jq >/dev/null 2>&1; then
+    ok="$(printf '%s' "$json" | jq -r '.ok // false' 2>/dev/null || echo false)"
+  else
+    ok="$(printf '%s' "$json" | python3 -c 'import json,sys
+try:
+ d=json.load(sys.stdin)
+ print("true" if d.get("ok") is True else "false")
+except Exception:
+ print("false")' 2>/dev/null || echo false)"
+  fi
+
+  if [[ "$ok" != "true" ]]; then
+    echo "[front:deploy] ERROR: preflight health check returned ok=false"
+    echo "$json"
+    if [[ "$FRONT_ALLOW_UNHEALTHY_DEPLOY" != "true" ]]; then
+      echo "[front:deploy] set FRONT_ALLOW_UNHEALTHY_DEPLOY=true for emergency override"
+      exit 1
+    fi
+    echo "[front:deploy] WARNING: continuing due to FRONT_ALLOW_UNHEALTHY_DEPLOY=true"
+  fi
+}
 
 pick_ssh_user() {
   local candidates=("$FRONT_SSH_USER" root ubuntu)
@@ -39,6 +82,8 @@ pick_ssh_user() {
 
   return 1
 }
+
+preflight_or_fail
 
 if ! RESOLVED_SSH_USER="$(pick_ssh_user)"; then
   echo "[front:deploy] unable to authenticate with provided SSH key (tried: ${FRONT_SSH_USER}, root, ubuntu)"
@@ -86,7 +131,15 @@ ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "
     exit 1
   fi
 
-  docker compose --env-file .env.production -f docker-compose.yaml up -d --build
+  COMPOSE_CMD='docker compose --env-file .env.production -f docker-compose.yaml up -d --build'
+  if command -v ionice >/dev/null 2>&1; then
+    COMPOSE_CMD=\"ionice -c ${FRONT_DEPLOY_IONICE_CLASS} -n ${FRONT_DEPLOY_IONICE_LEVEL} nice -n ${FRONT_DEPLOY_NICE} \$COMPOSE_CMD\"
+  else
+    COMPOSE_CMD=\"nice -n ${FRONT_DEPLOY_NICE} \$COMPOSE_CMD\"
+  fi
+
+  echo '[front:deploy] running compose in low-priority mode to reduce server pressure'
+  sh -lc \"\$COMPOSE_CMD\"
   docker compose --env-file .env.production -f docker-compose.yaml ps
 "
 
