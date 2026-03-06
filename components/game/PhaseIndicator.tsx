@@ -44,18 +44,17 @@ export const PhaseIndicator = React.memo(({ phase, dayCount }: PhaseIndicatorPro
                     initial={{ opacity: 0, scale: 0.5, rotate: -90 }}
                     animate={{ opacity: 1, scale: 1, rotate: 0 }}
                     transition={{ duration: 0.5 }}
-                    className="flex items-center justify-center"
                 >
-                    {React.cloneElement(config.icon as React.ReactElement<any>, { className: "w-6 h-6 md:w-8 md:h-8 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" })}
+                    {React.cloneElement(config.icon as React.ReactElement<any>, { className: "w-8 h-8 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" })}
                 </motion.div>
             </div>
 
             {/* Text badge with border */}
             <div className={`
-                px-4 md:px-6 py-1.5 md:py-2 rounded-full border backdrop-blur-md shadow-lg transition-all duration-500 ease-in-out
+                px-6 py-2 rounded-full border backdrop-blur-md shadow-lg transition-all duration-500 ease-in-out
                 ${config.color}
             `}>
-                <span className="text-sm md:text-lg font-bold font-['Montserrat'] uppercase tracking-widest whitespace-nowrap">
+                <span className="text-lg font-bold font-['Montserrat'] uppercase tracking-widest">
                     {phase === GamePhase.DAY ? `Day ${dayCount}` :
                         phase === GamePhase.NIGHT ? `Day ${dayCount}` :
                             phase === GamePhase.VOTING ? `Day ${dayCount}` :
