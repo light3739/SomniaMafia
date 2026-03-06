@@ -18,9 +18,10 @@ import ElasticSlider from './ElasticSlider';
 
 interface BackgroundMusicProps {
     additionalButtons?: React.ReactNode;
+    isChatExpanded?: boolean;
 }
 
-export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButtons }) => {
+export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButtons, isChatExpanded = false }) => {
     const { masterVolume, setMasterVolume } = useAudioSettings();
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -117,8 +118,14 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
                 {showSettings && (
                     <motion.div
                         initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        animate={{
+                            opacity: 1,
+                            y: 0,
+                            scale: 1,
+                            x: isChatExpanded ? -332 : 0
+                        }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
                         className="pointer-events-auto mb-2 p-5 bg-black/80 backdrop-blur-2xl border border-[#916A47]/30 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-64"
                     >
                         <h3 className="text-[#916A47] text-xs font-bold uppercase tracking-widest mb-5 flex items-center gap-2">

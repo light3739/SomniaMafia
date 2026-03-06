@@ -5,6 +5,7 @@ import { useGameContext } from '../../contexts/GameContext';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { NetworkSelector } from '../ui/NetworkSelector';
 
 export const CreateLobby: React.FC = () => {
@@ -39,7 +40,9 @@ export const CreateLobby: React.FC = () => {
                     <div className="-ml-3">
                         <BackButton to="/setup" />
                     </div>
-                    <NetworkSelector compact />
+                    <div className="flex items-center gap-2">
+                        <NetworkSelector compact />
+                    </div>
                 </div>
 
                 <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] p-5 md:p-8 border border-white/10 shadow-xl flex flex-col gap-4 md:gap-6 items-center mt-2">
