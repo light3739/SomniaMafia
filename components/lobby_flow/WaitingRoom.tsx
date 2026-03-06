@@ -54,7 +54,7 @@ export const WaitingRoom: React.FC = () => {
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-6 py-10 my-auto"
+                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10 my-auto"
             >
                 <div className="w-full flex items-center justify-start">
                     <BackButton to="/setup" label="Exit to Menu" />
@@ -68,8 +68,8 @@ export const WaitingRoom: React.FC = () => {
 
                 </div>
 
-                <div className="w-full bg-[rgba(15,10,5,0.85)] backdrop-blur-xl rounded-[32px] p-6 border border-white/5 shadow-2xl flex flex-col">
-                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 min-h-[300px] max-h-[400px]">
+                <div className="w-full bg-[rgba(15,10,5,0.85)] backdrop-blur-xl rounded-[32px] p-4 md:p-6 border border-white/5 shadow-2xl flex flex-col">
+                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2 min-h-[150px] max-h-[300px] md:max-h-[400px]">
                         {gameState.players.map((player, index) => {
                             const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
 
@@ -78,7 +78,7 @@ export const WaitingRoom: React.FC = () => {
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     key={player.address}
-                                    className={`w-full p-4 rounded-2xl flex justify-between items-center border transition-all ${isMe ? 'bg-[#916A47]/10 border-[#916A47]/30' : 'bg-white/[0.02] border-white/5'
+                                    className={`w-full p-3 md:p-4 rounded-2xl flex justify-between items-center border transition-all ${isMe ? 'bg-[#916A47]/10 border-[#916A47]/30' : 'bg-white/[0.02] border-white/5'
                                         }`}
                                 >
                                     <div className="flex items-center gap-4">
@@ -132,7 +132,7 @@ export const WaitingRoom: React.FC = () => {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
-                    className="w-full bg-[rgba(15,10,5,0.85)] backdrop-blur-xl rounded-2xl p-5 border border-white/5"
+                    className="w-full bg-[rgba(15,10,5,0.85)] backdrop-blur-xl rounded-2xl p-4 md:p-5 border border-white/5"
                 >
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -170,7 +170,7 @@ export const WaitingRoom: React.FC = () => {
                         onClick={handleStart}
                         isLoading={isTxPending}
                         disabled={isTxPending}
-                        className="w-full h-[70px] text-xl tracking-widest uppercase shadow-[0_10px_40px_rgba(145,106,71,0.2)]"
+                        className="w-full h-[60px] md:h-[70px] text-xl tracking-widest uppercase shadow-[0_10px_40px_rgba(145,106,71,0.2)]"
                     >
                         {isTxPending ? "Starting..." : "Start Game"}
                     </Button>

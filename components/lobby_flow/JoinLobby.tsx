@@ -173,7 +173,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         <div className="relative w-full h-screen font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-6 py-10 my-auto">
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10 my-auto">
                 <div className="w-full flex items-center justify-between">
                     <div className="-ml-3">
                         <BackButton />
@@ -209,7 +209,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 )}
 
                 <div className="flex items-center justify-between w-full">
-                    <h2 className="text-white text-3xl font-['Cinzel'] font-light tracking-widest uppercase">Live Sessions</h2>
+                    <h2 className="text-white text-2xl md:text-3xl font-['Cinzel'] font-light tracking-widest uppercase">Live Sessions</h2>
                     <div className="flex items-center gap-3">
                         {lastUpdate > 0 && (
                             <span className="text-white/20 text-[10px] font-mono">
@@ -218,7 +218,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                         )}
                         <button
                             onClick={() => fetchRooms(false)}
-                            className="text-[#916A47] hover:text-white transition-colors text-2xl"
+                            className="text-[#916A47] hover:text-white transition-colors text-xl md:text-2xl"
                             title="Refresh List"
                         >
                             ⟳
@@ -226,7 +226,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     </div>
                 </div>
 
-                <div className="w-full flex flex-col gap-3 min-h-[300px]">
+                <div className="w-full flex flex-col gap-3 min-h-[200px] md:min-h-[300px]">
                     {isLoading ? (
                         <div className="text-white/40 text-center flex-1 flex items-center justify-center bg-black/20 rounded-2xl border border-white/5 animate-pulse">Scanning Network...</div>
                     ) : rooms.length === 0 ? (
@@ -241,18 +241,18 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                             disabled={isTxPending || (!isConnected && !initialRoomId)} // Allow click if not connected to trigger tooltip? No, replace with connect instructions?
                             // Actually, let's keep it simple: If not connected, the top right button allows connection. 
                             // But better UX: click room -> if not connected -> highlight connect button or show alert.
-                            className={`w-full p-5 bg-[#19130D]/80 backdrop-blur-sm border border-white/10 rounded-[15px] flex items-center justify-between group transition-all ${!isConnected ? 'opacity-70 grayscale' : ''}`}
+                            className={`w-full p-4 md:p-5 bg-[#19130D]/80 backdrop-blur-sm border border-white/10 rounded-[15px] flex items-center justify-between group transition-all ${!isConnected ? 'opacity-70 grayscale' : ''}`}
                         >
                             <div className="flex flex-col items-start gap-1">
-                                <span className="text-white text-lg font-medium">{room.name || `Room #${room.id}`}</span>
-                                <span className="text-white/40 text-[10px] font-mono uppercase">By {room.host.slice(0, 10)}...</span>
+                                <span className="text-white text-base md:text-lg font-medium">{room.name || `Room #${room.id}`}</span>
+                                <span className="text-white/40 text-[9px] md:text-[10px] font-mono uppercase">By {room.host.slice(0, 10)}...</span>
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="text-right">
                                     <span className="text-[#916A47] font-bold block">{room.players}/{room.max}</span>
-                                    <span className="text-white/20 text-[8px] uppercase tracking-wider">Players Joined</span>
+                                    <span className="text-white/20 text-[7px] md:text-[8px] uppercase tracking-wider">Players Joined</span>
                                 </div>
-                                <div className="w-8 h-8 rounded-full bg-[#916A47]/20 flex items-center justify-center text-[#916A47]">
+                                <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#916A47]/20 flex items-center justify-center text-[#916A47]">
                                     {isConnected ? '→' : '🔒'}
                                 </div>
                             </div>
