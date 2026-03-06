@@ -114,7 +114,11 @@ export async function GET(request: Request) {
             }
         }
 
-        return buildResponse(state, alivePlayers, playerAddress);
+        const response = buildResponse(state, alivePlayers, playerAddress);
+        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        response.headers.set('Pragma', 'no-cache');
+        response.headers.set('Expires', '0');
+        return response;
 
     } catch (error: any) {
         console.error('[API/Discussion] GET Error:', error);
@@ -271,7 +275,9 @@ export async function POST(request: Request) {
 
             const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, true);
             console.log(`[API/Discussion] Speaker skipped by ${isHost ? 'HOST' : 'PLAYER'} in Room #${roomId} Day ${dayCount}, new index: ${newState?.currentSpeakerIndex}`);
-            return buildResponse(newState, alivePlayers, playerAddress);
+            const response = buildResponse(newState, alivePlayers, playerAddress);
+            response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            return response;
         }
 
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
