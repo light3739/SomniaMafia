@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Clock } from 'lucide-react';
 
 export const PostVotingTransition: React.FC = () => {
-    const [timeLeft, setTimeLeft] = useState(20);
+    const [timeLeft, setTimeLeft] = useState(10);
 
     useEffect(() => {
         if (timeLeft <= 0) return;
