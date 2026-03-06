@@ -183,7 +183,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isTxPending, setIsTxPending] = useState(false);
     const [isTxConfirming, setIsTxConfirming] = useState(false);
     const pendingConfirmationsRef = useRef<Set<string>>(new Set());
-    const [isTestMode, setIsTestMode] = useState(false);
+    const [isTestMode, setIsTestMode] = useState(() => {
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            return params.get("test") === "true" || params.has("test");
+        }
+        return false;
+    });
     const [playerMarks, setPlayerMarks] = useState<Record<string, 'mafia' | 'civilian' | 'question' | null>>({});
     // Vote map: stores who voted for whom (voter address -> target address)
     const [voteMap, setVoteMap] = useState<Record<string, string>>({});
@@ -197,17 +203,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return chainId === AVALANCHE_FUJI.id ? parseEther('0.1') : parseEther('1');
     }, [chainId]);
 
-    // URL detection for Test Mode
     useEffect(() => {
-        if (typeof window !== "undefined") {
-            const params = new URLSearchParams(window.location.search);
-            if (params.get("test") === "true" || params.has("test")) {
-                console.log("[GameContext] Test mode ENABLED via URL");
-                setIsTestMode(true);
-                (window as any).isTestMode = true;
-            }
+        if (isTestMode && typeof window !== 'undefined') {
+            (window as any).isTestMode = true;
         }
-    }, []);
+    }, [isTestMode]);
 
     const setPlayerMark = useCallback((address: string, mark: 'mafia' | 'civilian' | 'question' | null) => {
         setPlayerMarks(prev => ({

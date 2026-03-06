@@ -314,8 +314,7 @@ export function getPlayerPositions(count: number): { id: string; x: number; y: n
 }
 
 export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionState?: any }> = ({ initialNightState, initialDiscussionState }) => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap, claimRefund } = useGameContext();
-    const isTestMode = typeof window !== 'undefined' && (window as any).isTestMode;
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap, claimRefund, isTestMode } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const { activeHint, showHint, dismissHint } = useGameHints(currentRoomId?.toString());
     const players = gameState.players || [];
@@ -609,7 +608,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const isNightPhase = gameState.phase === GamePhase.NIGHT;
     const currentBg = isNightPhase ? nightBg : dayBg;
 
-    if (players.length === 0) {
+    if (players.length === 0 && !isTestMode) {
         return (
             <div className="w-full h-screen bg-black flex flex-col items-center justify-center gap-4 text-white">
                 <div className="fixed inset-0 z-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url(${dayBg})` }} />
