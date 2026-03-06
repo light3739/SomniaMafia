@@ -95,13 +95,11 @@ export async function POST(req: NextRequest) {
 
         const apiKey = process.env.LIVEKIT_API_KEY;
         const apiSecret = process.env.LIVEKIT_API_SECRET;
-        const wsUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
 
-        if (!apiKey || !apiSecret || !wsUrl) {
+        if (!apiKey || !apiSecret) {
             console.error('[LiveKit Token API] Missing environment variables:', {
                 hasApiKey: !!apiKey,
                 hasApiSecret: !!apiSecret,
-                hasWsUrl: !!wsUrl
             });
             return NextResponse.json(
                 { error: 'Server misconfigured' },
