@@ -73,7 +73,6 @@ export function MicButton({
     const [error, setError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
     const [participantCount, setParticipantCount] = useState(0);
-    const [forceRelay, setForceRelay] = useState(false);
     const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL);
 
     const addressRef = useRef(address);
@@ -83,7 +82,6 @@ export function MicButton({
     const roomRef = useRef<Room | null>(null);
     const audioTrackRef = useRef<LocalAudioTrack | null>(null);
     const audioContainerRef = useRef<HTMLDivElement | null>(null);
-    const connectedAtRef = useRef<number | null>(null);
 
     useEffect(() => {
         addressRef.current = address;
@@ -231,17 +229,9 @@ export function MicButton({
                 // Setup event listeners
                 room.on(RoomEvent.Disconnected, () => {
                     if (!cancelled) {
-                        const connectedAt = connectedAtRef.current;
-                        const shortLivedConnection = connectedAt !== null && (Date.now() - connectedAt) < 20000;
-                        connectedAtRef.current = null;
                         setIsConnected(false);
                         setParticipantCount(0);
                         console.log('[MicButton] Disconnected from room');
-                        if (!forceRelay && shortLivedConnection) {
-                            console.warn('[MicButton] Short-lived ICE connection detected, retrying via TURN relay');
-                            setForceRelay(true);
-                            setRetryCount((prev) => prev + 1);
-                        }
                     }
                 });
 
@@ -249,7 +239,6 @@ export function MicButton({
                     if (!cancelled) {
                         setIsConnected(true);
                         setParticipantCount(room.remoteParticipants.size + 1);
-                        connectedAtRef.current = Date.now();
                         console.log('[MicButton] Connected to room');
                     }
                 });
@@ -263,48 +252,18 @@ export function MicButton({
                     if (!cancelled) detachRemoteAudioRef.current(track, participant);
                 });
 
+                // Connect with natural ICE negotiation — TURN on port 443
+                // lets the browser try host/srflx/relay and pick the best path
                 const defaultConnectOptions = {
                     autoSubscribe: true,
-                    rtcConfig: forceRelay
-                        ? { iceTransportPolicy: 'relay' as RTCIceTransportPolicy }
-                        : undefined,
                 };
-                try {
-                    await connectRoomWithTimeout(
-                        room,
-                        livekitServerUrl,
-                        data.token,
-                        defaultConnectOptions,
-                        LIVEKIT_CONNECT_TIMEOUT_MS,
-                    );
-                } catch (primaryConnectError: any) {
-                    const message = String(primaryConnectError?.message || '').toLowerCase();
-                    const shouldRetryWithRelay =
-                        message.includes('timeout') ||
-                        message.includes('timed out') ||
-                        message.includes('pc manager is closed') ||
-                        message.includes('could not establish') ||
-                        message.includes('connection failed');
-
-                    if (!shouldRetryWithRelay) {
-                        throw primaryConnectError;
-                    }
-
-                    console.warn('[MicButton] Primary connect failed, retrying via TURN relay...', primaryConnectError);
-
-                    await connectRoomWithTimeout(
-                        room,
-                        livekitServerUrl,
-                        data.token,
-                        {
-                            autoSubscribe: true,
-                            rtcConfig: {
-                                iceTransportPolicy: 'relay',
-                            },
-                        },
-                        LIVEKIT_CONNECT_TIMEOUT_MS + 15000,
-                    );
-                }
+                await connectRoomWithTimeout(
+                    room,
+                    livekitServerUrl,
+                    data.token,
+                    defaultConnectOptions,
+                    LIVEKIT_CONNECT_TIMEOUT_MS,
+                );
 
                 if (cancelled) {
                     room.disconnect();
@@ -373,7 +332,7 @@ export function MicButton({
             audioTrackRef.current = null;
             if (audioContainerRef.current) audioContainerRef.current.innerHTML = '';
         };
-    }, [roomId, retryCount, livekitServerUrl, forceRelay]);
+    }, [roomId, retryCount, livekitServerUrl]);
 
     const toggleMic = useCallback(async () => {
         if (error) {

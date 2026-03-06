@@ -184,11 +184,17 @@ interface LiveKitVoiceChatProps {
     showTextChat?: boolean; // Show text chat alongside voice
 }
 
+/** Stable session identity — created once per userName, survives reconnects */
 function makeSessionIdentity(baseName: string): string {
     const safeBase = (baseName || 'Player').replace(/\s+/g, '-');
     const suffix = Math.random().toString(36).slice(2, 8);
     return `${safeBase}-${suffix}`;
 }
+
+/** Minimum delay (ms) between automatic reconnect attempts */
+const RECONNECT_COOLDOWN_MS = 5000;
+/** Maximum number of automatic reconnect attempts before requiring manual action */
+const MAX_AUTO_RECONNECTS = 2;
 
 export function LiveKitVoiceChat({
     roomId,
@@ -208,53 +214,69 @@ export function LiveKitVoiceChat({
     const [error, setError] = useState<string | null>(null);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
-    const [sessionIdentity, setSessionIdentity] = useState('');
+    const [sessionIdentity] = useState(() => makeSessionIdentity(userName));
     const [connectAttempt, setConnectAttempt] = useState(0);
     const [roomState, setRoomState] = useState<ConnectionState>(ConnectionState.Disconnected);
-    const [forceRelay, setForceRelay] = useState(false);
-    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const hasAutoReconnectedRef = useRef(false);
-    const connectedAtRef = useRef<number | null>(null);
     const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL) || 'wss://livekit.mafiaonchain.live';
+
+    // Reconnect tracking refs (not state — avoids render cascades)
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const autoReconnectCountRef = useRef(0);
+    const lastReconnectAtRef = useRef(0);
+    const isReconnectingRef = useRef(false);
+
+    // connectOptions: no iceTransportPolicy override — TURN on port 443 lets
+    // the browser ICE agent try host/srflx/relay naturally and pick the best path.
     const connectOptions = useMemo(() => ({
         autoSubscribe: true,
-        rtcConfig: forceRelay
-            ? { iceTransportPolicy: 'relay' as RTCIceTransportPolicy }
-            : undefined,
-    }), [forceRelay]);
+    }), []);
 
-    const triggerReconnect = useCallback((manual = false, relay = forceRelay) => {
+    /**
+     * Schedule a reconnect with cooldown enforcement.
+     * Manual reconnects bypass the auto-reconnect counter.
+     */
+    const scheduleReconnect = useCallback((manual = false) => {
+        // Prevent overlapping reconnects
+        if (isReconnectingRef.current && !manual) return;
+
+        // Enforce auto-reconnect limit
+        if (!manual && autoReconnectCountRef.current >= MAX_AUTO_RECONNECTS) {
+            console.warn('[LiveKitVoiceChat] Auto-reconnect limit reached, waiting for manual retry');
+            setError('Connection lost. Please reconnect manually.');
+            setStatusMessage(null);
+            return;
+        }
+
+        // Enforce cooldown
+        const now = Date.now();
+        const elapsed = now - lastReconnectAtRef.current;
+        const delay = manual ? 300 : Math.max(RECONNECT_COOLDOWN_MS - elapsed, 500);
+
         if (reconnectTimerRef.current) {
             clearTimeout(reconnectTimerRef.current);
-            reconnectTimerRef.current = null;
         }
-        if (manual) {
-            hasAutoReconnectedRef.current = false;
-        }
-        setForceRelay(relay);
-        setToken('');
+
+        isReconnectingRef.current = true;
+        setStatusMessage('Reconnecting to voice...');
         setError(null);
-        setStatusMessage(relay ? 'Retrying voice via TURN relay...' : 'Reconnecting to voice...');
-        setRoomState(ConnectionState.Connecting);
-        setSessionIdentity(makeSessionIdentity(userName));
-        setConnectAttempt((prev) => prev + 1);
-    }, [forceRelay, userName]);
 
-    useEffect(() => {
-        addressRef.current = address;
-    }, [address]);
+        reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null;
+            lastReconnectAtRef.current = Date.now();
+            if (manual) {
+                autoReconnectCountRef.current = 0;
+            } else {
+                autoReconnectCountRef.current += 1;
+            }
+            isReconnectingRef.current = false;
+            setToken('');
+            setConnectAttempt((prev) => prev + 1);
+        }, delay);
+    }, []);
 
-    useEffect(() => {
-        walletClientRef.current = walletClient;
-    }, [walletClient]);
-
-    useEffect(() => {
-        userNameRef.current = userName;
-    }, [userName]);
-
-    useEffect(() => {
-        setSessionIdentity(makeSessionIdentity(userName));
-    }, [userName]);
+    useEffect(() => { addressRef.current = address; }, [address]);
+    useEffect(() => { walletClientRef.current = walletClient; }, [walletClient]);
+    useEffect(() => { userNameRef.current = userName; }, [userName]);
 
     useEffect(() => {
         return () => {
@@ -264,20 +286,21 @@ export function LiveKitVoiceChat({
         };
     }, []);
 
+    // Token fetch effect — runs on mount and on connectAttempt bump
     useEffect(() => {
-        if (!isActive || !roomId) {
+        if (!isActive || !roomId || !sessionIdentity) {
             setToken("");
             setStatusMessage(null);
             setRoomState(ConnectionState.Disconnected);
             return;
         }
 
-        if (!sessionIdentity) return;
+        let cancelled = false;
 
         (async () => {
             try {
                 setError(null);
-                setStatusMessage(forceRelay ? 'Connecting via TURN relay...' : 'Connecting to voice...');
+                setStatusMessage('Connecting to voice...');
                 const playerAddress = addressRef.current || '';
                 let signature: `0x${string}` | undefined;
                 let signerAddress: string | undefined;
@@ -292,12 +315,12 @@ export function LiveKitVoiceChat({
                             address: playerAddress,
                             roomId: parsedRoomId,
                             walletClient: walletClientRef.current,
-                            buildMessage: ({ nonce, timestamp }) => buildTokenMessage({
+                            buildMessage: ({ nonce: n, timestamp: t }) => buildTokenMessage({
                                 room: roomId,
                                 username: userNameRef.current,
                                 playerAddress,
-                                nonce,
-                                timestamp,
+                                nonce: n,
+                                timestamp: t,
                             }),
                         });
                         signature = signed.signature;
@@ -306,6 +329,8 @@ export function LiveKitVoiceChat({
                         timestamp = signed.timestamp;
                     }
                 }
+
+                if (cancelled) return;
 
                 const resp = await fetch("/api/token", {
                     method: "POST",
@@ -321,27 +346,32 @@ export function LiveKitVoiceChat({
                     headers: { "Content-Type": "application/json" },
                 });
 
+                if (cancelled) return;
+
                 if (!resp.ok) {
                     throw new Error(`Failed to get token: ${resp.status}`);
                 }
 
                 const data = await resp.json();
+                if (data.error) throw new Error(data.error);
 
-                if (data.error) {
-                    throw new Error(data.error);
+                if (!cancelled) {
+                    setToken(data.token);
+                    setRoomState(ConnectionState.Connecting);
+                    setStatusMessage('Connecting to voice...');
                 }
-
-                setToken(data.token);
-                setRoomState(ConnectionState.Connecting);
-                setStatusMessage(forceRelay ? 'Connecting via TURN relay...' : 'Connecting to voice...');
             } catch (e) {
-                console.error('[LiveKitVoiceChat] Error:', e);
-                setError(e instanceof Error ? e.message : 'Failed to connect');
-                setStatusMessage(null);
-                setRoomState(ConnectionState.Disconnected);
+                if (!cancelled) {
+                    console.error('[LiveKitVoiceChat] Token fetch error:', e);
+                    setError(e instanceof Error ? e.message : 'Failed to connect');
+                    setStatusMessage(null);
+                    setRoomState(ConnectionState.Disconnected);
+                }
             }
         })();
-    }, [isActive, roomId, sessionIdentity, connectAttempt, forceRelay]);
+
+        return () => { cancelled = true; };
+    }, [isActive, roomId, sessionIdentity, connectAttempt]);
 
     if (!isActive) return null;
 
@@ -418,74 +448,30 @@ export function LiveKitVoiceChat({
                                         setRoomState(ConnectionState.Connected);
                                         setError(null);
                                         setStatusMessage(null);
-                                        hasAutoReconnectedRef.current = false;
-                                        connectedAtRef.current = Date.now();
+                                        autoReconnectCountRef.current = 0;
                                     }}
                                     onDisconnected={() => {
                                         setRoomState(ConnectionState.Disconnected);
-                                        const connectedAt = connectedAtRef.current;
-                                        const shortLivedConnection = connectedAt !== null && (Date.now() - connectedAt) < 20000;
-                                        connectedAtRef.current = null;
                                         if (!isActive) return;
-                                        if (reconnectTimerRef.current) return;
-                                        if (!forceRelay && shortLivedConnection) {
-                                            hasAutoReconnectedRef.current = true;
-                                            setStatusMessage('Unstable network path detected. Reconnecting via TURN relay...');
-                                            reconnectTimerRef.current = setTimeout(() => {
-                                                triggerReconnect(false, true);
-                                            }, 800);
-                                            return;
-                                        }
-                                        if (!hasAutoReconnectedRef.current) {
-                                            hasAutoReconnectedRef.current = true;
-                                            setStatusMessage(forceRelay ? 'Voice disconnected. Reconnecting via TURN relay...' : 'Voice disconnected. Reconnecting...');
-                                            reconnectTimerRef.current = setTimeout(() => {
-                                                triggerReconnect(false, forceRelay);
-                                            }, 1200);
-                                        }
+                                        console.log('[LiveKitVoiceChat] Disconnected, scheduling auto-reconnect');
+                                        scheduleReconnect(false);
                                     }}
                                     onError={(eventError: Error) => {
-                                        const message = String(eventError?.message || '');
-                                        const normalized = message.toLowerCase();
-
+                                        const msg = String(eventError?.message || '').toLowerCase();
+                                        // Transient errors during reconnect — ignore silently
                                         if (
-                                            !forceRelay &&
-                                            (normalized.includes('could not establish pc connection') ||
-                                                normalized.includes('pc connection') ||
-                                                normalized.includes('connection failed') ||
-                                                normalized.includes('ice') ||
-                                                normalized.includes('websocket is closed before the connection is established'))
+                                            msg.includes('client initiated disconnect') ||
+                                            msg.includes('websocket is closed before') ||
+                                            msg.includes('unexpectedconnectionstate') ||
+                                            msg.includes('pc manager is closed')
                                         ) {
-                                            setRoomState(ConnectionState.Disconnected);
-                                            setError(null);
-                                            setStatusMessage('Restricted network detected. Retrying via TURN relay...');
-                                            triggerReconnect(false, true);
+                                            console.log('[LiveKitVoiceChat] Transient error (ignored):', msg.slice(0, 80));
                                             return;
                                         }
-
-                                        if (
-                                            normalized.includes('client initiated disconnect') ||
-                                            normalized.includes('unexpectedconnectionstate') ||
-                                            normalized.includes('pc manager is closed') ||
-                                            normalized.includes('websocket is closed before the connection is established')
-                                        ) {
-                                            setRoomState(ConnectionState.Disconnected);
-                                            setError(null);
-                                            setStatusMessage(forceRelay ? 'Retrying voice via TURN relay...' : 'Retrying voice connection...');
-                                            return;
-                                        }
-
-                                        if (
-                                            message.includes('UnexpectedConnectionState') ||
-                                            message.includes('PC manager is closed')
-                                        ) {
-                                            setRoomState(ConnectionState.Disconnected);
-                                            setError(null);
-                                            setStatusMessage('Connection dropped. Reconnecting...');
-                                            return;
-                                        }
-                                        setStatusMessage(null);
-                                        setError(message || 'LiveKit connection error');
+                                        // Real connection failure — schedule reconnect
+                                        console.error('[LiveKitVoiceChat] Connection error:', msg.slice(0, 120));
+                                        setRoomState(ConnectionState.Disconnected);
+                                        scheduleReconnect(false);
                                     }}
                                     data-lk-theme="default"
                                     style={{
@@ -512,7 +498,7 @@ export function LiveKitVoiceChat({
                                     <span>Voice room: {roomId}</span>
                                     {roomState !== ConnectionState.Connected && (
                                         <button
-                                            onClick={() => triggerReconnect(true)}
+                                            onClick={() => scheduleReconnect(true)}
                                             className="ml-2 px-2 py-1 rounded border border-purple-500/40 text-purple-300 hover:bg-purple-500/10"
                                         >
                                             Reconnect
