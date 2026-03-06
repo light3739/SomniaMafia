@@ -184,7 +184,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         const currentFetchDayCount = latestDayCountRef.current; // Capture day count
         try {
             const response = await fetch(
-                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${currentFetchDayCount}&playerAddress=${myPlayer?.address || ''}&chainId=${chainId || ''}`,
+                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${currentFetchDayCount}&playerAddress=${myPlayer?.address || ''}&chainId=${chainId || ''}&t=${Date.now()}`,
                 { cache: 'no-store' }
             );
             const data = await response.json();
