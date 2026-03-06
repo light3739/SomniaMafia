@@ -23,6 +23,8 @@ function parseRoomId(room: string): string | null {
 
 export async function POST(req: NextRequest) {
     try {
+        const userAgent = req.headers.get('user-agent')?.toLowerCase() || '';
+        const isFirefox = userAgent.includes('firefox');
         const reqBody = await req.json();
         const {
             room,
@@ -142,15 +144,8 @@ export async function POST(req: NextRequest) {
             turnServers: [
                 {
                     urls: [
-                        'stun:stun.cloudflare.com:3478',
-                        'stun:stun.l.google.com:19302',
-                        `stun:${turnDomain}:443`,
-                    ],
-                },
-                {
-                    urls: [
                         `turns:${turnDomain}:443?transport=tcp`,
-                        `turn:${turnDomain}:443?transport=tcp`,
+                        ...(isFirefox ? [] : [`turn:${turnDomain}:443?transport=tcp`]),
                     ],
                     username: turnUsername,
                     credential: turnCredential,

@@ -35,9 +35,27 @@ function normalizeLiveKitWsUrl(rawUrl?: string): string {
     return `wss://${rawUrl}`;
 }
 
-function shouldStartRelayOnly(): boolean {
+function shouldPreferSameOriginLiveKit(): boolean {
     if (typeof navigator === 'undefined') return false;
     return /firefox/i.test(navigator.userAgent);
+}
+
+function buildLiveKitServerUrls(rawUrl?: string): string[] {
+    const urls: string[] = [];
+    const primary = normalizeLiveKitWsUrl(rawUrl);
+    const sameOrigin = typeof window !== 'undefined'
+        ? normalizeLiveKitWsUrl(`${window.location.origin}/livekit`)
+        : '';
+
+    if (shouldPreferSameOriginLiveKit() && sameOrigin) {
+        urls.push(sameOrigin);
+    }
+    urls.push(primary);
+    if (!shouldPreferSameOriginLiveKit() && sameOrigin) {
+        urls.push(sameOrigin);
+    }
+
+    return Array.from(new Set(urls.filter(Boolean)));
 }
 
 async function connectRoomWithTimeout(
@@ -80,8 +98,10 @@ export function MicButton({
     const [error, setError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
     const [participantCount, setParticipantCount] = useState(0);
-    const [preferRelay, setPreferRelay] = useState(() => shouldStartRelayOnly());
-    const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL);
+    const [preferRelay, setPreferRelay] = useState(false);
+    const [serverUrlIndex, setServerUrlIndex] = useState(0);
+    const livekitServerUrls = buildLiveKitServerUrls(process.env.NEXT_PUBLIC_LIVEKIT_URL);
+    const livekitServerUrl = livekitServerUrls[Math.min(serverUrlIndex, livekitServerUrls.length - 1)] || 'wss://livekit.mafiaonchain.live';
 
     const addressRef = useRef(address);
     const chainIdRef = useRef(chainId);
@@ -149,7 +169,8 @@ export function MicButton({
     }, [userName]);
 
     useEffect(() => {
-        setPreferRelay(shouldStartRelayOnly());
+        setPreferRelay(false);
+        setServerUrlIndex(0);
         connectedAtRef.current = 0;
     }, [roomId, userName]);
 
@@ -339,6 +360,15 @@ export function MicButton({
                     message.includes('PC manager is closed');
                 if (!cancelled && !isCleanDisconnect) {
                     const normalizedMessage = message.toLowerCase();
+                    if (
+                        normalizedMessage.includes('websocket') &&
+                        serverUrlIndex < livekitServerUrls.length - 1
+                    ) {
+                        console.warn('[MicButton] Signaling endpoint failed, switching to fallback URL');
+                        setServerUrlIndex((prev) => prev + 1);
+                        setRetryCount((prev) => prev + 1);
+                        return;
+                    }
                     if (!preferRelay && normalizedMessage.includes('could not establish pc connection')) {
                         console.warn('[MicButton] PC connection failed, retrying in relay-only mode');
                         setPreferRelay(true);
@@ -374,7 +404,7 @@ export function MicButton({
             audioTrackRef.current = null;
             if (audioContainerRef.current) audioContainerRef.current.innerHTML = '';
         };
-    }, [roomId, retryCount, livekitServerUrl]);
+    }, [livekitServerUrl, livekitServerUrls.length, preferRelay, retryCount, roomId, serverUrlIndex]);
 
     const toggleMic = useCallback(async () => {
         if (error) {
