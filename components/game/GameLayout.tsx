@@ -231,15 +231,30 @@ const HAND_TUNED: Record<number, { x: number; y: number }[]> = {
 export function getPlayerPositions(count: number): { id: string; x: number; y: number }[] {
     if (count === 0) return [];
 
-    // Hand-tuned lookup
-    const tuned = HAND_TUNED[count];
-    if (tuned) {
-        return tuned.map((p, i) => ({ id: `p${i + 1}`, x: p.x, y: p.y }));
-    }
-
-    // Rectangular perimeter fallback (matches hand-tuned style)
     // Cards are placed along a rounded-rectangle perimeter that avoids the
     // center chat area (600×600 at center of 1488×1024 board).
+    const isMobilePortrait = typeof window !== 'undefined' && window.innerWidth < 768 && window.innerHeight > window.innerWidth;
+
+    const tuned = HAND_TUNED[count];
+    if (tuned) {
+        return tuned.map((p, i) => {
+            let x = p.x;
+            let y = p.y;
+            // On mobile portrait, move side players closer to center to keep them on screen
+            if (isMobilePortrait) {
+                // Base width 1488, center 744. 
+                // We want to keep them within roughly 744 +/- 500
+                const center = 744;
+                const offset = x - center;
+                if (Math.abs(offset) > 300) {
+                    // Pull towards center
+                    x = center + (offset * 0.65);
+                }
+            }
+            return { id: `p${i + 1}`, x, y };
+        });
+    }
+
     const CARD_W = 250, CARD_H = 130;
 
     // Usable area for card top-left corners (board minus one card size)
@@ -545,12 +560,11 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
 
             // MOBILE SCALING OPTIMIZATION
             if (isPortrait && windowWidth < 768) {
-                // On mobile portrait, basic "contain" scaling makes everything tiny.
-                // We prefer keeping the 600px center feed readable.
-                // target 92% of screen width for the central feed area.
-                const mobileScale = (windowWidth * 0.92) / 600;
-                // Cap it so we don't go too crazy, but ensure it's larger than the default.
-                newScale = Math.max(newScale, Math.min(mobileScale, 0.6));
+                // On mobile portrait, we want to see the 600px feed PLUS the players.
+                // We target a visible width of 1100px (instead of 1488) to zoom in a bit,
+                // but not so much that players are off-screen.
+                const mobileScale = (windowWidth * 0.96) / 1100;
+                newScale = Math.max(newScale, mobileScale);
             }
 
             setScale(newScale);
