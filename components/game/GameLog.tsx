@@ -224,7 +224,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
 
     // Shared styles
     const FONT = "font-['Montserrat']";
-    const BASE_TEXT = `${FONT} text-white/70 text-[13px] font-normal`;
+    const BASE_TEXT = `${FONT} text-white/70 text-[16px] md:text-[13px] font-normal`;
     const ACCENT = "text-[#916A47]"; // Gold accent for VOTING/QUORUM
     const DISC_ACCENT = "text-[#cc9b6d]"; // Slightly different gold/orange for discussion
     const PLAYER_NAME = "text-white"; // Solid white for player names
@@ -241,7 +241,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                     className="flex items-center gap-3"
                 >
                     <div className="w-8 h-[1px] bg-gradient-to-r from-transparent to-[#916A47]/60" />
-                    <h2 className={`text-base md:text-lg font-['Cinzel'] font-bold text-white tracking-wider uppercase`}>
+                    <h2 className={`text-lg md:text-lg font-['Cinzel'] font-bold text-white tracking-wider uppercase`}>
                         Day {dayCount || 1}
                     </h2>
                     <div className="w-8 h-[1px] bg-gradient-to-l from-transparent to-[#916A47]/60" />
