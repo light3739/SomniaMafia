@@ -7,6 +7,7 @@ import Image from 'next/image';
 const lobbyBg = "/assets/lobby_background.png";
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { BackButton } from '../ui/BackButton';
 
 const AVATAR_STORAGE_KEY = 'mafia_player_avatar';
 const MAX_AVATAR_SIZE = 150; // pixels for compression
@@ -78,7 +79,7 @@ export const SetupProfile: React.FC = () => {
     };
 
     return (
-        <div className="relative w-full h-screen font-montserrat flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
+        <div className="relative w-full h-[100dvh] font-montserrat flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
             {/* Fixed Background handled by DynamicBackground */}
 
             <motion.div
@@ -88,6 +89,10 @@ export const SetupProfile: React.FC = () => {
                 transition={{ duration: 0.4 }}
                 className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-8 py-6 md:py-10 my-auto"
             >
+                <div className="w-full flex items-center justify-start">
+                    <BackButton to="/" />
+                </div>
+
                 {/* Profile Section */}
                 <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] mt-6 relative flex flex-col items-center p-5 md:p-8 border border-white/10 shadow-2xl">
                     <h2 className="text-white text-xl md:text-2xl font-['Cinzel'] mb-4 md:mb-6">Setup Your Profile</h2>

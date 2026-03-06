@@ -12,7 +12,7 @@ interface MainPageProps {
 export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
 
     return (
-        <div className="relative w-full h-screen overflow-y-auto overflow-x-hidden font-sans flex flex-col items-center custom-scrollbar">
+        <div className="relative w-full h-[100dvh] overflow-y-auto overflow-x-hidden font-sans flex flex-col items-center custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
 
             {/* Content Container */}

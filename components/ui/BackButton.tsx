@@ -34,7 +34,8 @@ export const BackButton: React.FC<BackButtonProps> = ({
             if (to) {
                 router.push(to);
             } else {
-                router.back();
+                // If no "to" provided, go to home to ensure site-based navigation
+                router.push('/');
             }
         }
     };
