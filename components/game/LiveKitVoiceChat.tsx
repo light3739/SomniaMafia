@@ -214,6 +214,7 @@ export function LiveKitVoiceChat({
     const [forceRelay, setForceRelay] = useState(false);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hasAutoReconnectedRef = useRef(false);
+    const connectedAtRef = useRef<number | null>(null);
     const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL) || 'wss://livekit.mafiaonchain.live';
     const connectOptions = useMemo(() => ({
         autoSubscribe: true,
@@ -418,11 +419,23 @@ export function LiveKitVoiceChat({
                                         setError(null);
                                         setStatusMessage(null);
                                         hasAutoReconnectedRef.current = false;
+                                        connectedAtRef.current = Date.now();
                                     }}
                                     onDisconnected={() => {
                                         setRoomState(ConnectionState.Disconnected);
+                                        const connectedAt = connectedAtRef.current;
+                                        const shortLivedConnection = connectedAt !== null && (Date.now() - connectedAt) < 20000;
+                                        connectedAtRef.current = null;
                                         if (!isActive) return;
                                         if (reconnectTimerRef.current) return;
+                                        if (!forceRelay && shortLivedConnection) {
+                                            hasAutoReconnectedRef.current = true;
+                                            setStatusMessage('Unstable network path detected. Reconnecting via TURN relay...');
+                                            reconnectTimerRef.current = setTimeout(() => {
+                                                triggerReconnect(false, true);
+                                            }, 800);
+                                            return;
+                                        }
                                         if (!hasAutoReconnectedRef.current) {
                                             hasAutoReconnectedRef.current = true;
                                             setStatusMessage(forceRelay ? 'Voice disconnected. Reconnecting via TURN relay...' : 'Voice disconnected. Reconnecting...');
