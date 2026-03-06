@@ -26,7 +26,7 @@ export const CreateLobby: React.FC = () => {
     };
 
     return (
-        <div className="relative w-full h-screen font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
+        <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
 
             <motion.div
@@ -37,7 +37,7 @@ export const CreateLobby: React.FC = () => {
             >
                 <div className="w-full flex items-center justify-between">
                     <div className="-ml-3">
-                        <BackButton />
+                        <BackButton to="/setup" />
                     </div>
                     <NetworkSelector compact />
                 </div>

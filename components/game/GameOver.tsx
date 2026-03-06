@@ -420,7 +420,7 @@ export const GameOver: React.FC = React.memo(() => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1 }}
-            className="fixed inset-0 z-[100] flex flex-col items-center p-8 bg-black/80 backdrop-blur-xl pointer-events-auto overflow-y-auto overflow-x-hidden custom-scrollbar"
+            className="fixed inset-0 z-[100] flex flex-col items-center p-8 bg-black/80 backdrop-blur-xl pointer-events-auto overflow-y-auto overflow-x-hidden custom-scrollbar h-[100dvh] w-screen"
         >
             {/* Post-game Global Voice Chat */}
             {currentRoomId && myPlayer && (

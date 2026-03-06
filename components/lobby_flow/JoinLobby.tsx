@@ -170,17 +170,102 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     };
 
     return (
-        <div className="relative w-full h-screen font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
+        <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
 
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10 my-auto">
                 <div className="w-full flex items-center justify-between">
                     <div className="-ml-3">
-                        <BackButton />
+                        <BackButton to="/setup" />
                     </div>
                     <div className="flex items-center gap-2">
                         <NetworkSelector compact />
-                        <ConnectButton accountStatus="avatar" chainStatus="none" showBalance={false} />
+                        <ConnectButton.Custom>
+                            {({
+                                account,
+                                chain,
+                                openAccountModal,
+                                openChainModal,
+                                openConnectModal,
+                                authenticationStatus,
+                                mounted,
+                            }) => {
+                                const ready = mounted && authenticationStatus !== 'loading';
+                                const connected =
+                                    ready &&
+                                    account &&
+                                    chain &&
+                                    (!authenticationStatus ||
+                                        authenticationStatus === 'authenticated');
+
+                                return (
+                                    <div
+                                        {...(!ready && {
+                                            'aria-hidden': true,
+                                            'style': {
+                                                opacity: 0,
+                                                pointerEvents: 'none',
+                                                userSelect: 'none',
+                                            },
+                                        })}
+                                    >
+                                        {(() => {
+                                            if (!connected) {
+                                                return (
+                                                    <button
+                                                        onClick={openConnectModal}
+                                                        type="button"
+                                                        className="h-10 px-4 bg-[#19130D]/80 backdrop-blur-md border border-[#916A47]/40 rounded-xl text-white text-xs md:text-sm font-semibold hover:border-[#916A47] transition-all shadow-lg uppercase tracking-wider"
+                                                    >
+                                                        Connect
+                                                    </button>
+                                                );
+                                            }
+
+                                            if (chain.unsupported) {
+                                                return (
+                                                    <button
+                                                        onClick={openChainModal}
+                                                        type="button"
+                                                        className="h-10 px-4 bg-rose-900/40 backdrop-blur-md border border-rose-500/40 rounded-xl text-white text-xs md:text-sm font-semibold hover:border-rose-500 transition-all shadow-lg"
+                                                    >
+                                                        Wrong network
+                                                    </button>
+                                                );
+                                            }
+
+                                            return (
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={openAccountModal}
+                                                        type="button"
+                                                        className="h-10 px-3 bg-[#19130D]/80 backdrop-blur-md border border-[#916A47]/40 rounded-xl text-white text-xs md:text-sm font-semibold hover:border-[#916A47] transition-all shadow-lg flex items-center gap-2"
+                                                    >
+                                                        {account.displayBalance ? (
+                                                            <span className="hidden md:inline text-white/40 font-normal">
+                                                                {account.displayBalance}
+                                                            </span>
+                                                        ) : null}
+                                                        <div className="w-5 h-5 rounded-full overflow-hidden border border-[#916A47]/40">
+                                                            {account.ensAvatar ? (
+                                                                <img src={account.ensAvatar} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full bg-[#916A47]/20 flex items-center justify-center text-[10px]">
+                                                                    {account.displayName.slice(0, 2)}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <span className="font-mono text-[11px] md:text-xs">
+                                                            {account.displayName}
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                );
+                            }}
+                        </ConnectButton.Custom>
                     </div>
                 </div>
 
