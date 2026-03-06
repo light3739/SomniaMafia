@@ -1,7 +1,7 @@
 "use client";
 
 import { LiveKitRoom, RoomAudioRenderer, ControlBar, useRoomContext } from "@livekit/components-react";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Volume2, VolumeX, X, Loader2, Users } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
@@ -201,17 +201,28 @@ export function LiveKitVoiceChat({
 }: LiveKitVoiceChatProps) {
     const { address } = useAccount();
     const { data: walletClient } = useWalletClient();
+    const addressRef = useRef(address);
+    const walletClientRef = useRef(walletClient);
+    const userNameRef = useRef(userName);
     const [token, setToken] = useState("");
     const [error, setError] = useState<string | null>(null);
+    const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
     const [sessionIdentity, setSessionIdentity] = useState('');
     const [connectAttempt, setConnectAttempt] = useState(0);
     const [roomState, setRoomState] = useState<ConnectionState>(ConnectionState.Disconnected);
+    const [forceRelay, setForceRelay] = useState(false);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hasAutoReconnectedRef = useRef(false);
     const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL) || 'wss://livekit.mafiaonchain.live';
+    const connectOptions = useMemo(() => ({
+        autoSubscribe: true,
+        rtcConfig: forceRelay
+            ? { iceTransportPolicy: 'relay' as RTCIceTransportPolicy }
+            : undefined,
+    }), [forceRelay]);
 
-    const triggerReconnect = useCallback((manual = false) => {
+    const triggerReconnect = useCallback((manual = false, relay = forceRelay) => {
         if (reconnectTimerRef.current) {
             clearTimeout(reconnectTimerRef.current);
             reconnectTimerRef.current = null;
@@ -219,11 +230,25 @@ export function LiveKitVoiceChat({
         if (manual) {
             hasAutoReconnectedRef.current = false;
         }
+        setForceRelay(relay);
         setToken('');
         setError(null);
+        setStatusMessage(relay ? 'Retrying voice via TURN relay...' : 'Reconnecting to voice...');
         setRoomState(ConnectionState.Connecting);
         setSessionIdentity(makeSessionIdentity(userName));
         setConnectAttempt((prev) => prev + 1);
+    }, [forceRelay, userName]);
+
+    useEffect(() => {
+        addressRef.current = address;
+    }, [address]);
+
+    useEffect(() => {
+        walletClientRef.current = walletClient;
+    }, [walletClient]);
+
+    useEffect(() => {
+        userNameRef.current = userName;
     }, [userName]);
 
     useEffect(() => {
@@ -241,6 +266,7 @@ export function LiveKitVoiceChat({
     useEffect(() => {
         if (!isActive || !roomId) {
             setToken("");
+            setStatusMessage(null);
             setRoomState(ConnectionState.Disconnected);
             return;
         }
@@ -250,7 +276,8 @@ export function LiveKitVoiceChat({
         (async () => {
             try {
                 setError(null);
-                const playerAddress = address || '';
+                setStatusMessage(forceRelay ? 'Connecting via TURN relay...' : 'Connecting to voice...');
+                const playerAddress = addressRef.current || '';
                 let signature: `0x${string}` | undefined;
                 let signerAddress: string | undefined;
                 let nonce: string | undefined;
@@ -263,10 +290,10 @@ export function LiveKitVoiceChat({
                         const signed = await signRequest({
                             address: playerAddress,
                             roomId: parsedRoomId,
-                            walletClient,
+                            walletClient: walletClientRef.current,
                             buildMessage: ({ nonce, timestamp }) => buildTokenMessage({
                                 room: roomId,
-                                username: userName,
+                                username: userNameRef.current,
                                 playerAddress,
                                 nonce,
                                 timestamp,
@@ -305,13 +332,15 @@ export function LiveKitVoiceChat({
 
                 setToken(data.token);
                 setRoomState(ConnectionState.Connecting);
+                setStatusMessage(forceRelay ? 'Connecting via TURN relay...' : 'Connecting to voice...');
             } catch (e) {
                 console.error('[LiveKitVoiceChat] Error:', e);
                 setError(e instanceof Error ? e.message : 'Failed to connect');
+                setStatusMessage(null);
                 setRoomState(ConnectionState.Disconnected);
             }
         })();
-    }, [isActive, roomId, userName, address, walletClient, sessionIdentity, connectAttempt]);
+    }, [isActive, roomId, sessionIdentity, connectAttempt, forceRelay]);
 
     if (!isActive) return null;
 
@@ -359,7 +388,7 @@ export function LiveKitVoiceChat({
                         {!token && !error && (
                             <div className="flex flex-col items-center justify-center py-8 gap-3">
                                 <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-                                <p className="text-gray-400 text-sm">Connecting to voice...</p>
+                                <p className="text-gray-400 text-sm">{statusMessage || 'Connecting to voice...'}</p>
                             </div>
                         )}
 
@@ -383,31 +412,66 @@ export function LiveKitVoiceChat({
                                     audio={true}
                                     token={token}
                                     serverUrl={livekitServerUrl}
+                                    connectOptions={connectOptions}
                                     onConnected={() => {
                                         setRoomState(ConnectionState.Connected);
                                         setError(null);
+                                        setStatusMessage(null);
                                         hasAutoReconnectedRef.current = false;
                                     }}
                                     onDisconnected={() => {
                                         setRoomState(ConnectionState.Disconnected);
                                         if (!isActive) return;
+                                        if (reconnectTimerRef.current) return;
                                         if (!hasAutoReconnectedRef.current) {
                                             hasAutoReconnectedRef.current = true;
+                                            setStatusMessage(forceRelay ? 'Voice disconnected. Reconnecting via TURN relay...' : 'Voice disconnected. Reconnecting...');
                                             reconnectTimerRef.current = setTimeout(() => {
-                                                triggerReconnect(false);
+                                                triggerReconnect(false, forceRelay);
                                             }, 1200);
                                         }
                                     }}
                                     onError={(eventError: Error) => {
                                         const message = String(eventError?.message || '');
+                                        const normalized = message.toLowerCase();
+
+                                        if (
+                                            !forceRelay &&
+                                            (normalized.includes('could not establish pc connection') ||
+                                                normalized.includes('pc connection') ||
+                                                normalized.includes('connection failed') ||
+                                                normalized.includes('ice') ||
+                                                normalized.includes('websocket is closed before the connection is established'))
+                                        ) {
+                                            setRoomState(ConnectionState.Disconnected);
+                                            setError(null);
+                                            setStatusMessage('Restricted network detected. Retrying via TURN relay...');
+                                            triggerReconnect(false, true);
+                                            return;
+                                        }
+
+                                        if (
+                                            normalized.includes('client initiated disconnect') ||
+                                            normalized.includes('unexpectedconnectionstate') ||
+                                            normalized.includes('pc manager is closed') ||
+                                            normalized.includes('websocket is closed before the connection is established')
+                                        ) {
+                                            setRoomState(ConnectionState.Disconnected);
+                                            setError(null);
+                                            setStatusMessage(forceRelay ? 'Retrying voice via TURN relay...' : 'Retrying voice connection...');
+                                            return;
+                                        }
+
                                         if (
                                             message.includes('UnexpectedConnectionState') ||
                                             message.includes('PC manager is closed')
                                         ) {
                                             setRoomState(ConnectionState.Disconnected);
-                                            setError('Connection dropped. Reconnecting...');
+                                            setError(null);
+                                            setStatusMessage('Connection dropped. Reconnecting...');
                                             return;
                                         }
+                                        setStatusMessage(null);
                                         setError(message || 'LiveKit connection error');
                                     }}
                                     data-lk-theme="default"
