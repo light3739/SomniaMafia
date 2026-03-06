@@ -197,6 +197,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return chainId === AVALANCHE_FUJI.id ? parseEther('0.1') : parseEther('1');
     }, [chainId]);
 
+    // URL detection for Test Mode
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get("test") === "true" || params.has("test")) {
+                console.log("[GameContext] Test mode ENABLED via URL");
+                setIsTestMode(true);
+                (window as any).isTestMode = true;
+            }
+        }
+    }, []);
+
     const setPlayerMark = useCallback((address: string, mark: 'mafia' | 'civilian' | 'question' | null) => {
         setPlayerMarks(prev => ({
             ...prev,

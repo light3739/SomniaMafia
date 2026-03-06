@@ -314,7 +314,7 @@ export function getPlayerPositions(count: number): { id: string; x: number; y: n
 }
 
 export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionState?: any }> = ({ initialNightState, initialDiscussionState }) => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap, claimRefund } = useGameContext();
+    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap, claimRefund, isTestMode } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const { activeHint, showHint, dismissHint } = useGameHints(currentRoomId?.toString());
     const players = gameState.players || [];
@@ -548,14 +548,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     }, [showHint]);
 
 
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            if (params.has('test')) {
-                (window as any).isTestMode = true;
-            }
-        }
-    }, []);
+
 
     useEffect(() => {
         const handleResize = () => {
@@ -833,7 +826,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             )}
 
             {/* Test Controls - Bottom Right */}
-            {typeof window !== 'undefined' && (window as any).isTestMode && (
+            {isTestMode && (
                 <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 p-4 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 text-white pointer-events-auto">
                     <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">Dev Tools</div>
                     <div className="flex gap-2">
