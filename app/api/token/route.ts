@@ -140,7 +140,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
             token,
             turnServers: [{
-                urls: [`turns:${turnDomain}:443?transport=tcp`],
+                urls: [
+                    `turns:${turnDomain}:443?transport=tcp`,
+                    `turn:${turnDomain}:443?transport=tcp`,
+                ],
                 username: turnUsername,
                 credential: turnCredential,
             }],
