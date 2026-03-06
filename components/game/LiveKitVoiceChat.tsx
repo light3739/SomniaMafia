@@ -195,6 +195,8 @@ function makeSessionIdentity(baseName: string): string {
 const RECONNECT_COOLDOWN_MS = 5000;
 /** Maximum number of automatic reconnect attempts before requiring manual action */
 const MAX_AUTO_RECONNECTS = 2;
+/** If a connection dies shortly after connect, force relay-only on next attempt */
+const SHORT_ICE_CONNECTION_MS = 20000;
 
 export function LiveKitVoiceChat({
     roomId,
@@ -212,6 +214,7 @@ export function LiveKitVoiceChat({
     const userNameRef = useRef(userName);
     const [token, setToken] = useState("");
     const [turnServers, setTurnServers] = useState<RTCIceServer[]>([]);
+    const [relayOnly, setRelayOnly] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
@@ -225,15 +228,31 @@ export function LiveKitVoiceChat({
     const autoReconnectCountRef = useRef(0);
     const lastReconnectAtRef = useRef(0);
     const isReconnectingRef = useRef(false);
+    const connectedAtRef = useRef(0);
 
     // connectOptions: include TURNS:443/tcp ICE server for VPN/firewall users.
     // livekit-client APPENDS these to the server-provided ICE servers.
     const connectOptions = useMemo(() => ({
         autoSubscribe: true,
-        rtcConfig: turnServers.length > 0 ? {
-            iceServers: turnServers,
+        rtcConfig: (turnServers.length > 0 || relayOnly) ? {
+            ...(turnServers.length > 0 ? {
+                iceServers: turnServers,
+            } : {}),
+            ...(relayOnly ? {
+                iceTransportPolicy: 'relay' as RTCIceTransportPolicy,
+            } : {}),
         } : undefined,
-    }), [turnServers]);
+    }), [relayOnly, turnServers]);
+
+    const switchToRelayOnly = useCallback((reason: string) => {
+        setRelayOnly((prev) => {
+            if (prev) return prev;
+            console.warn('[LiveKitVoiceChat] Switching to relay-only mode:', reason);
+            setStatusMessage('Switching to strict relay mode...');
+            setError(null);
+            return true;
+        });
+    }, []);
 
     /**
      * Schedule a reconnect with cooldown enforcement.
@@ -283,6 +302,14 @@ export function LiveKitVoiceChat({
     useEffect(() => { userNameRef.current = userName; }, [userName]);
 
     useEffect(() => {
+        setRelayOnly(false);
+        connectedAtRef.current = 0;
+        autoReconnectCountRef.current = 0;
+        lastReconnectAtRef.current = 0;
+        isReconnectingRef.current = false;
+    }, [roomId, sessionIdentity]);
+
+    useEffect(() => {
         return () => {
             if (reconnectTimerRef.current) {
                 clearTimeout(reconnectTimerRef.current);
@@ -295,6 +322,7 @@ export function LiveKitVoiceChat({
         if (!isActive || !roomId || !sessionIdentity) {
             setToken("");
             setTurnServers([]);
+            setRelayOnly(false);
             setStatusMessage(null);
             setRoomState(ConnectionState.Disconnected);
             return;
@@ -453,14 +481,29 @@ export function LiveKitVoiceChat({
                                     serverUrl={livekitServerUrl}
                                     connectOptions={connectOptions}
                                     onConnected={() => {
+                                        connectedAtRef.current = Date.now();
                                         setRoomState(ConnectionState.Connected);
                                         setError(null);
                                         setStatusMessage(null);
                                         autoReconnectCountRef.current = 0;
                                     }}
                                     onDisconnected={() => {
+                                        const connectedForMs = connectedAtRef.current > 0
+                                            ? Date.now() - connectedAtRef.current
+                                            : 0;
+                                        connectedAtRef.current = 0;
                                         setRoomState(ConnectionState.Disconnected);
                                         if (!isActive) return;
+                                        if (
+                                            !relayOnly &&
+                                            turnServers.length > 0 &&
+                                            connectedForMs > 0 &&
+                                            connectedForMs < SHORT_ICE_CONNECTION_MS
+                                        ) {
+                                            switchToRelayOnly(`short ICE connection (${connectedForMs}ms)`);
+                                            scheduleReconnect(true);
+                                            return;
+                                        }
                                         console.log('[LiveKitVoiceChat] Disconnected, scheduling auto-reconnect');
                                         scheduleReconnect(false);
                                     }}
@@ -474,6 +517,16 @@ export function LiveKitVoiceChat({
                                             msg.includes('pc manager is closed')
                                         ) {
                                             console.log('[LiveKitVoiceChat] Transient error (ignored):', msg.slice(0, 80));
+                                            return;
+                                        }
+                                        if (
+                                            !relayOnly &&
+                                            turnServers.length > 0 &&
+                                            msg.includes('could not establish pc connection')
+                                        ) {
+                                            switchToRelayOnly('pc connection failed before stable ICE');
+                                            setRoomState(ConnectionState.Disconnected);
+                                            scheduleReconnect(true);
                                             return;
                                         }
                                         // Real connection failure — schedule reconnect
@@ -504,6 +557,11 @@ export function LiveKitVoiceChat({
                                 <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
                                     <Users className="w-3 h-3" />
                                     <span>Voice room: {roomId}</span>
+                                    {relayOnly && (
+                                        <span className="rounded border border-amber-500/40 px-2 py-1 text-[10px] text-amber-300">
+                                            relay-only
+                                        </span>
+                                    )}
                                     {roomState !== ConnectionState.Connected && (
                                         <button
                                             onClick={() => scheduleReconnect(true)}

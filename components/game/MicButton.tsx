@@ -17,6 +17,8 @@ const LIVEKIT_CONNECT_TIMEOUT_MS = (() => {
     return 35000;
 })();
 
+const SHORT_ICE_CONNECTION_MS = 20000;
+
 interface MicButtonProps {
     roomId: string;
     userName?: string;
@@ -73,6 +75,7 @@ export function MicButton({
     const [error, setError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
     const [participantCount, setParticipantCount] = useState(0);
+    const [preferRelay, setPreferRelay] = useState(false);
     const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL);
 
     const addressRef = useRef(address);
@@ -82,6 +85,7 @@ export function MicButton({
     const roomRef = useRef<Room | null>(null);
     const audioTrackRef = useRef<LocalAudioTrack | null>(null);
     const audioContainerRef = useRef<HTMLDivElement | null>(null);
+    const connectedAtRef = useRef(0);
 
     useEffect(() => {
         addressRef.current = address;
@@ -138,6 +142,11 @@ export function MicButton({
     useEffect(() => {
         userNameRef.current = userName;
     }, [userName]);
+
+    useEffect(() => {
+        setPreferRelay(false);
+        connectedAtRef.current = 0;
+    }, [roomId, userName]);
 
     // Connect to LiveKit room on mount or retry
     useEffect(() => {
@@ -229,14 +238,24 @@ export function MicButton({
                 // Setup event listeners
                 room.on(RoomEvent.Disconnected, () => {
                     if (!cancelled) {
+                        const connectedForMs = connectedAtRef.current > 0
+                            ? Date.now() - connectedAtRef.current
+                            : 0;
+                        connectedAtRef.current = 0;
                         setIsConnected(false);
                         setParticipantCount(0);
                         console.log('[MicButton] Disconnected from room');
+                        if (!preferRelay && connectedForMs > 0 && connectedForMs < SHORT_ICE_CONNECTION_MS) {
+                            console.warn('[MicButton] Short ICE connection, retrying in relay-only mode');
+                            setPreferRelay(true);
+                            setRetryCount((prev) => prev + 1);
+                        }
                     }
                 });
 
                 room.on(RoomEvent.Connected, () => {
                     if (!cancelled) {
+                        connectedAtRef.current = Date.now();
                         setIsConnected(true);
                         setParticipantCount(room.remoteParticipants.size + 1);
                         console.log('[MicButton] Connected to room');
@@ -257,8 +276,15 @@ export function MicButton({
                 const extraIceServers: RTCIceServer[] = Array.isArray(data.turnServers) ? data.turnServers : [];
                 const defaultConnectOptions: { autoSubscribe: boolean; rtcConfig?: RTCConfiguration } = {
                     autoSubscribe: true,
-                    ...(extraIceServers.length > 0 ? {
-                        rtcConfig: { iceServers: extraIceServers },
+                    ...((extraIceServers.length > 0 || preferRelay) ? {
+                        rtcConfig: {
+                            ...(extraIceServers.length > 0 ? {
+                                iceServers: extraIceServers,
+                            } : {}),
+                            ...(preferRelay ? {
+                                iceTransportPolicy: 'relay' as RTCIceTransportPolicy,
+                            } : {}),
+                        },
                     } : {}),
                 };
                 await connectRoomWithTimeout(
@@ -307,6 +333,13 @@ export function MicButton({
                     message.includes('UnexpectedConnectionState') ||
                     message.includes('PC manager is closed');
                 if (!cancelled && !isCleanDisconnect) {
+                    const normalizedMessage = message.toLowerCase();
+                    if (!preferRelay && normalizedMessage.includes('could not establish pc connection')) {
+                        console.warn('[MicButton] PC connection failed, retrying in relay-only mode');
+                        setPreferRelay(true);
+                        setRetryCount((prev) => prev + 1);
+                        return;
+                    }
                     console.error('[MicButton] Connection error:', e);
                     setError(e instanceof Error ? e.message : 'Failed to connect');
                 } else if (isCleanDisconnect) {
