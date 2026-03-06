@@ -499,25 +499,28 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
         const newVoteMap: Record<string, string> = {};
         let anySuccess = false;
 
-        // Fetch votes for all alive players — each wrapped individually
+        // Fetch votes for all alive players concurrently
         // so one revert doesn't kill all vote data
-        for (const player of gameState.players) {
-            if (!player.isAlive) continue;
-            try {
-                const count = await publicClient.readContract({
-                    address: runtimeContractAddress,
-                    abi: MAFIA_ABI,
-                    functionName: 'voteCounts',
-                    args: [BigInt(String(currentRoomId || 0)), player.address as `0x${string}`],
-                }) as unknown as bigint;
-                counts.set(player.address.toLowerCase(), Number(count));
+        const alivePlayersForVotes = gameState.players.filter(p => p.isAlive);
 
-                const vote = await publicClient.readContract({
-                    address: runtimeContractAddress,
-                    abi: MAFIA_ABI,
-                    functionName: 'votes',
-                    args: [BigInt(String(currentRoomId || 0)), player.address as `0x${string}`],
-                }) as `0x${string}`;
+        await Promise.all(alivePlayersForVotes.map(async (player) => {
+            try {
+                const [count, vote] = await Promise.all([
+                    publicClient.readContract({
+                        address: runtimeContractAddress,
+                        abi: MAFIA_ABI,
+                        functionName: 'voteCounts',
+                        args: [BigInt(String(currentRoomId || 0)), player.address as `0x${string}`],
+                    }) as Promise<bigint>,
+                    publicClient.readContract({
+                        address: runtimeContractAddress,
+                        abi: MAFIA_ABI,
+                        functionName: 'votes',
+                        args: [BigInt(String(currentRoomId || 0)), player.address as `0x${string}`],
+                    }) as Promise<`0x${string}`>
+                ]);
+
+                counts.set(player.address.toLowerCase(), Number(count));
 
                 if (vote && vote !== '0x0000000000000000000000000000000000000000') {
                     newVoteMap[player.address.toLowerCase()] = vote.toLowerCase();
@@ -529,7 +532,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
                     console.warn(`[DayPhase] Failed to fetch vote for ${player.name}:`, e);
                 }
             }
-        }
+        }));
 
         // Only update if we got at least some data
         if (anySuccess) {
@@ -555,7 +558,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
 
         if (isVotingPhase) {
             fetchVoteCounts();
-            const interval = setInterval(fetchVoteCounts, 2000);
+            const interval = setInterval(fetchVoteCounts, 1000);
             return () => clearInterval(interval);
         } else if (!showVotingResults) {
             // Clear vote map when leaving voting phase, BUT NOT during voting results display
