@@ -23,6 +23,14 @@ interface ChatMessage {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+function normalizeLiveKitWsUrl(rawUrl?: string): string {
+    if (!rawUrl) return 'wss://livekit.mafiaonchain.live';
+    if (rawUrl.startsWith('wss://') || rawUrl.startsWith('ws://')) return rawUrl;
+    if (rawUrl.startsWith('https://')) return rawUrl.replace('https://', 'wss://');
+    if (rawUrl.startsWith('http://')) return rawUrl.replace('http://', 'ws://');
+    return `wss://${rawUrl}`;
+}
+
 // Chat toggle button component with integrated chat panel AND LiveKit connection
 export const ChatToggleButton: React.FC<{
     isExpanded: boolean;
@@ -43,6 +51,7 @@ export const ChatToggleButton: React.FC<{
     const prevMessagesCountRef = useRef(0);
     const { playChatMessageSound } = useSoundEffects();
     const [internalUnreadCount, setInternalUnreadCount] = useState(0);
+    const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL);
 
     // Reset unread count when chat is opened
     useEffect(() => {
@@ -222,7 +231,7 @@ export const ChatToggleButton: React.FC<{
 
                 // Connect to room (only data, no audio/video)
                 console.log('[ChatToggleButton] Connecting to LiveKit...');
-                await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL!, data.token, {
+                await room.connect(livekitServerUrl, data.token, {
                     autoSubscribe: true
                 });
                 console.log('[ChatToggleButton] room.connect() completed');
