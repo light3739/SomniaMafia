@@ -173,7 +173,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="relative z-10 w-full max-w-[800px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10 my-auto">
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10 my-auto">
                 <div className="w-full flex items-center justify-between">
                     <div className="-ml-3">
                         <BackButton to="/setup" />
@@ -225,7 +225,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     </div>
                 </div>
 
-                <div className="w-full flex flex-col gap-3 min-h-[200px] md:min-h-[300px]">
+                <div className="w-full flex flex-col gap-3 min-h-[300px] md:min-h-[500px]">
                     {isLoading ? (
                         <div className="text-white/40 text-center flex-1 flex items-center justify-center bg-black/20 rounded-2xl border border-white/5 animate-pulse">Scanning Network...</div>
                     ) : rooms.length === 0 ? (
