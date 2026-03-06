@@ -35,6 +35,11 @@ function normalizeLiveKitWsUrl(rawUrl?: string): string {
     return `wss://${rawUrl}`;
 }
 
+function shouldStartRelayOnly(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    return /firefox/i.test(navigator.userAgent);
+}
+
 async function connectRoomWithTimeout(
     room: Room,
     serverUrl: string,
@@ -75,7 +80,7 @@ export function MicButton({
     const [error, setError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
     const [participantCount, setParticipantCount] = useState(0);
-    const [preferRelay, setPreferRelay] = useState(false);
+    const [preferRelay, setPreferRelay] = useState(() => shouldStartRelayOnly());
     const livekitServerUrl = normalizeLiveKitWsUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL);
 
     const addressRef = useRef(address);
@@ -144,7 +149,7 @@ export function MicButton({
     }, [userName]);
 
     useEffect(() => {
-        setPreferRelay(false);
+        setPreferRelay(shouldStartRelayOnly());
         connectedAtRef.current = 0;
     }, [roomId, userName]);
 

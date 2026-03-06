@@ -139,14 +139,23 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
             token,
-            turnServers: [{
-                urls: [
-                    `turns:${turnDomain}:443?transport=tcp`,
-                    `turn:${turnDomain}:443?transport=tcp`,
-                ],
-                username: turnUsername,
-                credential: turnCredential,
-            }],
+            turnServers: [
+                {
+                    urls: [
+                        'stun:stun.cloudflare.com:3478',
+                        'stun:stun.l.google.com:19302',
+                        `stun:${turnDomain}:443`,
+                    ],
+                },
+                {
+                    urls: [
+                        `turns:${turnDomain}:443?transport=tcp`,
+                        `turn:${turnDomain}:443?transport=tcp`,
+                    ],
+                    username: turnUsername,
+                    credential: turnCredential,
+                },
+            ],
         });
     } catch (error) {
         console.error('[LiveKit Token API] Error:', error);
