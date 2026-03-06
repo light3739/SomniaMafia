@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWalletClient, useWatchContractEvent, useWatchBlockNumber } from 'wagmi';
-import { createWalletClient, http, parseEther, formatEther, parseEventLogs, toHex, pad, type WalletClient } from 'viem';
+import { createWalletClient, http, fallback, parseEther, formatEther, parseEventLogs, toHex, pad, type WalletClient } from 'viem';
 import { privateKeyToAccount, nonceManager } from 'viem/accounts';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL, AVALANCHE_FUJI, getDeploymentByChainId } from '../contracts/config';
@@ -212,17 +212,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // eth_getTransactionCount RPC call before every writeContract (~200ms saved)
             const account = privateKeyToAccount(session.privateKey, { nonceManager });
             console.log(`[Session Debug] Creating new cached client for ${account.address}`);
+
+            // Generate list of fallback transports from all defined RPCs
+            const fallbackTransports = runtimeChain.rpcUrls.default.http.map(url => http(url, {
+                // SPEED: Tighter timeout — Somnia RPCs respond in <500ms normally
+                timeout: 8_000,
+                // SPEED: Batch JSON-RPC — combine multiple calls into single HTTP request
+                batch: { batchSize: 20, wait: 16 },
+            }));
+
             const client = createWalletClient({
                 account,
                 chain: runtimeChain,
-                transport: http(runtimeChain.rpcUrls.default.http[0], {
-                    // SPEED: Tighter timeout — Somnia RPCs respond in <500ms normally
-                    timeout: 8_000,
-                    // SPEED: Fewer retries for faster failure detection (queue will retry anyway)
-                    retryCount: 2,
-                    retryDelay: 300,
-                    // SPEED: Batch JSON-RPC — combine multiple calls into single HTTP request
-                    batch: { batchSize: 20, wait: 16 },
+                transport: fallback(fallbackTransports, {
+                    rank: {
+                        // Automatically rank based on speed to use the fastest responsive RPC
+                        interval: 60_000,
+                        timeout: 5_000,
+                    }
                 }),
             });
             sessionClientRef.current = { client, key: cacheKey };
