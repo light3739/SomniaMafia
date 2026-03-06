@@ -538,18 +538,21 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             const windowWidth = window.innerWidth;
             const windowHeight = window.innerHeight;
 
-            // Calculate scale to fit both width and height with some padding
             const scaleX = windowWidth / BASE_WIDTH;
             const scaleY = windowHeight / BASE_HEIGHT;
+            const isPortrait = windowHeight > windowWidth;
+            let newScale = Math.min(scaleX, scaleY);
 
-            // Choose the smaller scale to fit entirely, or maybe cover? 
-            // "contain" behavior is usually safer for game boards so nothing gets cut off.
-            // But if it's too small on mobile, we might need a different strategy. 
-            // For now, let's try to fill the screen as much as possible while maintaining aspect ratio.
-            const newScale = Math.min(scaleX, scaleY);
+            // MOBILE SCALING OPTIMIZATION
+            if (isPortrait && windowWidth < 768) {
+                // On mobile portrait, basic "contain" scaling makes everything tiny.
+                // We prefer keeping the 600px center feed readable.
+                // target 92% of screen width for the central feed area.
+                const mobileScale = (windowWidth * 0.92) / 600;
+                // Cap it so we don't go too crazy, but ensure it's larger than the default.
+                newScale = Math.max(newScale, Math.min(mobileScale, 0.6));
+            }
 
-            // On very small screens, exact fit might make things tiny. 
-            // But user asked for this exact layout.
             setScale(newScale);
         };
 

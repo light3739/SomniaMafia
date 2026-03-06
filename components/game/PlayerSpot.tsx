@@ -336,7 +336,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
             {/* Text Info */}
             <div className="flex flex-col items-start min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1 w-full">
-                    <span className={`text-sm md:text-base font-bold truncate block max-w-[120px] ${isMafiaVisible ? 'text-rose-500' : 'text-[#916A47]'}`}>
+                    <span className={`text-[17px] md:text-base font-bold truncate block max-w-[120px] ${isMafiaVisible ? 'text-rose-500' : 'text-[#916A47]'}`}>
                         {player.name}
                     </span>
 
@@ -414,7 +414,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                         </div>
                     )}
                 </div>
-                <div className="text-[10px] text-white/30 font-mono">
+                <div className="text-[12px] md:text-[10px] text-white/30 font-mono">
                     {player.address ? `${player.address.slice(0, 4)}...${player.address.slice(-4)}` : '0x...'}
                 </div>
 
