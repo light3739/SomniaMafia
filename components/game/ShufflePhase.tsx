@@ -397,17 +397,29 @@ export const ShufflePhase: React.FC = React.memo(() => {
             // If generateKeys() is called again (e.g., due to a re-render or race condition),
             // it overwrites the keys that were already used to encrypt the deck on-chain.
             // This causes all subsequent role decryptions to fail (wrong decryption key → wrong roles).
-            if (!shuffleService.hasKeys()) {
-                shuffleService.generateKeys();
-                console.log("[Shuffle] Generated fresh SRA keys");
-            } else {
-                console.log("[Shuffle] Reusing existing SRA keys");
-            }
-
             // V4 Fix: Identify Active Slots (Alive players)
             const activeIndices = gameState.players
                 .map((p, i) => p.isAlive ? i : -1)
                 .filter(i => i !== -1);
+
+            // Generate all possible card values for verification
+            const roomIdStr = currentRoomId?.toString() || '0';
+            const verifyDeck = ShuffleService.generateInitialDeck(
+                gameState.players.length, roomIdStr, activeIndices.length
+            );
+            // Deduplicate card values for verification
+            const uniqueCardValues = [...new Set(verifyDeck)];
+
+            // CRITICAL: Only generate keys if we don't have them yet.
+            // If generateKeys() is called again (e.g., due to a re-render or race condition),
+            // it overwrites the keys that were already used to encrypt the deck on-chain.
+            // This causes all subsequent role decryptions to fail (wrong decryption key → wrong roles).
+            if (!shuffleService.hasKeys()) {
+                shuffleService.generateVerifiedKeys(uniqueCardValues);
+                console.log("[Shuffle] Generated fresh verified SRA keys");
+            } else {
+                console.log("[Shuffle] Reusing existing SRA keys");
+            }
 
             let newDeck: string[];
 
@@ -418,7 +430,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 }
                 const initialDeck = ShuffleService.generateDistributedDeck(
                     gameState.players.map(p => ({ isAlive: p.isAlive })),
-                    currentRoomId?.toString()
+                    roomIdStr
                 );
                 const shuffled = shuffleService.shuffleSubarray(initialDeck, activeIndices);
                 newDeck = shuffleService.encryptDeck(shuffled);
