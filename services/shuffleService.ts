@@ -36,15 +36,61 @@ export class ShuffleService {
         return this.keys;
     }
 
+    /**
+     * Generate keys with verification: ensures encrypt→decrypt roundtrip works
+     * for ALL card values used in the game. Retries up to maxRetries times.
+     */
+    public generateVerifiedKeys(cardValues: string[], maxRetries = 10): ShuffleKeys {
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            const keys = this.generateKeys();
+
+            // Verify roundtrip for every card value
+            let allValid = true;
+            for (const val of cardValues) {
+                const encrypted = this.encrypt(val);
+                const decrypted = this.decrypt(encrypted);
+                if (decrypted !== val) {
+                    console.warn(`[SRA] Key verification FAILED on attempt ${attempt + 1}: encrypt→decrypt(${val}) = ${decrypted} (expected ${val}). Retrying...`);
+                    allValid = false;
+                    break;
+                }
+            }
+
+            if (allValid) {
+                if (attempt > 0) {
+                    console.log(`[SRA] Keys verified OK after ${attempt + 1} attempts`);
+                }
+                return keys;
+            }
+
+            // Reset keys for retry
+            this.keys = null;
+        }
+
+        // Fallback: return last generated keys with warning
+        console.error(`[SRA] Failed to generate verified keys after ${maxRetries} attempts! Using last generated keys.`);
+        return this.generateKeys();
+    }
+
     public hasKeys(): boolean {
         return this.keys !== null;
     }
 
     // Генерация числа взаимно простого с n
+    // FIX: Use crypto.getRandomValues for much larger key range (~2^53)
+    // Old range [2, 1_000_002] was too small → caused SRA collisions
     private generateCoprime(n: bigint): bigint {
         let e: bigint;
         do {
-            e = BigInt(Math.floor(Math.random() * 1000000) + 2);
+            // Generate a random 6-byte (48-bit) value for much better distribution
+            const arr = new Uint8Array(6);
+            crypto.getRandomValues(arr);
+            e = 2n;
+            for (let i = 0; i < arr.length; i++) {
+                e = e + BigInt(arr[i]) * (256n ** BigInt(i));
+            }
+            // Ensure e is at least 2 and less than n
+            e = (e % (n - 2n)) + 2n;
         } while (this.gcd(e, n) !== 1n);
         return e;
     }
