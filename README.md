@@ -1,163 +1,160 @@
-# Somnia Mafia 🕵️‍♂️
+# Mafia On Chain
 
-A **V4 Web3 Social Deduction Game** built for **Somnia Testnet** and **Avalanche Fuji**.
-Featuring Zero-Knowledge Proofs for role verification, Session Keys for seamless UX, and a synchronized game loop.
+**Submission for [Avalanche Build Games Hackathon](https://www.avax.network/)**
 
-![Banner](/public/assets/mafia_shot.png)
+A fully on-chain social deduction game (Mafia / Werewolf) deployed on **Avalanche Fuji (C-Chain)**. Players connect wallets, join lobbies, get roles via a tamper-proof commit-reveal shuffle, play through Day/Night cycles with voice chat, and prove the winner using a **Zero-Knowledge proof (Groth16)** — all coordinated by smart contracts.
 
-## Features
+**Live Demo**: https://mafiaonchain.live
 
-- **Protocol V4**: Atomic lobby creation, commit-reveal schemes for all actions.
-- **ZK Endgame**: Client-side Zero-Knowledge Proof generation (Groth16) to prove win conditions without revealing sensitive data.
-- **Session Keys**: Burner wallets stored in-memory/local storage allow for instant, signature-free game actions after initial approval.
-- **Discussion Timer**: Synchronized server-side timer (Redis) for fair turn-based speech.
-- **Role Mechanics**:
-  - **Mafia**: Encrypted P2P Chat, Consensus Kills.
-  - **Detective**: "Check" action to investigate roles (Server-side validation).
-  - **Doctor**: "Heal" action to protect targets.
+---
+
+## Why Avalanche
+
+- **Fast finality** (~1s) makes real-time game actions (voting, night kills) feel instant — critical for a turn-based game with timers
+- **Low gas fees** allow per-action on-chain writes (every vote, every night commit is a tx) without breaking the UX
+- **EVM compatibility** lets us use standard tooling (Hardhat, viem, wagmi) while targeting Fuji C-Chain
+- Verified contracts on **Avalanche Fuji testnet** — all live gameplay runs there
+
+---
+
+## Deployed Contracts (Avalanche Fuji — chainId 43113)
+
+All interactions go through the **MafiaDiamond** proxy address:
+
+| Contract | Address | Explorer |
+|---|---|---|
+| **MafiaDiamond** (main entry point) | `0x3c1bd1923f8318247e2b60e41b0f280391c4e1e1` | [Verified](https://testnet.snowtrace.io/address/0x3c1bd1923f8318247e2b60e41b0f280391c4e1e1#code) |
+| Groth16Verifier (ZK) | `0x32d3612009c2d30c71c19d2548822e1eecb8d165` | [Verified](https://testnet.snowtrace.io/address/0x32d3612009c2d30c71c19d2548822e1eecb8d165#code) |
+| LobbyFacet | `0xb718ba5b6bccfa418f2971ea094f5b52a105c049` | [Verified](https://testnet.snowtrace.io/address/0xb718ba5b6bccfa418f2971ea094f5b52a105c049#code) |
+| ShuffleFacet | `0xffa18547fde97a6d2f4df8af0ac545db9f5ae789` | [Verified](https://testnet.snowtrace.io/address/0xffa18547fde97a6d2f4df8af0ac545db9f5ae789#code) |
+| VotingFacet | `0x78616f773e7d9fef5dd7c6583dc642b238033a61` | [Verified](https://testnet.snowtrace.io/address/0x78616f773e7d9fef5dd7c6583dc642b238033a61#code) |
+| NightFacet | `0x72d4cfa33b2e7e6cce4a85bbd31147659f04a3be` | [Verified](https://testnet.snowtrace.io/address/0x72d4cfa33b2e7e6cce4a85bbd31147659f04a3be#code) |
+| GameEndFacet | `0xca5556d70fbb02544a1418c31cbc1a032d9676d8` | [Verified](https://testnet.snowtrace.io/address/0xca5556d70fbb02544a1418c31cbc1a032d9676d8#code) |
+
+---
+
+## Related Repositories
+
+| Repo | Description |
+|---|---|
+| [SomniaMafia](https://github.com/light3739/SomniaMafia) | This repo — Next.js frontend + API routes |
+| [somnia-mafia-gm-server](https://github.com/light3739/somnia-mafia-gm-server) | Game Master backend (night phase oracle) |
+
+---
+
+## How It Works
+
+### Game Flow
+
+```
+Connect Wallet → Setup Profile → Create/Join Lobby
+    → Commit-Reveal Shuffle (roles assigned on-chain, tamper-proof)
+    → ZK Role Reveal (Groth16 — player learns role without exposing it)
+    → Day Discussion (voice chat via LiveKit)
+    → Voting (on-chain, all votes recorded)
+    → Night Phase (Mafia/Doctor/Detective act via GM oracle)
+    → Repeat until win condition
+    → ZK Endgame Proof → Prize distribution on-chain
+```
+
+### Key Technical Features
+
+**Commit-Reveal Role Shuffle**
+Every player commits a hash of a random deck, then reveals it. The contract XORs all decks to produce a tamper-proof shuffle. No single player can manipulate role assignment.
+
+**Zero-Knowledge Role Verification (Groth16)**
+Roles are verified on-chain using a Groth16 ZK proof (SnarkJS + Circom). The proof confirms role assignment without publicly revealing anyone's role. The win condition is also proven via ZK — no roles are leaked at game end.
+
+**Session Keys**
+Each player registers a derived burner wallet as a session key on-chain. All in-game transactions (votes, night actions) are signed by the session key automatically — no MetaMask popup per action.
+
+**Game Master Oracle (Night Phase)**
+Night actions (Mafia kill, Doctor heal, Detective investigate) are submitted encrypted to the GM server off-chain. The GM resolves conflicts and posts only the result (`resolveNightAsGameMaster`) on-chain — hiding who performed each action.
+
+**Diamond Proxy Architecture (EIP-2535)**
+The contract is structured as a Diamond proxy with 5 facets (Lobby, Shuffle, Voting, Night, GameEnd), allowing upgradeable and modular on-chain game logic.
+
+**Voice Chat**
+Real-time voice chat via LiveKit WebRTC — players discuss during the Day phase. TURN relay fallback for restrictive network environments.
+
+---
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14, TailwindCSS, Framer Motion
-- **Blockchain**: Solidity, Hardhat, Viem/Wagmi
-- **ZK**: SnarkJS, Circom
-- **Backend**: Next.js API Routes, Redis (Upstash compatible)
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 15, TailwindCSS, Framer Motion |
+| Blockchain | Solidity 0.8.28, Hardhat v3, Viem, Wagmi |
+| ZK Proofs | SnarkJS, Circom, Groth16 |
+| Voice | LiveKit WebRTC |
+| Backend | Next.js API Routes, Redis |
+| Infrastructure | Docker, Caddy, GitHub Actions |
+| Network | Avalanche Fuji C-Chain (chainId 43113) |
 
-## Getting Started
+---
+
+## Running Locally
 
 ### Prerequisites
 
 - Node.js 18+
-- Redis (Required in production for secure secrets/nonce storage)
-- Metamask (configured for Somnia Devnet)
+- Redis instance (local or Upstash)
+- MetaMask configured for Avalanche Fuji
 
 ### Environment Variables
 
-Copy `.env.example` to `.env.local`:
-
 ```bash
-# Public (Frontend)
-NEXT_PUBLIC_MAFIA_ADDRESS=0x...
-NEXT_PUBLIC_ENABLE_TEST_MODE=false
-NEXT_PUBLIC_ACTIVE_NETWORK=avalanche_fuji # or somnia_testnet
-
-# Private (Backend)
-REDIS_URL=redis://... # Required in production
-# ALLOW_INSECURE_MEMORY_FALLBACK=true # Emergency/dev only, NOT recommended in production
+# .env.local
+NEXT_PUBLIC_MAFIA_ADDRESS=0x3c1bd1923f8318247e2b60e41b0f280391c4e1e1
+NEXT_PUBLIC_ACTIVE_NETWORK=avalanche_fuji
+NEXT_PUBLIC_GM_SERVER_URL=https://gm.mafiaonchain.live
+NEXT_PUBLIC_LIVEKIT_URL=wss://livekit.mafiaonchain.live
+REDIS_URL=redis://localhost:6379
+LIVEKIT_API_KEY=...
+LIVEKIT_API_SECRET=...
 ```
 
-### Installation
+### Start
 
 ```bash
 npm install
-# or
-yarn install
-```
-
-### Run Development Server
-
-```bash
 npm run dev
+# Open http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-## Deployment
-
-1. **Build**: `npm run build`
-2. **Environment**: Ensure `NEXT_PUBLIC_MAFIA_ADDRESS` points to the correct deployment.
-3. **ZK Circuits**: Ensure `public/mafia_outcome.wasm` and `public/mafia_outcome_0001.zkey` are present.
-
-### Frontend on own server (Docker + Redis)
-
-This repo includes a production stack in `ops/frontend-server`.
-
-Run deploy from local machine:
+### Production Deploy (Docker)
 
 ```bash
-npm run front:deploy
+npm run front:deploy   # SSH deploy to remote server
+npm run gm:release     # Build + publish + deploy GM backend
 ```
 
-Defaults:
-- SSH host: `mafia`
-- Remote dir: `/root/somnia-frontend`
-- Frontend listens on `127.0.0.1:3000`
-- App Redis listens on `127.0.0.1:6380` (container internal `redis:6379`)
+---
 
-Server env file:
-- `ops/frontend-server/.env.production` (auto-created from `.env.production.example` on first deploy)
+## Architecture
 
-Important public vars:
-- `NEXT_PUBLIC_GM_SERVER_URL=https://gm.mafiaonchain.live`
-- `NEXT_PUBLIC_LIVEKIT_URL=https://livekit.mafiaonchain.live`
-
-Required server vars for voice token API:
-- `LIVEKIT_API_KEY` (must match key in LiveKit `livekit.yaml`)
-- `LIVEKIT_API_SECRET` (must match secret in LiveKit `livekit.yaml`)
-
-System health endpoint (sanitized env/runtime checks):
-- `GET /api/health/system`
-- Verifies presence of required frontend env vars and runtime dependencies
-- Checks Redis ping + GM `/health` + LiveKit `/rtc/validate` reachability
-
-### CI/CD deploy + Telegram alerts
-
-Workflow: `.github/workflows/frontend-deploy-server.yml`
-
-It sends Telegram notifications on:
-- deploy started
-- deploy success
-- deploy failure
-
-Required GitHub Secrets:
-- `GM_SSH_PRIVATE_KEY`
-- `GM_SSH_HOST`
-- `FRONT_REMOTE_DIR` (optional, defaults to `/root/somnia-frontend`)
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHAT_ID`
-
-## GM Backend: Push/Deploy Runbook
-
-Use npm scripts from this repository:
-
-```bash
-npm run gm:sync
-npm run gm:build
-npm run gm:publish
-npm run gm:deploy
+```
+Browser (Next.js)
+    |
+    |-- Wagmi/Viem ──────────────────> MafiaDiamond (Avalanche Fuji)
+    |                                       |-- LobbyFacet
+    |                                       |-- ShuffleFacet
+    |                                       |-- VotingFacet
+    |                                       |-- NightFacet
+    |                                       └── GameEndFacet ──> Groth16Verifier
+    |
+    |-- LiveKit SDK ─────────────────> LiveKit Server (WebRTC voice)
+    |
+    └── fetch (signed EIP-191) ──────> GM Server (night phase oracle)
+                                            └── resolveNightAsGameMaster() ──> Chain
 ```
 
-One-command release (publish + deploy):
+### Anti-Race Condition: Waterfall Submission
+When multiple clients simultaneously detect a win condition, they use a staggered submission schedule (sorted by wallet address, 15s delay per position) to prevent duplicate `endGameZK` transactions.
 
-```bash
-npm run gm:release
-```
+---
 
-Backend ops folder: `ops/gm-server`.
+## Smart Contract Sources
 
-## Contracts Location
-
-- Solidity sources:
-  - `contracts/SomniaMafia.sol`
-  - `Verifier_new.sol`
-- Frontend network/address/ABI wiring:
-  - `contracts/config.ts`
-- ABI files:
-  - `contracts/MafiaDiamondABI.json`
-  - `contracts/MafiaPortal.json`
-  - `contracts/IGroth16Verifier.json`
-
-## Architecture Highlights
-
-### The "Waterfall" Submission
-To prevent race conditions during auto-endgame, clients coordinate submission:
-- Players are sorted by address.
-- Player #1 submits immediately.
-- Player #2 waits 15s, etc.
-- Priority is given to Session Keys if balance allows.
-
-### Discussion API
-`/api/game/discussion` manages the state of the Day phase timer, ensuring all clients see the same effective time remaining despite network latency.
-
-## Credits
-Built for the Somnia Hackathon.
+Contract sources, deployment scripts, and Hardhat config:
+https://github.com/light3739/SomniaSol
