@@ -470,9 +470,11 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
     const resolvePhase = Array.isArray(resolveRoom) ? Number(resolveRoom[3]) : Number(resolveRoom.phase);
     const resolveHost = (Array.isArray(resolveRoom) ? String(resolveRoom[1]) : String(resolveRoom.host)).toLowerCase();
 
-    // Restrict to room host only
-    if (signatureCheck.signer !== resolveHost) {
-      return res.status(403).json({ error: 'Only the room host can trigger resolve-night' });
+    // Restrict to room host OR GM address (host may be eliminated mid-game)
+    const isHost = signatureCheck.signer === resolveHost;
+    const isGM = signatureCheck.signer === GM_ADDRESS.toLowerCase();
+    if (!isHost && !isGM) {
+      return res.status(403).json({ error: 'Only the room host or GM can trigger resolve-night' });
     }
 
     if (resolvePhase !== GamePhase.NIGHT) {
