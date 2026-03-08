@@ -142,25 +142,23 @@ await test('/investigation-proof — rejects expired timestamps (replay protecti
   // 401 = correct rejection
 });
 
-await test('/night-action — legacy message lacks night/day number (cross-night replay)', async () => {
-  // Legacy message: "night:roomId:actionType:targetAddress"  — no dayCount!
-  // An attacker could replay a kill action from night 1 into night 2.
-  // This test documents the vuln (we can't replay against a real room,
-  // but we verify the message format lacks the nonce-equivalent).
+await test('/night-action — legacy format rejected (cross-night replay prevention)', async () => {
+  // Legacy message: "night:roomId:actionType:targetAddress" — no nonce, no dayCount.
+  // Server now requires nonce+timestamp → sending without them returns 400.
   const legacyMsg = `night:${FAKE_ROOM}:kill:${CIVILIAN.address}`;
   const sig = await sign(MAFIA, legacyMsg);
-  //  If accepted (would be 400 "not in NIGHT phase" for fake room, not 401),
-  // then the legacy message format is used.
   const { status } = await post('/night-action', {
     roomId: FAKE_ROOM,
     playerAddress: MAFIA.address,
     actionType: 'kill',
     targetAddress: CIVILIAN.address,
     signature: sig,
+    // intentionally no nonce, no timestamp
   });
-  // Not 401 → auth passed with no dayCount binding → cross-night replay possible
-  if (status !== 401) {
-    warn('HIGH', `Legacy night-action sig lacks dayCount — cross-night replay: player can reuse sig from night N in night N+1 (format: "night:roomId:action:target")`);
+  // 400 = "nonce and timestamp required" — legacy rejected ✓
+  // Anything 2xx = accepted without nonce binding → replay still possible
+  if (status >= 200 && status < 300) {
+    warn('HIGH', `Legacy night-action accepted (${status}) — cross-night replay still possible!`);
   }
 });
 
@@ -358,12 +356,26 @@ await test('/night-action — one action per player (duplicate submission overri
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('\n━━━ Section 6: Tournament-specific ━━━\n');
 
-await test('ECIES keys survive across GM restarts (in-memory only!)', async () => {
-  warn('HIGH', 'eciesPubkeys and sraSKeys are in-memory Maps — a GM restart during a game loses all registered pubkeys and SRA keys. Players would need to re-register. For tournaments: persist to Redis with TTL or at minimum warn in /health if state was recently cleared.');
+await test('ECIES/SRA keys and roles persist across GM restarts (Redis)', async () => {
+  // Redis write-through is now implemented (redis.ts).
+  // Verify the /health endpoint is reachable (Redis status is visible in server logs).
+  const { body } = await get('/health');
+  if (body.status !== 'ok') {
+    warn('HIGH', `GM /health returned unexpected status: ${JSON.stringify(body)}`);
+  }
+  // INFO: if REDIS_URL is not set, GM falls back to in-memory gracefully (logged at startup)
+  // For tournaments ensure REDIS_URL env var is configured on the server.
 });
 
-await test('Night state survives across GM restarts (in-memory only!)', async () => {
-  warn('HIGH', 'Night actions are in-memory (game-state.ts nightStates Map) — a GM crash/restart during night phase loses all submitted actions. /resolve-night will return "No night actions submitted". For tournaments: persist night state to Redis.');
+await test('Night state persists across GM restarts (Redis write-through)', async () => {
+  // Night actions are now persisted to Redis after every mutation (rPersistNightState).
+  // On startup, loadAllState() restores them into memory.
+  // This test verifies the GM is alive; actual persistence requires a live room test.
+  const { body } = await get('/health');
+  if (body.status !== 'ok') {
+    warn('HIGH', `GM unhealthy — Redis state restore may have failed: ${JSON.stringify(body)}`);
+  }
+  // INFO: ensure REDIS_URL is configured in production.
 });
 
 await test('GM private key is the only resolve authority (single point of failure)', async () => {

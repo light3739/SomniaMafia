@@ -21,10 +21,22 @@ import {
   clearNightState,
   getNightState,
   getAllNightStates,
+  injectNightState,
   calculateMafiaConsensus,
   getDoctorHeal,
   type NightAction,
 } from './game-state.js';
+import {
+  connectRedis,
+  getRedis,
+  rPersistPubkey,
+  rPersistSraKey,
+  rPersistRole,
+  rPersistProof,
+  rPersistNightState,
+  rDeleteNightState,
+  loadAllState,
+} from './redis.js';
 
 const ALLOWED_ORIGINS = [
   'https://mafiaonchain.live',
@@ -99,7 +111,9 @@ function storeInvestigationProof(roomId: bigint, detective: Address, target: Add
     roomProofs = new Map<string, InvestigationProof>();
     investigationProofs.set(roomKey, roomProofs);
   }
-  roomProofs.set(detective.toLowerCase(), { targetAddress: target, timestamp: Date.now() });
+  const proof: InvestigationProof = { targetAddress: target, timestamp: Date.now() };
+  roomProofs.set(detective.toLowerCase(), proof);
+  rPersistProof(getRedis(), roomKey, detective.toLowerCase(), proof);
 }
 
 function getInvestigationProof(roomId: bigint, detective: Address): InvestigationProof | null {
@@ -301,6 +315,11 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
       return res.status(400).json({ error: 'actionType must be: kill, heal, check' });
     }
 
+    // Require modern signature (nonce+timestamp) — legacy format disabled to prevent cross-night replay
+    if (!nonce || timestamp === undefined) {
+      return res.status(400).json({ error: 'nonce and timestamp are required (legacy format not accepted)' });
+    }
+
     const rid = BigInt(roomId);
     const { diamond } = getChainConfig(chainId);
     console.log(`[GM API] Processing night-action for Room:${rid} on Chain:${chainId || 'default(43113)'} Diamond:${diamond}`);
@@ -393,6 +412,7 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
     };
 
     state.actions.set((playerAddress as string).toLowerCase(), action);
+    rPersistNightState(getRedis(), String(roomId), state);
 
     if (actionType === 'check') {
       storeInvestigationProof(
@@ -479,10 +499,12 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
 
     // Submit to contract
     state.resolved = true;
+    rPersistNightState(getRedis(), String(roomId), state);
     const { hash } = await resolveNight(rid, killTarget, healTarget, chainId);
 
     // Clean up
     clearNightState(rid);
+    rDeleteNightState(getRedis(), String(roomId));
 
     return res.json({
       ok: true,
@@ -495,7 +517,10 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
     // Reset resolved flag if tx fails
     const rid = BigInt(req.body.roomId);
     const state = getNightState(rid);
-    if (state) state.resolved = false;
+    if (state) {
+      state.resolved = false;
+      rPersistNightState(getRedis(), String(req.body.roomId), state);
+    }
     return res.status(500).json({ error: err.message });
   }
 });
@@ -590,7 +615,9 @@ app.post('/register-pubkey', (req: express.Request, res: express.Response) => {
   if (!/^04[0-9a-fA-F]{128}$/.test(pubkey)) {
     return res.status(400).json({ error: 'Invalid pubkey: expected 65-byte uncompressed P-256 hex (starting with 04)' });
   }
-  getRoomMap(eciesPubkeys, String(roomId)).set(String(playerAddress).toLowerCase(), pubkey);
+  const normalizedAddr = String(playerAddress).toLowerCase();
+  getRoomMap(eciesPubkeys, String(roomId)).set(normalizedAddr, pubkey);
+  rPersistPubkey(getRedis(), String(roomId), normalizedAddr, pubkey);
   console.log(`[ecies] Room ${roomId}: pubkey registered for ${playerAddress}`);
   return res.json({ ok: true });
 });
@@ -627,7 +654,9 @@ app.post('/submit-sra-key', async (req: express.Request, res: express.Response) 
     }
 
     const roomSraKeys = getRoomMap(sraSKeys, String(roomId));
-    roomSraKeys.set(String(playerAddress).toLowerCase(), String(sraKey));
+    const normalizedPlayer = String(playerAddress).toLowerCase();
+    roomSraKeys.set(normalizedPlayer, String(sraKey));
+    rPersistSraKey(getRedis(), String(roomId), normalizedPlayer, String(sraKey));
     console.log(`[ecies] Room ${roomId}: SRA key received from ${playerAddress}`);
 
     // If all SRA keys are now in, eagerly compute and cache roles for night-action role verification
@@ -649,7 +678,9 @@ app.post('/submit-sra-key', async (req: express.Request, res: express.Response) 
         const roomRoles = getRoomMap(resolvedRoles, String(roomId));
         allAddrs.forEach((addr: string, i: number) => {
           if (i < deck.length) {
-            roomRoles.set(addr, roleFromCardValue(sraDecryptCard(deck[i], allKeys), Number(roomId)));
+            const role = roleFromCardValue(sraDecryptCard(deck[i], allKeys), Number(roomId));
+            roomRoles.set(addr, role);
+            rPersistRole(getRedis(), String(roomId), addr, role);
           }
         });
         console.log(`[ecies] Room ${roomId}: all ${allAddrs.length} SRA keys collected — roles cached`);
@@ -760,6 +791,17 @@ app.get('/my-role/:roomId', async (req: express.Request, res: express.Response) 
 async function start() {
   try {
     await assertChainConfigOrThrow();
+    await connectRedis();
+    const redisClient = getRedis();
+    if (redisClient) {
+      await loadAllState(redisClient, {
+        eciesPubkeys,
+        sraSKeys,
+        resolvedRoles,
+        investigationProofs: investigationProofs as unknown as Map<string, Map<string, any>>,
+        injectNight: injectNightState,
+      });
+    }
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`\n🎭 Mafia GM Server running on port ${PORT}`);
       console.log(`   GM Address: ${GM_ADDRESS}`);
