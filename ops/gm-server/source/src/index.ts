@@ -26,8 +26,14 @@ import {
   type NightAction,
 } from './game-state.js';
 
+const ALLOWED_ORIGINS = [
+  'https://mafiaonchain.live',
+  'https://test.mafiaonchain.live',
+  ...(process.env.CORS_EXTRA_ORIGIN ? [process.env.CORS_EXTRA_ORIGIN] : []),
+];
+
 const app = express();
-app.use(cors());
+app.use(cors({ origin: ALLOWED_ORIGINS }));
 app.use(express.json());
 
 const PORT = Number(process.env.PORT) || 3001;
@@ -37,6 +43,8 @@ const PORT = Number(process.env.PORT) || 3001;
 const eciesPubkeys = new Map<string, Map<string, string>>();
 // Per room: player address → SRA decryption key (bigint as string)
 const sraSKeys = new Map<string, Map<string, string>>();
+// Per room: player address → ECIES-resolved role (cached after all SRA keys collected)
+const resolvedRoles = new Map<string, Map<string, string>>();
 
 function getRoomMap<V>(map: Map<string, Map<string, V>>, roomId: string): Map<string, V> {
   let m = map.get(roomId);
@@ -216,6 +224,12 @@ app.post('/investigation-proof', async (req: express.Request, res: express.Respo
     if (nonce && timestamp !== undefined) {
       const tsNum = Number(timestamp);
       if (Number.isFinite(tsNum)) {
+        // Reject replayed or future-dated timestamps (±5 min window)
+        const nowTs = Math.floor(Date.now() / 1000);
+        const ageTs = nowTs - tsNum;
+        if (ageTs > 300 || ageTs < -30) {
+          return res.status(401).json({ error: 'Timestamp expired or too far in future (max ±5 min)' });
+        }
         valid = await verifyMessage({
           address: signer,
           message: `investigate:${roomId}:${targetAddress}:${nonce}:${tsNum}`,
@@ -329,6 +343,7 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
     }
 
     // 4. Verify signature FIRST (before role check to prevent role enumeration)
+    const dayCount = Array.isArray(room) ? Number(room[7]) : Number(room.dayCount);
     const signatureCheck = await verifyAuthorizedSignature({
       roomId: String(roomId),
       signature: signature as `0x${string}`,
@@ -338,7 +353,7 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
       timestamp,
       chainId,
       buildLegacyMessage: () => `night:${roomId}:${actionType}:${targetAddress}`,
-      buildModernMessage: (n, ts) => `night:${roomId}:${actionType}:${targetAddress}:${n}:${ts}`,
+      buildModernMessage: (n, ts) => `night:${roomId}:${dayCount}:${actionType}:${targetAddress}:${n}:${ts}`,
     });
 
     if (!signatureCheck.ok) {
@@ -351,9 +366,18 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
       return res.status(403).json({ error: 'You have not committed a role on-chain' });
     }
 
-    // Note: We trust the actionType from the signed message.
-    // If a player lies (e.g. citizen claims kill), it has no real effect —
-    // they get punished at revealRole() time via FLAG_CLAIMED_MAFIA checks.
+    // 5b. Verify action type matches player's ECIES-resolved role
+    const ACTION_ROLE_MAP: Record<string, string> = { kill: 'MAFIA', heal: 'DOCTOR', check: 'DETECTIVE' };
+    const roomRoles = resolvedRoles.get(String(roomId));
+    const playerRole = roomRoles?.get((playerAddress as string).toLowerCase());
+    if (playerRole) {
+      const requiredRole = ACTION_ROLE_MAP[actionType];
+      if (requiredRole && playerRole !== requiredRole) {
+        return res.status(403).json({
+          error: `Action '${actionType}' requires role ${requiredRole} but your role is ${playerRole}`,
+        });
+      }
+    }
 
     // 6. Store the action
     const state = getOrCreateNightState(rid);
@@ -420,6 +444,21 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
     }
 
     const rid = BigInt(roomId);
+
+    // Fetch room to verify host and phase
+    const resolveRoom: any = await getRoom(rid, chainId);
+    const resolvePhase = Array.isArray(resolveRoom) ? Number(resolveRoom[3]) : Number(resolveRoom.phase);
+    const resolveHost = (Array.isArray(resolveRoom) ? String(resolveRoom[1]) : String(resolveRoom.host)).toLowerCase();
+
+    // Restrict to room host only
+    if (signatureCheck.signer !== resolveHost) {
+      return res.status(403).json({ error: 'Only the room host can trigger resolve-night' });
+    }
+
+    if (resolvePhase !== GamePhase.NIGHT) {
+      return res.status(400).json({ error: `Room is not in NIGHT phase (current: ${resolvePhase})` });
+    }
+
     const state = getNightState(rid);
 
     if (!state || state.actions.size === 0) {
@@ -427,13 +466,6 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
     }
     if (state.resolved) {
       return res.status(400).json({ error: 'Night already resolved' });
-    }
-
-    // Verify room is still in NIGHT phase
-    const room: any = await getRoom(rid, chainId);
-    const phase = Array.isArray(room) ? Number(room[3]) : Number(room.phase);
-    if (phase !== GamePhase.NIGHT) {
-      return res.status(400).json({ error: `Room is not in NIGHT phase (current: ${phase})` });
     }
 
     // Calculate consensus
@@ -468,12 +500,34 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
   }
 });
 
-// ─── Role Commit Sync (Stub) ──────────────────────────────
+// ─── Role Commit Sync ────────────────────────────────────
 // Frontend calls this to notify GM that a player has committed their role on-chain.
-app.post('/role-commit-sync', (req: express.Request, res: express.Response) => {
-  const { roomId, playerAddress, txHash } = req.body;
-  console.log(`[role-commit-sync] Room ${roomId}: Player ${playerAddress} committed role (tx: ${txHash})`);
-  return res.json({ ok: true });
+app.post('/role-commit-sync', async (req: express.Request, res: express.Response) => {
+  try {
+    const { roomId, playerAddress, txHash, signature, signerAddress, nonce, timestamp, chainId } = req.body;
+    if (!roomId || !playerAddress || !signature) {
+      return res.status(401).json({ error: 'Auth required: provide roomId, playerAddress, signature' });
+    }
+    const signatureCheck = await verifyAuthorizedSignature({
+      roomId: String(roomId),
+      signature: signature as `0x${string}`,
+      playerAddress: String(playerAddress),
+      signerAddress,
+      nonce,
+      timestamp,
+      chainId,
+      buildLegacyMessage: () => `role-sync:${roomId}:${(playerAddress as string).toLowerCase()}`,
+      buildModernMessage: (n, ts) => `role-sync:${roomId}:${(playerAddress as string).toLowerCase()}:${n}:${ts}`,
+    });
+    if (!signatureCheck.ok) {
+      return res.status(signatureCheck.status).json({ error: signatureCheck.error });
+    }
+    console.log(`[role-commit-sync] Room ${roomId}: Player ${playerAddress} committed role (tx: ${txHash})`);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[role-commit-sync] Error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── Get Night Status ─────────────────────────────────────
@@ -572,8 +626,39 @@ app.post('/submit-sra-key', async (req: express.Request, res: express.Response) 
       return res.status(signatureCheck.status).json({ error: signatureCheck.error });
     }
 
-    getRoomMap(sraSKeys, String(roomId)).set(String(playerAddress).toLowerCase(), String(sraKey));
+    const roomSraKeys = getRoomMap(sraSKeys, String(roomId));
+    roomSraKeys.set(String(playerAddress).toLowerCase(), String(sraKey));
     console.log(`[ecies] Room ${roomId}: SRA key received from ${playerAddress}`);
+
+    // If all SRA keys are now in, eagerly compute and cache roles for night-action role verification
+    try {
+      const rid = BigInt(roomId);
+      const chainIdNum = chainId ? Number(chainId) : undefined;
+      const players = await getPlayers(rid, chainIdNum) as any[];
+      const allAddrs = players.map((p: any) => p.wallet.toLowerCase());
+      const missingKeys = allAddrs.filter((addr: string) => !roomSraKeys.has(addr));
+      if (missingKeys.length === 0) {
+        const { public: publicClient, diamond } = getChainConfig(chainIdNum);
+        const deck = await publicClient.readContract({
+          address: diamond,
+          abi: DIAMOND_ABI,
+          functionName: 'getDeck',
+          args: [rid],
+        }) as string[];
+        const allKeys = allAddrs.map((addr: string) => roomSraKeys.get(addr)!);
+        const roomRoles = getRoomMap(resolvedRoles, String(roomId));
+        allAddrs.forEach((addr: string, i: number) => {
+          if (i < deck.length) {
+            roomRoles.set(addr, roleFromCardValue(sraDecryptCard(deck[i], allKeys), Number(roomId)));
+          }
+        });
+        console.log(`[ecies] Room ${roomId}: all ${allAddrs.length} SRA keys collected — roles cached`);
+      }
+    } catch (cacheErr: any) {
+      // Non-fatal — /night-action role verification will be skipped gracefully
+      console.error(`[ecies] Room ${roomId}: role pre-cache error: ${cacheErr.message}`);
+    }
+
     return res.json({ ok: true });
   } catch (err: any) {
     console.error('[submit-sra-key] Error:', err.message);

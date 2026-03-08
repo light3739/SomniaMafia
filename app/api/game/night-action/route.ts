@@ -8,6 +8,7 @@ export const POST = withSignedRoute<{
     playerAddress: string;
     actionType: 'kill' | 'heal' | 'check';
     targetAddress: string;
+    dayCount: number;
     signature: string;
     gmLegacySignature?: string;
     signerAddress?: string;
@@ -18,7 +19,7 @@ export const POST = withSignedRoute<{
     chainId?: number;
 }>({
     scope: 'night-action',
-    requiredFields: ['roomId', 'playerAddress', 'actionType', 'targetAddress', 'signature', 'nonce', 'timestamp'],
+    requiredFields: ['roomId', 'playerAddress', 'actionType', 'targetAddress', 'dayCount', 'signature', 'nonce', 'timestamp'],
     getRoomId: (body) => body.roomId,
     getActorAddress: (body) => body.playerAddress,
     getSignerAddress: (body) => body.signerAddress,
@@ -26,6 +27,7 @@ export const POST = withSignedRoute<{
         roomId,
         actionType: body.actionType,
         targetAddress: body.targetAddress,
+        dayCount: body.dayCount,
         nonce,
         timestamp,
     }),
@@ -42,6 +44,7 @@ export const POST = withSignedRoute<{
             playerAddress: body.playerAddress,
             actionType: body.actionType,
             targetAddress: body.targetAddress,
+            dayCount: body.dayCount,
             signature: body.gmLegacySignature || body.signature,
             signerAddress,
             role: body.role,
