@@ -19,8 +19,8 @@ export function createSecurityDependencies(overrides: Partial<SecurityDependenci
         }),
         consumeReplayNonce: (scope, roomId, actorAddress, nonce) =>
             ServerStore.consumeReplayNonce(scope, roomId, actorAddress, nonce),
-        now: () => Date.now(),
-        maxClockSkewMs: 2 * 60 * 1000,
+        now: () => Math.floor(Date.now() / 1000), // Unix seconds — matches requestSigning.ts
+        maxClockSkewMs: 2 * 60, // 120 seconds (field name kept for compat)
         nonceMinLength: 8,
     };
 
@@ -154,7 +154,7 @@ export async function verifySignedRequestBody<TBody extends Record<string, any>>
     const timestamp = Number(options.body.timestamp);
 
     if (options.requireReplayProtection !== false) {
-        if (!Number.isFinite(timestamp) || Math.abs(currentDeps.now() - timestamp) > currentDeps.maxClockSkewMs) {
+        if (!Number.isFinite(timestamp) || timestamp <= 0 || Math.abs(currentDeps.now() - timestamp) > currentDeps.maxClockSkewMs) {
             return { ok: false, status: 401, error: 'Request expired or invalid timestamp' };
         }
 
