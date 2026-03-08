@@ -1,7 +1,8 @@
 import React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { usePrivy } from '@privy-io/react-auth';
+import { useAccount, useSwitchChain } from 'wagmi';
 const somniaLogo = "/assets/somniayeal.png";
 const avalancheLogo = "/assets/avalanche-avax-logo.png";
 
@@ -98,98 +99,61 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     transition={{ delay: 1.0, duration: 0.5 }}
                     className="mt-32 relative z-20"
                 >
-                    <ConnectButton.Custom>
-                        {({
-                            account,
-                            chain,
-                            openChainModal,
-                            openConnectModal,
-                            authenticationStatus,
-                            mounted,
-                        }) => {
-                            // Note: If your app doesn't use authentication, you
-                            // can remove all 'authenticationStatus' checks
-                            const ready = mounted && authenticationStatus !== 'loading';
-                            const connected =
-                                ready &&
-                                account &&
-                                chain &&
-                                (!authenticationStatus ||
-                                    authenticationStatus === 'authenticated');
+                    {(() => {
+                        const { login, authenticated, ready } = usePrivy();
+                        const { isConnected, chain } = useAccount();
+                        const { switchChain } = useSwitchChain();
 
+                        // We check both privy auth and wagmi connection
+                        if (!ready) {
+                            return <div style={{ opacity: 0 }}>Loading...</div>;
+                        }
+
+                        if (!authenticated || !isConnected) {
                             return (
-                                <div
-                                    {...(!ready && {
-                                        'aria-hidden': true,
-                                        'style': {
-                                            opacity: 0,
-                                            pointerEvents: 'none',
-                                            userSelect: 'none',
-                                        },
-                                    })}
+                                <button
+                                    onClick={() => login()}
+                                    className="px-8 py-3 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-105 transition-all text-sm md:text-base tracking-wider relative overflow-hidden ring-1 ring-white/10"
+                                    style={{
+                                        background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
+                                    }}
                                 >
-                                    {(() => {
-                                        if (!connected) {
-                                            return (
-                                                <button
-                                                    onClick={openConnectModal}
-                                                    className="px-8 py-3 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-105 transition-all text-sm md:text-base tracking-wider relative overflow-hidden ring-1 ring-white/10"
-                                                    style={{
-                                                        background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
-                                                    }}
-                                                >
-                                                    <span className="relative z-10">CONNECT WALLET</span>
-                                                    {/* Shine effect overlay */}
-                                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
-                                                </button>
-                                            );
-                                        }
-
-                                        if (chain.unsupported) {
-                                            return (
-                                                <button
-                                                    onClick={openChainModal}
-                                                    className="px-8 py-3 rounded-xl font-mono font-bold text-white bg-red-600 shadow-lg hover:scale-105 transition-all text-sm md:text-base tracking-wider ring-1 ring-red-400/50"
-                                                >
-                                                    WRONG NETWORK
-                                                </button>
-                                            );
-                                        }
-
-                                        const preferredNetwork = typeof window !== 'undefined'
-                                            ? localStorage.getItem('mafia_selected_network')
-                                            : null;
-                                        const preferredChainId = preferredNetwork === 'somnia_testnet' ? 50312 : 43113;
-
-                                        if (chain.id !== preferredChainId) {
-                                            return (
-                                                <button
-                                                    onClick={openChainModal}
-                                                    className="px-8 py-3 rounded-xl font-mono font-bold text-white bg-orange-600 shadow-lg hover:scale-105 transition-all text-sm md:text-base tracking-wider ring-1 ring-orange-300/50"
-                                                >
-                                                    SWITCH NETWORK
-                                                </button>
-                                            );
-                                        }
-
-                                        return (
-                                            <button
-                                                onClick={onStart}
-                                                className="px-8 py-3 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-105 transition-all text-sm md:text-base tracking-wider relative overflow-hidden ring-1 ring-white/10"
-                                                style={{
-                                                    background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
-                                                }}
-                                            >
-                                                <span className="relative z-10">ENTER CITY</span>
-                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
-                                            </button>
-                                        );
-                                    })()}
-                                </div>
+                                    <span className="relative z-10">LOGIN / CONNECT</span>
+                                    {/* Shine effect overlay */}
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
+                                </button>
                             );
-                        }}
-                    </ConnectButton.Custom>
+                        }
 
+                        const preferredNetwork = typeof window !== 'undefined'
+                            ? localStorage.getItem('mafia_selected_network')
+                            : null;
+                        const preferredChainId = preferredNetwork === 'somnia_testnet' ? 50312 : 43113;
+
+                        if (chain?.id !== preferredChainId) {
+                            return (
+                                <button
+                                    onClick={() => switchChain({ chainId: preferredChainId })}
+                                    className="px-8 py-3 rounded-xl font-mono font-bold text-white bg-orange-600 shadow-lg hover:scale-105 transition-all text-sm md:text-base tracking-wider ring-1 ring-orange-300/50"
+                                >
+                                    SWITCH NETWORK
+                                </button>
+                            );
+                        }
+
+                        return (
+                            <button
+                                onClick={onStart}
+                                className="px-8 py-3 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-105 transition-all text-sm md:text-base tracking-wider relative overflow-hidden ring-1 ring-white/10"
+                                style={{
+                                    background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
+                                }}
+                            >
+                                <span className="relative z-10">ENTER CITY</span>
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
+                            </button>
+                        );
+                    })()}
                 </motion.div>
 
             </div>

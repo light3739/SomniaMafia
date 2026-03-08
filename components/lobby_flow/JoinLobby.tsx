@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { BackButton } from '../ui/BackButton';
 import { usePublicClient, useAccount } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { NetworkSelector } from '../ui/NetworkSelector';
 
@@ -190,7 +189,16 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                             <div className="flex flex-col gap-3">
                                 <p className="text-white/70 text-sm">Join the conspiracy now.</p>
                                 {!isConnected ? (
-                                    <div className="flex justify-center"><ConnectButton label="Connect & Join" /></div>
+                                    <div className="flex justify-center">
+                                        {(() => {
+                                            const { login } = require('@privy-io/react-auth').usePrivy();
+                                            return (
+                                                <button onClick={() => login()} className="bg-[#916A47] hover:bg-[#A37B58] text-white py-2 px-4 rounded-lg font-bold transition-all">
+                                                    Connect & Join
+                                                </button>
+                                            );
+                                        })()}
+                                    </div>
                                 ) : (
                                     <button
                                         onClick={() => handleJoin(rooms.find(r => r.id === Number(initialRoomId)))}

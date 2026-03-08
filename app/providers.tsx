@@ -1,83 +1,63 @@
 'use client';
 
 import * as React from 'react';
-import {
-    RainbowKitProvider,
-    getDefaultWallets,
-    getDefaultConfig,
-    darkTheme,
-} from '@rainbow-me/rainbowkit';
-import {
-    argentWallet,
-    trustWallet,
-    ledgerWallet,
-} from '@rainbow-me/rainbowkit/wallets';
-import {
-    QueryClient,
-    QueryClientProvider,
-} from '@tanstack/react-query';
-import { WagmiProvider, http, fallback } from 'wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { http, fallback } from 'viem';
+import { createConfig } from '@privy-io/wagmi';
+import { PrivyProvider } from '@privy-io/react-auth';
+import { WagmiProvider } from '@privy-io/wagmi';
+
 import { SOMNIA_TESTNET, AVALANCHE_FUJI } from '../contracts/config';
 import { GameProvider } from '../contexts/GameContext';
 import { AudioProvider } from '../contexts/AudioContext';
-import '@rainbow-me/rainbowkit/styles.css';
 
-const { wallets } = getDefaultWallets();
-
-const config = getDefaultConfig({
-    appName: 'Onchain Mafia',
-    projectId: 'YOUR_PROJECT_ID', // TODO: Add real project ID
-    wallets: [
-        ...wallets,
-        {
-            groupName: 'Other',
-            wallets: [argentWallet, trustWallet, ledgerWallet],
-        },
-    ],
+export const config = createConfig({
     chains: [
         SOMNIA_TESTNET,
         AVALANCHE_FUJI,
     ],
     transports: {
-        [SOMNIA_TESTNET.id]: fallback(SOMNIA_TESTNET.rpcUrls.default.http.map(url => http(url))),
-        [AVALANCHE_FUJI.id]: fallback(AVALANCHE_FUJI.rpcUrls.default.http.map(url => http(url))),
+        [SOMNIA_TESTNET.id]: fallback(SOMNIA_TESTNET.rpcUrls.default.http.map((url: string) => http(url))),
+        [AVALANCHE_FUJI.id]: fallback(AVALANCHE_FUJI.rpcUrls.default.http.map((url: string) => http(url))),
     },
-    // Use deployless multicall — works on ANY chain without needing Multicall3 deployed.
-    // This sends multicall bytecode directly via eth_call, zero contract dependency.
     batch: {
         multicall: {
+            // @ts-ignore
             deployless: true,
-            wait: 20, // SPEED: 20ms batch window (was 50ms) — Somnia is fast, don't wait long
+            wait: 20,
         },
     },
-    // Lower polling interval — Somnia has fast blocks (~1s)
-    // 1s matches Somnia's sub-second finality for fastest receipt detection
+    // @ts-ignore
     pollingInterval: 1_000,
-    ssr: true,
 });
 
 const queryClient = new QueryClient();
 
-const customTheme = darkTheme({
-    accentColor: '#916A47',
-    accentColorForeground: 'white',
-    borderRadius: 'large',
-    fontStack: 'system',
-    overlayBlur: 'large',
-});
-
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
-        <WagmiProvider config={config}>
+        <PrivyProvider
+            appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cmmidpuf302i70ckzh1kvlog3"}
+            config={{
+                loginMethods: ['email', 'wallet', 'google', 'twitter', 'discord'],
+                appearance: {
+                    theme: 'dark',
+                    accentColor: '#916A47',
+                    logo: '/assets/somniayeal.png',
+                },
+                embeddedWallets: {
+                    createOnLogin: 'users-without-wallets',
+                } as any,
+            }}
+        >
             <QueryClientProvider client={queryClient}>
-                <RainbowKitProvider theme={customTheme}>
+                <WagmiProvider config={config}>
                     <AudioProvider>
                         <GameProvider>
                             {children}
                         </GameProvider>
                     </AudioProvider>
-                </RainbowKitProvider>
+                </WagmiProvider>
             </QueryClientProvider>
-        </WagmiProvider>
+        </PrivyProvider>
     );
 }

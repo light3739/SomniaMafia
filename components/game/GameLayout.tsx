@@ -495,10 +495,13 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         }
 
         // Fallback: If we enter NIGHT without showVotingResults (e.g. page reload during night)
+        // Prevent race condition: don't eagerly update lastNightDayRef.current until timer finishes,
+        // so if showVotingResults becomes true within 1000ms, the main logic can still run later.
         if (!showVotingResults && !wasShowingResults && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current) {
-            lastNightDayRef.current = gameState.dayCount;
             if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
             nightTimerRef.current = setTimeout(() => {
+                // Only update if we actually show the announcement
+                lastNightDayRef.current = gameState.dayCount;
                 playNightTransition();
                 setShowNightAnnouncement(true);
             }, 1000);
@@ -785,6 +788,8 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     )}
                 </div>
 
+                {/* Game Hints Overlay (inside scalable container so it scales together) */}
+                <GameHintsOverlay activeHint={activeHint} onDismiss={dismissHint} />
             </div>
             {/* OVERLAYS (Shuffle, Reveal, GameOver) - Outside scalable container for full screen coverage */}
             {isOverlayPhase && (
@@ -947,9 +952,6 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     </div>
                 </div>
             )}
-
-            {/* Game Hints Overlay */}
-            <GameHintsOverlay activeHint={activeHint} onDismiss={dismissHint} scale={scale} />
 
             {/* Game UI Overlay (Chat + Sound buttons) */}
             <GameUIOverlay />

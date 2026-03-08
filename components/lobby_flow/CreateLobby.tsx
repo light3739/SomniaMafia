@@ -5,7 +5,6 @@ import { useGameContext } from '../../contexts/GameContext';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { NetworkSelector } from '../ui/NetworkSelector';
 
 export const CreateLobby: React.FC = () => {
