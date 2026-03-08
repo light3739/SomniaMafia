@@ -256,7 +256,7 @@ export const GameHintsOverlay: React.FC<{
     onDismiss: () => void;
     inline?: boolean;
     scale?: number;
-}> = ({ activeHint, onDismiss, inline = false, scale = 1 }) => {
+}> = ({ activeHint, onDismiss, inline = false }) => {
     if (!activeHint) return null;
     const config = HINT_CONFIGS[activeHint];
     if (!config) return null;
@@ -276,13 +276,13 @@ export const GameHintsOverlay: React.FC<{
 
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
 
-    // Mobile/Tablet mode: bottom-centered (above actions/chat)
+    // Mobile/Tablet mode within the scaled container (1488x1024)
     if (isMobile) {
         return (
-            <div className="fixed bottom-[18%] left-4 right-4 z-[150] pointer-events-none flex justify-center">
+            <div className="absolute z-[150] pointer-events-none flex justify-center w-full" style={{ bottom: '12%', left: 0 }}>
                 <AnimatePresence mode="wait">
                     {activeHint && (
-                        <div key={activeHint} className="w-full max-w-[420px]">
+                        <div key={activeHint} className="w-full max-w-[420px] px-4 flex justify-center mx-auto">
                             <HintCard config={config} onDismiss={onDismiss} />
                         </div>
                     )}
@@ -291,13 +291,13 @@ export const GameHintsOverlay: React.FC<{
         );
     }
 
-    // Desktop: right of 600px center panel
-    const feedRightPx = 300 * scale;
+    // Desktop: absolute right of the 600px center panel
+    // Center is at X=744. Right edge of 600px panel is 744 + 300 = 1044. Add 16px gap = 1060px.
     return (
         <div
-            className="fixed z-[150] pointer-events-none"
+            className="absolute z-[150] pointer-events-none"
             style={{
-                left: `calc(50% + ${feedRightPx + 16}px)`,
+                left: '1060px',
                 top: '50%',
                 transform: 'translateY(-180px)',
             }}

@@ -91,7 +91,7 @@ export const WaitingRoom: React.FC = () => {
                 </div>
 
                 <div className="w-full bg-[rgba(15,10,5,0.85)] backdrop-blur-xl rounded-[32px] p-4 md:p-6 border border-white/5 shadow-2xl flex flex-col">
-                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2 min-h-[180px] md:min-h-[250px] max-h-[600px]">
+                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2 h-[250px] md:h-[350px]">
                         {gameState.players.map((player, index) => {
                             const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
 
