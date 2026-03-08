@@ -300,6 +300,94 @@ app.post('/investigation-proof', async (req: express.Request, res: express.Respo
   }
 });
 
+// ─── Night Auto-Resolution Helpers ───────────────────────
+
+/** Fallback timeout: resolve night even if not all players acted (AFK protection). */
+const NIGHT_TIMEOUT_MS = Number(process.env.NIGHT_TIMEOUT_MS ?? 180_000); // default 3 min
+
+const nightTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Remember chainId per room so the timeout callback can resolve on the right chain. */
+const nightChainIds = new Map<string, number | undefined>();
+
+function clearNightTimer(roomIdStr: string): void {
+  const t = nightTimers.get(roomIdStr);
+  if (t) { clearTimeout(t); nightTimers.delete(roomIdStr); }
+}
+
+/**
+ * Core resolve logic — called internally (auto or timeout), not via HTTP.
+ * Submits killTarget / healTarget to the contract and cleans up state.
+ */
+async function doResolveNight(rid: bigint, chainId?: number): Promise<void> {
+  const state = getNightState(rid);
+  if (!state || state.resolved) return;
+  if (state.actions.size === 0) {
+    console.warn(`[auto-resolve] Room ${rid}: no actions submitted — skipping`);
+    return;
+  }
+
+  state.resolved = true;
+  rPersistNightState(getRedis(), String(rid), state);
+
+  const allActions = [...state.actions.values()];
+  const killTarget = calculateMafiaConsensus(allActions);
+  const healTarget = getDoctorHeal(allActions);
+
+  console.log(`[auto-resolve] Room ${rid}: kill=${killTarget}, heal=${healTarget}, actions=${allActions.length}`);
+  try {
+    const { hash } = await resolveNight(rid, killTarget, healTarget, chainId);
+    console.log(`[auto-resolve] Room ${rid}: tx ${hash}`);
+  } catch (err: any) {
+    // Reset so host/GM can retry via /resolve-night
+    const s = getNightState(rid);
+    if (s) { s.resolved = false; rPersistNightState(getRedis(), String(rid), s); }
+    throw err;
+  } finally {
+    clearNightTimer(String(rid));
+    nightChainIds.delete(String(rid));
+  }
+  clearNightState(rid);
+  rDeleteNightState(getRedis(), String(rid));
+}
+
+/**
+ * Start (or reset) the per-room fallback timer.
+ * Called on the first night-action of each night.
+ */
+function scheduleNightTimeout(rid: bigint, chainId?: number): void {
+  const key = String(rid);
+  clearNightTimer(key);
+  nightChainIds.set(key, chainId);
+  const t = setTimeout(async () => {
+    nightTimers.delete(key);
+    const s = getNightState(rid);
+    if (!s || s.resolved) return;
+    console.log(`[night-timeout] Room ${rid}: ${NIGHT_TIMEOUT_MS / 1000}s timeout — auto-resolving`);
+    doResolveNight(rid, chainId).catch((e: any) =>
+      console.error(`[night-timeout] Room ${rid}: auto-resolve failed: ${e.message}`)
+    );
+  }, NIGHT_TIMEOUT_MS);
+  nightTimers.set(key, t);
+}
+
+/**
+ * Returns true when every alive non-CIVILIAN player has submitted a night action.
+ * Requires resolvedRoles to be populated (all SRA keys collected).
+ */
+function allRolePlayersActed(roomIdStr: string, alivePlayers: any[]): boolean {
+  const roles = resolvedRoles.get(roomIdStr);
+  if (!roles) return false; // SRA keys not all in yet — can't decide
+  const roleActors = alivePlayers.filter((p: any) => {
+    const r = roles.get(p.wallet.toLowerCase());
+    return r && r !== 'CIVILIAN';
+  });
+  if (roleActors.length === 0) return false;
+  const state = getNightState(BigInt(roomIdStr));
+  if (!state) return false;
+  return roleActors.every((p: any) => state.actions.has(p.wallet.toLowerCase()));
+}
+
 // ─── Submit Night Action ──────────────────────────────────
 // Players call this instead of on-chain commitNightAction
 app.post('/night-action', async (req: express.Request, res: express.Response) => {
@@ -422,13 +510,26 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
       );
     }
 
+    const actionsReceived = state.actions.size;
     console.log(
-      `[night] Room ${roomId}: ${player.nickname} (${actionType}) → ${target.nickname} | ${state.actions.size} actions total`
+      `[night] Room ${roomId}: ${player.nickname} (${actionType}) → ${target.nickname} | ${actionsReceived} actions total`
     );
+
+    // Auto-resolve: fire immediately when all alive role-players have acted
+    const alivePlayers = players.filter((p: any) => !!(Number(p.flags) & FLAGS.ACTIVE));
+    if (allRolePlayersActed(String(roomId), alivePlayers)) {
+      console.log(`[night] Room ${roomId}: all role-players acted — auto-resolving`);
+      doResolveNight(rid, chainId).catch((e: any) =>
+        console.error(`[night] Room ${roomId}: auto-resolve error: ${e.message}`)
+      );
+    } else if (actionsReceived === 1) {
+      // First action of this night — arm the fallback timeout
+      scheduleNightTimeout(rid, chainId);
+    }
 
     return res.json({
       ok: true,
-      actionsReceived: state.actions.size,
+      actionsReceived,
     });
   } catch (err: any) {
     console.error('[night-action] Error:', err.message);
@@ -803,6 +904,26 @@ async function start() {
         investigationProofs: investigationProofs as unknown as Map<string, Map<string, any>>,
         injectNight: injectNightState,
       });
+      // Re-arm night timeouts for rooms that were mid-night when the server restarted
+      for (const [roomIdStr, nightState] of getAllNightStates()) {
+        if (!nightState.resolved) {
+          const elapsed = Date.now() - nightState.nightStartedAt;
+          const remaining = Math.max(5_000, NIGHT_TIMEOUT_MS - elapsed);
+          const rid = BigInt(roomIdStr);
+          const savedChainId = nightChainIds.get(roomIdStr);
+          const t = setTimeout(async () => {
+            nightTimers.delete(roomIdStr);
+            const s = getNightState(rid);
+            if (!s || s.resolved) return;
+            console.log(`[night-timeout] Room ${rid}: post-restart timeout — auto-resolving`);
+            doResolveNight(rid, savedChainId).catch((e: any) =>
+              console.error(`[night-timeout] Room ${rid}: auto-resolve failed: ${e.message}`)
+            );
+          }, remaining);
+          nightTimers.set(roomIdStr, t);
+          console.log(`[startup] Room ${roomIdStr}: night in progress — timeout in ${remaining}ms`);
+        }
+      }
     }
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`\n🎭 Mafia GM Server running on port ${PORT}`);
