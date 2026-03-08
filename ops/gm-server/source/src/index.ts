@@ -331,7 +331,22 @@ async function doResolveNight(rid: bigint, chainId?: number): Promise<void> {
   rPersistNightState(getRedis(), String(rid), state);
 
   const allActions = [...state.actions.values()];
-  const killTarget = calculateMafiaConsensus(allActions);
+
+  // Count total alive mafia for correct consensus threshold (AFK mafia count against majority)
+  let totalAliveMafia: number | undefined;
+  try {
+    const chainIdNum = chainId;
+    const players = await getPlayers(rid, chainIdNum) as any[];
+    const roomRoles = resolvedRoles.get(String(rid));
+    if (roomRoles) {
+      totalAliveMafia = players.filter((p: any) =>
+        !!(Number(p.flags) & FLAGS.ACTIVE) &&
+        roomRoles.get(p.wallet.toLowerCase()) === 'MAFIA'
+      ).length;
+    }
+  } catch (_) { /* non-fatal — falls back to voter count */ }
+
+  const killTarget = calculateMafiaConsensus(allActions, totalAliveMafia);
   const healTarget = getDoctorHeal(allActions);
 
   console.log(`[auto-resolve] Room ${rid}: kill=${killTarget}, heal=${healTarget}, actions=${allActions.length}`);
