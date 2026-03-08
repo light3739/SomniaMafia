@@ -118,6 +118,14 @@ export const DIAMOND_ABI = [
     outputs: [{ name: '', type: 'uint8' }],
     stateMutability: 'view',
   },
+  // ShuffleFacet — deck state
+  {
+    type: 'function',
+    name: 'getDeck',
+    inputs: [{ name: 'roomId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'string[]' }],
+    stateMutability: 'view',
+  },
   // Events we watch
   {
     type: 'event',

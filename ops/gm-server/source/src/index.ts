@@ -9,11 +9,13 @@ import {
   resolveNight,
   assertChainConfigOrThrow,
   getChainConfig,
+  DIAMOND_ABI,
   GM_ADDRESS,
   GamePhase,
   FLAGS,
   ACTION_TO_ROLE,
 } from './chain.js';
+import { eciesEncrypt } from './ecies.js';
 import {
   getOrCreateNightState,
   clearNightState,
@@ -29,6 +31,50 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = Number(process.env.PORT) || 3001;
+
+// ─── ECIES Role-Privacy Stores ────────────────────────────
+// Per room: player address → ECIES public key hex (65-byte uncompressed P-256)
+const eciesPubkeys = new Map<string, Map<string, string>>();
+// Per room: player address → SRA decryption key (bigint as string)
+const sraSKeys = new Map<string, Map<string, string>>();
+
+function getRoomMap<V>(map: Map<string, Map<string, V>>, roomId: string): Map<string, V> {
+  let m = map.get(roomId);
+  if (!m) { m = new Map(); map.set(roomId, m); }
+  return m;
+}
+
+// SRA helpers (mirrors frontend shuffleService.ts)
+const SRA_PRIME = 2147483647n;
+function modPow(base: bigint, exp: bigint, mod: bigint): bigint {
+  let result = 1n;
+  base = base % mod;
+  while (exp > 0n) {
+    if (exp % 2n === 1n) result = (result * base) % mod;
+    exp = exp / 2n;
+    base = (base * base) % mod;
+  }
+  return result;
+}
+function sraDecryptCard(encryptedCard: string, decryptionKeys: string[]): string {
+  let val = BigInt(encryptedCard);
+  for (const key of decryptionKeys) val = modPow(val, BigInt(key), SRA_PRIME);
+  return val.toString();
+}
+function getCardOffset(roomId: number): number {
+  return 100 + ((roomId * 7919 + 104729) % 10000);
+}
+function roleFromCardValue(cardValue: string, roomId: number): string {
+  const offset = getCardOffset(roomId);
+  const n = parseInt(cardValue) - offset;
+  switch (n) {
+    case 1: return 'MAFIA';
+    case 2: return 'DOCTOR';
+    case 3: return 'DETECTIVE';
+    case 4: return 'CIVILIAN';
+    default: return 'UNKNOWN';
+  }
+}
 const ZERO_ADDR = '0x0000000000000000000000000000000000000000' as Address;
 
 interface InvestigationProof {
@@ -468,6 +514,153 @@ app.get('/room/:roomId', async (req: express.Request, res: express.Response) => 
       })),
     });
   } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Register ECIES Public Key ────────────────────────────
+// Players register their P-256 pubkey so GM can encrypt their role privately.
+// No auth required — pubkeys are not secret.
+app.post('/register-pubkey', (req: express.Request, res: express.Response) => {
+  const { roomId, playerAddress, pubkey } = req.body;
+  if (!roomId || !playerAddress || !pubkey) {
+    return res.status(400).json({ error: 'Missing: roomId, playerAddress, pubkey' });
+  }
+  // Validate: 65-byte uncompressed P-256 point starts with "04", followed by 128 hex chars
+  if (!/^04[0-9a-fA-F]{128}$/.test(pubkey)) {
+    return res.status(400).json({ error: 'Invalid pubkey: expected 65-byte uncompressed P-256 hex (starting with 04)' });
+  }
+  getRoomMap(eciesPubkeys, String(roomId)).set(String(playerAddress).toLowerCase(), pubkey);
+  console.log(`[ecies] Room ${roomId}: pubkey registered for ${playerAddress}`);
+  return res.json({ ok: true });
+});
+
+// ─── Submit SRA Decryption Key to GM ─────────────────────
+// Players send their real SRA key to GM off-chain (signed).
+// GM collects these to decrypt the deck privately — keys never go on-chain.
+app.post('/submit-sra-key', async (req: express.Request, res: express.Response) => {
+  try {
+    const { roomId, playerAddress, sraKey, signature, signerAddress, nonce, timestamp, chainId } = req.body;
+    if (!roomId || !playerAddress || !sraKey || !signature) {
+      return res.status(400).json({ error: 'Missing: roomId, playerAddress, sraKey, signature' });
+    }
+    // Validate sraKey is a positive integer
+    try {
+      if (BigInt(sraKey) <= 0n) throw new Error();
+    } catch {
+      return res.status(400).json({ error: 'sraKey must be a positive integer string' });
+    }
+
+    const signatureCheck = await verifyAuthorizedSignature({
+      roomId: String(roomId),
+      signature: signature as `0x${string}`,
+      playerAddress: String(playerAddress),
+      signerAddress,
+      nonce,
+      timestamp,
+      chainId,
+      buildLegacyMessage: () => `submit-key:${roomId}:${sraKey}`,
+      buildModernMessage: (n, ts) => `submit-key:${roomId}:${sraKey}:${n}:${ts}`,
+    });
+    if (!signatureCheck.ok) {
+      return res.status(signatureCheck.status).json({ error: signatureCheck.error });
+    }
+
+    getRoomMap(sraSKeys, String(roomId)).set(String(playerAddress).toLowerCase(), String(sraKey));
+    console.log(`[ecies] Room ${roomId}: SRA key received from ${playerAddress}`);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[submit-sra-key] Error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Get My Role (ECIES encrypted) ───────────────────────
+// Returns the player's role encrypted with their registered ECIES pubkey.
+// Only the player with the matching private key can decrypt.
+// Returns 202 if not all SRA keys are collected yet (player should retry).
+app.get('/my-role/:roomId', async (req: express.Request, res: express.Response) => {
+  try {
+    const { roomId } = req.params;
+    const { playerAddress, signature, signerAddress, nonce, timestamp, chainId } = req.query as Record<string, string>;
+
+    if (!playerAddress || !signature) {
+      return res.status(400).json({ error: 'Missing query params: playerAddress, signature' });
+    }
+
+    const signatureCheck = await verifyAuthorizedSignature({
+      roomId,
+      signature: signature as `0x${string}`,
+      playerAddress,
+      signerAddress,
+      nonce,
+      timestamp: timestamp ? Number(timestamp) : undefined,
+      chainId: chainId ? Number(chainId) : undefined,
+      buildLegacyMessage: () => `my-role:${roomId}:${playerAddress.toLowerCase()}`,
+      buildModernMessage: (n, ts) => `my-role:${roomId}:${playerAddress.toLowerCase()}:${n}:${ts}`,
+    });
+    if (!signatureCheck.ok) {
+      return res.status(signatureCheck.status).json({ error: signatureCheck.error });
+    }
+
+    const normalizedPlayer = playerAddress.toLowerCase();
+    const chainIdNum = chainId ? Number(chainId) : undefined;
+    const rid = BigInt(roomId);
+
+    // Check ECIES pubkey registered
+    const playerPubkey = eciesPubkeys.get(String(roomId))?.get(normalizedPlayer);
+    if (!playerPubkey) {
+      return res.status(404).json({ error: 'ECIES pubkey not registered. Call POST /register-pubkey first.' });
+    }
+
+    // Get players from chain to find this player's deck index
+    const players = await getPlayers(rid, chainIdNum) as any[];
+    const playerIndex = players.findIndex((p: any) => p.wallet.toLowerCase() === normalizedPlayer);
+    if (playerIndex === -1) {
+      return res.status(404).json({ error: 'Player not found in room' });
+    }
+
+    // Check all SRA keys collected
+    const keyMap = sraSKeys.get(String(roomId));
+    const allAddrs = players.map((p: any) => p.wallet.toLowerCase());
+    const missingKeys = allAddrs.filter((addr: string) => !keyMap?.has(addr));
+    if (missingKeys.length > 0) {
+      return res.status(202).json({
+        pending: true,
+        keysReceived: allAddrs.length - missingKeys.length,
+        keysExpected: allAddrs.length,
+        message: 'Not all SRA keys submitted yet — retry shortly',
+      });
+    }
+
+    // Read current deck from chain
+    const { public: publicClient, diamond } = getChainConfig(chainIdNum);
+    const deck = await publicClient.readContract({
+      address: diamond,
+      abi: DIAMOND_ABI,
+      functionName: 'getDeck',
+      args: [rid],
+    }) as string[];
+
+    if (!deck || deck.length === 0) {
+      return res.status(500).json({ error: 'Deck is empty on chain' });
+    }
+    if (playerIndex >= deck.length) {
+      return res.status(500).json({ error: `Player index ${playerIndex} out of deck range ${deck.length}` });
+    }
+
+    // Decrypt this player's card using ALL collected SRA keys
+    const allKeys = allAddrs.map((addr: string) => keyMap!.get(addr)!);
+    const decryptedCard = sraDecryptCard(deck[playerIndex], allKeys);
+    const role = roleFromCardValue(decryptedCard, Number(roomId));
+
+    // Encrypt role with player's ECIES pubkey
+    const encrypted = eciesEncrypt(playerPubkey, role);
+
+    console.log(`[ecies] Room ${roomId}: role served to ${playerAddress} (idx=${playerIndex})`);
+    return res.json({ encrypted });
+  } catch (err: any) {
+    console.error('[my-role] Error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });

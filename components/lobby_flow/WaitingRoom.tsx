@@ -7,6 +7,9 @@ import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { GamePhase } from '../../types';
 import { Check, Loader2 } from 'lucide-react';
+import { useAccount } from 'wagmi';
+import { loadOrCreateKeypair, exportPublicKeyHex } from '../../services/eciesService';
+import { GM_SERVER_URL } from '../../contracts/config';
 
 export const WaitingRoom: React.FC = () => {
     const {
@@ -19,6 +22,7 @@ export const WaitingRoom: React.FC = () => {
         refreshPlayersList
     } = useGameContext();
 
+    const { address } = useAccount();
     const roomIdNumber = currentRoomId ? Number(currentRoomId) : null;
     const {
         hasSession,
@@ -26,6 +30,24 @@ export const WaitingRoom: React.FC = () => {
     } = useSessionKey(roomIdNumber);
 
     const router = useRouter();
+
+    // Register ECIES pubkey with GM so it can encrypt our role privately
+    useEffect(() => {
+        if (!currentRoomId || !address) return;
+        const roomId = String(currentRoomId);
+
+        loadOrCreateKeypair(roomId, address)
+            .then(keypair => exportPublicKeyHex(keypair.publicKey))
+            .then(pubkey =>
+                fetch(`${GM_SERVER_URL}/register-pubkey`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roomId, playerAddress: address, pubkey }),
+                })
+            )
+            .then(r => { if (!r.ok) console.warn('[ECIES] register-pubkey failed', r.status); })
+            .catch(e => console.warn('[ECIES] register-pubkey error:', e));
+    }, [currentRoomId, address]);
 
     // 1. Авто-переход при смене фазы в блокчейне
     useEffect(() => {
