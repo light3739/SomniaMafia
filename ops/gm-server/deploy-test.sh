@@ -47,6 +47,10 @@ ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "
 "
 
 echo "[gm-test:deploy] Installing and restarting pm2 process: $PM2_NAME (port 3003)"
+# Collect local git info before SSH
+DEPLOY_BRANCH="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+DEPLOY_SHA="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+
 ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "
   export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"
   cd '$REMOTE_DIR'
@@ -54,6 +58,17 @@ ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "
   export PORT=3003
   npm ci && npm run build
   pm2 restart '$PM2_NAME' || PORT=3003 pm2 start dist/index.js --name '$PM2_NAME'
+
+  # Telegram deploy notification
+  ENV_FILE=/etc/mafia-monitor.env
+  if [[ -f \"\$ENV_FILE\" ]]; then . \"\$ENV_FILE\"; fi
+  BOT_TOKEN=\"\${TELEGRAM_BOT_TOKEN:-}\"
+  CHAT_ID=\"\${TELEGRAM_CHAT_ID:-}\"
+  if [[ -n \"\$BOT_TOKEN\" && -n \"\$CHAT_ID\" ]]; then
+    curl -sS -X POST \"https://api.telegram.org/bot\${BOT_TOKEN}/sendMessage\" \\
+      -d \"chat_id=\${CHAT_ID}\" \\
+      --data-urlencode \"text=🧪 GM-server TEST deployed%0ABranch: $DEPLOY_BRANCH%0ACommit: $DEPLOY_SHA%0AURL: https://gm-test.mafiaonchain.live/health\" >/dev/null || true
+  fi
 "
 
 echo "[gm-test:deploy] Done — https://gm-test.mafiaonchain.live"
