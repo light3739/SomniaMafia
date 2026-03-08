@@ -182,10 +182,18 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     const quorumData = useMemo(() => {
         const needed = Math.floor(alivePlayers.length / 2) + 1;
 
-        const voteCounts = new Map<string, number>();
+        // Keep track of only the latest vote for each voter
+        const currentVotesByVoter = new Map<string, string>();
         for (const vc of dayEvents.voteCasts) {
-            voteCounts.set(vc.target, (voteCounts.get(vc.target) || 0) + 1);
+            currentVotesByVoter.set(vc.voter, vc.target);
         }
+
+        // Count how many current votes each target has
+        const voteCounts = new Map<string, number>();
+        for (const target of currentVotesByVoter.values()) {
+            voteCounts.set(target, (voteCounts.get(target) || 0) + 1);
+        }
+
         let maxVotes = 0;
         for (const count of voteCounts.values()) {
             if (count > maxVotes) maxVotes = count;
