@@ -425,6 +425,11 @@ export const ShufflePhase: React.FC = React.memo(() => {
 
             if (shuffleState.currentShufflerIndex === 0) {
                 // I am the host (first player) - Generate fresh deck
+                // generateDistributedDeck already does Fisher-Yates internally — roles are
+                // randomly assigned to player slots. Do NOT reshuffle positions here:
+                // subsequent players read deck[myIndex] to find their card, so positions
+                // must remain stable across all shuffle rounds. Security comes from SRA
+                // encryption (random keys per player), not from position permutation.
                 if (shuffleState.deck.length > 0) {
                     console.warn("Host sees existing deck, resetting...");
                 }
@@ -432,15 +437,15 @@ export const ShufflePhase: React.FC = React.memo(() => {
                     gameState.players.map(p => ({ isAlive: p.isAlive })),
                     roomIdStr
                 );
-                const shuffled = shuffleService.shuffleSubarray(initialDeck, activeIndices);
-                newDeck = shuffleService.encryptDeck(shuffled);
+                newDeck = shuffleService.encryptDeck(initialDeck);
             } else {
-                // Subsequent player - Shuffle existing deck
+                // Subsequent player - encrypt only, do NOT reshuffle positions.
+                // Shuffling positions with Math.random() breaks the deck[playerIndex]
+                // mapping that findMyCardIndex() relies on to find each player's role.
                 if (shuffleState.deck.length === 0) {
                     throw new Error("Deck is empty! Sync error.");
                 }
-                const shuffled = shuffleService.shuffleSubarray(shuffleState.deck, activeIndices);
-                newDeck = shuffleService.encryptDeck(shuffled);
+                newDeck = shuffleService.encryptDeck(shuffleState.deck);
             }
 
             const salt = ShuffleService.generateSalt();
