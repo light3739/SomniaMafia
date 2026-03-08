@@ -129,6 +129,12 @@ async function verifyAuthorizedSignature(params: {
   if (nonce && timestamp !== undefined) {
     const tsNum = Number(timestamp);
     if (Number.isFinite(tsNum)) {
+      // Reject replayed or future-dated timestamps (±5 min window)
+      const now = Math.floor(Date.now() / 1000);
+      const age = now - tsNum;
+      if (age > 300 || age < -30) {
+        return { ok: false, error: 'Timestamp expired or too far in future (max ±5 min)', status: 401 };
+      }
       valid = await verifyMessage({
         address: normalizedSigner as Address,
         message: buildModernMessage(nonce, tsNum),
