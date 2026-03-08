@@ -48,6 +48,11 @@ export function getAllNightStates(): Map<string, RoomNightState> {
   return nightStates;
 }
 
+/** Inject a pre-loaded night state (used during Redis startup restore). */
+export function injectNightState(roomId: bigint, state: RoomNightState): void {
+  nightStates.set(roomId.toString(), state);
+}
+
 // ─── Consensus logic ──────────────────────────────────────
 
 /**
