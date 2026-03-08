@@ -4,11 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { stringToHex, hexToString } from '../../services/cryptoUtils';
-import { usePublicClient, useAccount } from 'wagmi';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
+import { usePublicClient, useAccount, useWalletClient } from 'wagmi';
+import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL } from '../../contracts/config';
 import { Role, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
 import { Eye, EyeOff, Check, Users, Skull, Shield, Search, Loader2, RefreshCw } from 'lucide-react';
+import { loadOrCreateKeypair, eciesDecrypt, type EciesEncrypted } from '../../services/eciesService';
+import { signRequest } from '../../services/requestSigning';
 
 interface RevealState {
     deck: string[];
@@ -72,6 +74,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     const publicClient = usePublicClient();
     const { address } = useAccount();
+    const { data: walletClient } = useWalletClient();
     const [revealState, setRevealState] = useState<RevealState>({
         deck: [],
         collectedKeys: new Map(),
@@ -219,9 +222,8 @@ export const RoleReveal: React.FC = React.memo(() => {
         return () => clearInterval(interval);
     }, [checkIfShared]);
 
-    // V3: Поделиться своим ключом со всеми (batch - одна транзакция!)
+    // Share keys: real SRA key → GM (off-chain, private); dummy byte → on-chain (prevents chain observers from decrypting roles)
     const shareMyKey = useCallback(async () => {
-        // FIX: Use ref guard to prevent concurrent calls (React state batching can miss isProcessing)
         if (!myPlayer || isShareInFlightRef.current || isProcessing || revealState.hasSharedKeys) return;
         isShareInFlightRef.current = true;
 
@@ -230,24 +232,48 @@ export const RoleReveal: React.FC = React.memo(() => {
             const shuffleService = getShuffleService();
             const myDecryptionKey = shuffleService.getDecryptionKey();
 
-            // V3: Собираем всех получателей и ключи в массивы
-            const recipients: string[] = [];
-            const encryptedKeys: string[] = [];
+            // Step 1: Send REAL SRA key to GM off-chain (signed, never goes on-chain)
+            if (currentRoomId && address && walletClient) {
+                try {
+                    const meta = await signRequest({
+                        address,
+                        roomId: Number(currentRoomId),
+                        walletClient,
+                        buildMessage: ({ nonce, timestamp }) =>
+                            `submit-key:${currentRoomId}:${myDecryptionKey}:${nonce}:${timestamp}`,
+                    });
+                    await fetch(`${GM_SERVER_URL}/submit-sra-key`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            roomId: String(currentRoomId),
+                            playerAddress: address,
+                            sraKey: myDecryptionKey,
+                            signature: meta.signature,
+                            signerAddress: meta.signerAddress,
+                            nonce: meta.nonce,
+                            timestamp: meta.timestamp,
+                        }),
+                    });
+                } catch (e) {
+                    console.warn('[ECIES] submit-sra-key failed (non-fatal, GM will retry):', e);
+                }
+            }
 
+            // Step 2: Send DUMMY bytes on-chain to satisfy FLAG_HAS_SHARED_KEYS
+            // Real keys are with GM — on-chain data is intentionally useless
+            const recipients: string[] = [];
+            const dummyKeys: string[] = [];
             for (const player of gameState.players) {
                 if (player.address.toLowerCase() === myPlayer.address.toLowerCase()) continue;
                 recipients.push(player.address);
-                // Convert decryption key to hex bytes for Solidity
-                encryptedKeys.push(stringToHex(myDecryptionKey));
+                dummyKeys.push('0x00'); // single null byte — meaningless garbage
             }
 
-            // addLog(`Sharing keys to ${recipients.length} players...`, "info");
-            await shareKeysToAllOnChain(recipients, encryptedKeys);
+            await shareKeysToAllOnChain(recipients, dummyKeys);
             setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
-            // addLog("All keys shared in one tx!", "success");
         } catch (e: any) {
             console.error("Failed to share keys:", e);
-            // FIX: Check if keys were actually shared on-chain (TX may have succeeded but receipt failed)
             const errMsg = (e.message || '').toLowerCase();
             if (errMsg.includes('alreadyshared') || errMsg.includes('keysalreadyshared')) {
                 console.log("[RoleReveal] Keys already shared on-chain, marking as shared.");
@@ -257,10 +283,9 @@ export const RoleReveal: React.FC = React.memo(() => {
             }
         } finally {
             setIsProcessing(false);
-            // FIX: Release ref guard after a short delay to prevent rapid re-entry
             setTimeout(() => { isShareInFlightRef.current = false; }, 1500);
         }
-    }, [gameState.players, myPlayer, isProcessing, revealState.hasSharedKeys, shareKeysToAllOnChain, addLog, stringToHex]);
+    }, [gameState.players, myPlayer, isProcessing, revealState.hasSharedKeys, shareKeysToAllOnChain, addLog, currentRoomId, address, walletClient]);
 
     // Расшифровать все карты чтобы найти союзников по роли
     const decryptAllCardsForTeammates = useCallback(async (
@@ -303,94 +328,81 @@ export const RoleReveal: React.FC = React.memo(() => {
         return teammates;
     }, [revealState.deck, revealState.myCardIndex, gameState.players]);
 
-    // Расшифровать мою роль
+    // Decrypt role: ask GM for ECIES-encrypted role, decrypt locally with our private key
     const decryptMyRole = useCallback(async () => {
-        if (revealState.myCardIndex < 0 || revealState.deck.length === 0) return;
-        // FIX: Ref guard to prevent concurrent decrypt calls
+        if (revealState.myCardIndex < 0 || !currentRoomId || !address || !walletClient) return;
         if (isDecryptInFlightRef.current) return;
         isDecryptInFlightRef.current = true;
 
         setIsProcessing(true);
         try {
-            // Собираем ключи
-            const keys = await collectKeys();
+            // Sign request so GM knows this is really us
+            const meta = await signRequest({
+                address,
+                roomId: Number(currentRoomId),
+                walletClient,
+                buildMessage: ({ nonce, timestamp }) =>
+                    `my-role:${currentRoomId}:${address.toLowerCase()}:${nonce}:${timestamp}`,
+            });
 
-            if (!keys || keys.size < gameState.players.length - 1) {
+            const params = new URLSearchParams({
+                playerAddress: address,
+                signature: meta.signature,
+                signerAddress: meta.signerAddress,
+                nonce: meta.nonce,
+                timestamp: String(meta.timestamp),
+            });
+
+            const resp = await fetch(`${GM_SERVER_URL}/my-role/${currentRoomId}?${params}`);
+            const data = await resp.json();
+
+            if (resp.status === 202 && data.pending) {
+                // Not all keys collected yet — will auto-retry via polling
                 setIsProcessing(false);
+                setTimeout(() => { isDecryptInFlightRef.current = false; }, 3000);
                 return;
             }
 
-            const shuffleService = getShuffleService();
-            if (!shuffleService.hasKeys()) {
-                console.log("[RoleReveal] Keys not generated, skipping decryption");
-                setIsProcessing(false);
-                return;
+            if (!resp.ok || !data.encrypted) {
+                throw new Error(data.error || `GM returned ${resp.status}`);
             }
 
-            let myEncryptedCard = revealState.deck[revealState.myCardIndex];
+            // Decrypt with our ECIES private key
+            const keypair = await loadOrCreateKeypair(String(currentRoomId), address);
+            const roleStr = await eciesDecrypt(data.encrypted as EciesEncrypted, keypair.privateKey);
 
-            // Расшифровываем своим ключом
-            myEncryptedCard = shuffleService.decrypt(myEncryptedCard);
+            // Map GM role string to frontend Role enum
+            const roleMap: Record<string, Role> = {
+                MAFIA: Role.MAFIA, DOCTOR: Role.DOCTOR,
+                DETECTIVE: Role.DETECTIVE, CIVILIAN: Role.CIVILIAN,
+            };
+            const role = roleMap[roleStr] ?? Role.UNKNOWN;
 
-            // Расшифровываем ключами других игроков
-            for (const [_, key] of keys) {
-                const decryptionKey = hexToString(key);
-                myEncryptedCard = shuffleService.decryptWithKey(myEncryptedCard, decryptionKey);
-            }
-
-            // Преобразуем число в роль
-            const role = ShuffleService.roleNumberToRole(myEncryptedCard, currentRoomId?.toString());
-
-            // Если я мафия — расшифровываем ВСЕ карты чтобы найти союзников
-            let teammates: string[] = [];
-            if (role === Role.MAFIA) {
-                teammates = await decryptAllCardsForTeammates(keys, shuffleService, Role.MAFIA);
-                if (teammates.length > 0) {
-                    const names = teammates.map(addr =>
-                        gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase())?.name || addr.slice(0, 8)
-                    );
-                    addLog(`Your fellow mafia: ${names.join(', ')}`, "info");
-                }
-            }
-
-            setRevealState(prev => ({
-                ...prev,
-                myRole: role,
-                isRevealed: true,
-                teammates
-            }));
-
-            // PERSISTENCE: Save role to localStorage immediately
-            if (currentRoomId && address) {
+            // Persist role
+            if (address) {
                 localStorage.setItem(`my_role_${currentRoomId}_${address.toLowerCase()}`, role);
-                console.log("[RoleReveal] Role saved to localStorage");
             }
 
-            // Обновляем gameState с моей ролью и ролями союзников (если я мафия)
+            setRevealState(prev => ({ ...prev, myRole: role, isRevealed: true, teammates: [] }));
+
             setGameState(prev => ({
                 ...prev,
-                players: prev.players.map(p => {
-                    const addr = p.address.toLowerCase();
-                    if (addr === myPlayer?.address.toLowerCase()) {
-                        return { ...p, role };
-                    }
-                    if (role === Role.MAFIA && teammates.some(t => t.toLowerCase() === addr)) {
-                        return { ...p, role: Role.MAFIA };
-                    }
-                    return p;
-                })
+                players: prev.players.map(p =>
+                    p.address.toLowerCase() === myPlayer?.address.toLowerCase()
+                        ? { ...p, role }
+                        : p
+                ),
             }));
 
             addLog(`Your role: ${role}`, "success");
         } catch (e: any) {
-            console.error("Failed to decrypt role:", e);
-            addLog(e.message || "Failed to decrypt", "danger");
+            console.error("Failed to get role from GM:", e);
+            addLog(e.message || "Failed to get role", "danger");
         } finally {
             setIsProcessing(false);
-            // FIX: Release ref guard after delay to prevent rapid retry on failure
             setTimeout(() => { isDecryptInFlightRef.current = false; }, 2000);
         }
-    }, [revealState.myCardIndex, revealState.deck, gameState.players, myPlayer, collectKeys, addLog, setGameState, decryptAllCardsForTeammates, currentRoomId, address]);
+    }, [revealState.myCardIndex, currentRoomId, address, walletClient, myPlayer, addLog, setGameState]);
 
     // Подтвердить роль (с предварительным коммитом)
     const handleConfirmRole = useCallback(async () => {
