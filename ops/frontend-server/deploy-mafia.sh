@@ -131,7 +131,7 @@ ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "
     exit 1
   fi
 
-  COMPOSE_CMD='docker compose --env-file .env.production -f docker-compose.yaml up -d --build'
+  COMPOSE_CMD='docker compose --project-name somnia-prod --env-file .env.production -f docker-compose.yaml up -d --build'
   if command -v ionice >/dev/null 2>&1; then
     COMPOSE_CMD=\"ionice -c ${FRONT_DEPLOY_IONICE_CLASS} -n ${FRONT_DEPLOY_IONICE_LEVEL} nice -n ${FRONT_DEPLOY_NICE} \$COMPOSE_CMD\"
   else
@@ -140,7 +140,7 @@ ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "
 
   echo '[front:deploy] running compose in low-priority mode to reduce server pressure'
   sh -lc \"\$COMPOSE_CMD\"
-  docker compose --env-file .env.production -f docker-compose.yaml ps
+  docker compose --project-name somnia-prod --env-file .env.production -f docker-compose.yaml ps
 "
 
 echo "[front:deploy] done"
