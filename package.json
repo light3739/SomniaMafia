@@ -14,6 +14,8 @@
     "gm:publish": "bash ops/gm-server/publish-repo.sh",
     "gm:release": "bash ops/gm-server/publish-and-deploy.sh",
     "front:deploy": "bash ops/frontend-server/deploy-mafia.sh",
+    "front:deploy:test": "bash ops/frontend-server/deploy-test.sh",
+    "gm:deploy:test": "bash ops/gm-server/deploy-test.sh",
     "monitor:deploy": "bash ops/monitoring/deploy-mafia-monitor.sh",
     "push:front": "bash ops/git/push-frontend.sh",
     "push:all": "bash ops/git/push-all.sh"

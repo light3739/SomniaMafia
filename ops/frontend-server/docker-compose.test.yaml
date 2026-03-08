@@ -1,0 +1,30 @@
+services:
+  frontend:
+    build:
+      context: ../..
+      dockerfile: ops/frontend-server/Dockerfile
+      args:
+        NEXT_PUBLIC_GM_SERVER_URL: ${NEXT_PUBLIC_GM_SERVER_URL:-https://gm-test.mafiaonchain.live}
+        NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-https://livekit.mafiaonchain.live}
+        NEXT_PUBLIC_ACTIVE_NETWORK: ${NEXT_PUBLIC_ACTIVE_NETWORK:-avalanche_fuji}
+    container_name: somnia-frontend-test
+    restart: unless-stopped
+    env_file:
+      - ./.env.test
+    ports:
+      - "127.0.0.1:3002:3000"
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: somnia-redis-test
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "127.0.0.1:6382:6379"
+    volumes:
+      - somnia_redis_data_test:/data
+
+volumes:
+  somnia_redis_data_test:
