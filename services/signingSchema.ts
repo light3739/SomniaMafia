@@ -14,10 +14,11 @@ export function buildNightActionMessage(input: {
   roomId: string;
   actionType: NightActionType;
   targetAddress: string;
+  dayCount: number;
   nonce: string;
   timestamp: number;
 }): string {
-  return `night:${input.roomId}:${input.actionType}:${input.targetAddress}:${input.nonce}:${input.timestamp}`;
+  return `night:${input.roomId}:${input.dayCount}:${input.actionType}:${input.targetAddress}:${input.nonce}:${input.timestamp}`;
 }
 
 export function buildResolveNightMessage(input: {
