@@ -35,6 +35,8 @@ rsync -az --delete \
   --exclude 'node_modules' \
   --exclude '.next' \
   --exclude 'ops/gm-server/workdir' \
+  --exclude 'ops/frontend-server/.env.test' \
+  --exclude 'ops/frontend-server/.env.production' \
   "$ROOT_DIR/" "${SSH_USER}@${FRONT_SSH_HOST}:${FRONT_REMOTE_DIR}/"
 
 echo "[test:deploy] Ensuring .env.test exists on remote"
@@ -54,7 +56,7 @@ echo "[test:deploy] Building and starting somnia-frontend-test (port 3002)"
 ssh "${SSH_OPTS[@]}" "${SSH_USER}@${FRONT_SSH_HOST}" "
   cd '$FRONT_REMOTE_DIR/ops/frontend-server'
   nice -n ${FRONT_DEPLOY_NICE} ionice -c ${FRONT_DEPLOY_IONICE_CLASS} -n ${FRONT_DEPLOY_IONICE_LEVEL} \
-    docker compose -f docker-compose.test.yaml up -d --build 2>&1
+    docker compose --project-name somnia-test -f docker-compose.test.yaml up -d --build 2>&1
 "
 
 echo "[test:deploy] Done — https://test.mafiaonchain.live"
