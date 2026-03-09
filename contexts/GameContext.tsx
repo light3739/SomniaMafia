@@ -1886,6 +1886,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const playerAddress = address!;
             console.log(`[GM API] Submitting night action: ${actionType} on ${targetAddress} by ${playerAddress}`);
 
+            // Always fetch fresh dayCount from contract to avoid stale state (e.g. night 2 with dayCount=0)
+            let currentDayCount = gameState.dayCount;
+            if (publicClient && currentRoomId) {
+                try {
+                    const roomData = await publicClient.readContract({
+                        address: runtimeContractAddress,
+                        abi: MAFIA_ABI,
+                        functionName: 'getRoom',
+                        args: [currentRoomId],
+                    }) as any;
+                    currentDayCount = Number(Array.isArray(roomData) ? roomData[7] : roomData.dayCount);
+                    console.log(`[GM API] Fresh dayCount from contract: ${currentDayCount}`);
+                } catch (e) {
+                    console.warn('[NightAction] Could not fetch fresh dayCount, falling back to gameState:', e);
+                }
+            }
+
             const signed = await signRequest({
                 address: playerAddress,
                 roomId: Number(currentRoomId),
@@ -1894,7 +1911,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     roomId: currentRoomId.toString(),
                     actionType,
                     targetAddress,
-                    dayCount: gameState.dayCount,
+                    dayCount: currentDayCount,
                     nonce,
                     timestamp,
                 }),
@@ -1926,7 +1943,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 playerAddress,
                 actionType,
                 targetAddress,
-                dayCount: gameState.dayCount,
+                dayCount: currentDayCount,
                 signature: signed.signature,
                 signerAddress: signed.signerAddress,
                 role: myRoleNum,
