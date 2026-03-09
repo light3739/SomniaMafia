@@ -197,18 +197,24 @@ async function verifyAuthorizedSignature(params: {
       const sessionRoomId = Number(session.roomId || 0);
       const isActive = Boolean(session.isActive);
 
+      const expectedRoomId = Number(BigInt(roomId));
+
       if (!sessionAddress || sessionAddress !== normalizedSigner) {
+        console.error('[AUTH FAIL] Session key not registered', { normalizedSigner, normalizedPlayer, sessionAddress });
         return { ok: false, error: 'Session key is not registered for this player', status: 403 };
       }
 
       if (!isActive || expiresAt <= Math.floor(Date.now() / 1000)) {
+        console.error('[AUTH FAIL] Session key inactive or expired', { isActive, expiresAt, now: Math.floor(Date.now() / 1000) });
         return { ok: false, error: 'Session key inactive or expired', status: 403 };
       }
 
-      if (sessionRoomId !== Number(BigInt(roomId))) {
+      if (sessionRoomId !== expectedRoomId) {
+        console.error('[AUTH FAIL] Session key room mismatch', { sessionRoomId, expectedRoomId });
         return { ok: false, error: 'Session key room mismatch', status: 403 };
       }
     } catch (e: any) {
+      console.error('[AUTH FAIL] Error fetching session info', e);
       return { ok: false, error: `Session verification failed: ${e?.message || 'unknown error'}`, status: 500 };
     }
   }
