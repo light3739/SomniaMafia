@@ -44,13 +44,12 @@ jobs:
           REMOTE_DIR="${REMOTE_DIR:-/root/gm-server}"
           PM2_NAME="${PM2_NAME:-gm-server}"
 
-          # Upload source (keep remote .env intact)
-          rsync -az --delete \
+          # Upload source (keep remote .env intact — no --delete to avoid wiping it)
+          rsync -az --checksum \
             --exclude node_modules \
             --exclude dist \
             --exclude .git \
             --exclude .env \
-            --filter="protect .env" \
             -e "ssh -p $SSH_PORT" \
             ops/gm-server/source/ \
             "${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}/"
