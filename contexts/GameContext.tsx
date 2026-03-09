@@ -2016,12 +2016,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             console.log(`[Investigation API] Fetching result for ${detective} -> ${target}`);
+            if (!detective) {
+                console.error('[Investigation API] No signer available');
+                return { role: Role.UNKNOWN, isMafia: false };
+            }
+
+            // Use signRequest to generate modern signature with nonce and timestamp
+            // signRequest automatically handles session key vs walletClient
             const signed = await signRequest({
                 address: detective,
                 roomId: Number(currentRoomId),
                 walletClient,
-                buildMessage: ({ nonce, timestamp }) => `investigate:${currentRoomId.toString()}:${target}:${nonce}:${timestamp}`,
+                buildMessage: ({ nonce, timestamp }) =>
+                    `investigate:${currentRoomId.toString()}:${target.toLowerCase()}:${nonce}:${timestamp}`
             });
+
+            console.log(`[Investigation API] Signed with ${signed.signerAddress.toLowerCase() === detective.toLowerCase() ? 'main wallet' : 'session key'}: ${signed.signerAddress}`);
 
             const response = await fetch('/api/game/investigate', {
                 method: 'POST',

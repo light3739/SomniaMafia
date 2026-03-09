@@ -38,9 +38,15 @@ export const POST = withSignedRoute<{
                 detectiveAddress,
                 targetAddress,
                 signature,
+<<<<<<< HEAD
                 signerAddress,
                 nonce: body.nonce,
                 timestamp: body.timestamp,
+=======
+                signerAddress: actualSigner,
+                nonce,
+                timestamp,
+>>>>>>> f5627fc4 (fix(client): update investigation signature to use modern format with nonce/ts)
             }),
         });
 
