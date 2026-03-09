@@ -5,8 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
 import { MAFIA_ABI } from '../../contracts/config';
-import { ShuffleService, getShuffleService } from '../../services/shuffleService';
-import { hexToString } from '../../services/cryptoUtils';
+
 import { Role, Player, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
 import { MafiaChat } from './MafiaChat';
@@ -260,85 +259,27 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
     // Storage key for night commit data
     const NIGHT_COMMIT_KEY = `mafia_night_commit_${currentRoomId}_${address ? address.toLowerCase() : ''}`;
 
-    // Load mafia teammates on mount (only for mafia role)
+    // Load mafia teammates: ask GM for all room roles (GM has them after SRA key collection)
     const loadMafiaTeammates = useCallback(async () => {
-        if (!publicClient || !currentRoomId || !myPlayer || myRole !== Role.MAFIA) return;
+        if (!currentRoomId || !myPlayer || myRole !== Role.MAFIA) return;
         if (nightState.teammates.length > 0) return; // Already loaded
 
         try {
-            // Get deck from contract
-            const deck = await publicClient.readContract({
-                address: runtimeContractAddress,
-                abi: MAFIA_ABI,
-                functionName: 'getDeck',
-                args: [currentRoomId],
-            }) as string[];
+            const res = await fetch(`/api/game/room-roles?roomId=${currentRoomId}`);
+            const data = await res.json();
 
-            // Get all keys shared with me
-            const [senders, keyBytes] = await publicClient.readContract({
-                address: runtimeContractAddress,
-                abi: MAFIA_ABI,
-                functionName: 'getAllKeysForMe',
-                args: [currentRoomId],
-                account: address as `0x${string}`,
-            }) as [string[], string[]];
-
-            const keys = new Map<string, string>();
-            for (let i = 0; i < senders.length; i++) {
-                if (keyBytes[i] && keyBytes[i] !== '0x') {
-                    keys.set(senders[i], keyBytes[i]);
-                }
-            }
-
-            // Find my card index
-            const myCardIndex = gameState.players.findIndex(
-                p => p.address.toLowerCase() === myPlayer.address.toLowerCase()
-            );
-
-            const shuffleService = getShuffleService();
-
-            // Ensure keys are loaded (after page reload, ShuffleService is a fresh instance)
-            if (!shuffleService.hasKeys()) {
-                const loaded = shuffleService.loadKeys(currentRoomId.toString(), myPlayer.address);
-                if (!loaded) {
-                    console.warn("[NightPhase] Cannot load shuffle keys from localStorage — teammate discovery unavailable");
-                    return;
-                }
-                console.log("[NightPhase] Shuffle keys recovered from localStorage");
+            if (data.pending || !data.roles) {
+                // Roles not computed yet — will retry on next mount/effect cycle
+                return;
             }
 
             const teammates: string[] = [];
-
-            // Decrypt all cards to find fellow mafia
-            for (let i = 0; i < deck.length; i++) {
-                if (i === myCardIndex) continue; // Skip my own card
-
-                try {
-                    let encryptedCard = deck[i];
-
-                    // Skip empty/uninitialised deck slots (BigInt('') would throw)
-                    if (!encryptedCard) continue;
-
-                    // Decrypt with my key
-                    encryptedCard = shuffleService.decrypt(encryptedCard);
-
-                    // Decrypt with other players' keys (skip dummy 0x00 bytes stored on-chain)
-                    for (const [_, key] of keys) {
-                        const decryptionKey = hexToString(key).replace(/\0/g, '').trim();
-                        if (!decryptionKey || !/^\d+$/.test(decryptionKey)) continue;
-                        encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
+            for (const [addr, role] of Object.entries(data.roles as Record<string, string>)) {
+                if (role === 'MAFIA' && addr.toLowerCase() !== myPlayer.address.toLowerCase()) {
+                    const player = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
+                    if (player && player.isAlive) {
+                        teammates.push(player.address);
                     }
-
-                    const cardRole = ShuffleService.roleNumberToRole(encryptedCard, currentRoomId?.toString());
-
-                    if (cardRole === Role.MAFIA) {
-                        const player = gameState.players[i];
-                        if (player && player.isAlive) {
-                            teammates.push(player.address);
-                        }
-                    }
-                } catch (e) {
-                    console.warn(`Failed to decrypt card ${i}:`, e);
                 }
             }
 
@@ -352,7 +293,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         } catch (e) {
             console.error("Failed to load mafia teammates:", e);
         }
-    }, [publicClient, currentRoomId, myPlayer, myRole, address, gameState.players, nightState.teammates.length, addLog]);
+    }, [currentRoomId, myPlayer, myRole, gameState.players, nightState.teammates.length, addLog]);
 
     // Load teammates when mafia enters night phase
     useEffect(() => {
