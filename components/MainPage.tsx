@@ -100,16 +100,15 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     className="mt-32 relative z-20"
                 >
                     {(() => {
-                        const { login, authenticated, ready } = usePrivy();
-                        const { isConnected, chain } = useAccount();
+                        const { login, authenticated, ready, user } = usePrivy();
+                        const { chain } = useAccount();
                         const { switchChain } = useSwitchChain();
 
-                        // We check both privy auth and wagmi connection
                         if (!ready) {
                             return <div style={{ opacity: 0 }}>Loading...</div>;
                         }
 
-                        // If not authenticated via Privy, show the login button
+                        // Not logged in → show login button
                         if (!authenticated) {
                             return (
                                 <button
@@ -120,30 +119,25 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                     }}
                                 >
                                     <span className="relative z-10">LOGIN / CONNECT</span>
-                                    {/* Shine effect overlay */}
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
                                 </button>
                             );
                         }
 
-                        // If authenticated by Privy, but Wagmi hasn't picked up the connection yet (can happen with embedded wallets)
-                        if (!isConnected) {
-                            return (
-                                <button
-                                    disabled
-                                    className="px-8 py-3 rounded-xl font-mono font-bold text-white/50 bg-black/50 border border-white/10 transition-all text-sm md:text-base tracking-wider cursor-wait"
-                                >
-                                    CONNECTING WALLET...
-                                </button>
-                            );
-                        }
+                        // Logged in via Privy. At this point user has either:
+                        // a) an embedded wallet (user.wallet.address) — created automatically for social/email logins
+                        // b) or a connected external wallet (MetaMask, etc.)
+                        // In both cases we can proceed. We don't block on wagmi's isConnected here
+                        // because setActiveWallet() is async and may lag a few renders.
 
                         const preferredNetwork = typeof window !== 'undefined'
                             ? localStorage.getItem('mafia_selected_network')
                             : null;
                         const preferredChainId = preferredNetwork === 'somnia_testnet' ? 50312 : 43113;
 
-                        if (chain?.id !== preferredChainId) {
+                        // Only check chain if wagmi is already connected (external wallet).
+                        // Embedded wallet users won't have chain info yet → skip to ENTER CITY.
+                        if (chain && chain.id !== preferredChainId) {
                             return (
                                 <button
                                     onClick={() => switchChain({ chainId: preferredChainId })}
