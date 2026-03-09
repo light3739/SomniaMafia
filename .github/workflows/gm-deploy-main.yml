@@ -50,6 +50,7 @@ jobs:
             --exclude dist \
             --exclude .git \
             --exclude .env \
+            --filter="protect .env" \
             -e "ssh -p $SSH_PORT" \
             ops/gm-server/source/ \
             "${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}/"
