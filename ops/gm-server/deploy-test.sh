@@ -19,11 +19,7 @@ fi
 
 echo "[gm-test:deploy] Uploading to ${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}"
 ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "mkdir -p '$REMOTE_DIR'"
-rsync -az --delete -e "ssh -p $SSH_PORT" \
-  --exclude node_modules \
-  --exclude dist \
-  --exclude .git \
-  "$WORKDIR/" "${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}/"
+tar -cz -C "$WORKDIR" --exclude=node_modules --exclude=dist --exclude=.git . | ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "tar -xz -C '$REMOTE_DIR'"
 
 echo "[gm-test:deploy] Ensuring .env exists on remote"
 ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "
