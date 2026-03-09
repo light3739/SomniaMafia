@@ -4,7 +4,7 @@
 import { Role } from '../types';
 import { keccak256, encodePacked, encodeAbiParameters, parseAbiParameters } from 'viem';
 
-// 2048-bit Modular Group 14 PRIME
+// 2048-bit Modular Group 14 PRIME (RFC 3526)
 const PRIME = BigInt('0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3BE39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA051015728E5A8AACAA68FFFFFFFFFFFFFFFF');
 
 // Per-room offset to avoid v^e mod p = v when v ∈ {0,1}
@@ -77,13 +77,13 @@ export class ShuffleService {
     }
 
     // Генерация числа взаимно простого с n
-    // FIX: Use crypto.getRandomValues for much larger key range (~2^53)
-    // Old range [2, 1_000_002] was too small → caused SRA collisions
+    // FIX: Use crypto.getRandomValues for larger key range (2048-bit)
+    // Ensures cryptographic security and avoids discrete logarithm attacks
     private generateCoprime(n: bigint): bigint {
         let e: bigint;
         do {
-            // Generate a random 6-byte (48-bit) value for much better distribution
-            const arr = new Uint8Array(256); // Use larger buffer for 2048-bit keys
+            // Generate a random 256-byte (2048-bit) value for cryptographic security
+            const arr = new Uint8Array(256);
             crypto.getRandomValues(arr);
             e = 2n;
             for (let i = 0; i < arr.length; i++) {
