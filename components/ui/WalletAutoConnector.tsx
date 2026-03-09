@@ -1,37 +1,34 @@
 'use client';
 import { useEffect } from 'react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { useConnect } from 'wagmi';
-import { config } from '../../app/providers';
+import { useSetActiveWallet } from '@privy-io/wagmi';
 
 /**
- * WalletAutoConnector — bridges Privy's embedded wallet into Wagmi.
- * After a social login (Google/Twitter/Discord), Privy creates an embedded
- * wallet but Wagmi doesn't know about it yet. This component watches for
- * that state and connects the wallet automatically.
+ * WalletAutoConnector — officially recommended pattern by Privy.
+ * After a social login (Google/Twitter/Discord/Email), Privy creates an
+ * embedded wallet. This component finds it and calls setActiveWallet()
+ * so Wagmi's useAccount().isConnected becomes true automatically.
+ *
+ * Docs: https://docs.privy.io/guide/wagmi#set-the-active-wallet
  */
 export function WalletAutoConnector() {
-    const { authenticated, ready } = usePrivy();
+    const { ready, authenticated } = usePrivy();
     const { wallets } = useWallets();
-    const { connect, connectors } = useConnect();
+    const { setActiveWallet } = useSetActiveWallet();
 
     useEffect(() => {
         if (!ready || !authenticated) return;
         if (wallets.length === 0) return;
 
-        // Find the Privy connector registered in wagmi config
-        const privyConnector = connectors.find(c => c.id === 'io.privy.wallet' || c.name?.toLowerCase().includes('privy'));
-        if (!privyConnector) return;
+        // Prefer the Privy embedded wallet (walletClientType === 'privy')
+        // Fall back to first available wallet if no embedded wallet
+        const embeddedWallet = wallets.find(w => w.walletClientType === 'privy')
+            ?? wallets[0];
 
-        // Only connect if not already connected
-        privyConnector.getAccounts().then(accounts => {
-            if (accounts.length === 0) {
-                connect({ connector: privyConnector });
-            }
-        }).catch(() => {
-            // Connector not ready yet, will retry on next render
-        });
-    }, [ready, authenticated, wallets, connectors, connect]);
+        if (embeddedWallet) {
+            setActiveWallet(embeddedWallet);
+        }
+    }, [ready, authenticated, wallets, setActiveWallet]);
 
     return null;
 }
