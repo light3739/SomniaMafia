@@ -196,6 +196,9 @@ export const GameOver: React.FC = React.memo(() => {
                     let encryptedCard = deck[i];
 
                     if (hasMyKeys) {
+                        // Skip empty/uninitialised deck slots
+                        if (!encryptedCard) continue;
+
                         // Расшифровываем своим ключом
                         encryptedCard = shuffleService.decrypt(encryptedCard);
 

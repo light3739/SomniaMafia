@@ -316,6 +316,9 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 try {
                     let encryptedCard = deck[i];
 
+                    // Skip empty/uninitialised deck slots (BigInt('') would throw)
+                    if (!encryptedCard) continue;
+
                     // Decrypt with my key
                     encryptedCard = shuffleService.decrypt(encryptedCard);
 
