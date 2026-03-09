@@ -164,11 +164,13 @@ async function verifyAuthorizedSignature(params: {
       if (age > 300000 || age < -30000) {
         return { ok: false, error: 'Timestamp expired or too far in future (max ±5 min)', status: 401 };
       }
+      const modernMsg = buildModernMessage(nonce, tsNum);
       valid = await verifyMessage({
         address: normalizedSigner as Address,
-        message: buildModernMessage(nonce, tsNum),
+        message: modernMsg,
         signature,
       });
+      console.log(`[AUTH DEBUG] modern check => valid:${valid} msg:"${modernMsg}" signer:${normalizedSigner}`);
     }
   }
 
