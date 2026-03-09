@@ -7,8 +7,7 @@ import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
 import { formatEther } from 'viem';
 import { MAFIA_ABI } from '../../contracts/config';
-import { ShuffleService, getShuffleService } from '../../services/shuffleService';
-import { hexToString } from '../../services/cryptoUtils';
+
 import { Role } from '../../types';
 import { Button } from '../ui/Button';
 import { useSoundEffects } from '../ui/SoundEffects';
@@ -60,12 +59,19 @@ export const GameOver: React.FC = React.memo(() => {
     const [revealedRoles, setRevealedRoles] = useState<Map<string, Role>>(new Map());
     const [onChainRoles, setOnChainRoles] = useState<Map<string, Role>>(new Map());
     const [isRevealing, setIsRevealing] = useState(false);
+    const [revealTimedOut, setRevealTimedOut] = useState(false);
     const [winner, setWinner] = useState<Winner>((gameState.winner as Winner) || 'DRAW');
     const [refundClaimed, setRefundClaimed] = useState(false);
     const [refundAutomatic, setRefundAutomatic] = useState(false);
     const [depositAmount, setDepositAmount] = useState<string>('0');
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // After 30s, stop pulsing and show static "Unknown" for any unresolved roles
+    useEffect(() => {
+        const t = setTimeout(() => setRevealTimedOut(true), 30000);
+        return () => clearTimeout(t);
+    }, []);
 
     // Check player deposit amount
     useEffect(() => {
@@ -154,95 +160,17 @@ export const GameOver: React.FC = React.memo(() => {
 
         setIsRevealing(true);
         try {
-            const shuffleService = getShuffleService();
-            // SPEED: Ensure keys are loaded (critical for decryption after page refresh)
-            if (!shuffleService.hasKeys()) {
-                shuffleService.loadKeys(currentRoomId.toString(), address);
-            }
-            // SPEED: Fetch deck and keys in parallel — saves one sequential RPC roundtrip
-            const [deck, keysResult] = await Promise.all([
-                publicClient.readContract({
-                    address: runtimeContractAddress,
-                    abi: MAFIA_ABI,
-                    functionName: 'getDeck',
-                    args: [currentRoomId],
-                }) as Promise<string[]>,
-                publicClient.readContract({
-                    address: runtimeContractAddress,
-                    abi: MAFIA_ABI,
-                    functionName: 'getAllKeysForMe',
-                    args: [currentRoomId],
-                    account: address,
-                }).catch(e => {
-                    console.error("Failed to batch fetch keys:", e);
-                    return [[], []] as [string[], string[]];
-                }) as Promise<[string[], string[]]>,
-            ]);
-
-            // Собираем ключи от всех игроков (V3.1 Batch Fetch)
-            const keys = new Map<string, string>();
-            const [senders, keyBytes] = keysResult;
-            for (let i = 0; i < senders.length; i++) {
-                if (keyBytes[i] && keyBytes[i] !== '0x') {
-                    keys.set(senders[i].toLowerCase(), keyBytes[i]);
-                }
-            }
-
-            const roles = new Map<string, Role>();
-            const hasMyKeys = shuffleService.hasKeys();
-
-            for (let i = 0; i < deck.length && i < gameState.players.length; i++) {
-                try {
-                    let encryptedCard = deck[i];
-
-                    if (hasMyKeys) {
-                        // Skip empty/uninitialised deck slots
-                        if (!encryptedCard) continue;
-
-                        // Расшифровываем своим ключом
-                        encryptedCard = shuffleService.decrypt(encryptedCard);
-
-                        // Расшифровываем ключами других (пропускаем dummy 0x00 байты с чейна)
-                        for (const [_, key] of keys) {
-                            const decryptionKey = hexToString(key).replace(/\0/g, '').trim();
-                            if (!decryptionKey || !/^\d+$/.test(decryptionKey)) continue;
-                            encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
-                        }
-
-                        const role = ShuffleService.roleNumberToRole(encryptedCard, currentRoomId?.toString());
-                        if (role !== Role.UNKNOWN) {
-                            roles.set(gameState.players[i].address.toLowerCase(), role);
-                        }
-                    }
-                } catch (e: any) {
-                    if (e.message !== "Keys not generated") {
-                        console.warn(`Failed to decrypt card ${i}:`, e);
-                    }
-                }
-            }
-
-            setRevealedRoles(roles);
-
-            // Обновляем gameState с раскрытыми ролями
-            setGameState(prev => ({
-                ...prev,
-                players: prev.players.map(p => ({
-                    ...p,
-                    role: roles.get(p.address.toLowerCase()) || p.role
-                }))
-            }));
-
-            // Fetch on-chain roles and merge (they take priority)
-            await fetchOnChainRoles(roles);
-
+            // Roles come from on-chain playerRoles storage (fetchOnChainRoles)
+            // and from GM cache (fetchGMRoles, called separately after 3s).
+            // Local SRA deck decryption is intentionally removed: on-chain keys
+            // are all dummy 0x00 bytes since the real keys go to the GM off-chain.
+            await fetchOnChainRoles(new Map());
         } catch (e) {
             console.error("Failed to reveal roles:", e);
-            // Still try to fetch on-chain roles even if local decryption failed
-            await fetchOnChainRoles(new Map());
         } finally {
             setIsRevealing(false);
         }
-    }, [publicClient, currentRoomId, gameState.players, address, setGameState, isRevealing]);
+    }, [publicClient, currentRoomId, isRevealing, address, isTestMode, gameState.players]); // fetchOnChainRoles intentionally omitted — defined after this callback, stable identity
 
     // Fetch roles revealed on-chain (trustless source)
     const fetchOnChainRoles = useCallback(async (localRoles: Map<string, Role>) => {
@@ -386,6 +314,9 @@ export const GameOver: React.FC = React.memo(() => {
 
     // After on-chain reveals settle, fetch missing roles from GM (fills in dead players etc.)
     useEffect(() => {
+        // Try immediately — GM may already have roles cached from previous SRA key collection
+        fetchGMRoles();
+        // Retry at 3s in case GM was slow
         const timer = setTimeout(() => fetchGMRoles(), 3000);
         return () => clearTimeout(timer);
     }, [fetchGMRoles]);
@@ -396,14 +327,24 @@ export const GameOver: React.FC = React.memo(() => {
         revealedRolesRef.current = revealedRoles;
     }, [revealedRoles]);
 
+    const allRolesKnown = useCallback(() => {
+        return gameState.players.length > 0 && gameState.players.every(p => {
+            const addr = p.address.toLowerCase();
+            const r = onChainRoles.get(addr)
+                || revealedRolesRef.current.get(addr)
+                || p.role;
+            return r !== Role.UNKNOWN;
+        });
+    }, [gameState.players, onChainRoles]);
+
     useEffect(() => {
-        // Start polling for 60 seconds (people take time to reveal manually sometimes)
+        // Poll until all roles known, or 5 min max
         let pollCount = 0;
-        const maxPolls = 20; // 20 polls * 3 seconds = 60 seconds
+        const maxPolls = 100; // 100 × 3s = 5 min
 
         pollIntervalRef.current = setInterval(async () => {
             pollCount++;
-            if (pollCount > maxPolls) {
+            if (pollCount > maxPolls || allRolesKnown()) {
                 if (pollIntervalRef.current) {
                     clearInterval(pollIntervalRef.current);
                     pollIntervalRef.current = null;
@@ -411,11 +352,11 @@ export const GameOver: React.FC = React.memo(() => {
                 return;
             }
 
-            // Re-fetch on-chain roles to catch late reveals
-            // Pass the LATEST revealed roles from the ref to avoid stale closure
-            await fetchOnChainRoles(revealedRolesRef.current);
-            // On the first poll, also pull from GM (in case on-chain reveals have populated)
-            if (pollCount === 1) await fetchGMRoles();
+            // Always try both sources — GM may cache roles at any time
+            await Promise.all([
+                fetchOnChainRoles(revealedRolesRef.current),
+                fetchGMRoles(),
+            ]);
         }, 3000);
 
         return () => {
@@ -424,7 +365,7 @@ export const GameOver: React.FC = React.memo(() => {
                 pollIntervalRef.current = null;
             }
         };
-    }, [fetchOnChainRoles, fetchGMRoles]);
+    }, [fetchOnChainRoles, fetchGMRoles, allRolesKnown]);
 
     // Музыка победы
     useEffect(() => {
@@ -568,9 +509,25 @@ export const GameOver: React.FC = React.memo(() => {
                         transition={{ delay: 1.2 }}
                         className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 p-6 mb-6"
                     >
-                        <div className="flex items-center gap-2 mb-4">
-                            <h3 className="text-white/50 text-sm uppercase tracking-wider">All Roles Revealed</h3>
-                            {isRevealing && <span className="text-xs text-white/30">(decrypting...)</span>}
+                        <div className="flex items-center justify-between gap-2 mb-4">
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-white/50 text-sm uppercase tracking-wider">All Roles Revealed</h3>
+                                {isRevealing && <span className="text-xs text-white/30">(loading...)</span>}
+                            </div>
+                            {/* Manual refresh — useful when GM was slow to cache roles */}
+                            <button
+                                onClick={async () => {
+                                    await Promise.all([
+                                        fetchOnChainRoles(revealedRolesRef.current),
+                                        fetchGMRoles(),
+                                    ]);
+                                }}
+                                className="flex items-center gap-1 text-xs text-white/30 hover:text-white/60 transition-colors"
+                                title="Refresh roles"
+                            >
+                                <Eye className="w-3 h-3" />
+                                Refresh
+                            </button>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -579,17 +536,14 @@ export const GameOver: React.FC = React.memo(() => {
                                 const isDead = !player.isAlive;
                                 const onChainRole = onChainRoles.get(player.address.toLowerCase());
                                 const localRole = revealedRoles.get(player.address.toLowerCase());
-                                // Priority: 
-                                // 1. On-chain revealed role (verified source)
-                                // 2. Local decryption (ShuffleService) 
-                                // 3. Previous gameState role (only if not UNKNOWN)
+                                // Priority: on-chain > GM cache > previous gameState role
                                 let role = Role.UNKNOWN;
                                 if (onChainRole && onChainRole !== Role.UNKNOWN) role = onChainRole;
                                 else if (localRole && localRole !== Role.UNKNOWN) role = localRole;
                                 else if (player.role !== Role.UNKNOWN) role = player.role;
 
                                 const roleKnown = role !== Role.UNKNOWN;
-                                const isOnChain = !!onChainRole;
+                                const isOnChain = !!onChainRole && onChainRole !== Role.UNKNOWN;
 
                                 return (
                                     <motion.div
@@ -608,7 +562,7 @@ export const GameOver: React.FC = React.memo(() => {
                                     `}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className={`relative w-10 h-10 rounded-full flex items-center justify-center overflow-hidden border border-white/10 ${RoleBgColors[role]}`}>
+                                            <div className={`relative w-10 h-10 rounded-full flex items-center justify-center overflow-hidden border border-white/10 ${roleKnown ? RoleBgColors[role] : 'bg-gray-800/50'}`}>
                                                 {player.avatarUrl ? (
                                                     <Image
                                                         src={player.avatarUrl}
@@ -619,7 +573,10 @@ export const GameOver: React.FC = React.memo(() => {
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center">
-                                                        <Users className="w-5 h-5 text-white/20" />
+                                                        {roleKnown
+                                                            ? RoleIcons[role]
+                                                            : <Users className="w-5 h-5 text-white/20 animate-pulse" />
+                                                        }
                                                     </div>
                                                 )}
                                             </div>
@@ -628,11 +585,15 @@ export const GameOver: React.FC = React.memo(() => {
                                                     {player.name} {isMe && '(You)'}
                                                 </p>
                                                 <div className="flex items-center gap-1">
-                                                    <p className={`text-xs ${roleKnown ? RoleColors[role] : 'text-gray-500'}`}>
-                                                        {roleKnown ? role : '🔒 Encrypted'}
-                                                    </p>
-                                                    {isOnChain && (
-                                                        <span className="text-[10px] text-white/40">✓</span>
+                                                    {roleKnown ? (
+                                                        <>
+                                                            <p className={`text-xs font-semibold ${RoleColors[role]}`}>{role}</p>
+                                                            {isOnChain && <span className="text-[10px] text-white/40">✓</span>}
+                                                        </>
+                                                    ) : revealTimedOut ? (
+                                                        <p className="text-xs text-white/30">Unknown</p>
+                                                    ) : (
+                                                        <p className="text-xs text-white/20 animate-pulse">revealing...</p>
                                                     )}
                                                 </div>
                                             </div>
