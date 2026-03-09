@@ -43,6 +43,7 @@
     "scripts/*",
     "ops/gm-server/source/**",
     "ops/gm-server/workdir/**",
-    ".github/**"
+    ".github/**",
+    "_gm-server-dedicated/**"
   ]
 }

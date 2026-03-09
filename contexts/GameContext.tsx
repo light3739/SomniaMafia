@@ -1894,20 +1894,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const playerAddress = address!;
             console.log(`[GM API] Submitting night action: ${actionType} on ${targetAddress} by ${playerAddress}`);
-
-            const signed = await signRequest({
-                address: playerAddress,
-                roomId: Number(currentRoomId),
-                walletClient,
-                buildMessage: ({ nonce, timestamp }) => buildNightActionMessage({
-                    roomId: currentRoomId.toString(),
-                    actionType,
-                    targetAddress,
-                    nonce,
-                    timestamp,
-                }),
-            });
-
             const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${playerAddress.toLowerCase()}`);
             const myPlayer = gameState.players.find(p => p.address.toLowerCase() === playerAddress.toLowerCase());
             const myRoleStr = savedRole || myPlayer?.role;
@@ -1927,22 +1913,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 throw new Error("Missing role or salt for cryptographic verification");
             }
 
-            console.log('[GM API] Request signed for night action');
-
-            const payload = JSON.stringify({
-                roomId: currentRoomId.toString(),
-                playerAddress,
-                actionType,
-                targetAddress,
-                signature: signed.signature,
-                signerAddress: signed.signerAddress,
-                role: myRoleNum,
-                salt: savedSalt,
-                nonce: signed.nonce,
-                timestamp: signed.timestamp,
-                chainId,
-            });
-
             // Retry with backoff for transient 403/5xx (role commit cache miss on GM)
             let response: Response | undefined;
             let lastError = '';
@@ -1950,6 +1920,35 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 12000);
                 try {
+                    // FIX: Re-sign on every attempt to get a fresh nonce/timestamp
+                    // This prevents "Replay detected" 409 errors if the first request was processed but timed out
+                    const signed = await signRequest({
+                        address: playerAddress,
+                        roomId: Number(currentRoomId),
+                        walletClient,
+                        buildMessage: ({ nonce, timestamp }) => buildNightActionMessage({
+                            roomId: currentRoomId.toString(),
+                            actionType,
+                            targetAddress,
+                            nonce,
+                            timestamp,
+                        }),
+                    });
+
+                    const payload = JSON.stringify({
+                        roomId: currentRoomId.toString(),
+                        playerAddress,
+                        actionType,
+                        targetAddress,
+                        signature: signed.signature,
+                        signerAddress: signed.signerAddress,
+                        role: myRoleNum,
+                        salt: savedSalt,
+                        nonce: signed.nonce,
+                        timestamp: signed.timestamp,
+                        chainId,
+                    });
+
                     try {
                         response = await fetch('/api/game/night-action', {
                             method: 'POST',
@@ -2017,27 +2016,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             console.log(`[Investigation API] Fetching result for ${detective} -> ${target}`);
-            // Sign message using session key (no MetaMask popup) or fallback to main wallet
-            const message = `investigate:${currentRoomId.toString()}:${target}`;
-
-            let signature: string;
-            let signerAddress: string;
-
-            const sessionAccount = getSessionAccount();
-            if (sessionAccount) {
-                // Use session key — instant, no popup
-                signature = await sessionAccount.signMessage!({ message });
-                signerAddress = sessionAccount.address;
-                console.log(`[Investigation API] Signed with session key: ${signerAddress}`);
-            } else if (walletClient) {
-                // Fallback to main wallet (MetaMask popup)
-                signature = await walletClient.signMessage({ message });
-                signerAddress = detective;
-                console.log(`[Investigation API] Signed with main wallet: ${signerAddress}`);
-            } else {
-                console.error('[Investigation API] No signer available');
-                return { role: Role.UNKNOWN, isMafia: false };
-            }
+            const signed = await signRequest({
+                address: detective,
+                roomId: Number(currentRoomId),
+                walletClient,
+                buildMessage: ({ nonce, timestamp }) => `investigate:${currentRoomId.toString()}:${target}:${nonce}:${timestamp}`,
+            });
 
             const response = await fetch('/api/game/investigate', {
                 method: 'POST',
@@ -2046,8 +2030,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     roomId: currentRoomId.toString(),
                     detectiveAddress: detective,
                     targetAddress: target,
-                    signature,
-                    signerAddress // session key or main wallet address
+                    signature: signed.signature,
+                    signerAddress: signed.signerAddress,
+                    nonce: signed.nonce,
+                    timestamp: signed.timestamp,
+                    chainId,
                 })
             });
 
