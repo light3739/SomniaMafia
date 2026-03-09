@@ -30,6 +30,7 @@ export const POST = withSignedRoute<{
         timestamp,
     }),
 }, async ({ body, roomId, signerAddress }) => {
+    console.log(`[API/NightAction] Received request for Room ${roomId}:`, JSON.stringify(body));
     if (!['kill', 'heal', 'check'].includes(body.actionType)) {
         return NextResponse.json({ error: 'Invalid actionType' }, { status: 400 });
     }
