@@ -482,13 +482,17 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
     });
 
     if (!signatureCheck.ok) {
+      console.error(`[night-action] Sig FAIL Room:${roomId} player:${playerAddress} sigDayCount:${sigDayCount} contractDayCount:${contractDayCount} action:${actionType} target:${targetAddress} nonce:${nonce} ts:${timestamp} err:${signatureCheck.error}`);
       return res.status(signatureCheck.status).json({ error: signatureCheck.error });
     }
 
     // Sanity-check: body dayCount must not be more than 1 behind contract (tolerate minor lag)
     if (Math.abs(contractDayCount - sigDayCount) > 1) {
+      console.error(`[night-action] dayCount mismatch Room:${roomId} client:${sigDayCount} contract:${contractDayCount}`);
       return res.status(400).json({ error: `dayCount mismatch: client sent ${sigDayCount}, contract has ${contractDayCount}` });
     }
+
+    console.log(`[night-action] Sig OK Room:${roomId} player:${playerAddress} sigDayCount:${sigDayCount} action:${actionType}`);
 
     // 5. Verify player has committed a role on-chain (completed shuffle phase)
     const committed = await hasCommittedRole(rid, playerAddress as Address, chainId);
