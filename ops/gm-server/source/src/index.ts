@@ -491,7 +491,7 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
       timestamp,
       chainId,
       buildLegacyMessage: () => `night:${roomId}:${actionType}:${targetAddress}`,
-      buildModernMessage: (n, ts) => `night:${roomId}:${actionType}:${String(targetAddress).toLowerCase()}:${n}:${ts}`,
+      buildModernMessage: (n, ts) => `night:${roomId}:${sigDayCount}:${actionType}:${targetAddress}:${n}:${ts}`,
     });
 
     if (!signatureCheck.ok) {
