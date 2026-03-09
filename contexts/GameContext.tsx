@@ -2120,6 +2120,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (!res.ok) {
                     const err = await res.json();
                     const gmError = String(err?.error || 'GM resolve failed');
+                    const gmTxFailed = Boolean(err?.gmTxFailed);
 
                     // Fallback path: if GM has no actions to resolve, force timeout on-chain
                     // so NIGHT still progresses to DAY instead of stalling.
@@ -2138,6 +2139,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     // Already resolved on server side — just refresh UI state.
                     if (gmError.includes('Night already resolved')) {
+                        await refreshPlayersList(currentRoomId);
+                        return;
+                    }
+
+                    // GM TX failed (e.g. insufficient gas in GM wallet) — fall back to on-chain forcePhaseTimeout
+                    if (
+                        gmTxFailed ||
+                        gmError.includes('gas required') ||
+                        gmError.includes('insufficient funds') ||
+                        gmError.includes('Execution reverted') ||
+                        gmError.includes('exceeds allowance')
+                    ) {
+                        console.warn('[GM API] GM TX failed (gas?), falling back to on-chain forcePhaseTimeout:', gmError);
+                        addLog('GM transaction failed. Forcing night timeout on-chain...', 'warning');
+
+                        const fallbackHash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
+                        await publicClient?.waitForTransactionReceipt({ hash: fallbackHash });
                         await refreshPlayersList(currentRoomId);
                         return;
                     }
