@@ -29,6 +29,14 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
+error.txt
+ts_errors.txt
+session_out.txt
+git_status.txt
+assets_history.txt
+commits.txt
+status_build_fix.txt
 
 # env files (can opt-in for committing if needed)
 .env*
@@ -47,3 +55,12 @@ next-env.d.ts
 ops/gm-server/workdir/
 ops/gm-server/workdir/**
 !ops/gm-server/workdir/.gitkeep
+
+# local temporary scripts
+fix.js
+check_room.js
+checker.js
+tmp_check_session.ts
+ctmpgm_check.ts
+ctmpgm_check.ts
+verification_key.json
