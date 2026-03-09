@@ -28,7 +28,7 @@ const nextConfig: NextConfig = {
               // Frames: Privy uses an iframe for its auth modal
               "frame-src 'self' https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org",
               // Connections: Privy API, WalletConnect, RPC providers
-              "connect-src 'self' https://auth.privy.io https://api.privy.io wss://relay.walletconnect.com wss://relay.walletconnect.org https://*.rpc.privy.systems https://*.somnia.network https://*.avax.network https://*.avax-test.network wss://*.somnia.network https://*.drpc.org wss://*.drpc.org https://*.publicnode.com wss://*.publicnode.com https://*.llamarpc.com https://*.ankr.com https://*.infura.io https://*.alchemy.com",
+              "connect-src 'self' https://auth.privy.io https://api.privy.io wss://relay.walletconnect.com wss://relay.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org https://*.rpc.privy.systems https://*.somnia.network https://*.avax.network https://*.avax-test.network wss://*.somnia.network https://*.drpc.org wss://*.drpc.org https://*.publicnode.com wss://*.publicnode.com https://*.llamarpc.com https://*.ankr.com https://*.infura.io https://*.alchemy.com",
               // Images
               "img-src 'self' data: blob: https:",
             ].join('; '),
