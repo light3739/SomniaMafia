@@ -302,6 +302,9 @@ export const RoleReveal: React.FC = React.memo(() => {
             try {
                 let encryptedCard = revealState.deck[i];
 
+                // Skip empty/uninitialised deck slots
+                if (!encryptedCard) continue;
+
                 // Расшифровываем своим ключом
                 encryptedCard = shuffleService.decrypt(encryptedCard);
 
