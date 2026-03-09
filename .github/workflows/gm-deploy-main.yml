@@ -1,0 +1,87 @@
+name: GM Deploy (main)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/gm-server/source/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify start (Telegram)
+        run: |
+          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              -d text="🚀 GM deploy started: ${{ github.repository }} @ ${{ github.ref_name }} | ${{ github.sha }}"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GM_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          PORT="${{ secrets.GM_SSH_PORT }}"
+          if [ -z "$PORT" ]; then PORT=22; fi
+          ssh-keyscan -p "$PORT" -H "${{ secrets.GM_SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Build & Deploy GM server
+        env:
+          SSH_HOST: ${{ secrets.GM_SSH_HOST }}
+          SSH_USER: ${{ secrets.GM_SSH_USER }}
+          SSH_PORT: ${{ secrets.GM_SSH_PORT }}
+          REMOTE_DIR: ${{ secrets.GM_REMOTE_DIR }}
+          PM2_NAME: ${{ secrets.GM_PM2_NAME }}
+        run: |
+          SSH_USER="${SSH_USER:-root}"
+          SSH_PORT="${SSH_PORT:-22}"
+          REMOTE_DIR="${REMOTE_DIR:-/root/gm-server}"
+          PM2_NAME="${PM2_NAME:-gm-server}"
+
+          # Upload source (keep remote .env intact)
+          rsync -az --delete \
+            --exclude node_modules \
+            --exclude dist \
+            --exclude .git \
+            --exclude .env \
+            -e "ssh -p $SSH_PORT" \
+            ops/gm-server/source/ \
+            "${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}/"
+
+          # Build & restart remotely
+          ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "
+            export NVM_DIR=\"\$HOME/.nvm\"
+            [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"
+            set -euo pipefail
+            cd '$REMOTE_DIR'
+            if [ ! -f .env ]; then
+              echo 'ERROR: .env missing on remote'; exit 1
+            fi
+            npm ci
+            npm run build
+            pm2 restart '$PM2_NAME' || pm2 start dist/index.js --name '$PM2_NAME'
+          "
+
+      - name: Notify success (Telegram)
+        if: success()
+        run: |
+          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              -d text="✅ GM deploy success: ${{ github.repository }} @ ${{ github.ref_name }}"
+          fi
+
+      - name: Notify failure (Telegram)
+        if: failure()
+        run: |
+          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              -d text="❌ GM deploy FAILED: ${{ github.repository }} @ ${{ github.ref_name }} | https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
