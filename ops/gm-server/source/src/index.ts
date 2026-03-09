@@ -157,9 +157,11 @@ async function verifyAuthorizedSignature(params: {
     const tsNum = Number(timestamp);
     if (Number.isFinite(tsNum)) {
       // Reject replayed or future-dated timestamps (±5 min window)
-      const now = Math.floor(Date.now() / 1000);
+      // The frontend sends timestamp in milliseconds (Date.now())
+      const now = Date.now();
       const age = now - tsNum;
-      if (age > 300 || age < -30) {
+      // Accept age between -30 seconds (-30000ms) and +5 minutes (300000ms)
+      if (age > 300000 || age < -30000) {
         return { ok: false, error: 'Timestamp expired or too far in future (max ±5 min)', status: 401 };
       }
       valid = await verifyMessage({
