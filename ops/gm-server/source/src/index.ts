@@ -818,8 +818,11 @@ app.post('/submit-sra-key', async (req: express.Request, res: express.Response) 
       const rid = BigInt(roomId);
       const chainIdNum = chainId ? Number(chainId) : undefined;
       const players = await getPlayers(rid, chainIdNum) as any[];
-      const allAddrs = players.map((p: any) => p.wallet.toLowerCase());
-      const missingKeys = allAddrs.filter((addr: string) => !roomSraKeys.has(addr));
+      // Only require ACTIVE players' keys to trigger role pre-cache.
+      // Inactive/kicked players' keys are applied if available but are not required.
+      const activePlayers = (players as any[]).filter((p: any) => (Number(p.flags) & FLAGS.ACTIVE) !== 0);
+      const activeAddrs = activePlayers.map((p: any) => p.wallet.toLowerCase());
+      const missingKeys = activeAddrs.filter((addr: string) => !roomSraKeys.has(addr));
       if (missingKeys.length === 0) {
         const { public: publicClient, diamond } = getChainConfig(chainIdNum);
         const deck = await publicClient.readContract({
@@ -828,16 +831,20 @@ app.post('/submit-sra-key', async (req: express.Request, res: express.Response) 
           functionName: 'getDeck',
           args: [rid],
         }) as string[];
-        const allKeys = allAddrs.map((addr: string) => roomSraKeys.get(addr)!);
+        // Apply ALL collected keys (including from inactive players who submitted before being kicked)
+        const allCollectedKeys = (players as any[])
+          .map((p: any) => roomSraKeys.get(p.wallet.toLowerCase()))
+          .filter(Boolean) as string[];
         const roomRoles = getRoomMap(resolvedRoles, String(roomId));
-        allAddrs.forEach((addr: string, i: number) => {
+        // Use ALL players for deck index mapping — positions are stable across the game
+        (players as any[]).forEach((p: any, i: number) => {
           if (i < deck.length) {
-            const role = roleFromCardValue(sraDecryptCard(deck[i], allKeys), Number(roomId));
-            roomRoles.set(addr, role);
-            rPersistRole(getRedis(), String(roomId), addr, role);
+            const role = roleFromCardValue(sraDecryptCard(deck[i], allCollectedKeys), Number(roomId));
+            roomRoles.set(p.wallet.toLowerCase(), role);
+            rPersistRole(getRedis(), String(roomId), p.wallet.toLowerCase(), role);
           }
         });
-        console.log(`[ecies] Room ${roomId}: all ${allAddrs.length} SRA keys collected — roles cached`);
+        console.log(`[ecies] Room ${roomId}: all ${activeAddrs.length} active SRA keys collected — roles cached`);
       }
     } catch (cacheErr: any) {
       // Non-fatal — /night-action role verification will be skipped gracefully
@@ -889,6 +896,14 @@ app.get('/my-role/:roomId', async (req: express.Request, res: express.Response) 
       return res.status(404).json({ error: 'ECIES pubkey not registered. Call POST /register-pubkey first.' });
     }
 
+    // Fast path: serve from pre-computed cache if available
+    const cachedRole = resolvedRoles.get(String(roomId))?.get(normalizedPlayer);
+    if (cachedRole) {
+      const encrypted = eciesEncrypt(playerPubkey, cachedRole);
+      console.log(`[ecies] Room ${roomId}: role served from cache to ${playerAddress} (${cachedRole})`);
+      return res.json({ encrypted });
+    }
+
     // Get players from chain to find this player's deck index
     const players = await getPlayers(rid, chainIdNum) as any[];
     const playerIndex = players.findIndex((p: any) => p.wallet.toLowerCase() === normalizedPlayer);
@@ -896,16 +911,17 @@ app.get('/my-role/:roomId', async (req: express.Request, res: express.Response) 
       return res.status(404).json({ error: 'Player not found in room' });
     }
 
-    // Check all SRA keys collected
+    // Only require ACTIVE players' SRA keys (kicked players may be missing theirs)
     const keyMap = sraSKeys.get(String(roomId));
-    const allAddrs = players.map((p: any) => p.wallet.toLowerCase());
-    const missingKeys = allAddrs.filter((addr: string) => !keyMap?.has(addr));
+    const activePlayers = (players as any[]).filter((p: any) => (Number(p.flags) & FLAGS.ACTIVE) !== 0);
+    const activeAddrs = activePlayers.map((p: any) => p.wallet.toLowerCase());
+    const missingKeys = activeAddrs.filter((addr: string) => !keyMap?.has(addr));
     if (missingKeys.length > 0) {
       return res.status(202).json({
         pending: true,
-        keysReceived: allAddrs.length - missingKeys.length,
-        keysExpected: allAddrs.length,
-        message: 'Not all SRA keys submitted yet — retry shortly',
+        keysReceived: activeAddrs.length - missingKeys.length,
+        keysExpected: activeAddrs.length,
+        message: `Not all SRA keys submitted yet — retry shortly (missing: ${missingKeys.length})`,
       });
     }
 
@@ -925,15 +941,17 @@ app.get('/my-role/:roomId', async (req: express.Request, res: express.Response) 
       return res.status(500).json({ error: `Player index ${playerIndex} out of deck range ${deck.length}` });
     }
 
-    // Decrypt this player's card using ALL collected SRA keys
-    const allKeys = allAddrs.map((addr: string) => keyMap!.get(addr)!);
-    const decryptedCard = sraDecryptCard(deck[playerIndex], allKeys);
+    // Apply ALL collected keys (active + any inactive players who did submit)
+    const allCollectedKeys = (players as any[])
+      .map((p: any) => keyMap!.get(p.wallet.toLowerCase()))
+      .filter(Boolean) as string[];
+    const decryptedCard = sraDecryptCard(deck[playerIndex], allCollectedKeys);
     const role = roleFromCardValue(decryptedCard, Number(roomId));
 
     // Encrypt role with player's ECIES pubkey
     const encrypted = eciesEncrypt(playerPubkey, role);
 
-    console.log(`[ecies] Room ${roomId}: role served to ${playerAddress} (idx=${playerIndex})`);
+    console.log(`[ecies] Room ${roomId}: role served to ${playerAddress} (idx=${playerIndex}, role=${role})`);
     return res.json({ encrypted });
   } catch (err: any) {
     console.error('[my-role] Error:', err.message);
@@ -943,18 +961,80 @@ app.get('/my-role/:roomId', async (req: express.Request, res: express.Response) 
 
 // ─── Get All Room Roles (after game ends) ────────────────
 // Returns all cached player→role mappings once the GM has collected all SRA keys.
+// If the cache is empty but SRA keys exist, attempts on-demand computation from chain data.
 // No authentication required — the game is over and roles are public information.
-app.get('/room-roles/:roomId', (req: express.Request, res: express.Response) => {
-  const { roomId } = req.params;
-  const roles = resolvedRoles.get(String(roomId));
-  if (!roles || roles.size === 0) {
-    return res.status(202).json({ pending: true, message: 'Roles not yet resolved — retry after all players have shared keys.' });
+app.get('/room-roles/:roomId', async (req: express.Request, res: express.Response) => {
+  try {
+    const { roomId } = req.params;
+    const { chainId } = req.query as Record<string, string>;
+    const rid = BigInt(roomId);
+    const chainIdNum = chainId ? Number(chainId) : undefined;
+
+    // SECURITY FIX: Only allow fetching roles if the game has ended.
+    const room: any = await getRoom(rid, chainIdNum);
+    const phase = Array.isArray(room) ? Number(room[3]) : Number(room.phase);
+    if (phase !== GamePhase.ENDED) {
+      return res.status(403).json({ error: `Roles are only public after the game ends. Current phase: ${phase}` });
+    }
+
+    // Fast path: serve from cache
+    const cached = resolvedRoles.get(String(roomId));
+    if (cached && cached.size > 0) {
+      const result: Record<string, string> = {};
+      for (const [addr, role] of cached) result[addr.toLowerCase()] = role;
+      return res.json({ roles: result });
+    }
+
+    // Cache miss — try to compute from SRA keys we already have
+    const keyMap = sraSKeys.get(String(roomId));
+    if (!keyMap || keyMap.size === 0) {
+      return res.status(202).json({ pending: true, message: 'No SRA keys received yet.' });
+    }
+
+    const players = await getPlayers(rid, chainIdNum) as any[];
+    const activePlayers = players.filter((p: any) => (Number(p.flags) & FLAGS.ACTIVE) !== 0);
+    const activeAddrs = activePlayers.map((p: any) => p.wallet.toLowerCase());
+    const missingKeys = activeAddrs.filter((addr: string) => !keyMap.has(addr));
+
+    if (missingKeys.length > 0) {
+      return res.status(202).json({
+        pending: true,
+        keysReceived: keyMap.size,
+        keysExpected: activeAddrs.length,
+        message: `Waiting for SRA keys — missing ${missingKeys.length} of ${activeAddrs.length} active players.`,
+      });
+    }
+
+    // All active keys present — decrypt the deck and cache the result
+    const { public: publicClient, diamond } = getChainConfig(chainIdNum);
+    const deck = await publicClient.readContract({
+      address: diamond,
+      abi: DIAMOND_ABI,
+      functionName: 'getDeck',
+      args: [rid],
+    }) as string[];
+
+    const allCollectedKeys = players
+      .map((p: any) => keyMap.get(p.wallet.toLowerCase()))
+      .filter(Boolean) as string[];
+
+    const roomRoles = getRoomMap(resolvedRoles, String(roomId));
+    players.forEach((p: any, i: number) => {
+      if (i < deck.length) {
+        const role = roleFromCardValue(sraDecryptCard(deck[i], allCollectedKeys), Number(roomId));
+        roomRoles.set(p.wallet.toLowerCase(), role);
+        rPersistRole(getRedis(), String(roomId), p.wallet.toLowerCase(), role);
+      }
+    });
+    console.log(`[room-roles] Room ${roomId}: computed ${roomRoles.size} roles on-demand`);
+
+    const result: Record<string, string> = {};
+    for (const [addr, role] of roomRoles) result[addr.toLowerCase()] = role;
+    return res.json({ roles: result });
+  } catch (err: any) {
+    console.error('[room-roles] Error computing on-demand:', err.message);
+    return res.status(500).json({ error: err.message });
   }
-  const result: Record<string, string> = {};
-  for (const [addr, role] of roles) {
-    result[addr.toLowerCase()] = role;
-  }
-  return res.json({ roles: result });
 });
 
 // ─── Start ────────────────────────────────────────────────
