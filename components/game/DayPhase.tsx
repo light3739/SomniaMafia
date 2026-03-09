@@ -144,7 +144,10 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
 
                 forcePhaseTimeoutOnChain().catch(err => {
                     console.error('[DayPhase] forcePhaseTimeout failed:', err);
-                    votingTimeoutRef.current = false;
+                    const isTimeNotExpired = String(err?.message || err?.shortMessage || '').includes('TimeNotExpired');
+                    setTimeout(() => {
+                        votingTimeoutRef.current = false;
+                    }, isTimeNotExpired ? 10_000 : 0);
                 });
             }
         };

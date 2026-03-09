@@ -568,7 +568,7 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
 // Called by frontend or auto-triggered when all actions are in
 app.post('/resolve-night', async (req: express.Request, res: express.Response) => {
   try {
-    const { roomId, signature, callerAddress, signerAddress, nonce, timestamp, chainId } = req.body;
+    const { roomId, signature, callerAddress, playerAddress: reqPlayerAddress, signerAddress, nonce, timestamp, chainId } = req.body;
     if (!roomId) return res.status(400).json({ error: 'Missing roomId' });
 
     // Only GM or authenticated caller can trigger resolve
@@ -576,11 +576,16 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
       return res.status(401).json({ error: 'Missing signature or callerAddress' });
     }
 
+    // reqPlayerAddress is the main wallet; callerAddress may be a session key.
+    // If frontend sends playerAddress, use it as the main wallet and treat callerAddress as the signer.
+    const mainWallet = reqPlayerAddress || callerAddress;
+    const effectiveSigner = signerAddress || (reqPlayerAddress ? callerAddress : undefined);
+
     const signatureCheck = await verifyAuthorizedSignature({
       roomId: String(roomId),
       signature: signature as `0x${string}`,
-      playerAddress: String(callerAddress),
-      signerAddress,
+      playerAddress: String(mainWallet),
+      signerAddress: effectiveSigner,
       nonce,
       timestamp,
       chainId,
@@ -601,17 +606,19 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
     const nowSec = Math.floor(Date.now() / 1000);
 
     // Restrict to: room host, GM address, OR any room participant after the phase deadline has passed
-    const isHost = signatureCheck.signer === resolveHost;
-    const isGM = signatureCheck.signer === GM_ADDRESS.toLowerCase();
+    // Use mainWallet for comparisons — signatureCheck.signer may be a session key address.
+    const callerMainWallet = mainWallet.toLowerCase();
+    const isHost = callerMainWallet === resolveHost || signatureCheck.signer === resolveHost;
+    const isGM = callerMainWallet === GM_ADDRESS.toLowerCase() || signatureCheck.signer === GM_ADDRESS.toLowerCase();
     const deadlineExpired = resolveDeadline > 0 && nowSec > resolveDeadline;
     if (!isHost && !isGM) {
       if (!deadlineExpired) {
         return res.status(403).json({ error: 'Only the room host or GM can trigger resolve-night before deadline' });
       }
-      // After deadline: verify the caller is a participant in the room
+      // After deadline: verify the caller is a participant in the room (check both main wallet and signer)
       const resolvePlayers = await getPlayers(rid, chainId);
       const isParticipant = resolvePlayers.some(
-        (p: any) => p.wallet.toLowerCase() === signatureCheck.signer
+        (p: any) => p.wallet.toLowerCase() === callerMainWallet || p.wallet.toLowerCase() === signatureCheck.signer
       );
       if (!isParticipant) {
         return res.status(403).json({ error: 'Caller is not a participant in this room' });
