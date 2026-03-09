@@ -2118,7 +2118,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
 
                 if (!res.ok) {
-                    const err = await res.json();
+                    const err = await res.json().catch(() => ({}));
                     const gmError = String(err?.error || 'GM resolve failed');
                     const gmTxFailed = Boolean(err?.gmTxFailed);
 
@@ -2153,6 +2153,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     ) {
                         console.warn('[GM API] GM TX failed (gas?), falling back to on-chain forcePhaseTimeout:', gmError);
                         addLog('GM transaction failed. Forcing night timeout on-chain...', 'warning');
+
+                        const fallbackHash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
+                        await publicClient?.waitForTransactionReceipt({ hash: fallbackHash });
+                        await refreshPlayersList(currentRoomId);
+                        return;
+                    }
+
+                    // GM returned 403 (auth) — deadline passed, fall back to on-chain forcePhaseTimeout
+                    if (res.status === 403 || res.status === 401) {
+                        console.warn('[GM API] GM auth error, falling back to on-chain forcePhaseTimeout:', gmError);
+                        addLog('GM authorization failed. Forcing night timeout on-chain...', 'warning');
 
                         const fallbackHash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
                         await publicClient?.waitForTransactionReceipt({ hash: fallbackHash });
