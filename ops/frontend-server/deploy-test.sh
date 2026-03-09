@@ -28,16 +28,14 @@ SSH_USER="$FRONT_SSH_USER"
 
 echo "[test:deploy] Syncing source to ${SSH_USER}@${FRONT_SSH_HOST}:${FRONT_REMOTE_DIR}"
 ssh "${SSH_OPTS[@]}" "${SSH_USER}@${FRONT_SSH_HOST}" "mkdir -p '$FRONT_REMOTE_DIR'"
-
-rsync -az --delete \
-  -e "ssh ${SSH_OPTS[*]}" \
-  --exclude '.git' \
-  --exclude 'node_modules' \
-  --exclude '.next' \
-  --exclude 'ops/gm-server/workdir' \
-  --exclude 'ops/frontend-server/.env.test' \
-  --exclude 'ops/frontend-server/.env.production' \
-  "$ROOT_DIR/" "${SSH_USER}@${FRONT_SSH_HOST}:${FRONT_REMOTE_DIR}/"
+tar -cz -C "$ROOT_DIR" \
+  --exclude='.git' \
+  --exclude='node_modules' \
+  --exclude='.next' \
+  --exclude='ops/gm-server/workdir' \
+  --exclude='ops/frontend-server/.env.test' \
+  --exclude='ops/frontend-server/.env.production' \
+  . | ssh "${SSH_OPTS[@]}" "${SSH_USER}@${FRONT_SSH_HOST}" "tar -xz -C '$FRONT_REMOTE_DIR'"
 
 echo "[test:deploy] Ensuring .env.test exists on remote"
 ssh "${SSH_OPTS[@]}" "${SSH_USER}@${FRONT_SSH_HOST}" "
