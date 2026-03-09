@@ -258,7 +258,7 @@ app.post('/investigation-proof', async (req: express.Request, res: express.Respo
         }
         valid = await verifyMessage({
           address: signer,
-          message: `investigate:${roomId}:${targetAddress}:${nonce}:${tsNum}`,
+          message: `investigate:${roomId}:${String(targetAddress).toLowerCase()}:${nonce}:${tsNum}`,
           signature: signature as `0x${string}`,
         });
       }
@@ -489,8 +489,8 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
       nonce,
       timestamp,
       chainId,
-      buildLegacyMessage: () => `night:${roomId}:${actionType}:${targetAddress}`,
-      buildModernMessage: (n, ts) => `night:${roomId}:${sigDayCount}:${actionType}:${targetAddress}:${n}:${ts}`,
+      buildLegacyMessage: () => `night:${roomId}:${actionType}:${String(targetAddress).toLowerCase()}`,
+      buildModernMessage: (n, ts) => `night:${roomId}:${sigDayCount}:${actionType}:${String(targetAddress).toLowerCase()}:${n}:${ts}`,
     });
 
     if (!signatureCheck.ok) {
