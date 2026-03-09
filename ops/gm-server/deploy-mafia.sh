@@ -51,6 +51,13 @@ ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "
 "
 
 echo "[deploy] Installing and restarting pm2"
-ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "cd '$REMOTE_DIR' && npm ci && npm run build && pm2 restart '$PM2_NAME' || pm2 start dist/index.js --name '$PM2_NAME'"
+ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" "
+  export NVM_DIR=\"\$HOME/.nvm\"
+  [ -s \"\$NVM_DIR/nvm.sh\" ] && \. \"\$NVM_DIR/nvm.sh\"
+  cd '$REMOTE_DIR'
+  npm ci
+  npm run build
+  pm2 restart '$PM2_NAME' || pm2 start dist/index.js --name '$PM2_NAME'
+"
 
 echo "[deploy] Done"
