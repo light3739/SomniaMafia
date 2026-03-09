@@ -60,12 +60,22 @@ jobs:
             [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"
             set -euo pipefail
             cd '$REMOTE_DIR'
-            if [ ! -f .env ]; then
-              echo 'ERROR: .env missing on remote'; exit 1
-            fi
+            
+            echo '--- Remote build started ---'
             npm ci
             npm run build
-            pm2 restart '$PM2_NAME' || pm2 start dist/index.js --name '$PM2_NAME'
+            
+            echo '--- PM2 Restart ---'
+            # Check if PM2 process exists
+            if pm2 list | grep -q \"$PM2_NAME\"; then
+              pm2 delete \"$PM2_NAME\"
+            fi
+            
+            # Start fresh to ensure .env (via internal dotenv) and dist/ are correctly loaded
+            pm2 start dist/index.js --name \"$PM2_NAME\"
+            
+            pm2 save
+            echo '--- Deployment finished successfully ---'
           "
 
       - name: Notify success (Telegram)
