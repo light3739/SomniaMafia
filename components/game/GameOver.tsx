@@ -234,17 +234,15 @@ export const GameOver: React.FC = React.memo(() => {
 
             // Fetch on-chain roles and merge (they take priority)
             await fetchOnChainRoles(roles);
-            await fetchGMRoles();
 
         } catch (e) {
             console.error("Failed to reveal roles:", e);
             // Still try to fetch on-chain roles even if local decryption failed
             await fetchOnChainRoles(new Map());
-            await fetchGMRoles();
         } finally {
             setIsRevealing(false);
         }
-    }, [publicClient, currentRoomId, gameState.players, address, setGameState, isRevealing, fetchGMRoles]);
+    }, [publicClient, currentRoomId, gameState.players, address, setGameState, isRevealing]);
 
     // Fetch roles revealed on-chain (trustless source)
     const fetchOnChainRoles = useCallback(async (localRoles: Map<string, Role>) => {
@@ -386,6 +384,12 @@ export const GameOver: React.FC = React.memo(() => {
         revealAllRoles();
     }, [revealAllRoles]);
 
+    // After on-chain reveals settle, fetch missing roles from GM (fills in dead players etc.)
+    useEffect(() => {
+        const timer = setTimeout(() => fetchGMRoles(), 3000);
+        return () => clearTimeout(timer);
+    }, [fetchGMRoles]);
+
     // Poll for late on-chain reveals (other players may reveal after us)
     const revealedRolesRef = useRef<Map<string, Role>>(revealedRoles);
     useEffect(() => {
@@ -410,6 +414,8 @@ export const GameOver: React.FC = React.memo(() => {
             // Re-fetch on-chain roles to catch late reveals
             // Pass the LATEST revealed roles from the ref to avoid stale closure
             await fetchOnChainRoles(revealedRolesRef.current);
+            // On the first poll, also pull from GM (in case on-chain reveals have populated)
+            if (pollCount === 1) await fetchGMRoles();
         }, 3000);
 
         return () => {
@@ -418,7 +424,7 @@ export const GameOver: React.FC = React.memo(() => {
                 pollIntervalRef.current = null;
             }
         };
-    }, [fetchOnChainRoles]);
+    }, [fetchOnChainRoles, fetchGMRoles]);
 
     // Музыка победы
     useEffect(() => {
