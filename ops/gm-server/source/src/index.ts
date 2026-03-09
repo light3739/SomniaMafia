@@ -597,12 +597,25 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
     const resolveRoom: any = await getRoom(rid, chainId);
     const resolvePhase = Array.isArray(resolveRoom) ? Number(resolveRoom[3]) : Number(resolveRoom.phase);
     const resolveHost = (Array.isArray(resolveRoom) ? String(resolveRoom[1]) : String(resolveRoom.host)).toLowerCase();
+    const resolveDeadline = Number(Array.isArray(resolveRoom) ? resolveRoom[10] : resolveRoom.phaseDeadline);
+    const nowSec = Math.floor(Date.now() / 1000);
 
-    // Restrict to room host OR GM address (host may be eliminated mid-game)
+    // Restrict to: room host, GM address, OR any room participant after the phase deadline has passed
     const isHost = signatureCheck.signer === resolveHost;
     const isGM = signatureCheck.signer === GM_ADDRESS.toLowerCase();
+    const deadlineExpired = resolveDeadline > 0 && nowSec > resolveDeadline;
     if (!isHost && !isGM) {
-      return res.status(403).json({ error: 'Only the room host or GM can trigger resolve-night' });
+      if (!deadlineExpired) {
+        return res.status(403).json({ error: 'Only the room host or GM can trigger resolve-night before deadline' });
+      }
+      // After deadline: verify the caller is a participant in the room
+      const resolvePlayers = await getPlayers(rid, chainId);
+      const isParticipant = resolvePlayers.some(
+        (p: any) => p.wallet.toLowerCase() === signatureCheck.signer
+      );
+      if (!isParticipant) {
+        return res.status(403).json({ error: 'Caller is not a participant in this room' });
+      }
     }
 
     if (resolvePhase !== GamePhase.NIGHT) {
@@ -645,13 +658,17 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
   } catch (err: any) {
     console.error('[resolve-night] Error:', err.message);
     // Reset resolved flag if tx fails
-    const rid = BigInt(req.body.roomId);
-    const state = getNightState(rid);
-    if (state) {
-      state.resolved = false;
-      rPersistNightState(getRedis(), String(req.body.roomId), state);
-    }
-    return res.status(500).json({ error: err.message });
+    try {
+      const rid = BigInt(req.body.roomId);
+      const state = getNightState(rid);
+      if (state) {
+        state.resolved = false;
+        rPersistNightState(getRedis(), String(req.body.roomId), state);
+      }
+    } catch (_) {}
+    // Signal txFailed so frontend can fall back to on-chain forcePhaseTimeout
+    const isGasTxError = /gas required|insufficient funds|exceed|allowance|Execution reverted/i.test(err.message || '');
+    return res.status(500).json({ error: err.message, gmTxFailed: isGasTxError });
   }
 });
 
