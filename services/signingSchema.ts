@@ -17,7 +17,7 @@ export function buildNightActionMessage(input: {
   nonce: string;
   timestamp: number;
 }): string {
-  return `night:${input.roomId}:${input.actionType}:${input.targetAddress}:${input.nonce}:${input.timestamp}`;
+  return `night:${input.roomId}:${input.actionType}:${input.targetAddress.toLowerCase()}:${input.nonce}:${input.timestamp}`;
 }
 
 export function buildResolveNightMessage(input: {

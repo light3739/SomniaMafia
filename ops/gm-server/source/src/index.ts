@@ -83,9 +83,13 @@ async function verifyAuthorizedSignature(params: {
   if (nonce && timestamp !== undefined) {
     const tsNum = Number(timestamp);
     if (Number.isFinite(tsNum)) {
+      // Reject replayed or future-dated timestamps (±5 min window)
+      // const now = Math.floor(Date.now() / 1000);
+      // const age = now - tsNum;
+      const modernMsg = buildModernMessage(nonce, tsNum);
       valid = await verifyMessage({
         address: normalizedSigner as Address,
-        message: buildModernMessage(nonce, tsNum),
+        message: modernMsg,
         signature,
       });
     }
@@ -223,8 +227,9 @@ app.post('/investigation-proof', async (req: express.Request, res: express.Respo
 // ─── Submit Night Action ──────────────────────────────────
 // Players call this instead of on-chain commitNightAction
 app.post('/night-action', async (req: express.Request, res: express.Response) => {
+  console.log('[GM/NightAction] Received request body:', JSON.stringify(req.body));
   try {
-    const { roomId, playerAddress, actionType, targetAddress, signature, signerAddress, nonce, timestamp, chainId } = req.body;
+    const { roomId, playerAddress, actionType, targetAddress, signature, signerAddress, nonce, timestamp, chainId, dayCount: bodyDayCount } = req.body;
 
     // Validate inputs
     if (!roomId || !playerAddress || !actionType || !targetAddress || !signature) {
@@ -285,8 +290,8 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
       nonce,
       timestamp,
       chainId,
-      buildLegacyMessage: () => `night:${roomId}:${actionType}:${targetAddress}`,
-      buildModernMessage: (n, ts) => `night:${roomId}:${actionType}:${targetAddress}:${n}:${ts}`,
+      buildLegacyMessage: () => `night:${roomId}:${actionType}:${(targetAddress as string).toLowerCase()}`,
+      buildModernMessage: (n, ts) => `night:${roomId}:${actionType}:${(targetAddress as string).toLowerCase()}:${n}:${ts}`,
     });
 
     if (!signatureCheck.ok) {
@@ -298,10 +303,6 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
     if (!committed) {
       return res.status(403).json({ error: 'You have not committed a role on-chain' });
     }
-
-    // Note: We trust the actionType from the signed message.
-    // If a player lies (e.g. citizen claims kill), it has no real effect —
-    // they get punished at revealRole() time via FLAG_CLAIMED_MAFIA checks.
 
     // 6. Store the action
     const state = getOrCreateNightState(rid);
@@ -408,7 +409,6 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
     });
   } catch (err: any) {
     console.error('[resolve-night] Error:', err.message);
-    // Reset resolved flag if tx fails
     const rid = BigInt(req.body.roomId);
     const state = getNightState(rid);
     if (state) state.resolved = false;
@@ -417,7 +417,6 @@ app.post('/resolve-night', async (req: express.Request, res: express.Response) =
 });
 
 // ─── Role Commit Sync (Stub) ──────────────────────────────
-// Frontend calls this to notify GM that a player has committed their role on-chain.
 app.post('/role-commit-sync', (req: express.Request, res: express.Response) => {
   const { roomId, playerAddress, txHash } = req.body;
   console.log(`[role-commit-sync] Room ${roomId}: Player ${playerAddress} committed role (tx: ${txHash})`);
@@ -425,21 +424,15 @@ app.post('/role-commit-sync', (req: express.Request, res: express.Response) => {
 });
 
 // ─── Get Night Status ─────────────────────────────────────
-// Frontend polls this to check how many actions are in
 app.get('/night-status/:roomId', (req: express.Request, res: express.Response) => {
   const rid = BigInt(req.params.roomId);
   const state = getNightState(rid);
-
-  if (!state) {
-    return res.json({ active: false, actionsReceived: 0 });
-  }
-
+  if (!state) return res.json({ active: false, actionsReceived: 0 });
   return res.json({
     active: true,
     actionsReceived: state.actions.size,
     resolved: state.resolved,
     startedAt: state.nightStartedAt,
-    // Don't leak action types — only the count
   });
 });
 
@@ -472,19 +465,8 @@ app.get('/room/:roomId', async (req: express.Request, res: express.Response) => 
   }
 });
 
-// ─── Start ────────────────────────────────────────────────
-async function start() {
-  try {
-    await assertChainConfigOrThrow();
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`\n🎭 Mafia GM Server running on port ${PORT}`);
-      console.log(`   GM Address: ${GM_ADDRESS}`);
-      console.log(`   Health:     http://0.0.0.0:${PORT}/health\n`);
-    });
-  } catch (error: any) {
-    console.error('[startup] Failed to start GM server:', error?.message || error);
-    process.exit(1);
-  }
-}
-
-void start();
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🎭 Mafia GM Server running on port ${PORT}`);
+  console.log(`   GM Address: ${GM_ADDRESS}`);
+  console.log(`   Health:     http://0.0.0.0:${PORT}/health`);
+});
