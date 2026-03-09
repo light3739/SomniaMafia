@@ -202,9 +202,10 @@ export const GameOver: React.FC = React.memo(() => {
                         // Расшифровываем своим ключом
                         encryptedCard = shuffleService.decrypt(encryptedCard);
 
-                        // Расшифровываем ключами других
+                        // Расшифровываем ключами других (пропускаем dummy 0x00 байты с чейна)
                         for (const [_, key] of keys) {
-                            const decryptionKey = hexToString(key);
+                            const decryptionKey = hexToString(key).replace(/\0/g, '').trim();
+                            if (!decryptionKey || !/^\d+$/.test(decryptionKey)) continue;
                             encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
                         }
 
@@ -233,15 +234,17 @@ export const GameOver: React.FC = React.memo(() => {
 
             // Fetch on-chain roles and merge (they take priority)
             await fetchOnChainRoles(roles);
+            await fetchGMRoles();
 
         } catch (e) {
             console.error("Failed to reveal roles:", e);
             // Still try to fetch on-chain roles even if local decryption failed
             await fetchOnChainRoles(new Map());
+            await fetchGMRoles();
         } finally {
             setIsRevealing(false);
         }
-    }, [publicClient, currentRoomId, gameState.players, address, setGameState, isRevealing]);
+    }, [publicClient, currentRoomId, gameState.players, address, setGameState, isRevealing, fetchGMRoles]);
 
     // Fetch roles revealed on-chain (trustless source)
     const fetchOnChainRoles = useCallback(async (localRoles: Map<string, Role>) => {
@@ -300,6 +303,53 @@ export const GameOver: React.FC = React.memo(() => {
             console.error("Failed to fetch on-chain roles:", e);
         }
     }, [publicClient, currentRoomId, gameState.players, setGameState]);
+
+    // Fetch all roles from GM server (GM has decrypted deck using all SRA keys)
+    // Used as fallback when on-chain playerRoles reverts or returns 0 (e.g. dead players)
+    const fetchGMRoles = useCallback(async () => {
+        if (!currentRoomId) return;
+        try {
+            const res = await fetch(`/api/game/room-roles?roomId=${currentRoomId.toString()}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.roles || typeof data.roles !== 'object') return;
+
+            const roleMap: Record<string, Role> = {
+                'MAFIA': Role.MAFIA, 'DOCTOR': Role.DOCTOR,
+                'DETECTIVE': Role.DETECTIVE, 'CIVILIAN': Role.CIVILIAN,
+            };
+            const gmRoles = new Map<string, Role>();
+            for (const [addr, roleStr] of Object.entries(data.roles as Record<string, string>)) {
+                const role = roleMap[roleStr];
+                if (role) gmRoles.set(addr.toLowerCase(), role);
+            }
+            if (gmRoles.size === 0) return;
+
+            console.log(`[GameOver] GM roles fetched: ${gmRoles.size} players`);
+
+            // Fill in roles not yet revealed on-chain (on-chain takes priority)
+            setRevealedRoles(prev => {
+                const merged = new Map(prev);
+                for (const [addr, role] of gmRoles) {
+                    if (!merged.has(addr) || merged.get(addr) === Role.UNKNOWN) {
+                        merged.set(addr, role);
+                    }
+                }
+                return merged;
+            });
+
+            setGameState(prev => ({
+                ...prev,
+                players: prev.players.map(p => {
+                    const gmRole = gmRoles.get(p.address.toLowerCase());
+                    if (gmRole && p.role === Role.UNKNOWN) return { ...p, role: gmRole };
+                    return p;
+                })
+            }));
+        } catch (_e) {
+            // Non-fatal — on-chain reveals are the canonical source
+        }
+    }, [currentRoomId, setGameState]);
 
     // Определяем победителя на основе раскрытых ролей
     const determineWinner = (roles: Map<string, Role>) => {

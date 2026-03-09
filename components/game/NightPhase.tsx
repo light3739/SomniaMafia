@@ -322,9 +322,10 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     // Decrypt with my key
                     encryptedCard = shuffleService.decrypt(encryptedCard);
 
-                    // Decrypt with other players' keys
+                    // Decrypt with other players' keys (skip dummy 0x00 bytes stored on-chain)
                     for (const [_, key] of keys) {
-                        const decryptionKey = hexToString(key);
+                        const decryptionKey = hexToString(key).replace(/\0/g, '').trim();
+                        if (!decryptionKey || !/^\d+$/.test(decryptionKey)) continue;
                         encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
                     }
 
