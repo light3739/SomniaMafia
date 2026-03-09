@@ -245,7 +245,7 @@ app.post('/investigation-proof', async (req: express.Request, res: express.Respo
     const signer = (String(signerAddress || detectiveAddress)).toLowerCase() as Address;
 
     let valid = false;
-    const legacyMessage = `investigate:${roomId}:${targetAddress}`;
+    const legacyMessage = `investigate:${roomId}:${(targetAddress as string).toLowerCase()}`;
 
     if (nonce && timestamp !== undefined) {
       const tsNum = Number(timestamp);
@@ -258,7 +258,7 @@ app.post('/investigation-proof', async (req: express.Request, res: express.Respo
         }
         valid = await verifyMessage({
           address: signer,
-          message: `investigate:${roomId}:${String(targetAddress).toLowerCase()}:${nonce}:${tsNum}`,
+          message: `investigate:${roomId}:${(targetAddress as string).toLowerCase()}:${nonce}:${tsNum}`,
           signature: signature as `0x${string}`,
         });
       }
@@ -489,8 +489,8 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
       nonce,
       timestamp,
       chainId,
-      buildLegacyMessage: () => `night:${roomId}:${actionType}:${String(targetAddress).toLowerCase()}`,
-      buildModernMessage: (n, ts) => `night:${roomId}:${sigDayCount}:${actionType}:${String(targetAddress).toLowerCase()}:${n}:${ts}`,
+      buildLegacyMessage: () => `night:${roomId}:${actionType}:${(targetAddress as string).toLowerCase()}`,
+      buildModernMessage: (n, ts) => `night:${roomId}:${actionType}:${(targetAddress as string).toLowerCase()}:${n}:${ts}`,
     });
 
     if (!signatureCheck.ok) {
