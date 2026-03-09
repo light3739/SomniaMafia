@@ -4,8 +4,11 @@ import { GM_SERVER_URL, getDeploymentByChainId, ACTIVE_DEPLOYMENT } from '@/cont
 import { ServerStore } from '@/services/serverStore';
 import { withSignedRoute } from '@/app/api/_lib/security';
 
+import { buildInvestigateMessage } from '@/services/signingSchema';
+
 export const POST = withSignedRoute<{
     roomId: string;
+    dayCount: number;
     detectiveAddress: string;
     targetAddress: string;
     signature: string;
@@ -15,11 +18,17 @@ export const POST = withSignedRoute<{
     chainId?: number;
 }>({
     scope: 'investigate',
-    requiredFields: ['roomId', 'detectiveAddress', 'targetAddress', 'signature', 'nonce', 'timestamp'],
+    requiredFields: ['roomId', 'dayCount', 'detectiveAddress', 'targetAddress', 'signature', 'nonce', 'timestamp'],
     getRoomId: (body) => body.roomId,
     getActorAddress: (body) => body.detectiveAddress,
     getSignerAddress: (body) => body.signerAddress,
-    getMessage: ({ roomId, body, nonce, timestamp }) => `investigate:${roomId}:${body.targetAddress}:${nonce}:${timestamp}`,
+    getMessage: ({ roomId, body, nonce, timestamp }) => buildInvestigateMessage({
+        roomId,
+        dayCount: body.dayCount,
+        targetAddress: body.targetAddress,
+        nonce,
+        timestamp
+    }),
     validateSessionRoomMatch: true,
 }, async ({ body, roomId, signerAddress }) => {
     try {
@@ -38,15 +47,10 @@ export const POST = withSignedRoute<{
                 detectiveAddress,
                 targetAddress,
                 signature,
-<<<<<<< HEAD
                 signerAddress,
                 nonce: body.nonce,
                 timestamp: body.timestamp,
-=======
-                signerAddress: actualSigner,
-                nonce,
-                timestamp,
->>>>>>> f5627fc4 (fix(client): update investigation signature to use modern format with nonce/ts)
+                dayCount: body.dayCount,
             }),
         });
 

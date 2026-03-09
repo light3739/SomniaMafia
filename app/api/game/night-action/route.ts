@@ -5,6 +5,7 @@ import { buildNightActionMessage } from '@/services/signingSchema';
 
 export const POST = withSignedRoute<{
     roomId: string;
+    dayCount: number;
     playerAddress: string;
     actionType: 'kill' | 'heal' | 'check';
     targetAddress: string;
@@ -18,12 +19,13 @@ export const POST = withSignedRoute<{
     chainId?: number;
 }>({
     scope: 'night-action',
-    requiredFields: ['roomId', 'playerAddress', 'actionType', 'targetAddress', 'signature', 'nonce', 'timestamp'],
+    requiredFields: ['roomId', 'dayCount', 'playerAddress', 'actionType', 'targetAddress', 'signature', 'nonce', 'timestamp'],
     getRoomId: (body) => body.roomId,
     getActorAddress: (body) => body.playerAddress,
     getSignerAddress: (body) => body.signerAddress,
     getMessage: ({ body, roomId, nonce, timestamp }) => buildNightActionMessage({
         roomId,
+        dayCount: body.dayCount,
         actionType: body.actionType,
         targetAddress: body.targetAddress,
         nonce,
@@ -49,6 +51,7 @@ export const POST = withSignedRoute<{
             salt: body.salt,
             nonce: body.nonce,
             timestamp: body.timestamp,
+            dayCount: body.dayCount,
             chainId: body.chainId,
         }),
     });

@@ -11,7 +11,7 @@ import { loadSession, createNewSession, markSessionRegistered, getSessionAccount
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
 import { signRequest } from '../services/requestSigning';
-import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage } from '../services/signingSchema';
+import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage, buildInvestigateMessage, buildRoleSyncMessage } from '../services/signingSchema';
 
 const shotSound = "/assets/mafia_shot.wav";
 
@@ -362,30 +362,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (roleCommitSyncInProgressRef.current.has(key)) return;
         roleCommitSyncInProgressRef.current.add(key);
 
-        const MAX_RETRIES = 2;
+        const MAX_RETRIES = 3;
         try {
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                 try {
-                    const message = `sync-role-commit:${roomId.toString()}:${txHash}`;
-                    let signature: `0x${string}`;
-                    let signerAddress = playerAddress;
-
-                    const session = loadSession();
-                    if (
-                        session &&
-                        session.registeredOnChain &&
-                        Date.now() < session.expiresAt &&
-                        session.mainWallet.toLowerCase() === playerAddress.toLowerCase() &&
-                        session.roomId === Number(roomId)
-                    ) {
-                        const sessionAccount = privateKeyToAccount(session.privateKey);
-                        signature = await sessionAccount.signMessage({ message });
-                        signerAddress = sessionAccount.address;
-                    } else if (walletClient) {
-                        signature = await walletClient.signMessage({ message });
-                    } else {
-                        return;
-                    }
+                    // FIX: Use signRequest to support session keys AND modern signing format (nonce/timestamp)
+                    // GM server now requires the modern format for all night actions/syncs
+                    const signed = await signRequest({
+                        address: playerAddress,
+                        roomId: Number(roomId),
+                        walletClient,
+                        buildMessage: ({ nonce, timestamp }) => buildRoleSyncMessage({
+                            roomId: roomId.toString(),
+                            txHash,
+                            nonce,
+                            timestamp,
+                        }),
+                    });
 
                     const res = await fetch(`${GM_SERVER_URL}/role-commit-sync`, {
                         method: 'POST',
@@ -394,17 +387,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             roomId: roomId.toString(),
                             playerAddress,
                             txHash,
-                            signature,
-                            signerAddress,
+                            signature: signed.signature,
+                            signerAddress: signed.signerAddress,
+                            nonce: signed.nonce,
+                            timestamp: signed.timestamp,
                         }),
                     });
 
-                    if (!res.ok) throw new Error(`GM sync failed: ${res.status}`);
+                    if (!res.ok) {
+                        const errorMsg = await res.json().catch(() => ({ error: 'Sync failed' }));
+                        throw new Error(`GM sync failed (${res.status}): ${errorMsg.error}`);
+                    }
                     console.log(`[RoleCommitSync] Synced tx ${txHash} to GM cache`);
                     return;
-                } catch (err) {
+                } catch (err: any) {
+                    console.warn(`[RoleCommitSync] Attempt ${attempt} failed: ${err.message}`);
                     if (attempt < MAX_RETRIES) {
-                        await new Promise(r => setTimeout(r, 1200 * attempt));
+                        await new Promise(r => setTimeout(r, 1500 * attempt));
                     }
                 }
             }
@@ -1928,6 +1927,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         walletClient,
                         buildMessage: ({ nonce, timestamp }) => buildNightActionMessage({
                             roomId: currentRoomId.toString(),
+                            dayCount: gameState.dayCount,
                             actionType,
                             targetAddress,
                             nonce,
@@ -1937,6 +1937,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     const payload = JSON.stringify({
                         roomId: currentRoomId.toString(),
+                        dayCount: gameState.dayCount,
                         playerAddress,
                         actionType,
                         targetAddress,
@@ -2027,8 +2028,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 address: detective,
                 roomId: Number(currentRoomId),
                 walletClient,
-                buildMessage: ({ nonce, timestamp }) =>
-                    `investigate:${currentRoomId.toString()}:${target.toLowerCase()}:${nonce}:${timestamp}`
+                buildMessage: ({ nonce, timestamp }) => buildInvestigateMessage({
+                    roomId: currentRoomId.toString(),
+                    dayCount: gameState.dayCount,
+                    targetAddress: target,
+                    nonce,
+                    timestamp,
+                }),
             });
 
             console.log(`[Investigation API] Signed with ${signed.signerAddress.toLowerCase() === detective.toLowerCase() ? 'main wallet' : 'session key'}: ${signed.signerAddress}`);
@@ -2038,6 +2044,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     roomId: currentRoomId.toString(),
+                    dayCount: gameState.dayCount,
                     detectiveAddress: detective,
                     targetAddress: target,
                     signature: signed.signature,
@@ -2077,7 +2084,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(`Investigation failed: ${e.message}`, "danger");
             return { role: Role.UNKNOWN, isMafia: false };
         }
-    }, [currentRoomId, addLog, walletClient]);
+    }, [currentRoomId, addLog, walletClient, chainId]);
 
     const forcePhaseTimeoutOnChain = useCallback(async () => {
         if (!currentRoomId) return;

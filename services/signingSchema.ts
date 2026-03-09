@@ -12,12 +12,13 @@ export function buildAvatarMessage(input: {
 
 export function buildNightActionMessage(input: {
   roomId: string;
+  dayCount: number;
   actionType: NightActionType;
   targetAddress: string;
   nonce: string;
   timestamp: number;
 }): string {
-  return `night:${input.roomId}:${input.actionType}:${input.targetAddress.toLowerCase()}:${input.nonce}:${input.timestamp}`;
+  return `night:${input.roomId}:${input.dayCount}:${input.actionType}:${input.targetAddress.toLowerCase()}:${input.nonce}:${input.timestamp}`;
 }
 
 export function buildResolveNightMessage(input: {
@@ -46,4 +47,23 @@ export function buildTokenMessage(input: {
   timestamp: number;
 }): string {
   return `token:${input.room}:${input.username}:${input.playerAddress.toLowerCase()}:${input.nonce}:${input.timestamp}`;
+}
+
+export function buildInvestigateMessage(input: {
+  roomId: string;
+  dayCount: number;
+  targetAddress: string;
+  nonce: string;
+  timestamp: number;
+}): string {
+  return `investigate:${input.roomId}:${input.dayCount}:${input.targetAddress.toLowerCase()}:${input.nonce}:${input.timestamp}`;
+}
+
+export function buildRoleSyncMessage(input: {
+  roomId: string;
+  txHash: string;
+  nonce: string;
+  timestamp: number;
+}): string {
+  return `sync-role-commit:${input.roomId}:${input.txHash.toLowerCase()}:${input.nonce}:${input.timestamp}`;
 }

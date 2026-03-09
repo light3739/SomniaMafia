@@ -485,10 +485,32 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         return () => clearInterval(interval);
     }, [gameState.phaseDeadline, gameState.players, gameState.phase, myPlayer?.address, isTestMode, isProcessing, isTxPending, forcePhaseTimeoutOnChain, addLog, publicClient, currentRoomId]);
 
-    // Reset timeout flag when phase changes (new night phase)
+    // Reset state when dayCount changes (new day/night cycle)
     useEffect(() => {
+        console.log(`[NightPhase] Day count changed to ${gameState.dayCount} - resetting state`);
+        
+        // 1. Reset timeout trigger
         timeoutTriggeredRef.current = false;
-    }, [gameState.dayCount]);
+
+        // 2. Clear state for the new night
+        setNightState(prev => ({
+            hasCommitted: false,
+            hasRevealed: false,
+            salt: null,
+            commitHash: null,
+            investigationResult: null,
+            teammates: prev.teammates, // Keep teammates
+            committedTarget: null,
+            mafiaCommitted: 0,
+            mafiaRevealed: 0,
+            mafiaConsensusTarget: null,
+        }));
+
+        // 3. Clear localStorage for the new night
+        if (NIGHT_COMMIT_KEY) {
+            localStorage.removeItem(NIGHT_COMMIT_KEY);
+        }
+    }, [gameState.dayCount, NIGHT_COMMIT_KEY]);
 
 
     const handleCommit = useCallback(async () => {
