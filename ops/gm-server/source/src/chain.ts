@@ -147,7 +147,10 @@ export const DIAMOND_ABI = [
 ] as const;
 
 // ─── Clients ──────────────────────────────────────────────
-const gmAccount = privateKeyToAccount((process.env.GM_PRIVATE_KEY as Hex) || '0x0000000000000000000000000000000000000000000000000000000000000001');
+if (!process.env.GM_PRIVATE_KEY) {
+  throw new Error('FATAL: GM_PRIVATE_KEY is missing from environment variables');
+}
+const gmAccount = privateKeyToAccount(process.env.GM_PRIVATE_KEY as Hex);
 export const GM_ADDRESS = gmAccount.address;
 
 const AVAX_DIAMOND = (process.env.AVAX_DIAMOND || '0x3c1bd1923f8318247e2b60e41b0f280391c4e1e1') as Address;

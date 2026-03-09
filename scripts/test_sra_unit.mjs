@@ -10,7 +10,7 @@
  */
 
 // ─── SRA constants (same in both frontend and GM) ────────────────────────────
-const PRIME = 2147483647n; // Mersenne prime 2^31-1
+const PRIME = BigInt('0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3BE39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA051015728E5A8AACAA68FFFFFFFFFFFFFFFF'); // RFC 3526 2048-bit MODP Group prime
 
 function modPow(base, exp, mod) {
   let result = 1n;
@@ -64,8 +64,8 @@ function generateSRAKeys() {
   // Pick random coprime e in [2, PRIME-2]
   let e;
   do {
-    // Use 6 random bytes for good distribution (mirrors frontend)
-    const arr = new Uint8Array(6);
+    // Use 256 random bytes for good distribution (mirrors frontend)
+    const arr = new Uint8Array(256);
     crypto.getRandomValues(arr);
     e = 2n;
     for (let i = 0; i < arr.length; i++) e += BigInt(arr[i]) * (256n ** BigInt(i));
@@ -230,13 +230,11 @@ assert('missing one key → cannot get correct plaintext', () => {
 
 // Test 7: Verify GM SRA prime matches frontend prime
 console.log('\n7. Prime constant consistency:');
-assert('GM and frontend use same SRA prime (2^31-1)', () => {
-  // GM uses SRA_PRIME = 2147483647n, frontend uses PRIME = 2147483647n
-  const GM_SRA_PRIME = 2147483647n;
+assert('GM and frontend use same SRA prime (2048-bit)', () => {
+  // GM uses SRA_PRIME, frontend uses PRIME
+  const GM_SRA_PRIME = BigInt('0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3BE39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA051015728E5A8AACAA68FFFFFFFFFFFFFFFF');
   const FRONTEND_PRIME = PRIME;
   if (GM_SRA_PRIME !== FRONTEND_PRIME) throw new Error(`Mismatch: GM=${GM_SRA_PRIME}, frontend=${FRONTEND_PRIME}`);
-  // Verify it's actually 2^31 - 1
-  if (GM_SRA_PRIME !== (2n ** 31n - 1n)) throw new Error('Not 2^31-1');
 });
 
 // Test 8: cardVal must stay in valid range (< PRIME) after encoding
@@ -246,7 +244,8 @@ assert('all role card values < PRIME for roomIds 0-100', () => {
     const offset = getCardOffset(rid);
     for (const n of [1, 2, 3, 4]) {
       const cv = offset + n;
-      if (cv >= 2147483647) throw new Error(`roomId=${rid}, role=${n}: card value ${cv} >= PRIME!`);
+      // We know cv is very small, but just keeping the logic intact
+      if (BigInt(cv) >= PRIME) throw new Error(`roomId=${rid}, role=${n}: card value ${cv} >= PRIME!`);
       if (cv <= 1) throw new Error(`roomId=${rid}, role=${n}: card value ${cv} <= 1 — SRA fixed point!`);
     }
   }
