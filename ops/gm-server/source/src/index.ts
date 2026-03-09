@@ -407,7 +407,7 @@ function allRolePlayersActed(roomIdStr: string, alivePlayers: any[]): boolean {
 // Players call this instead of on-chain commitNightAction
 app.post('/night-action', async (req: express.Request, res: express.Response) => {
   try {
-    const { roomId, playerAddress, actionType, targetAddress, signature, signerAddress, nonce, timestamp, chainId } = req.body;
+    const { roomId, playerAddress, actionType, targetAddress, signature, signerAddress, nonce, timestamp, chainId, dayCount: bodyDayCount } = req.body;
 
     // Validate inputs
     if (!roomId || !playerAddress || !actionType || !targetAddress || !signature) {
@@ -465,7 +465,10 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
     }
 
     // 4. Verify signature FIRST (before role check to prevent role enumeration)
-    const dayCount = Array.isArray(room) ? Number(room[7]) : Number(room.dayCount);
+    // Use dayCount from the request body — that's what the client signed.
+    // If it mismatches the contract we'll catch it via an authorization check below.
+    const contractDayCount = Array.isArray(room) ? Number(room[7]) : Number(room.dayCount);
+    const sigDayCount = bodyDayCount !== undefined ? Number(bodyDayCount) : contractDayCount;
     const signatureCheck = await verifyAuthorizedSignature({
       roomId: String(roomId),
       signature: signature as `0x${string}`,
@@ -475,12 +478,21 @@ app.post('/night-action', async (req: express.Request, res: express.Response) =>
       timestamp,
       chainId,
       buildLegacyMessage: () => `night:${roomId}:${actionType}:${targetAddress}`,
-      buildModernMessage: (n, ts) => `night:${roomId}:${dayCount}:${actionType}:${targetAddress}:${n}:${ts}`,
+      buildModernMessage: (n, ts) => `night:${roomId}:${sigDayCount}:${actionType}:${targetAddress}:${n}:${ts}`,
     });
 
     if (!signatureCheck.ok) {
+      console.error(`[night-action] Sig FAIL Room:${roomId} player:${playerAddress} sigDayCount:${sigDayCount} contractDayCount:${contractDayCount} action:${actionType} target:${targetAddress} nonce:${nonce} ts:${timestamp} err:${signatureCheck.error}`);
       return res.status(signatureCheck.status).json({ error: signatureCheck.error });
     }
+
+    // Sanity-check: body dayCount must not be more than 1 behind contract (tolerate minor lag)
+    if (Math.abs(contractDayCount - sigDayCount) > 1) {
+      console.error(`[night-action] dayCount mismatch Room:${roomId} client:${sigDayCount} contract:${contractDayCount}`);
+      return res.status(400).json({ error: `dayCount mismatch: client sent ${sigDayCount}, contract has ${contractDayCount}` });
+    }
+
+    console.log(`[night-action] Sig OK Room:${roomId} player:${playerAddress} sigDayCount:${sigDayCount} action:${actionType}`);
 
     // 5. Verify player has committed a role on-chain (completed shuffle phase)
     const committed = await hasCommittedRole(rid, playerAddress as Address, chainId);

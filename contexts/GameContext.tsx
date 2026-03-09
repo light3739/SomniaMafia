@@ -11,7 +11,7 @@ import { loadSession, createNewSession, markSessionRegistered, getSessionAccount
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
 import { signRequest } from '../services/requestSigning';
-import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage } from '../services/signingSchema';
+import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage, buildDiscussionMessage } from '../services/signingSchema';
 
 const shotSound = "/assets/mafia_shot.wav";
 
@@ -366,26 +366,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                 try {
-                    const message = `sync-role-commit:${roomId.toString()}:${txHash}`;
-                    let signature: `0x${string}`;
-                    let signerAddress = playerAddress;
-
-                    const session = loadSession();
-                    if (
-                        session &&
-                        session.registeredOnChain &&
-                        Date.now() < session.expiresAt &&
-                        session.mainWallet.toLowerCase() === playerAddress.toLowerCase() &&
-                        session.roomId === Number(roomId)
-                    ) {
-                        const sessionAccount = privateKeyToAccount(session.privateKey);
-                        signature = await sessionAccount.signMessage({ message });
-                        signerAddress = sessionAccount.address;
-                    } else if (walletClient) {
-                        signature = await walletClient.signMessage({ message });
-                    } else {
-                        return;
-                    }
+                    // Sign using signRequest so message format matches GM server's
+                    // buildModernMessage: role-sync:${roomId}:${playerAddress}:${nonce}:${timestamp}
+                    const signed = await signRequest({
+                        address: playerAddress,
+                        roomId: Number(roomId),
+                        walletClient,
+                        buildMessage: ({ nonce, timestamp }) =>
+                            `role-sync:${roomId.toString()}:${playerAddress.toLowerCase()}:${nonce}:${timestamp}`,
+                    });
 
                     const res = await fetch(`${GM_SERVER_URL}/role-commit-sync`, {
                         method: 'POST',
@@ -394,8 +383,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             roomId: roomId.toString(),
                             playerAddress,
                             txHash,
-                            signature,
-                            signerAddress,
+                            signature: signed.signature,
+                            signerAddress: signed.signerAddress,
+                            nonce: signed.nonce,
+                            timestamp: signed.timestamp,
                         }),
                     });
 

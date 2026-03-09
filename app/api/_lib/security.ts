@@ -184,6 +184,11 @@ export async function verifySignedRequestBody<TBody extends Record<string, any>>
     });
 
     if (!sigValid) {
+        console.error('[security] Invalid signature', {
+            address: signerAddress,
+            message,
+            signaturePrefix: signature.slice(0, 10),
+        });
         return { ok: false, status: 401, error: 'Invalid signature' };
     }
 
