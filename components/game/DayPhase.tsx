@@ -810,6 +810,7 @@ const VotingTimer: React.FC = React.memo(() => {
     const myAddress = myPlayer?.address;
     const hasVoted = myPlayer?.hasVoted;
     const isAlive = myPlayer?.isAlive;
+    const isVotingPhase = gameState.phase === GamePhase.VOTING;
 
     useEffect(() => {
         if (!phaseDeadline) return;
@@ -833,7 +834,8 @@ const VotingTimer: React.FC = React.memo(() => {
                     setTimeLeft(0);
                     setTimerMode('transition');
 
-                    if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive) {
+                    // Guard: only auto-vote if still in VOTING phase (prevents stale fire after NightStarted resets hasVoted flags)
+                    if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive && isVotingPhase) {
                         hasAutoVotedRef.current = true;
                         addLog("1 minute limit reached. Auto-voting for self...", "warning");
                         // FIX #16: Re-check hasVoted fresh from the latest player data
@@ -852,7 +854,8 @@ const VotingTimer: React.FC = React.memo(() => {
                     setTimerMode('hard');
 
                     // LATE JOINER PROTECTION: Auto-vote if in Hard Mode
-                    if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive) {
+                    // Guard: only auto-vote if still in VOTING phase
+                    if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive && isVotingPhase) {
                         hasAutoVotedRef.current = true;
                         addLog("Late join during hard timer. Auto-voting for self...", "warning");
                         // FIX #16: Re-check hasVoted
@@ -871,7 +874,7 @@ const VotingTimer: React.FC = React.memo(() => {
         tick();
         const interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
-    }, [phaseDeadline, myAddress, hasVoted, isAlive, voteOnChain, addLog]);
+    }, [phaseDeadline, myAddress, hasVoted, isAlive, isVotingPhase, voteOnChain, addLog]);
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
