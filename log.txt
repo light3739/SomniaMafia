@@ -1,0 +1,11 @@
+2806d29b fix: remove isConnected gate on main page — social/email logins now go straight to ENTER CITY
+c0da6ff7 ops: fix frontend deploy-test.sh to use tar instead of rsync (Windows compat)
+46ada15e feat: profile page with social account linking, nickname edit, Privy auto-fill
+3ffe94bc fix: use useSetActiveWallet (official Privy pattern) to bridge embedded wallet to Wagmi
+f7116258 fix: fetchGMRoles declared before revealAllRoles (TS use-before-declaration)
+=== ORIGIN ===
+41bfe666 fix(gm-server): address critical security issues (2048-bit SRA prime, secure GM private key, authenticated room-roles)
+4bcb9dfa fix(frontend): restore missing RoleReveal.tsx that broke the build
+93fa6866 fix(frontend): UI components and stop tracking gm-server dist
+fce0e988 fix(gm-server): prevent role leaking before game ends on /room-roles
+13672b77 ci: add dev deployment github actions
