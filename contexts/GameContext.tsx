@@ -2407,22 +2407,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Automatically reveal my role on-chain after game ends (for trustless verification)
     const revealMyRoleAfterGameEnd = useCallback(async () => {
-        if (!currentRoomId || !myPlayer || !address || !publicClient) return;
+        if (!currentRoomId || !myPlayer || !address) return;
 
         try {
-            // FIX: Check if already revealed ON-CHAIN before submitting to avoid revert during estimation
-            const onChainRole = await publicClient.readContract({
-                address: runtimeContractAddress,
-                abi: MAFIA_ABI,
-                functionName: 'playerRoles',
-                args: [currentRoomId, address],
-            }) as number;
-
-            if (onChainRole !== 0) {
-                console.log("[RoleReveal] Role already revealed on-chain (contract state), skipping");
-                return;
-            }
-
             // Get saved salt from localStorage (set during commitRole phase)
             const salt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
             if (!salt) {
@@ -2433,7 +2420,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Get role from myPlayer (locally decrypted)
             let roleNum = getRoleNumber(myPlayer.role);
 
-            // FALLBACK #1: If myPlayer.role is UNKNOWN, check localStorage (common after page refresh)
+            // FALLBACK: If myPlayer.role is UNKNOWN, check localStorage (common after page refresh)
             if (roleNum === 0 && address) {
                 const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${address.toLowerCase()}`);
                 if (savedRole) {
@@ -2453,14 +2440,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog("Role revealed on-chain!", "success");
 
         } catch (e: any) {
-            // Ignore "already revealed" errors - might have been revealed before
-            if (e.message?.includes("RoleAlreadyRevealed") || e.message?.includes("already revealed")) {
-                console.log("[RoleReveal] Already revealed, skipping");
+            const msg = e.message || '';
+            // Benign: already revealed, or player is dead (PlayerInactive / FLAG_ACTIVE=0)
+            if (msg.includes("RoleAlreadyRevealed") || msg.includes("already revealed") ||
+                msg.includes("PlayerInactive") || msg.includes("0x5416eb98")) {
+                console.log("[RoleReveal] Skipping — already revealed or player inactive");
                 return;
             }
             console.warn("[RoleReveal] Failed:", e);
         }
-    }, [currentRoomId, myPlayer, address, revealRoleOnChain, addLog, publicClient]);
+    }, [currentRoomId, myPlayer, address, revealRoleOnChain, addLog]);
 
     // FIX: Automatically reveal my role on-chain when the game ends
     // This ensures roles are visible to everyone via the polling in GameOver screen,

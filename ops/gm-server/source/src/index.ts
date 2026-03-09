@@ -941,6 +941,22 @@ app.get('/my-role/:roomId', async (req: express.Request, res: express.Response) 
   }
 });
 
+// ─── Get All Room Roles (after game ends) ────────────────
+// Returns all cached player→role mappings once the GM has collected all SRA keys.
+// No authentication required — the game is over and roles are public information.
+app.get('/room-roles/:roomId', (req: express.Request, res: express.Response) => {
+  const { roomId } = req.params;
+  const roles = resolvedRoles.get(String(roomId));
+  if (!roles || roles.size === 0) {
+    return res.status(202).json({ pending: true, message: 'Roles not yet resolved — retry after all players have shared keys.' });
+  }
+  const result: Record<string, string> = {};
+  for (const [addr, role] of roles) {
+    result[addr.toLowerCase()] = role;
+  }
+  return res.json({ roles: result });
+});
+
 // ─── Start ────────────────────────────────────────────────
 async function start() {
   try {
