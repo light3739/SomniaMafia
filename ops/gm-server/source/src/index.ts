@@ -65,7 +65,7 @@ function getRoomMap<V>(map: Map<string, Map<string, V>>, roomId: string): Map<st
 }
 
 // SRA helpers (mirrors frontend shuffleService.ts)
-const SRA_PRIME = 2147483647n;
+const SRA_PRIME = BigInt('0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3BE39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA051015728E5A8AACAA68FFFFFFFFFFFFFFFF');
 function modPow(base: bigint, exp: bigint, mod: bigint): bigint {
   let result = 1n;
   base = base % mod;
@@ -970,10 +970,36 @@ app.get('/room-roles/:roomId', async (req: express.Request, res: express.Respons
     const rid = BigInt(roomId);
     const chainIdNum = chainId ? Number(chainId) : undefined;
 
-    // SECURITY FIX: Only allow fetching roles if the game has ended.
+    // SECURITY FIX: Only allow fetching roles if the game has ended, UNLESS authenticated as MAFIA.
+    // Since this is a public endpoint, we must hide active roles.
     const room: any = await getRoom(rid, chainIdNum);
     const phase = Array.isArray(room) ? Number(room[3]) : Number(room.phase);
-    if (phase !== GamePhase.ENDED) {
+    
+    // Check if player is authenticated via query signature (for Mafia fetching teammates)
+    const { playerAddress, signature, nonce, timestamp } = req.query as Record<string, string>;
+    let isVerifiedMafia = false;
+    
+    if (playerAddress && signature && nonce && timestamp) {
+      const sigCheck = await verifyAuthorizedSignature({
+        roomId: String(roomId),
+        signature: signature as `0x${string}`,
+        playerAddress,
+        nonce,
+        timestamp: Number(timestamp),
+        chainId: chainIdNum,
+        buildLegacyMessage: () => `teammates:${roomId}`, // Not used
+        buildModernMessage: (n, ts) => `teammates:${roomId}:${n}:${ts}`,
+      });
+      if (sigCheck.ok) {
+        // If sig is valid, check if this player is actually Mafia
+        const cached = resolvedRoles.get(String(roomId));
+        if (cached && cached.get(playerAddress.toLowerCase()) === 'MAFIA') {
+          isVerifiedMafia = true;
+        }
+      }
+    }
+
+    if (phase !== GamePhase.ENDED && !isVerifiedMafia) {
       return res.status(403).json({ error: `Roles are only public after the game ends. Current phase: ${phase}` });
     }
 
@@ -981,7 +1007,18 @@ app.get('/room-roles/:roomId', async (req: express.Request, res: express.Respons
     const cached = resolvedRoles.get(String(roomId));
     if (cached && cached.size > 0) {
       const result: Record<string, string> = {};
-      for (const [addr, role] of cached) result[addr.toLowerCase()] = role;
+      for (const [addr, role] of cached) {
+        // If not ended but verified as Mafia, ONLY return Mafia teammates
+        if (phase !== GamePhase.ENDED && isVerifiedMafia) {
+          if (role === 'MAFIA') {
+            result[addr.toLowerCase()] = role;
+          } else {
+            result[addr.toLowerCase()] = 'UNKNOWN'; // hide other roles
+          }
+        } else {
+          result[addr.toLowerCase()] = role;
+        }
+      }
       return res.json({ roles: result });
     }
 

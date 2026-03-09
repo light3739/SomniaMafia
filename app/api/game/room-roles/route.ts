@@ -10,7 +10,10 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const gmRes = await fetch(`${GM_SERVER_URL}/room-roles/${encodeURIComponent(roomId)}`, {
+        const query = req.nextUrl.searchParams.toString();
+        const url = `${GM_SERVER_URL}/room-roles/${encodeURIComponent(roomId)}${query ? `?${query}` : ''}`;
+        
+        const gmRes = await fetch(url, {
             headers: { 'Content-Type': 'application/json' },
         });
         const data = await gmRes.json();

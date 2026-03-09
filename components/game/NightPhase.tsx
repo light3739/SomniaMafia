@@ -3,7 +3,8 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
-import { usePublicClient, useAccount } from 'wagmi';
+import { usePublicClient, useAccount, useWalletClient } from 'wagmi';
+import { signRequest } from '../../services/requestSigning';
 import { MAFIA_ABI } from '../../contracts/config';
 
 import { Role, Player, GamePhase } from '../../types';
@@ -89,7 +90,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         setGameState,
         runtimeContractAddress
     } = useGameContext();
-    const { address } = useAccount();
+    const { address, chainId } = useAccount();
+    const { data: walletClient } = useWalletClient();
     const { playKillSound, playProtectSound, playInvestigateSound, playApproveSound, playVoteSound, playRejectSound } = useSoundEffects();
 
     // Моя роль (defined early for use in callbacks)
@@ -265,7 +267,24 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         if (nightState.teammates.length > 0) return; // Already loaded
 
         try {
-            const res = await fetch(`/api/game/room-roles?roomId=${currentRoomId}`);
+            // Sign the request to prove we are Mafia (authenticated discovery)
+            const signed = await signRequest({
+                address: address as string,
+                roomId: Number(currentRoomId),
+                walletClient,
+                buildMessage: ({ nonce, timestamp }) => `teammates:${currentRoomId}:${nonce}:${timestamp}`,
+            });
+
+            const query = new URLSearchParams({
+                roomId: currentRoomId.toString(),
+                playerAddress: address as string,
+                signature: signed.signature,
+                nonce: signed.nonce,
+                timestamp: signed.timestamp.toString(),
+                chainId: chainId?.toString() || '',
+            }).toString();
+
+            const res = await fetch(`/api/game/room-roles?${query}`);
             const data = await res.json();
 
             if (data.pending || !data.roles) {
