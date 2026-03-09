@@ -109,7 +109,8 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                             return <div style={{ opacity: 0 }}>Loading...</div>;
                         }
 
-                        if (!authenticated || !isConnected) {
+                        // If not authenticated via Privy, show the login button
+                        if (!authenticated) {
                             return (
                                 <button
                                     onClick={() => login()}
@@ -121,6 +122,18 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                     <span className="relative z-10">LOGIN / CONNECT</span>
                                     {/* Shine effect overlay */}
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
+                                </button>
+                            );
+                        }
+
+                        // If authenticated by Privy, but Wagmi hasn't picked up the connection yet (can happen with embedded wallets)
+                        if (!isConnected) {
+                            return (
+                                <button
+                                    disabled
+                                    className="px-8 py-3 rounded-xl font-mono font-bold text-white/50 bg-black/50 border border-white/10 transition-all text-sm md:text-base tracking-wider cursor-wait"
+                                >
+                                    CONNECTING WALLET...
                                 </button>
                             );
                         }

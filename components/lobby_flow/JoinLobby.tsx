@@ -191,7 +191,14 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                 {!isConnected ? (
                                     <div className="flex justify-center">
                                         {(() => {
-                                            const { login } = require('@privy-io/react-auth').usePrivy();
+                                            const { login, authenticated } = require('@privy-io/react-auth').usePrivy();
+                                            if (authenticated) {
+                                                return (
+                                                    <button disabled className="bg-[#916A47]/50 text-white/50 py-2 px-4 rounded-lg font-bold transition-all cursor-wait">
+                                                        Connecting...
+                                                    </button>
+                                                );
+                                            }
                                             return (
                                                 <button onClick={() => login()} className="bg-[#916A47] hover:bg-[#A37B58] text-white py-2 px-4 rounded-lg font-bold transition-all">
                                                     Connect & Join
