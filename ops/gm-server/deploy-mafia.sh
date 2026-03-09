@@ -25,6 +25,7 @@ rsync -az --delete -e "ssh -p $SSH_PORT" \
   --exclude node_modules \
   --exclude dist \
   --exclude .git \
+  --exclude .env \
   "$WORKDIR/" "${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}/"
 
 echo "[deploy] Validating remote env"
