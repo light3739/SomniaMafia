@@ -52,7 +52,7 @@ interface GameContextType {
     voteOnChain: (targetAddress: `0x${string}`) => Promise<void>;
 
     // Night (V4: Mafia uses consensus, Doctor/Detective use commit-reveal)
-    submitNightActionToGM: (actionType: 'kill' | 'heal' | 'check', targetAddress: string) => Promise<void>;
+    submitNightActionToGM: (actionType: 'kill' | 'heal' | 'check', targetAddress: string, explicitDayCount?: number) => Promise<void>;
 
     revealRoleOnChain: (role: number, salt: string) => Promise<void>;
     tryEndGame: () => Promise<void>;
@@ -1885,7 +1885,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // --- NIGHT PHASE (GM SERVER API) ---
 
-    const submitNightActionToGM = useCallback(async (actionType: 'kill' | 'heal' | 'check', targetAddress: string) => {
+    const submitNightActionToGM = useCallback(async (
+        actionType: 'kill' | 'heal' | 'check',
+        targetAddress: string,
+        explicitDayCount?: number
+    ) => {
+        const resolvedDayCount = explicitDayCount ?? gameState.dayCount;
         if (!currentRoomId) return;
         if (!walletClient && !address) return;
 
@@ -1927,7 +1932,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         walletClient,
                         buildMessage: ({ nonce, timestamp }) => buildNightActionMessage({
                             roomId: currentRoomId.toString(),
-                            dayCount: gameState.dayCount,
+                            dayCount: resolvedDayCount,
                             actionType,
                             targetAddress,
                             nonce,
@@ -1937,7 +1942,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     const payload = JSON.stringify({
                         roomId: currentRoomId.toString(),
-                        dayCount: gameState.dayCount,
+                        dayCount: resolvedDayCount,
                         playerAddress,
                         actionType,
                         targetAddress,
@@ -2084,7 +2089,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(`Investigation failed: ${e.message}`, "danger");
             return { role: Role.UNKNOWN, isMafia: false };
         }
-    }, [currentRoomId, addLog, walletClient, chainId]);
+    }, [currentRoomId, addLog, walletClient, chainId, gameState.dayCount]);
 
     const forcePhaseTimeoutOnChain = useCallback(async () => {
         if (!currentRoomId) return;

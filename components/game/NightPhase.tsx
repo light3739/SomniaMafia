@@ -11,6 +11,7 @@ import { hexToString } from '../../services/cryptoUtils';
 import { Role, Player, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
 import { MafiaChat } from './MafiaChat';
+import { buildTeammatesMessage } from '../../services/signingSchema';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { Moon, Skull, Shield, Search, Eye, Check, Clock, User, Lock, AlertCircle, Users, RefreshCw } from 'lucide-react';
 import { NightActionFeedback } from './NightActionFeedback';
@@ -273,19 +274,25 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 address: address as string,
                 roomId: Number(currentRoomId),
                 walletClient,
-                buildMessage: ({ nonce, timestamp }) => `teammates:${currentRoomId}:${nonce}:${timestamp}`,
+                buildMessage: ({ nonce, timestamp }) => buildTeammatesMessage({
+                    roomId: currentRoomId.toString(),
+                    nonce,
+                    timestamp,
+                }),
             });
 
-            const query = new URLSearchParams({
-                roomId: currentRoomId.toString(),
-                playerAddress: address as string,
-                signature: signed.signature,
-                nonce: signed.nonce,
-                timestamp: signed.timestamp.toString(),
-                chainId: chainId?.toString() || '',
-            }).toString();
-
-            const res = await fetch(`/api/game/room-roles?${query}`);
+            const res = await fetch(`/api/game/room-roles`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId: currentRoomId.toString(),
+                    playerAddress: address as string,
+                    signature: signed.signature,
+                    nonce: signed.nonce,
+                    timestamp: signed.timestamp,
+                    chainId: chainId || undefined,
+                }),
+            });
             const data = await res.json();
 
             if (data.roles) {
@@ -533,7 +540,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         try {
             if (!isTestMode) {
                 const actionType = myRole === Role.MAFIA ? 'kill' : myRole === Role.DOCTOR ? 'heal' : 'check';
-                await submitNightActionToGM(actionType, committedTarget);
+                // FIX: Pass dayCount explicitly to avoid stale capture in Context
+                await submitNightActionToGM(actionType, committedTarget, gameState.dayCount);
             } else {
                 await new Promise(resolve => setTimeout(resolve, 1500));
                 if (myRole === Role.MAFIA) {

@@ -67,3 +67,11 @@ export function buildRoleSyncMessage(input: {
 }): string {
   return `sync-role-commit:${input.roomId}:${input.txHash.toLowerCase()}:${input.nonce}:${input.timestamp}`;
 }
+
+export function buildTeammatesMessage(input: {
+  roomId: string;
+  nonce: string;
+  timestamp: number;
+}): string {
+  return `teammates:${input.roomId}:${input.nonce}:${input.timestamp}`;
+}
