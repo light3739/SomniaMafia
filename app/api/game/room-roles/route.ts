@@ -12,11 +12,13 @@ export const POST = withSignedRoute<{
     timestamp: number;
     signature: string;
     chainId?: number;
+    signerAddress?: string;
 }>({
     scope: 'room-roles',
     requiredFields: ['roomId', 'playerAddress', 'nonce', 'timestamp', 'signature'],
     getRoomId: (body) => body.roomId,
     getActorAddress: (body) => body.playerAddress,
+    getSignerAddress: (body) => body.signerAddress || body.playerAddress,
     getMessage: ({ body, roomId, nonce, timestamp }) => buildTeammatesMessage({ roomId, nonce, timestamp }),
 }, async ({ body, roomId }) => {
     try {
