@@ -4,6 +4,9 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePrivy } from '@privy-io/react-auth';
+import { useBalance } from 'wagmi';
+import { formatEther } from 'viem';
+import { SOMNIA_TESTNET, AVALANCHE_FUJI } from '../../contracts/config';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
@@ -165,6 +168,18 @@ export const SetupProfile: React.FC = () => {
     const hasEmbeddedWallet = !!privyWallet;
     const embeddedWalletAddress = privyWallet?.address;
 
+    const { data: somniaBalance } = useBalance({
+        address: embeddedWalletAddress as `0x${string}`,
+        chainId: SOMNIA_TESTNET.id,
+        query: { enabled: !!embeddedWalletAddress }
+    });
+
+    const { data: avaxBalance } = useBalance({
+        address: embeddedWalletAddress as `0x${string}`,
+        chainId: AVALANCHE_FUJI.id,
+        query: { enabled: !!embeddedWalletAddress }
+    });
+
     return (
         <div className="relative w-full h-[100dvh] font-montserrat flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
             <motion.div
@@ -254,6 +269,56 @@ export const SetupProfile: React.FC = () => {
                         username={embeddedWalletAddress ? `${embeddedWalletAddress.slice(0, 6)}...${embeddedWalletAddress.slice(-4)}` : undefined}
                         onLink={() => createWallet?.()}
                     />
+
+                    {hasEmbeddedWallet && (
+                        <div className="flex flex-col gap-2 mt-2 px-1">
+                            <h4 className="text-white/50 text-xs font-medium mb-1">Testnet Balances</h4>
+                            
+                            <div className="flex items-center justify-between bg-white/5 rounded-xl p-3 border border-white/10">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-[#19130D] flex items-center justify-center border border-white/20 p-1">
+                                        <img src="/assets/somniayeal.png" alt="Somnia" className="w-full h-full object-contain" />
+                                    </div>
+                                    <span className="text-white text-sm font-semibold">Somnia</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-[#ffb01d] font-mono text-sm shadow-[#ffb01d]/20 drop-shadow-sm">
+                                        {somniaBalance ? Number(formatEther(somniaBalance.value)).toFixed(3) : '0.000'} STT
+                                    </span>
+                                    <a 
+                                        href="https://faucet.testnet.somnia.network/" 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="px-3 py-1 bg-[#ffb01d]/10 hover:bg-[#ffb01d]/20 text-[#ffb01d] border border-[#ffb01d]/30 rounded-lg text-xs font-bold transition-all"
+                                    >
+                                        Faucet
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between bg-white/5 rounded-xl p-3 border border-white/10">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-[#19130D] flex items-center justify-center border border-white/20 p-1">
+                                        <img src="/assets/avalanche-avax-logo.png" alt="Avalanche" className="w-full h-full object-contain" />
+                                    </div>
+                                    <span className="text-white text-sm font-semibold">Avalanche</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-red-400 font-mono text-sm shadow-red-400/20 drop-shadow-sm">
+                                        {avaxBalance ? Number(formatEther(avaxBalance.value)).toFixed(3) : '0.000'} AVAX
+                                    </span>
+                                    <a 
+                                        href="https://core.app/tools/testnet-faucet/?subnet=c&token=c" 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="px-3 py-1 bg-red-400/10 hover:bg-red-400/20 text-red-400 border border-red-400/30 rounded-lg text-xs font-bold transition-all"
+                                    >
+                                        Faucet
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Connected Accounts */}
