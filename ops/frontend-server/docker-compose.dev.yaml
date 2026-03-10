@@ -19,7 +19,7 @@ services:
 
   gm-server:
     build:
-      context: ../../../../gm-server
+      context: ../../../gm-server
       dockerfile: Dockerfile
     container_name: mafia-gm-dev
     restart: unless-stopped
