@@ -11,7 +11,7 @@ import { loadSession, createNewSession, markSessionRegistered, getSessionAccount
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
 import { signRequest } from '../services/requestSigning';
-import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage, buildDiscussionMessage } from '../services/signingSchema';
+import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage, buildDiscussionMessage, buildInvestigateMessage, buildRoleSyncMessage } from '../services/signingSchema';
 
 const shotSound = "/assets/mafia_shot.wav";
 
@@ -199,8 +199,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const runtimeContractAddress = runtimeDeployment.contracts.MafiaDiamond as `0x${string}`;
 
     const LOBBY_FUNDING_VALUE = useMemo(() => {
-        // GAS FIX: 0.1 AVAX is safe for ~3.3M gas at 30 gwei
-        return chainId === AVALANCHE_FUJI.id ? parseEther('0.1') : parseEther('1');
+        // GAS FIX: 0.35 AVAX is safe for ~3.3M gas at 30 gwei
+        return chainId === AVALANCHE_FUJI.id ? parseEther('0.35') : parseEther('1');
     }, [chainId]);
 
     useEffect(() => {
@@ -367,13 +367,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                 try {
                     // Sign using signRequest so message format matches GM server's
-                    // buildModernMessage: role-sync:${roomId}:${playerAddress}:${nonce}:${timestamp}
+                    // buildRoleSyncMessage: sync-role-commit:${roomId}:${txHash}:${nonce}:${timestamp}
                     const signed = await signRequest({
                         address: playerAddress,
                         roomId: Number(roomId),
                         walletClient,
-                        buildMessage: ({ nonce, timestamp }) =>
-                            `role-sync:${roomId.toString()}:${playerAddress.toLowerCase()}:${nonce}:${timestamp}`,
+                        buildMessage: ({ nonce, timestamp }) => buildRoleSyncMessage({
+                            roomId: roomId.toString(),
+                            txHash,
+                            nonce,
+                            timestamp,
+                        }),
                     });
 
                     const res = await fetch(`${GM_SERVER_URL}/role-commit-sync`, {
@@ -387,6 +391,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             signerAddress: signed.signerAddress,
                             nonce: signed.nonce,
                             timestamp: signed.timestamp,
+                            chainId: chainId?.toString() || '',
                         }),
                     });
 
@@ -2027,27 +2032,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             console.log(`[Investigation API] Fetching result for ${detective} -> ${target}`);
-            // Sign message using session key (no MetaMask popup) or fallback to main wallet
-            const message = `investigate:${currentRoomId.toString()}:${target}`;
+            
+            // Use signRequest to generate modern signature with nonce and timestamp
+            // signRequest automatically handles session key vs walletClient
+            const signed = await signRequest({
+                address: detective,
+                roomId: Number(currentRoomId),
+                walletClient,
+                buildMessage: ({ nonce, timestamp }) => buildInvestigateMessage({
+                    roomId: currentRoomId.toString(),
+                    dayCount: gameState.dayCount,
+                    targetAddress: target,
+                    nonce,
+                    timestamp,
+                }),
+            });
 
-            let signature: string;
-            let signerAddress: string;
-
-            const sessionAccount = getSessionAccount();
-            if (sessionAccount) {
-                // Use session key — instant, no popup
-                signature = await sessionAccount.signMessage!({ message });
-                signerAddress = sessionAccount.address;
-                console.log(`[Investigation API] Signed with session key: ${signerAddress}`);
-            } else if (walletClient) {
-                // Fallback to main wallet (MetaMask popup)
-                signature = await walletClient.signMessage({ message });
-                signerAddress = detective;
-                console.log(`[Investigation API] Signed with main wallet: ${signerAddress}`);
-            } else {
-                console.error('[Investigation API] No signer available');
-                return { role: Role.UNKNOWN, isMafia: false };
-            }
+            console.log(`[Investigation API] Signed with ${signed.signerAddress.toLowerCase() === detective.toLowerCase() ? 'main wallet' : 'session key'}: ${signed.signerAddress}`);
 
             const response = await fetch('/api/game/investigate', {
                 method: 'POST',
@@ -2056,8 +2057,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     roomId: currentRoomId.toString(),
                     detectiveAddress: detective,
                     targetAddress: target,
-                    signature,
-                    signerAddress // session key or main wallet address
+                    dayCount: gameState.dayCount,
+                    signature: signed.signature,
+                    signerAddress: signed.signerAddress,
+                    nonce: signed.nonce,
+                    timestamp: signed.timestamp,
+                    chainId: chainId?.toString() || '',
                 })
             });
 
@@ -3087,15 +3092,30 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 1. Fetch ALL logs for this room in one request
             // We use low-level topics filtering: [topic0=null (any event), topic1=roomId]
             const roomIdTopic = pad(toHex(currentRoomId), { size: 32 });
-            const rawLogs = await publicClient.getLogs({
-                address: runtimeContractAddress,
-                topics: [
-                    null,        // Any event signature
-                    roomIdTopic  // topic[1] must match roomId
-                ],
-                fromBlock: lastProcessedBlockRef.current,
-                toBlock: currentBlock
-            } as any);
+            
+            const MAX_BLOCK_RANGE = 500n; // Somnia/Fuji safe limit
+            let allRawLogs: any[] = [];
+            let chunkFrom = lastProcessedBlockRef.current!;
+
+            while (chunkFrom <= currentBlock) {
+                const chunkTo = chunkFrom + MAX_BLOCK_RANGE > currentBlock
+                    ? currentBlock
+                    : chunkFrom + MAX_BLOCK_RANGE;
+
+                const chunk = await publicClient.getLogs({
+                    address: runtimeContractAddress,
+                    topics: [
+                        null,        // Any event signature
+                        roomIdTopic  // topic[1] must match roomId
+                    ],
+                    fromBlock: chunkFrom,
+                    toBlock: chunkTo
+                } as any);
+
+                allRawLogs = [...allRawLogs, ...chunk];
+                chunkFrom = chunkTo + 1n;
+            }
+            const rawLogs = allRawLogs;
 
             // 2. Parse logs using viem
             const parsedLogs = parseEventLogs({
@@ -3110,6 +3130,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const logId = `${txHash}-${log.logIndex}`; // Unique ID per event
 
                 if (processedEventsRef.current.has(logId)) continue;
+                
+                // Memory Optimization: Prevent infinite growth of processedEvents set
+                if (processedEventsRef.current.size > 2000) {
+                    const iterator = processedEventsRef.current.values();
+                    for (let i = 0; i < 500; i++) processedEventsRef.current.delete(iterator.next().value);
+                }
+                
                 processedEventsRef.current.add(logId);
                 hasChanges = true;
 

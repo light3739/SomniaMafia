@@ -8,6 +8,8 @@ import { signRequest } from '../../services/requestSigning';
 import { MAFIA_ABI } from '../../contracts/config';
 
 import { Role, Player, GamePhase } from '../../types';
+import { buildTeammatesMessage } from '../../services/signingSchema';
+import { NetworkSelector } from '../ui/NetworkSelector';
 import { Button } from '../ui/Button';
 import { MafiaChat } from './MafiaChat';
 import { useSoundEffects } from '../ui/SoundEffects';
@@ -272,7 +274,11 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 address: address as string,
                 roomId: Number(currentRoomId),
                 walletClient,
-                buildMessage: ({ nonce, timestamp }) => `teammates:${currentRoomId}:${nonce}:${timestamp}`,
+                buildMessage: ({ nonce, timestamp }) => buildTeammatesMessage({
+                    roomId: currentRoomId.toString(),
+                    nonce,
+                    timestamp,
+                }),
             });
 
             const query = new URLSearchParams({
