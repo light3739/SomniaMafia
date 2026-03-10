@@ -998,7 +998,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     (isMe && avatarUrl) ||
                     `https://picsum.photos/seed/${p.wallet}/200`;
 
-                let resolvedRole = existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN;
+                let resolvedRole = existingRoles.get(p.wallet.toLowerCase()) ?? Role.UNKNOWN;
 
                 if (isMe && resolvedRole === Role.UNKNOWN && address) {
                     const savedRole = localStorage.getItem(`my_role_${roomId}_${address.toLowerCase()}`);
@@ -3069,15 +3069,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 1. Fetch ALL logs for this room in one request
             // We use low-level topics filtering: [topic0=null (any event), topic1=roomId]
             const roomIdTopic = pad(toHex(currentRoomId), { size: 32 });
-            const rawLogs = await publicClient.getLogs({
-                address: runtimeContractAddress,
-                topics: [
-                    null,        // Any event signature
-                    roomIdTopic  // topic[1] must match roomId
-                ],
-                fromBlock: lastProcessedBlockRef.current,
-                toBlock: currentBlock
-            } as any);
+            const MAX_BLOCK_RANGE = 500n;
+            let allRawLogs: any[] = [];
+            let chunkFrom = lastProcessedBlockRef.current!;
+            while (chunkFrom <= currentBlock) {
+                const chunkTo = chunkFrom + MAX_BLOCK_RANGE > currentBlock
+                    ? currentBlock
+                    : chunkFrom + MAX_BLOCK_RANGE;
+                const chunk = await publicClient.getLogs({
+                    address: runtimeContractAddress,
+                    topics: [null, roomIdTopic],
+                    fromBlock: chunkFrom,
+                    toBlock: chunkTo
+                } as any);
+                allRawLogs = [...allRawLogs, ...chunk];
+                chunkFrom = chunkTo + 1n;
+            }
+            const rawLogs = allRawLogs;
 
             // 2. Parse logs using viem
             const parsedLogs = parseEventLogs({
@@ -3093,6 +3101,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 if (processedEventsRef.current.has(logId)) continue;
                 processedEventsRef.current.add(logId);
+
+                // ✅ ДОБАВЬ: не давать Set'у расти бесконечно
+                if (processedEventsRef.current.size > 5000) {
+                    const arr = Array.from(processedEventsRef.current);
+                    processedEventsRef.current = new Set(arr.slice(-2000));
+                }
                 hasChanges = true;
 
                 const eventName = (log as any).eventName;
