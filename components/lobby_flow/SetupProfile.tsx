@@ -77,7 +77,7 @@ const SocialCard: React.FC<SocialCardProps> = ({ icon, name, linked, username, o
 // --- Main Component ---
 export const SetupProfile: React.FC = () => {
     const { playerName, setPlayerName, avatarUrl, setAvatarUrl } = useGameContext();
-    const { user, logout, linkGoogle, linkTwitter, linkDiscord, unlinkGoogle, unlinkTwitter, unlinkDiscord } = usePrivy();
+    const { user, logout, linkGoogle, linkTwitter, linkDiscord, unlinkGoogle, unlinkTwitter, unlinkDiscord, createWallet } = usePrivy();
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [hydrated, setHydrated] = useState(false);
@@ -159,6 +159,12 @@ export const SetupProfile: React.FC = () => {
     const discord = user?.discord;
     const walletAddress = user?.wallet?.address;
 
+    const privyWallet = user?.linkedAccounts?.find(
+        (account: any) => account.type === 'wallet' && account.walletClientType === 'privy'
+    ) as any;
+    const hasEmbeddedWallet = !!privyWallet;
+    const embeddedWalletAddress = privyWallet?.address;
+
     return (
         <div className="relative w-full h-[100dvh] font-montserrat flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
             <motion.div
@@ -236,6 +242,18 @@ export const SetupProfile: React.FC = () => {
                             </span>
                         )}
                     </div>
+                </div>
+
+                {/* In-Game Wallet */}
+                <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[32px] p-5 md:p-6 border border-white/10 shadow-xl flex flex-col gap-3">
+                    <h3 className="text-white/60 text-xs font-bold uppercase tracking-[0.15em] mb-1">In-Game Wallet</h3>
+                    <SocialCard
+                        icon="💳"
+                        name="Embedded Wallet"
+                        linked={hasEmbeddedWallet}
+                        username={embeddedWalletAddress ? `${embeddedWalletAddress.slice(0, 6)}...${embeddedWalletAddress.slice(-4)}` : undefined}
+                        onLink={() => createWallet?.()}
+                    />
                 </div>
 
                 {/* Connected Accounts */}
