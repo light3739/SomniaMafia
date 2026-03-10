@@ -163,6 +163,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const checkWinInProgressRef = useRef(false);
     useEffect(() => {
         currentRoomIdRef.current = currentRoomId;
+        roleFetchedRef.current = false;
     }, [currentRoomId]);
 
     // === TX QUEUE: Serialize session key transactions to prevent nonce collisions ===
