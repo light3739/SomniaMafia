@@ -1,0 +1,42 @@
+name: mafia-dev
+services:
+  frontend:
+    build:
+      context: ../..
+      dockerfile: ops/frontend-server/Dockerfile
+      args:
+        NEXT_PUBLIC_GM_SERVER_URL: https://gm-test.mafiaonchain.live
+        NEXT_PUBLIC_LIVEKIT_URL: wss://livekit.mafiaonchain.live
+        NEXT_PUBLIC_ACTIVE_NETWORK: avalanche_fuji
+    container_name: mafia-frontend-dev
+    restart: unless-stopped
+    env_file:
+      - ./.env.dev
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - redis
+
+  gm-server:
+    build:
+      context: ../../../../gm-server
+      dockerfile: Dockerfile
+    container_name: mafia-gm-dev
+    restart: unless-stopped
+    env_file:
+      - ./.env.gm.dev
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: mafia-redis-dev
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - mafia_redis_dev:/data
+
+volumes:
+  mafia_redis_dev:
