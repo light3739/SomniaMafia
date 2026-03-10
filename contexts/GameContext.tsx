@@ -155,6 +155,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [showVotingResults, setShowVotingResults] = useState(false);
     const [keys, setKeys] = useState<CryptoKeyPair | null>(null);
     const eciesPrivKeyRef = useRef<CryptoKey | null>(null);
+    const roleFetchedRef = useRef(false);
 
     // Ref для currentRoomId чтобы избежать проблем с замыканием в callbacks
     const currentRoomIdRef = useRef<bigint | null>(currentRoomId);
@@ -1683,18 +1684,105 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             const plaintext = await eciesDecrypt(encrypted, privKey);
-            const roleNum = parseInt(plaintext.trim(), 10);
+            const text = plaintext.trim().toUpperCase();
+            // Поддержка обоих форматов: строка ("MAFIA") и число ("1")
+            const roleStringMap: Record<string, number> = {
+                'MAFIA': 1, 'DOCTOR': 2, 'DETECTIVE': 3, 'CIVILIAN': 4
+            };
+            const roleNum = roleStringMap[text] ?? parseInt(text, 10);
+
             if (isNaN(roleNum) || roleNum < 1 || roleNum > 4) {
                 console.error('[ECIES] Decrypted value is not a valid role:', plaintext);
                 return null;
             }
-            console.log('[ECIES] Role decrypted successfully:', roleNum);
+            console.log('[ECIES] Role decrypted successfully:', text, '->', roleNum);
             return roleNum;
         } catch (e) {
             console.error('[ECIES] Decryption failed:', e);
             return null;
         }
     }, [currentRoomId, address]);
+
+    const fetchMyRoleFromGM = useCallback(async () => {
+        if (!address || !currentRoomId || !walletClient) return;
+        if (roleFetchedRef.current) return; // уже получили
+        roleFetchedRef.current = true;
+
+        const tryFetch = async (): Promise<void> => {
+            try {
+                const signed = await signRequest({
+                    address,
+                    roomId: Number(currentRoomId),
+                    walletClient,
+                    buildMessage: ({ nonce, timestamp }) =>
+                        `my-role:${currentRoomId}:${address.toLowerCase()}:${nonce}:${timestamp}`,
+                });
+
+                const params = new URLSearchParams({
+                    playerAddress: address,
+                    signature: signed.signature,
+                    signerAddress: signed.signerAddress,
+                    nonce: signed.nonce,
+                    timestamp: String(signed.timestamp),
+                    chainId: String(chainId),
+                });
+
+                const res = await fetch(
+                    `${GM_SERVER_URL}/my-role/${currentRoomId}?${params}`
+                );
+
+                if (res.status === 202) {
+                    // SRA ключи ещё не все собраны — повтор через 4с
+                    console.log('[MyRole] SRA keys not ready, retrying in 4s...');
+                    roleFetchedRef.current = false; // разрешить повтор
+                    setTimeout(tryFetch, 4000);
+                    return;
+                }
+
+                if (!res.ok) {
+                    console.error('[MyRole] GM responded', res.status);
+                    roleFetchedRef.current = false;
+                    return;
+                }
+
+                const { encrypted } = await res.json();
+                const roleNum = await decryptMyRoleFromGM(encrypted);
+                if (!roleNum) {
+                    roleFetchedRef.current = false;
+                    return;
+                }
+
+                const roleEnumMap: Record<number, Role> = {
+                    1: Role.MAFIA, 2: Role.DOCTOR, 3: Role.DETECTIVE, 4: Role.CIVILIAN
+                };
+                const myRole = roleEnumMap[roleNum] ?? Role.UNKNOWN;
+
+                // Сохраняем в localStorage (для совместимости с остальными функциями)
+                localStorage.setItem(
+                    `my_role_${currentRoomId}_${address.toLowerCase()}`,
+                    myRole
+                );
+
+                // Обновляем state
+                setGameState(prev => ({
+                    ...prev,
+                    players: prev.players.map(p =>
+                        p.address.toLowerCase() === address.toLowerCase()
+                            ? { ...p, role: myRole }
+                            : p
+                    ),
+                }));
+
+                addLog(`Your role: ${myRole}`, 'success');
+                console.log(`[MyRole] ✅ Role set: ${myRole}`);
+            } catch (e) {
+                console.error('[MyRole] fetchMyRoleFromGM failed:', e);
+                roleFetchedRef.current = false;
+            }
+        };
+
+        await tryFetch();
+    }, [address, currentRoomId, walletClient, chainId, decryptMyRoleFromGM, addLog]);
 
     const commitRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
@@ -3409,6 +3497,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [gameState.phase, gameState.players, canActOnPlayer]);
 
 
+
+    // Запрашиваем зашифрованную роль от GM при переходе в фазу DAY (первый день)
+    // Именно тогда GM уже имеет все SRA ключи и может выдать роль
+    const prevPhaseForRoleRef = useRef<GamePhase>(GamePhase.LOBBY);
+    useEffect(() => {
+        const prev = prevPhaseForRoleRef.current;
+        const curr = gameState.phase;
+        prevPhaseForRoleRef.current = curr;
+
+        // Переход в DAY фазу = роли уже расшифрованы GM
+        if (curr === GamePhase.DAY && prev !== GamePhase.DAY) {
+            // Небольшая задержка: даём GM собрать все SRA ключи
+            setTimeout(() => {
+                fetchMyRoleFromGM();
+            }, 2000);
+        }
+    }, [gameState.phase, fetchMyRoleFromGM]);
 
     // AUTO-END GAME CHECKER (Safe Hybrid Approach)
     useEffect(() => {
