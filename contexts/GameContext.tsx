@@ -949,6 +949,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             mafiaCommittedCount, mafiaRevealedCount, phaseDeadline
         } = gameData;
 
+        // FIX: If rawPlayers is empty (transient RPC issue), skip update to prevent role loss
+        if (!rawPlayers || rawPlayers.length === 0) {
+            console.warn('[refreshPlayersList] skipping update because rawPlayers is empty (RPC lag?)');
+            return;
+        }
+
         // DEBUG: Log current phase from contract (only when phase/day changes to reduce noise)
         const phaseKey = `${phase}:${dayCount}`;
         if (lastPhaseKeyRef.current !== phaseKey) {
@@ -1882,7 +1888,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // --- NIGHT PHASE (GM SERVER API) ---
 
-    const submitNightActionToGM = useCallback(async (actionType: 'kill' | 'heal' | 'check', targetAddress: string) => {
+    const submitNightActionToGM = useCallback(async (
+        actionType: 'kill' | 'heal' | 'check',
+        targetAddress: string,
+        explicitDayCount?: number
+    ) => {
+        const resolvedDayCount = explicitDayCount ?? gameState.dayCount;
         if (!currentRoomId) return;
         if (!walletClient && !address) return;
 
@@ -1890,37 +1901,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const playerAddress = address!;
             console.log(`[GM API] Submitting night action: ${actionType} on ${targetAddress} by ${playerAddress}`);
-
-            // Always fetch fresh dayCount from contract to avoid stale state (e.g. night 2 with dayCount=0)
-            let currentDayCount = gameState.dayCount;
-            if (publicClient && currentRoomId) {
-                try {
-                    const roomData = await publicClient.readContract({
-                        address: runtimeContractAddress,
-                        abi: MAFIA_ABI,
-                        functionName: 'getRoom',
-                        args: [currentRoomId],
-                    }) as any;
-                    currentDayCount = Number(Array.isArray(roomData) ? roomData[7] : roomData.dayCount);
-                    console.log(`[GM API] Fresh dayCount from contract: ${currentDayCount}`);
-                } catch (e) {
-                    console.warn('[NightAction] Could not fetch fresh dayCount, falling back to gameState:', e);
-                }
-            }
-
-            const signed = await signRequest({
-                address: playerAddress,
-                roomId: Number(currentRoomId),
-                walletClient,
-                buildMessage: ({ nonce, timestamp }) => buildNightActionMessage({
-                    roomId: currentRoomId.toString(),
-                    actionType,
-                    targetAddress,
-                    dayCount: currentDayCount,
-                    nonce,
-                    timestamp,
-                }),
-            });
 
             const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${playerAddress.toLowerCase()}`);
             const myPlayer = gameState.players.find(p => p.address.toLowerCase() === playerAddress.toLowerCase());
@@ -1941,23 +1921,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 throw new Error("Missing role or salt for cryptographic verification");
             }
 
-            console.log('[GM API] Request signed for night action');
-
-            const payload = JSON.stringify({
-                roomId: currentRoomId.toString(),
-                playerAddress,
-                actionType,
-                targetAddress,
-                dayCount: currentDayCount,
-                signature: signed.signature,
-                signerAddress: signed.signerAddress,
-                role: myRoleNum,
-                salt: savedSalt,
-                nonce: signed.nonce,
-                timestamp: signed.timestamp,
-                chainId,
-            });
-
             // Retry with backoff for transient 403/5xx (role commit cache miss on GM)
             let response: Response | undefined;
             let lastError = '';
@@ -1965,50 +1928,75 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 12000);
                 try {
-                    try {
-                        response = await fetch('/api/game/night-action', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: payload,
-                            signal: controller.signal,
-                        });
-                    } catch (networkError: any) {
-                        const isAbort = networkError?.name === 'AbortError';
-                        lastError = isAbort ? 'GM server timeout (12s). Retrying...' : (networkError?.message || 'Network error');
-                        if (attempt < 2) {
-                            await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
-                            continue;
-                        }
+                    // FIX: Re-sign on every attempt to get a fresh nonce/timestamp
+                    const signed = await signRequest({
+                        address: playerAddress,
+                        roomId: Number(currentRoomId),
+                        walletClient,
+                        buildMessage: ({ nonce, timestamp }) => buildNightActionMessage({
+                            roomId: currentRoomId.toString(),
+                            actionType,
+                            targetAddress,
+                            dayCount: resolvedDayCount,
+                            nonce,
+                            timestamp,
+                        }),
+                    });
+
+                    console.log(`[GM API] Attempt ${attempt + 1}: signature fresh, sending payload`);
+
+                    response = await fetch('/api/game/night-action', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            roomId: currentRoomId.toString(),
+                            playerAddress,
+                            actionType,
+                            targetAddress,
+                            dayCount: resolvedDayCount,
+                            signature: signed.signature,
+                            signerAddress: signed.signerAddress,
+                            role: myRoleNum,
+                            salt: savedSalt,
+                            nonce: signed.nonce,
+                            timestamp: signed.timestamp,
+                            chainId,
+                        }),
+                        signal: controller.signal,
+                    });
+
+                    if (response.ok) break;
+
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    lastError = errorData.error || 'Failed to submit night action';
+
+                    // Only retry on 403 or 5xx
+                    if (response.status !== 403 && response.status < 500) {
                         throw new Error(lastError);
+                    }
+
+                    if (attempt < 2) {
+                        console.warn(`[GM API] Attempt ${attempt + 1} failed (${response.status}: ${lastError}). Retrying...`);
+                        await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
+                    }
+                } catch (e: any) {
+                    lastError = e.message || 'Network error';
+                    if (attempt < 2) {
+                        await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
+                    } else {
+                        throw e;
                     }
                 } finally {
                     clearTimeout(timeoutId);
                 }
-
-                if (response.ok) break;
-
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                lastError = errorData.error || 'Failed to submit night action';
-
-                // Only retry on 403 (role commit not found) or 5xx — don't retry 400/401
-                if (response.status !== 403 && response.status < 500) {
-                    throw new Error(lastError);
-                }
-
-                if (attempt < 2) {
-                    console.warn(`[GM API] Attempt ${attempt + 1} failed (${response.status}: ${lastError}). Retrying in ${(attempt + 1) * 2}s...`);
-                    await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
-                }
             }
 
             if (!response || !response.ok) {
-                throw new Error(lastError || 'Failed to submit night action after retries');
+                throw new Error(lastError || 'Failed after multiple attempts');
             }
 
             // OPTIMISTIC: Mark committed immediately
             applyOptimisticUpdate({ hasNightCommitted: true });
-            // Night action target should NOT be added to voteMap (which is for public votes only)
-
             addLog(`Submitted ${actionType} action!`, "success");
 
         } catch (e: any) {
@@ -2018,7 +2006,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, address, walletClient, applyOptimisticUpdate, addLog, setVoteMap]);
+    }, [currentRoomId, address, walletClient, applyOptimisticUpdate, addLog, gameState.dayCount, gameState.players, chainId]);
 
     const getInvestigationResultOnChain = useCallback(async (detective: string, target: string) => {
         if (isTestMode) {
@@ -2140,18 +2128,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
 
                 if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
+                    const err = await res.json();
                     const gmError = String(err?.error || 'GM resolve failed');
-                    const gmTxFailed = Boolean(err?.gmTxFailed);
 
                     // Fallback path: if GM has no actions to resolve, force timeout on-chain
                     // so NIGHT still progresses to DAY instead of stalling.
+                    // Also fallback if GM TX failed (insufficient gas etc)
                     if (
                         gmError.includes('No night actions submitted') ||
-                        gmError.includes('No valid night actions from alive players')
+                        gmError.includes('No valid night actions from alive players') ||
+                        gmError.includes('gas required') ||
+                        gmError.includes('insufficient funds') ||
+                        gmError.includes('Execution reverted')
                     ) {
-                        console.warn('[GM API] No actions in GM state, falling back to on-chain forcePhaseTimeout');
-                        addLog('No GM actions found. Forcing night timeout on-chain...', 'warning');
+                        console.warn('[GM API] No actions or GM TX failed, falling back to on-chain forcePhaseTimeout');
+                        addLog('GM cannot resolve night. Forcing timeout on-chain...', 'warning');
 
                         const fallbackHash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
                         await publicClient?.waitForTransactionReceipt({ hash: fallbackHash });
@@ -2165,34 +2156,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         return;
                     }
 
-                    // GM TX failed (e.g. insufficient gas in GM wallet) — fall back to on-chain forcePhaseTimeout
-                    if (
-                        gmTxFailed ||
-                        gmError.includes('gas required') ||
-                        gmError.includes('insufficient funds') ||
-                        gmError.includes('Execution reverted') ||
-                        gmError.includes('exceeds allowance')
-                    ) {
-                        console.warn('[GM API] GM TX failed (gas?), falling back to on-chain forcePhaseTimeout:', gmError);
-                        addLog('GM transaction failed. Forcing night timeout on-chain...', 'warning');
-
-                        const fallbackHash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
-                        await publicClient?.waitForTransactionReceipt({ hash: fallbackHash });
-                        await refreshPlayersList(currentRoomId);
-                        return;
-                    }
-
-                    // GM returned 403 (auth) — deadline passed, fall back to on-chain forcePhaseTimeout
-                    if (res.status === 403 || res.status === 401) {
-                        console.warn('[GM API] GM auth error, falling back to on-chain forcePhaseTimeout:', gmError);
-                        addLog('GM authorization failed. Forcing night timeout on-chain...', 'warning');
-
-                        const fallbackHash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
-                        await publicClient?.waitForTransactionReceipt({ hash: fallbackHash });
-                        await refreshPlayersList(currentRoomId);
-                        return;
-                    }
-
                     throw new Error(gmError);
                 }
 
@@ -2202,18 +2165,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // Normal On-chain timeout for other phases
+            addLog("Forcing phase timeout on-chain...", "info");
             const hash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
-            addLog("Phase timeout triggered!", "warning");
             await publicClient?.waitForTransactionReceipt({ hash });
+            addLog("Phase timeout forced on-chain!", "success");
             await refreshPlayersList(currentRoomId);
         } catch (e: any) {
-            console.error('[ForcePhaseTimeout Error]', e);
-            addLog(e.shortMessage || e.message || 'Timeout action failed', "danger");
-            throw e;
+            console.error('[Force Phase Timeout Failed]', e);
+            addLog(e.shortMessage || e.message, "danger");
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList, gameState.phase, walletClient, address]);
+    }, [currentRoomId, address, walletClient, gameState.phase, addLog, refreshPlayersList, chainId, publicClient, sendGameTransaction]);
 
     // --- MAFIA CHAT (V4) ---
 
@@ -2412,7 +2375,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Automatically reveal my role on-chain after game ends (for trustless verification)
     const revealMyRoleAfterGameEnd = useCallback(async () => {
-        if (!currentRoomId || !myPlayer || !address) return;
+        if (!currentRoomId || !myPlayer || !address || !publicClient) return;
 
         try {
             // Get saved salt from localStorage (set during commitRole phase)
@@ -2422,10 +2385,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 return;
             }
 
+            // FIX: Check if already revealed ON-CHAIN before submitting to avoid revert during estimation
+            const onChainRole = await publicClient.readContract({
+                address: runtimeContractAddress,
+                abi: MAFIA_ABI,
+                functionName: 'playerRoles',
+                args: [currentRoomId, address],
+            }) as number;
+
+            if (onChainRole !== 0) {
+                console.log("[RoleReveal] Role already revealed on-chain (contract state), skipping");
+                return;
+            }
+
             // Get role from myPlayer (locally decrypted)
             let roleNum = getRoleNumber(myPlayer.role);
 
-            // FALLBACK: If myPlayer.role is UNKNOWN, check localStorage (common after page refresh)
+            // FALLBACK #1: If myPlayer.role is UNKNOWN, check localStorage (common after page refresh)
             if (roleNum === 0 && address) {
                 const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${address.toLowerCase()}`);
                 if (savedRole) {
@@ -3134,7 +3110,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Memory Optimization: Prevent infinite growth of processedEvents set
                 if (processedEventsRef.current.size > 2000) {
                     const iterator = processedEventsRef.current.values();
-                    for (let i = 0; i < 500; i++) processedEventsRef.current.delete(iterator.next().value);
+                    for (let i = 0; i < 500; i++) {
+                        const val = iterator.next().value;
+                        if (val !== undefined) processedEventsRef.current.delete(val);
+                    }
                 }
                 
                 processedEventsRef.current.add(logId);
