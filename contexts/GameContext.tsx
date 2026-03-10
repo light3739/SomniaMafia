@@ -8,6 +8,7 @@ import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL, AVALANCHE_FUJI, getDeploymentByChainId } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
 import { loadSession, createNewSession, markSessionRegistered, getSessionAccount } from '../services/sessionKeyService';
+import { loadOrCreateKeypair, exportPublicKeyHex, eciesDecrypt, EciesEncrypted } from '../services/eciesService';
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
 import { signRequest } from '../services/requestSigning';
@@ -86,6 +87,7 @@ interface GameContextType {
     setVoteMap: React.Dispatch<React.SetStateAction<Record<string, string>>>;
     runtimeContractAddress: `0x${string}`;
     currencySymbol: string;
+    decryptMyRoleFromGM: (encrypted: EciesEncrypted) => Promise<number | null>;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -152,6 +154,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [selectedTarget, setSelectedTarget] = useState<`0x${string}` | null>(null);
     const [showVotingResults, setShowVotingResults] = useState(false);
     const [keys, setKeys] = useState<CryptoKeyPair | null>(null);
+    const eciesPrivKeyRef = useRef<CryptoKey | null>(null);
 
     // Ref для currentRoomId чтобы избежать проблем с замыканием в callbacks
     const currentRoomIdRef = useRef<bigint | null>(currentRoomId);
@@ -1223,6 +1226,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 3. Сессия
             const { sessionAddress } = createNewSession(address, newRoomId);
 
+            // ✅ ДОБАВИТЬ: Загружаем/генерируем ECIES keypair для этого игрока
+            const eciesKp = await loadOrCreateKeypair(newRoomId.toString(), address);
+            eciesPrivKeyRef.current = eciesKp.privateKey;
+            const eciesPubKeyHex = await exportPublicKeyHex(eciesKp.publicKey);
+            console.log('[ECIES] Public key ready:', eciesPubKeyHex.slice(0, 20) + '...');
+
             // Sanitize nickname (allow alphanumeric only, fallback to Player_XXXX)
             // Cyrillic/Special chars can cause contract reverts if validation exists
             const safeName = /^[a-zA-Z0-9_ ]+$/.test(playerName) ? playerName : `Player_${Math.floor(Math.random() * 1000)}`;
@@ -1315,6 +1324,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             markSessionRegistered();
+
+            // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере
+            try {
+                await fetch('/api/game/register-pubkey', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId: finalRoomId.toString(),
+                        address,
+                        eciesPubKey: eciesPubKeyHex,
+                        chainId,
+                    })
+                });
+                console.log('[ECIES] Public key registered with GM server');
+            } catch (e) {
+                console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
+            }
+
             setCurrentRoomId(finalRoomId);
             await refreshPlayersList(finalRoomId);
 
@@ -1384,6 +1411,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 2. Generate session key
             const { sessionAddress } = createNewSession(address, roomId);
 
+            // ✅ ДОБАВИТЬ: ECIES keypair для join
+            const eciesKp = await loadOrCreateKeypair(roomId.toString(), address);
+            eciesPrivKeyRef.current = eciesKp.privateKey;
+            const eciesPubKeyHex = await exportPublicKeyHex(eciesKp.publicKey);
+            console.log('[ECIES] Public key ready:', eciesPubKeyHex.slice(0, 20) + '...');
+
             // 3. Оценка газа с буфером
             let gasLimit = 14_500_000n;
             try {
@@ -1436,6 +1469,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 5. Mark session as registered
             markSessionRegistered();
+
+            // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере
+            try {
+                await fetch('/api/game/register-pubkey', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId: roomId.toString(),
+                        address,
+                        eciesPubKey: eciesPubKeyHex,
+                        chainId,
+                    })
+                });
+                console.log('[ECIES] Public key registered with GM server');
+            } catch (e) {
+                console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
+            }
 
             setCurrentRoomId(BigInt(roomId));
             await refreshPlayersList(BigInt(roomId));
@@ -1605,6 +1655,46 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
         }
     }, [currentRoomId, sendGameTransaction, addLog, confirmInBackground]);
+
+    // ✅ ДОБАВИТЬ: Расшифровка роли, зашифрованной GM через ECIES
+    const decryptMyRoleFromGM = useCallback(async (
+        encrypted: EciesEncrypted
+    ): Promise<number | null> => {
+        // Попытка 1: использовать privKey из памяти (текущая сессия)
+        let privKey = eciesPrivKeyRef.current;
+
+        // Попытка 2: восстановить из localStorage (после перезагрузки страницы)
+        if (!privKey && currentRoomId && address) {
+            try {
+                const kp = await loadOrCreateKeypair(currentRoomId.toString(), address);
+                privKey = kp.privateKey;
+                eciesPrivKeyRef.current = privKey;
+                console.log('[ECIES] Private key restored from localStorage');
+            } catch (e) {
+                console.error('[ECIES] Failed to restore keypair:', e);
+                return null;
+            }
+        }
+
+        if (!privKey) {
+            console.error('[ECIES] No private key available for decryption');
+            return null;
+        }
+
+        try {
+            const plaintext = await eciesDecrypt(encrypted, privKey);
+            const roleNum = parseInt(plaintext.trim(), 10);
+            if (isNaN(roleNum) || roleNum < 1 || roleNum > 4) {
+                console.error('[ECIES] Decrypted value is not a valid role:', plaintext);
+                return null;
+            }
+            console.log('[ECIES] Role decrypted successfully:', roleNum);
+            return roleNum;
+        } catch (e) {
+            console.error('[ECIES] Decryption failed:', e);
+            return null;
+        }
+    }, [currentRoomId, address]);
 
     const commitRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
@@ -3390,7 +3480,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         voteMap, setVoteMap,
         runtimeContractAddress,
         currencySymbol: runtimeChain.nativeCurrency.symbol,
-        setCurrentRoomId
+        setCurrentRoomId,
+        decryptMyRoleFromGM
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, isTxConfirming, currentRoomId,
         createLobbyOnChain, joinLobbyOnChain, startGameOnChain,
@@ -3407,7 +3498,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         playerMarks, setPlayerMark,
         voteMap,
         runtimeChain.nativeCurrency.symbol,
-        setCurrentRoomId
+        setCurrentRoomId,
+        decryptMyRoleFromGM
     ]);
 
     return (
