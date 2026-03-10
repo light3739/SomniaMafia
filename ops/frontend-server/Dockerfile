@@ -7,6 +7,7 @@ RUN npm config set legacy-peer-deps true && npm ci
 
 FROM base AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS=--max-old-space-size=3072
 ARG NEXT_PUBLIC_GM_SERVER_URL
 ARG NEXT_PUBLIC_LIVEKIT_URL
 ARG NEXT_PUBLIC_ACTIVE_NETWORK
