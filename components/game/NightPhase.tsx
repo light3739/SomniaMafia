@@ -288,9 +288,10 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     roomId: currentRoomId.toString(),
                     playerAddress: address as string,
                     signature: signed.signature,
+                    signerAddress: signed.signerAddress,
                     nonce: signed.nonce,
                     timestamp: signed.timestamp,
-                    chainId: chainId || undefined,
+                    chainId: chainId?.toString() || '',
                 }),
             });
             const data = await res.json();

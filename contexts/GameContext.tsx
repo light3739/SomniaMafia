@@ -391,6 +391,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             signerAddress: signed.signerAddress,
                             nonce: signed.nonce,
                             timestamp: signed.timestamp,
+                            chainId: chainId?.toString() || '',
                         }),
                     });
 
@@ -1952,7 +1953,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         salt: savedSalt,
                         nonce: signed.nonce,
                         timestamp: signed.timestamp,
-                        chainId,
+                        chainId: chainId?.toString() || '',
                     });
 
                     try {
@@ -2056,7 +2057,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     signerAddress: signed.signerAddress,
                     nonce: signed.nonce,
                     timestamp: signed.timestamp,
-                    chainId,
+                    chainId: chainId?.toString() || '',
                 })
             });
 
