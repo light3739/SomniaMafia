@@ -24,7 +24,8 @@ services:
     container_name: mafia-gm-dev
     restart: unless-stopped
     env_file:
-      - ./.env.gm.dev
+      - path: ../../../gm-server/.env
+        required: false
     ports:
       - "127.0.0.1:3001:3001"
     depends_on:

@@ -14,7 +14,7 @@ jobs:
           if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
             curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-              -d text="🚀 Frontend dev deploy started: ${{ github.repository }} @ ${{ github.ref_name }} | commit ${{ github.sha }}"
+              -d text="🚀 Frontend dev deploy started: ${{ github.repository }} @ ${{ github.ref_name }} | ${{ github.sha }}"
           fi
 
       - name: Checkout
@@ -25,27 +25,33 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.GM_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          HOST="${{ secrets.MAFIATEST_SSH_HOST }}"
+          if [ -z "$HOST" ]; then HOST="${{ secrets.GM_SSH_HOST }}"; fi
           PORT="${{ secrets.GM_SSH_PORT }}"
           if [ -z "$PORT" ]; then PORT=22; fi
-          ssh-keyscan -p "$PORT" -H "${{ secrets.GM_SSH_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts
 
       - name: Deploy frontend to test server
         env:
-          FRONT_SSH_HOST: ${{ secrets.GM_SSH_HOST }}
+          FRONT_SSH_HOST: ${{ secrets.MAFIATEST_SSH_HOST }}
           FRONT_SSH_USER: ${{ secrets.GM_SSH_USER }}
           FRONT_SSH_PORT: ${{ secrets.GM_SSH_PORT }}
-          FRONT_REMOTE_DIR: /root/somnia-frontend-test
+          FRONT_REMOTE_DIR: /root/mafia-dev/frontend
         run: |
+          # Fall back to GM_SSH_HOST if MAFIATEST_SSH_HOST is not set
+          if [ -z "${FRONT_SSH_HOST}" ]; then
+            export FRONT_SSH_HOST="${{ secrets.GM_SSH_HOST }}"
+          fi
           if [ -z "${FRONT_SSH_USER}" ]; then
             export FRONT_SSH_USER=root
           fi
           if [ -z "${FRONT_SSH_PORT}" ]; then
             export FRONT_SSH_PORT=22
           fi
-          npm run front:deploy:test
+          npm run front:deploy:dev
 
       - name: Notify success (Telegram)
-        if: ${{ success() }}
+        if: success()
         run: |
           if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
             curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
@@ -54,7 +60,7 @@ jobs:
           fi
 
       - name: Notify failure (Telegram)
-        if: ${{ failure() }}
+        if: failure()
         run: |
           if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
             curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
