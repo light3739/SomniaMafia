@@ -29,3 +29,4 @@ services:
 
 volumes:
   somnia_redis_data_test:
+  

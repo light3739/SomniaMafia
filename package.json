@@ -8,12 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:gm": "node scripts/test_gm_backend_smoke.js",
-    "gm:sync": "bash ops/gm-server/sync.sh",
-    "gm:build": "bash ops/gm-server/build.sh",
-    "gm:deploy": "bash ops/gm-server/deploy-mafia.sh",
     "front:deploy": "bash ops/frontend-server/deploy-mafia.sh",
-    "front:deploy:test": "bash ops/frontend-server/deploy-test.sh",
-    "gm:deploy:test": "bash ops/gm-server/deploy-test.sh",
+    "front:deploy:dev": "bash ops/frontend-server/deploy-dev.sh",
     "monitor:deploy": "bash ops/monitoring/deploy-mafia-monitor.sh"
   },
   "dependencies": {

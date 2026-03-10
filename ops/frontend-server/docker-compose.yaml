@@ -17,6 +17,20 @@ services:
     depends_on:
       - redis
 
+  gm-server:
+    build:
+      context: ../../../gm-server
+      dockerfile: Dockerfile
+    container_name: somnia-gm
+    restart: unless-stopped
+    env_file:
+      - path: ../../../gm-server/.env
+        required: false
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      - redis
+
   redis:
     image: redis:7-alpine
     container_name: somnia-redis
