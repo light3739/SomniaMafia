@@ -208,6 +208,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getActiveWalletClient = useCallback(async () => {
         const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
         if (embeddedWallet) {
+            // Force Privy embedded wallet to switch to correct network before sending tx
+            await embeddedWallet.switchChain(runtimeChain.id);
             const provider = await embeddedWallet.getEthereumProvider();
             return {
                 client: createWalletClient({
@@ -226,8 +228,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const LOBBY_FUNDING_VALUE = useMemo(() => {
         // GAS FIX: 0.35 AVAX is safe for ~3.3M gas at 30 gwei
-        return chainId === AVALANCHE_FUJI.id ? parseEther('0.35') : parseEther('1');
-    }, [chainId]);
+        return runtimeChain.id === AVALANCHE_FUJI.id ? parseEther('0.35') : parseEther('1');
+    }, [runtimeChain.id]);
 
     useEffect(() => {
         if (isTestMode && typeof window !== 'undefined') {
