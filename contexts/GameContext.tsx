@@ -2009,7 +2009,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, address, walletClient, applyOptimisticUpdate, addLog, setVoteMap]);
+    }, [currentRoomId, address, walletClient, applyOptimisticUpdate, addLog, setVoteMap, gameState.dayCount]);
 
     const getInvestigationResultOnChain = useCallback(async (detective: string, target: string) => {
         if (isTestMode) {

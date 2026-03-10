@@ -611,7 +611,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             setIsProcessing(false);
             commitStartedRef.current = false;
         }
-    }, [selectedTarget, nightState.hasCommitted, myRole, gameState.phase, roleConfig.action, submitNightActionToGM, getInvestigationResultOnChain, addLog, playKillSound, playProtectSound, playInvestigateSound, address, setSelectedTarget, setGameState, isTestMode, gameState.players]);
+    }, [selectedTarget, nightState.hasCommitted, myRole, gameState.phase, roleConfig.action, submitNightActionToGM, getInvestigationResultOnChain, addLog, playKillSound, playProtectSound, playInvestigateSound, address, setSelectedTarget, setGameState, isTestMode, gameState.players, gameState.dayCount]);
 
 
 
