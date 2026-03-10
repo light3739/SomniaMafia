@@ -393,12 +393,84 @@ export class ServerStore {
         if (!redis) {
             return memoryStore[key]?.[address.toLowerCase()] || null;
         }
-
         try {
             const avatar = await redis.hget(key, address.toLowerCase());
             return avatar || null;
         } catch (e) {
             console.error("[ServerStore] Redis error (getAvatar):", e);
+            return null;
+        }
+    }
+
+    // ============ ECIES PUBLIC KEYS ============
+
+    /**
+     * Store a player's ECIES public key (65-byte hex) for a specific room.
+     * GM uses these to encrypt each player's role individually.
+     */
+    static async storeEciesPubKey(roomId: string, address: string, pubKeyHex: string): Promise<void> {
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:ecies_pubkeys:${normalizedRoomId}`;
+        const normalizedAddress = address.toLowerCase();
+
+        // Basic validation: uncompressed P-256 point = 65 bytes = 130 hex chars
+        if (!/^[0-9a-f]{130}$/i.test(pubKeyHex)) {
+            throw new Error(`[ServerStore] Invalid ECIES pubkey format for ${address}`);
+        }
+
+        if (!redis) {
+            if (!memoryStore[key]) memoryStore[key] = {};
+            memoryStore[key][normalizedAddress] = pubKeyHex;
+            return;
+        }
+
+        try {
+            await redis.hset(key, normalizedAddress, pubKeyHex);
+            await redis.expire(key, GAME_DATA_TTL);
+            console.log(`[ServerStore] Stored ECIES pubkey for Room #${roomId}, Player ${address.slice(0, 8)}...`);
+        } catch (e) {
+            console.error('[ServerStore] Redis error (storeEciesPubKey):', e);
+            throw e;
+        }
+    }
+
+    /**
+     * Get all ECIES public keys for a room.
+     * Returns: { "0xaddress": "04abcd...", ... }
+     */
+    static async getEciesPubKeys(roomId: string): Promise<Record<string, string>> {
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:ecies_pubkeys:${normalizedRoomId}`;
+
+        if (!redis) {
+            return memoryStore[key] || {};
+        }
+
+        try {
+            const data = await redis.hgetall(key);
+            return data || {};
+        } catch (e) {
+            console.error('[ServerStore] Redis error (getEciesPubKeys):', e);
+            return {};
+        }
+    }
+
+    /**
+     * Get a single player's ECIES public key.
+     */
+    static async getEciesPubKey(roomId: string, address: string): Promise<string | null> {
+        const normalizedRoomId = BigInt(roomId).toString();
+        const key = `room:ecies_pubkeys:${normalizedRoomId}`;
+
+        if (!redis) {
+            return memoryStore[key]?.[address.toLowerCase()] || null;
+        }
+
+        try {
+            const pubKey = await redis.hget(key, address.toLowerCase());
+            return pubKey || null;
+        } catch (e) {
+            console.error('[ServerStore] Redis error (getEciesPubKey):', e);
             return null;
         }
     }
