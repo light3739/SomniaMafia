@@ -199,8 +199,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const runtimeContractAddress = runtimeDeployment.contracts.MafiaDiamond as `0x${string}`;
 
     const LOBBY_FUNDING_VALUE = useMemo(() => {
-        // GAS FIX: 0.1 AVAX is safe for ~3.3M gas at 30 gwei
-        return chainId === AVALANCHE_FUJI.id ? parseEther('0.1') : parseEther('1');
+        // GAS FIX: 0.35 AVAX is safe for ~3.3M gas at 30 gwei
+        return chainId === AVALANCHE_FUJI.id ? parseEther('0.35') : parseEther('1');
     }, [chainId]);
 
     useEffect(() => {
