@@ -2,8 +2,9 @@
 
 import React, { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWalletClient, useWatchContractEvent, useWatchBlockNumber } from 'wagmi';
-import { createWalletClient, http, fallback, parseEther, formatEther, parseEventLogs, toHex, pad, type WalletClient } from 'viem';
+import { createWalletClient, http, fallback, parseEther, formatEther, parseEventLogs, toHex, pad, custom, type WalletClient } from 'viem';
 import { privateKeyToAccount, nonceManager } from 'viem/accounts';
+import { useWallets } from '@privy-io/react-auth';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL, AVALANCHE_FUJI, getDeploymentByChainId } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
@@ -185,6 +186,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
     const { data: walletClient } = useWalletClient();
+    const { wallets } = useWallets();
     const [isTxPending, setIsTxPending] = useState(false);
     const [isTxConfirming, setIsTxConfirming] = useState(false);
     const pendingConfirmationsRef = useRef<Set<string>>(new Set());
@@ -202,6 +204,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const runtimeDeployment = useMemo(() => getDeploymentByChainId(chainId ?? null), [chainId]);
     const runtimeChain = runtimeDeployment.chain;
     const runtimeContractAddress = runtimeDeployment.contracts.MafiaDiamond as `0x${string}`;
+
+    const getActiveWalletClient = useCallback(async () => {
+        const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
+        if (embeddedWallet) {
+            const provider = await embeddedWallet.getEthereumProvider();
+            return {
+                client: createWalletClient({
+                    account: embeddedWallet.address as `0x${string}`,
+                    chain: runtimeChain,
+                    transport: custom(provider)
+                }),
+                account: embeddedWallet.address as `0x${string}`
+            };
+        }
+        if (walletClient && address) {
+            return { client: walletClient, account: address as `0x${string}` };
+        }
+        throw new Error("No connected wallet found");
+    }, [wallets, walletClient, address, runtimeChain]);
 
     const LOBBY_FUNDING_VALUE = useMemo(() => {
         // GAS FIX: 0.35 AVAX is safe for ~3.3M gas at 30 gwei
@@ -477,7 +498,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Determine which account to use for gas estimation
         const sessionClient = getSessionWalletClient();
-        const accountToUse = (canUseSession && sessionClient) ? sessionClient.account : address;
+        const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
+        const accountToUse = (canUseSession && sessionClient) ? sessionClient.account : activeAccount;
 
         if (!accountToUse || !publicClient) {
             console.error("[Gas Estimation] Missing account or publicClient.");
@@ -642,18 +664,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // FIX #8/#9: Enqueue session key TXs to prevent nonce collisions
             return enqueueTx(() => attemptSend(0));
         } else {
-            // Fallback на основной кошелек (MetaMask)
+            // Fallback на основной кошелек (MetaMask или Privy Embedded)
             const totalTime = Math.round(performance.now() - txStartTime);
             console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas} (prep took ${totalTime}ms)`);
-            return writeContractAsync({
+            return activeWalletClient.writeContract({
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: functionName as any,
                 args: args as any,
+                account: activeAccount,
+                chain: runtimeChain,
                 gas: calculatedGas,
+                type: 'legacy',
             });
         }
-    }, [getSessionWalletClient, writeContractAsync, publicClient, address, isTestMode, runtimeContractAddress, runtimeChain]);
+    }, [getSessionWalletClient, getActiveWalletClient, publicClient, address, isTestMode, runtimeContractAddress, runtimeChain]);
 
     const [gameState, setGameState] = useState<GameState>({
         phase: GamePhase.LOBBY,
@@ -1241,13 +1266,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 4. Оценка газа с буфером
             let gasLimit = 14_500_000n;
+            const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
                     args: [lobbyName, 16, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
-                    account: address,
+                    account: activeAccount,
                     value: LOBBY_FUNDING_VALUE,
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
@@ -1257,7 +1283,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // 5. АТОМАРНАЯ ТРАНЗАКЦИЯ (Create + Join + Fund)
-            const hash = await writeContractAsync({
+            const hash = await activeWalletClient.writeContract({
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'createAndJoin',
@@ -1268,6 +1294,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     pubKeyHex as `0x${string}`,      // bytes publicKey
                     sessionAddress as `0x${string}`  // address sessionAddress
                 ],
+                account: activeAccount,
+                chain: runtimeChain,
                 value: LOBBY_FUNDING_VALUE,
                 gas: gasLimit,
                 type: 'legacy',
@@ -1391,7 +1419,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, lobbyName, publicClient, writeContractAsync, addLog, refreshPlayersList, LOBBY_FUNDING_VALUE, runtimeContractAddress]);
+    }, [playerName, address, lobbyName, publicClient, getActiveWalletClient, addLog, refreshPlayersList, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain]);
 
     const joinLobbyOnChain = useCallback(async (roomId: number): Promise<boolean> => {
         if (!playerName || !address || !publicClient) { alert("Enter name and connect wallet!"); return false; }
@@ -1421,13 +1449,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 3. Оценка газа с буфером
             let gasLimit = 14_500_000n;
+            const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
-                    account: address,
+                    account: activeAccount,
                     value: LOBBY_FUNDING_VALUE,
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
@@ -1437,11 +1466,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // 4. Join room with session key + fund it
-            const hash = await writeContractAsync({
+            const hash = await activeWalletClient.writeContract({
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
+                account: activeAccount,
+                chain: runtimeChain,
                 value: LOBBY_FUNDING_VALUE,
                 gas: gasLimit,
                 type: 'legacy',
@@ -1534,7 +1565,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, publicClient, writeContractAsync, addLog, refreshPlayersList, avatarUrl, walletClient, LOBBY_FUNDING_VALUE, runtimeContractAddress]);
+    }, [playerName, address, publicClient, getActiveWalletClient, addLog, refreshPlayersList, avatarUrl, walletClient, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain]);
 
     // --- SHUFFLE PHASE ---
 
@@ -1544,13 +1575,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             // Оценка газа с буфером
             let gasLimit = 14_500_000n;
+            const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'startGame',
                     args: [currentRoomId],
-                    account: address,
+                    account: activeAccount,
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] startGame estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -1558,11 +1590,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.warn('[Gas] startGame estimation failed, using fallback', e);
             }
 
-            const hash = await writeContractAsync({
+            const hash = await activeWalletClient.writeContract({
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'startGame',
                 args: [currentRoomId],
+                account: activeAccount,
+                chain: runtimeChain,
                 gas: gasLimit,
                 type: 'legacy',
             });
@@ -1574,7 +1608,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    }, [currentRoomId, publicClient, address, addLog, confirmInBackground, writeContractAsync]);
+    }, [currentRoomId, publicClient, address, addLog, confirmInBackground, getActiveWalletClient, runtimeChain]);
 
     // V4: Deck commit-reveal
     const commitDeckOnChain = useCallback(async (deckHash: string): Promise<`0x${string}` | undefined> => {
