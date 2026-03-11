@@ -134,6 +134,7 @@ export async function fetchInvestigationProofFromGM(params: {
     targetAddress: string;
     walletClient: any;
     chainId?: number;
+    dayCount?: number;
 }): Promise<{ role: Role; source: string } | null> {
     const { roomId, detectiveAddress, targetAddress, walletClient, chainId } = params;
 
@@ -142,7 +143,7 @@ export async function fetchInvestigationProofFromGM(params: {
         roomId: Number(roomId),
         walletClient,
         buildMessage: ({ nonce, timestamp }) =>
-            `investigate:${roomId}:${targetAddress.toLowerCase()}:${nonce}:${timestamp}`,
+            `investigate:${roomId}:${params.dayCount || 0}:${targetAddress.toLowerCase()}:${nonce}:${timestamp}`,
     });
 
     const body = {
@@ -153,7 +154,8 @@ export async function fetchInvestigationProofFromGM(params: {
         signerAddress: meta.signerAddress,
         nonce: meta.nonce,
         timestamp: meta.timestamp,
-        chainId
+        chainId,
+        dayCount: params.dayCount
     };
 
     const res = await fetch(`${GM_SERVER_URL}/investigation-proof`, {
@@ -187,6 +189,7 @@ export async function skipNightActionToGM(params: {
     address: string;
     walletClient: any;
     chainId?: number;
+    dayCount?: number;
 }): Promise<void> {
     const { roomId, address, walletClient, chainId } = params;
 
@@ -195,7 +198,7 @@ export async function skipNightActionToGM(params: {
         roomId: Number(roomId),
         walletClient,
         buildMessage: ({ nonce, timestamp }) =>
-            `skip-night:${roomId}:${nonce}:${timestamp}`,
+            `skip-night:${roomId}:${params.dayCount || 0}:${nonce}:${timestamp}`,
     });
 
     const body = {
@@ -205,7 +208,8 @@ export async function skipNightActionToGM(params: {
         signerAddress: meta.signerAddress,
         nonce: meta.nonce,
         timestamp: meta.timestamp,
-        chainId
+        chainId,
+        dayCount: params.dayCount
     };
 
     const res = await fetch(`${GM_SERVER_URL}/skip-night-action`, {
