@@ -222,7 +222,7 @@ export const RoleReveal: React.FC = React.memo(() => {
     useEffect(() => {
         if (gameState.phase !== GamePhase.REVEAL) return;
 
-        // Sequence: Register ECIES -> Submit SRA -> Fetch Role
+        // Sequence: Register ECIES -> Submit SRA -> Fetch Role -> Auto-Confirm
         if (!revealState.eciesRegistered) {
             handleRegisterEcies();
         } else if (!revealState.hasSharedKeys) {
@@ -230,8 +230,26 @@ export const RoleReveal: React.FC = React.memo(() => {
         } else if (!revealState.isRevealed) {
             const interval = setInterval(handleFetchRole, 2000); // Poll every 2s
             return () => clearInterval(interval);
+        } else if (!revealState.hasConfirmed && !isProcessing && !isTxPending) {
+            // Auto-confirm role after a 4 second delay so the user can read it
+            const timeout = setTimeout(() => {
+                handleConfirmRole();
+            }, 4000);
+            return () => clearTimeout(timeout);
         }
-    }, [gameState.phase, revealState.eciesRegistered, revealState.hasSharedKeys, revealState.isRevealed, handleRegisterEcies, handleShareKey, handleFetchRole]);
+    }, [
+        gameState.phase, 
+        revealState.eciesRegistered, 
+        revealState.hasSharedKeys, 
+        revealState.isRevealed, 
+        revealState.hasConfirmed,
+        isProcessing,
+        isTxPending,
+        handleRegisterEcies, 
+        handleShareKey, 
+        handleFetchRole,
+        handleConfirmRole
+    ]);
 
     // UI
     const roleConfig = revealState.myRole ? RoleConfig[revealState.myRole] : RoleConfig[Role.UNKNOWN];
