@@ -59,6 +59,11 @@ export const GameOver: React.FC = React.memo(() => {
     const [revealedRoles, setRevealedRoles] = useState<Map<string, Role>>(new Map());
     const [onChainRoles, setOnChainRoles] = useState<Map<string, Role>>(new Map());
     const onChainRolesRef = useRef<Map<string, Role>>(new Map());
+    const contractWinnerRef = useRef<string | null>(gameState.winner); // ← Winner priority fix
+
+    useEffect(() => {
+        contractWinnerRef.current = gameState.winner;
+    }, [gameState.winner]);
     const [refundClaimed, setRefundClaimed] = useState(false);
     const [refundAutomatic, setRefundAutomatic] = useState(false);
     const [depositAmount, setDepositAmount] = useState<string>('0');
@@ -71,6 +76,9 @@ export const GameOver: React.FC = React.memo(() => {
 
     // Change 1: accepts players explicitly
     const determineWinner = useCallback((roles: Map<string, Role>, players: typeof gameState.players) => {
+        // Contract is the single source of truth - if it already declared a winner, don't overwrite
+        if (contractWinnerRef.current) return;
+
         const alivePlayers = players.filter(p => p.isAlive);
 
         let aliveMafia = 0;
