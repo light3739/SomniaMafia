@@ -2841,6 +2841,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // addLog(`ZK Proof submitted! Winner: ${isTownWin ? "TOWN" : "MAFIA"}`, "success"); // Removed tech log
 
             await publicClient.waitForTransactionReceipt({ hash });
+            
+            // Proactively set winner from ZK inputs to avoid dependency on fragile event string
+            // isTownWin is already declared above line 2840
+            setGameState(prev => ({
+                ...prev,
+                phase: GamePhase.ENDED,
+                winner: isTownWin ? 'TOWN' : 'MAFIA'
+            }));
+
             await refreshPlayersList(currentRoomId);
 
             // DEBUG: Check deposit status after game end
@@ -2989,6 +2998,20 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const hash = await sendGameTransaction('endGameZK', args as any, useSessionKey);
 
                     await publicClient.waitForTransactionReceipt({ hash });
+                    
+                    // Proactively set winner from server result
+                    const lowerRes = (data.result || '').toLowerCase();
+                    const resolvedWinner: 'MAFIA' | 'TOWN' = 
+                        lowerRes.includes('town') ? 'TOWN' :
+                        lowerRes.includes('mafia') ? 'MAFIA' : 
+                        'TOWN';
+                    
+                    setGameState(prev => ({
+                        ...prev,
+                        phase: GamePhase.ENDED,
+                        winner: resolvedWinner
+                    }));
+
                     addLog("Game ended automatically via Server ZK!", "phase");
                     await refreshPlayersList(roomId);
 
@@ -3465,7 +3488,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     case 'GameEnded': {
                         const winCondition = args.winCondition as string || '';
-                        const gameWinner: 'MAFIA' | 'TOWN' = winCondition.toLowerCase().includes('mafia') ? 'MAFIA' : 'TOWN';
+                        const lower = winCondition.toLowerCase();
+                        
+                        // ✅ ROBUST PARSING: Explicitly check for both sides.
+                        // We prioritize TOWN check as fallback to match user's recommended pattern.
+                        const gameWinner: 'MAFIA' | 'TOWN' = 
+                            lower.includes('town') ? 'TOWN' : 
+                            lower.includes('mafia') ? 'MAFIA' : 
+                            'TOWN'; // Final fallback
+                        
                         console.log(`[Event] GameEnded! Winner: ${gameWinner}, condition: ${winCondition}`);
                         addLog(`Game Over! ${gameWinner === 'MAFIA' ? '🔪 Mafia wins!' : '🏘️ Town wins!'}`, 'phase');
                         setGameState(prev => ({
