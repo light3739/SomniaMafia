@@ -165,6 +165,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const currentRoomIdRef = useRef<bigint | null>(currentRoomId);
     const autoWinLockRef = useRef(false);
     const checkWinInProgressRef = useRef(false);
+    const votingFinalizedTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const autoClaimAttemptedRef = useRef(false);
+    const avatarCacheRef = useRef<Record<string, string>>({});
     useEffect(() => {
         currentRoomIdRef.current = currentRoomId;
         roleFetchedRef.current = false;
@@ -1001,16 +1004,27 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             lastPhaseKeyRef.current = phaseKey;
         }
 
-        // Fetch remote avatars from server
+        // Fetch remote avatars from server (CACHE IF NOT LOBBY)
         let remoteAvatars: Record<string, string> = {};
-        try {
-            const avatarRes = await fetch(`/api/game/avatar?roomId=${roomId.toString()}`);
-            if (avatarRes.ok) {
-                const data = await avatarRes.json();
-                remoteAvatars = data.avatars || {};
+        const isLobby = gameState.phase === GamePhase.LOBBY;
+        const hasCache = Object.keys(avatarCacheRef.current).length > 0;
+
+        if (isLobby || !hasCache) {
+            try {
+                const avatarRes = await fetch(`/api/game/avatar?roomId=${roomId.toString()}`);
+                if (avatarRes.ok) {
+                    const data = await avatarRes.json();
+                    remoteAvatars = data.avatars || {};
+                    avatarCacheRef.current = remoteAvatars;
+                } else {
+                    remoteAvatars = avatarCacheRef.current;
+                }
+            } catch (e) {
+                console.warn('[Avatar Sync] Failed to fetch avatars:', e);
+                remoteAvatars = avatarCacheRef.current;
             }
-        } catch (e) {
-            console.warn('[Avatar Sync] Failed to fetch avatars:', e);
+        } else {
+            remoteAvatars = avatarCacheRef.current;
         }
 
         setGameState(prev => {
@@ -2242,6 +2256,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 address,
                 walletClient,
                 chainId,
+                dayCount: gameState.dayCount
             });
             // Mark as acted locally
             applyOptimisticUpdate({ hasNightCommitted: true });
@@ -2263,6 +2278,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 targetAddress,
                 walletClient,
                 chainId,
+                dayCount: gameState.dayCount
             });
         } catch (e) {
             console.error('[GM API] Failed to fetch investigation proof:', e);
@@ -3342,9 +3358,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 const chunk = await publicClient.getLogs({
                     address: runtimeContractAddress,
+                    // topics: [null, roomIdTopic] fallback for Somnia/Fuji nodes that might handle null poorly
                     topics: [
-                        null,        // Any event signature
-                        roomIdTopic  // topic[1] must match roomId
+                        null, // Keep null for now as we don't have all hashes easily here, but ensure ID is stable
+                        roomIdTopic
                     ],
                     fromBlock: chunkFrom,
                     toBlock: chunkTo
@@ -3487,15 +3504,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             addLog(`Voting Finalized: No one was eliminated.`, "warning");
                         }
 
-                        // NEW: Trigger Voting Results Phase (10s delay)
+                        // NEW: Trigger Voting Results Phase (10s delay with cancellation ref)
                         console.log("[VotingFinalized] Triggering 10s results phase...");
                         setShowVotingResults(true);
-                        setTimeout(() => {
+
+                        if (votingFinalizedTimerRef.current) clearTimeout(votingFinalizedTimerRef.current);
+                        votingFinalizedTimerRef.current = setTimeout(() => {
                             console.log("[VotingFinalized] Results phase ended. Proceeding to Night.");
                             setShowVotingResults(false);
                             addLog("Night has fallen...", "night");
                             // Clear votes directly at the end of the results phase
                             setVoteMap({});
+                            votingFinalizedTimerRef.current = null;
                         }, 10000); // 10 seconds
 
                         break;
@@ -3620,11 +3640,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
 
                 // If Known Mafia >= Potential Town, we have won (or tied for win).
-                // In this case, revealing is safe because the game is effectively over.
-                if (knownMafia > 0 && knownMafia >= knownMafia + potentialTown - knownMafia) { // Simplifies to knownMafia >= potentialTown
-                    if (knownMafia >= potentialTown) {
-                        await claimVictory();
-                    }
+                if (!autoClaimAttemptedRef.current && knownMafia > 0 && knownMafia >= potentialTown) {
+                    autoClaimAttemptedRef.current = true;
+                    await claimVictory();
                 }
             }
 
