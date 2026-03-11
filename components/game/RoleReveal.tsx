@@ -2,11 +2,10 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
-import { usePublicClient, useAccount, useWalletClient } from 'wagmi';
-import { MAFIA_ABI } from '../../contracts/config';
+import { useAccount, useWalletClient } from 'wagmi';
 import { Role, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
-import { Check, Users, Skull, Shield, Search, Loader2, RefreshCw, EyeOff } from 'lucide-react';
+import { Check, Users, Skull, Shield, Search, Loader2, EyeOff } from 'lucide-react';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { registerEciesPubkey, submitSraKeyToGm, fetchMyRoleFromGm } from '../../services/gmService';
 import { loadOrCreateKeypair } from '../../services/eciesService';
@@ -60,11 +59,9 @@ export const RoleReveal: React.FC = React.memo(() => {
         commitAndConfirmRoleOnChain,
         addLog,
         isTxPending,
-        setGameState,
-        runtimeContractAddress
+        setGameState
     } = useGameContext();
 
-    const publicClient = usePublicClient();
     const { address } = useAccount();
     const { data: walletClient } = useWalletClient();
 
@@ -142,9 +139,19 @@ export const RoleReveal: React.FC = React.memo(() => {
         } catch (e: any) {
             console.error("[RoleReveal] SRA submission failed:", e);
             addLog(e.message || "Failed to submit SRA key", "danger");
+            
+            // Retry after 3 seconds by allowing the effect to trigger this again
+            setTimeout(() => {
+                submitInFlightRef.current = false;
+            }, 3000);
+            return; // Don't reset flag immediately in finally
         } finally {
             setIsProcessing(false);
-            submitInFlightRef.current = false;
+            // Only reset if it didn't fail (in success case) or if we don't want retry
+            // But here we want the timeout to handle the reset on failure
+            if (revealState.hasSharedKeys) {
+                submitInFlightRef.current = false;
+            }
         }
     }, [currentRoomId, address, walletClient, revealState.hasSharedKeys, addLog]);
 
@@ -259,7 +266,8 @@ export const RoleReveal: React.FC = React.memo(() => {
         handleRegisterEcies, 
         handleShareKey, 
         handleFetchRole,
-        handleConfirmRole
+        handleConfirmRole,
+        walletClient
     ]);
 
     // UI
