@@ -91,7 +91,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // Handle ECIES Registration
     const handleRegisterEcies = useCallback(async () => {
-        if (!currentRoomId || !address || registerInFlightRef.current) return;
+        if (!currentRoomId || !address || !walletClient || registerInFlightRef.current) return;
         
         const { isNew } = await loadOrCreateKeypair(currentRoomId.toString(), address);
         // Register if not already registered OR if it's a freshly generated key
@@ -99,7 +99,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
         registerInFlightRef.current = true;
         try {
-            await registerEciesPubkey(currentRoomId.toString(), address);
+            await registerEciesPubkey(currentRoomId.toString(), address, walletClient);
             setRevealState(prev => ({ 
                 ...prev, 
                 eciesRegistered: true,
@@ -112,7 +112,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } finally {
             registerInFlightRef.current = false;
         }
-    }, [currentRoomId, address, revealState.eciesRegistered]);
+    }, [currentRoomId, address, walletClient, revealState.eciesRegistered]);
 
     // Handle SRA Key submission
     const handleShareKey = useCallback(async () => {
