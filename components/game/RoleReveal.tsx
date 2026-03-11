@@ -139,7 +139,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // Handle Role Fetching
     const handleFetchRole = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient || revealState.isRevealed || !revealState.hasSharedKeys || fetchInFlightRef.current) return;
+        if (!currentRoomId || !address || !walletClient || revealState.isRevealed || revealState.hasConfirmed || !revealState.hasSharedKeys || fetchInFlightRef.current) return;
         fetchInFlightRef.current = true;
         try {
             const role = await fetchMyRoleFromGm({
@@ -174,7 +174,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } finally {
             fetchInFlightRef.current = false;
         }
-    }, [currentRoomId, address, walletClient, revealState.isRevealed, revealState.hasSharedKeys, addLog, setGameState]);
+    }, [currentRoomId, address, walletClient, revealState.isRevealed, revealState.hasConfirmed, revealState.hasSharedKeys, addLog, setGameState]);
 
     // Handle Confirmation
     const handleConfirmRole = useCallback(async () => {
@@ -227,7 +227,7 @@ export const RoleReveal: React.FC = React.memo(() => {
             handleRegisterEcies();
         } else if (!revealState.hasSharedKeys) {
             handleShareKey();
-        } else if (!revealState.isRevealed) {
+        } else if (!revealState.isRevealed && !revealState.hasConfirmed) {
             const interval = setInterval(handleFetchRole, 2000); // Poll every 2s
             return () => clearInterval(interval);
         } else if (!revealState.hasConfirmed && !isProcessing && !isTxPending) {
