@@ -1100,20 +1100,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Check if we already have a winner from a GameEnded event
                 if (prev.winner) {
                     resolvedWinner = prev.winner;
-                } else {
-                    // Fallback: derive winner from alive mafia count
-                    const aliveMafia = formattedPlayers.filter(p => p.isAlive && p.role === Role.MAFIA).length;
-                    const aliveTotal = formattedPlayers.filter(p => p.isAlive).length;
-                    const aliveTown = aliveTotal - aliveMafia;
-                    // If we can tell (no unknowns among alive or simple heuristic)
-                    if (aliveMafia === 0) {
-                        resolvedWinner = 'TOWN';
-                    } else if (aliveMafia >= aliveTown) {
-                        resolvedWinner = 'MAFIA';
-                    }
-                    if (resolvedWinner) {
-                        console.log('[Win] Derived winner from contract ENDED phase:', resolvedWinner);
-                    }
                 }
             }
 
@@ -1126,7 +1112,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 mafiaCommittedCount,
                 mafiaRevealedCount,
                 phaseDeadline,
-                winner: resolvedWinner || prev.winner
+                // prev.winner has absolute priority — never overwrite established winner with null or derivation
+                winner: prev.winner || resolvedWinner
             };
         });
         return gameData;
