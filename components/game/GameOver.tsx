@@ -58,15 +58,40 @@ export const GameOver: React.FC = React.memo(() => {
     const router = useRouter();
     const [revealedRoles, setRevealedRoles] = useState<Map<string, Role>>(new Map());
     const [onChainRoles, setOnChainRoles] = useState<Map<string, Role>>(new Map());
-    const [isRevealing, setIsRevealing] = useState(false);
-    const [revealTimedOut, setRevealTimedOut] = useState(false);
-    const [winner, setWinner] = useState<Winner>((gameState.winner as Winner) || 'DRAW');
+    const onChainRolesRef = useRef<Map<string, Role>>(new Map());
     const [refundClaimed, setRefundClaimed] = useState(false);
     const [refundAutomatic, setRefundAutomatic] = useState(false);
     const [depositAmount, setDepositAmount] = useState<string>('0');
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const [isRevealing, setIsRevealing] = useState(false);
+    const [revealTimedOut, setRevealTimedOut] = useState(false);
     const roomIdRef = useRef<bigint | null>(currentRoomId);
+    const [winner, setWinner] = useState<Winner>((gameState.winner as Winner) || 'DRAW');
+
+    // Change 1: accepts players explicitly
+    const determineWinner = useCallback((roles: Map<string, Role>, players: typeof gameState.players) => {
+        const alivePlayers = players.filter(p => p.isAlive);
+
+        let aliveMafia = 0;
+        let aliveTown = 0; // civilian + doctor + detective
+
+        for (const player of alivePlayers) {
+            const role = roles.get(player.address.toLowerCase()) || player.role;
+            if (role === Role.MAFIA) aliveMafia++;
+            else if (role !== Role.UNKNOWN) aliveTown++;
+        }
+
+        if (alivePlayers.length === 0) {
+            setWinner('DRAW');
+        } else if (aliveMafia > 0 && aliveMafia >= aliveTown) {
+            setWinner('MAFIA');
+        } else if (aliveMafia === 0) {
+            setWinner('TOWN');
+        } else {
+            setWinner('DRAW');
+        }
+    }, []);
 
     // After 30s, stop pulsing and show static "Unknown" for any unresolved roles
     useEffect(() => {
@@ -155,7 +180,7 @@ export const GameOver: React.FC = React.memo(() => {
                 roles.set(p.address.toLowerCase(), p.role);
             });
             setRevealedRoles(roles);
-            determineWinner(roles);
+            determineWinner(roles, gameState.players); // ← Change 3
             return;
         }
 
@@ -171,7 +196,7 @@ export const GameOver: React.FC = React.memo(() => {
         } finally {
             setIsRevealing(false);
         }
-    }, [publicClient, currentRoomId, isRevealing, address, isTestMode, gameState.players]); // fetchOnChainRoles intentionally omitted — defined after this callback, stable identity
+    }, [publicClient, currentRoomId, isRevealing, address, isTestMode, gameState.players, determineWinner]); 
 
     // Fetch roles revealed on-chain (trustless source)
     const fetchOnChainRoles = useCallback(async (localRoles: Map<string, Role>) => {
@@ -204,6 +229,7 @@ export const GameOver: React.FC = React.memo(() => {
             }
 
             setOnChainRoles(roles);
+            onChainRolesRef.current = roles; // ← Change 5: synchronously update ref
 
             // Merge: on-chain > local > existing
             const merged = new Map<string, Role>();
@@ -224,12 +250,12 @@ export const GameOver: React.FC = React.memo(() => {
             }));
 
             // Determine winner based on merged roles
-            determineWinner(merged);
+            determineWinner(merged, gameState.players); // ← Change 2
 
         } catch (e) {
             console.error("Failed to fetch on-chain roles:", e);
         }
-    }, [publicClient, currentRoomId, gameState.players, setGameState]);
+    }, [publicClient, currentRoomId, gameState.players, setGameState, determineWinner]);
 
     // Fetch all roles from GM server (GM has decrypted deck using all SRA keys)
     // Used as fallback when on-chain playerRoles reverts or returns 0 (e.g. dead players)
@@ -283,40 +309,25 @@ export const GameOver: React.FC = React.memo(() => {
                     return p;
                 })
             }));
+
+            // Change 4: Build merged map for determineWinner
+            const mergedForWinner = new Map<string, Role>();
+            for (const player of gameState.players) {
+                const addr = player.address.toLowerCase();
+                const onChain = onChainRolesRef.current.get(addr);
+                const gm = gmRoles.get(addr);
+                const existing = player.role;
+                mergedForWinner.set(addr, (onChain && onChain !== Role.UNKNOWN ? onChain : null)
+                    || (gm && gm !== Role.UNKNOWN ? gm : null)
+                    || (existing !== Role.UNKNOWN ? existing : Role.UNKNOWN));
+            }
+            // Recalculate winner
+            determineWinner(mergedForWinner, gameState.players);
+
         } catch (_e) {
             // Non-fatal — on-chain reveals are the canonical source
         }
-    }, [currentRoomId, setGameState]);
-
-    // Определяем победителя на основе раскрытых ролей
-    const determineWinner = (roles: Map<string, Role>) => {
-        const alivePlayers = gameState.players.filter(p => p.isAlive);
-
-        let aliveMafia = 0;
-        let aliveTown = 0; // civilian + doctor + detective
-
-        for (const player of alivePlayers) {
-            const role = roles.get(player.address.toLowerCase()) || player.role;
-            if (role === Role.MAFIA) aliveMafia++;
-            else if (role !== Role.UNKNOWN) aliveTown++;
-        }
-
-        // Условия победы:
-        // MAFIA wins: мафия >= город
-        // TOWN wins: мафия = 0
-        // DRAW: никто не выжил
-
-        if (alivePlayers.length === 0) {
-            setWinner('DRAW');
-        } else if (aliveMafia > 0 && aliveMafia >= aliveTown) {
-            setWinner('MAFIA');
-        } else if (aliveMafia === 0) {
-            setWinner('TOWN');
-        } else {
-            // Игра должна продолжаться, но раз мы в GameOver - значит что-то пошло не так
-            setWinner('DRAW');
-        }
-    };
+    }, [currentRoomId, setGameState, determineWinner, gameState.players]);
 
     // Reveal on монтирование
     useEffect(() => {
