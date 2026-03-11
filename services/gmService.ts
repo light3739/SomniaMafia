@@ -12,9 +12,17 @@ export interface GmRoleResponse {
 /**
  * Register player's ECIES public key with the GM server.
  */
-export async function registerEciesPubkey(roomId: string, address: string): Promise<void> {
+export async function registerEciesPubkey(roomId: string, address: string, walletClient?: any): Promise<void> {
     const keypair = await loadOrCreateKeypair(roomId, address);
     const pubkeyHex = await exportPublicKeyHex(keypair.publicKey);
+
+    const meta = await signRequest({
+        address,
+        roomId: Number(roomId),
+        walletClient,
+        buildMessage: ({ nonce, timestamp }) =>
+            `register-pubkey:${roomId}:${address.toLowerCase()}:${pubkeyHex}:${nonce}:${timestamp}`,
+    });
 
     const res = await fetch(`${GM_SERVER_URL}/register-pubkey`, {
         method: 'POST',
@@ -23,6 +31,10 @@ export async function registerEciesPubkey(roomId: string, address: string): Prom
             roomId,
             playerAddress: address,
             pubkey: pubkeyHex,
+            signature: meta.signature,
+            signerAddress: meta.signerAddress,
+            nonce: meta.nonce,
+            timestamp: meta.timestamp,
         }),
     });
 

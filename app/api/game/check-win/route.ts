@@ -1,16 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, http } from 'viem';
-import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '@/contracts/config';
-import { ServerStore } from '@/services/serverStore';
 import path from 'path';
 import * as snarkjs from 'snarkjs';
-
-const publicClient = createPublicClient({
-    chain: somniaChain,
-    transport: http()
-});
-
-const FLAG_ACTIVE = 2; // From SomniaMafiaV4.sol
+import { GM_SERVER_URL } from '@/contracts/config';
 
 export async function POST(request: Request) {
     try {
@@ -23,145 +14,73 @@ export async function POST(request: Request) {
         const roomId = BigInt(rawRoomId).toString();
         console.log(`[API/CheckWin] Checking Room #${roomId}`);
 
-        // 1. Get room data from blockchain
-        const roomData: any = await publicClient.readContract({
-            address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
-            abi: MAFIA_ABI,
-            functionName: 'getRoom',
-            args: [BigInt(roomId)],
-        });
+        // 1. Check Win Condition on GM Server
+        console.log(`[API/CheckWin] Calling GM Server /win-check/${roomId}`);
+        const gmRes = await fetch(`${GM_SERVER_URL}/win-check/${roomId}`);
+        let gmData;
+        try {
+            gmData = await gmRes.json();
+        } catch (e) {
+            return NextResponse.json({ error: 'Failed to read GM Server response' }, { status: 500 });
+        }
 
-        // roomData.phase: 6 = ENDED
-        const phase = Number(roomData.phase);
-        if (phase === 0 || phase === 6) {
+        if (!gmRes.ok) {
+            return NextResponse.json({ error: gmData.error || 'GM Server check failed' }, { status: gmRes.status });
+        }
+
+        if (!gmData.winDetected || !gmData.result) {
             return NextResponse.json({
                 winDetected: false,
-                phase,
-                message: 'Game not in active phase or already ended'
+                message: gmData.message || 'Game continues',
+                phase: gmData.phase
             });
         }
 
-        // 2. Get players from blockchain
-        const players: any = await publicClient.readContract({
-            address: MAFIA_CONTRACT_ADDRESS as `0x${string}`,
-            abi: MAFIA_ABI,
-            functionName: 'getPlayers',
-            args: [BigInt(roomId)],
-        });
+        const { result, mafiaCount, townCount } = gmData;
 
-        // 3. Match with server secrets
-        const secrets = await ServerStore.getRoomSecrets(roomId.toString());
-        if (!secrets) {
-            return NextResponse.json({
-                winDetected: false,
-                message: 'No secrets found for this room'
-            });
-        }
+        // 2. Generate ZK Proof
+        console.log(`[API/CheckWin] ${result} detected! Generating ZK Proof in Node...`);
 
-        let mafiaCount = 0;
-        let townCount = 0;
-        const missingAddresses: string[] = [];
+        const wasmPath = path.join(process.cwd(), 'public', 'mafia_outcome.wasm');
+        const zkeyPath = path.join(process.cwd(), 'public', 'mafia_outcome_0001.zkey');
 
-        for (const player of players) {
-            const addr = player.wallet.toLowerCase();
-            const flags = Number(player.flags);
-            const isAlive = (flags & FLAG_ACTIVE) !== 0;
+        // Add a timeout for ZK generation
+        const proofPromise = (snarkjs as any).groth16.fullProve(
+            {
+                roomId: roomId.toString(),
+                mafiaCount: mafiaCount.toString(),
+                townCount: townCount.toString()
+            },
+            wasmPath,
+            zkeyPath
+        );
 
-            if (isAlive) {
-                const secret = secrets[addr];
-                if (secret) {
-                    // Role Mapping: MAFIA = 1, DOCTOR = 2, DETECTIVE = 3, CIVILIAN = 4
-                    if (Number(secret.role) === 1) {
-                        mafiaCount++;
-                    } else {
-                        townCount++;
-                    }
-                } else {
-                    missingAddresses.push(addr);
-                }
-            }
-        }
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('ZK Proof generation timed out')), 30000)
+        );
 
-        const missingSecrets = missingAddresses.length;
-        if (missingSecrets > 0) {
-            console.log(`[API/CheckWin] Room #${roomId}: MISSING SECRETS for: ${missingAddresses.join(', ')}`);
-        }
+        const { proof, publicSignals } = await Promise.race([proofPromise, timeoutPromise]) as any;
 
-        console.log(`[API/CheckWin] Room #${roomId}: Mafia=${mafiaCount}, Town=${townCount}, Missing Secrets=${missingSecrets}`);
+        console.log(`[API/CheckWin] ZK Proof generated. Formatting for Solidity...`);
 
-        // 4. Check Win Condition
-        let result = null;
-
-        if (missingSecrets === 0) {
-            // All secrets available — standard check
-            if (mafiaCount === 0) {
-                result = 'TOWN_WIN';
-            } else if (mafiaCount >= townCount) {
-                result = 'MAFIA_WIN';
-            }
-        } else {
-            // Some secrets missing — try to determine winner with available data
-            // MAFIA_WIN: If known mafia >= known town + missing (even if all missing are town, mafia still wins)
-            if (mafiaCount > 0 && mafiaCount >= townCount + missingSecrets) {
-                result = 'MAFIA_WIN';
-                console.log(`[API/CheckWin] Room #${roomId}: MAFIA_WIN determined despite ${missingSecrets} missing secrets`);
-            }
-            // TOWN_WIN with missing secrets: We can't be sure — missing players might be mafia
-            // So we DO NOT declare TOWN_WIN when secrets are missing
-        }
-
-        if (result) {
-            // 5. Generate ZK Proof
-            console.log(`[API/CheckWin] ${result} detected! Generating ZK Proof in Node...`);
-
-            const wasmPath = path.join(process.cwd(), 'public', 'mafia_outcome.wasm');
-            const zkeyPath = path.join(process.cwd(), 'public', 'mafia_outcome_0001.zkey');
-
-            // Add a timeout for ZK generation
-            const proofPromise = (snarkjs as any).groth16.fullProve(
-                {
-                    roomId: roomId.toString(),
-                    mafiaCount: mafiaCount.toString(),
-                    townCount: townCount.toString()
-                },
-                wasmPath,
-                zkeyPath
-            );
-
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('ZK Proof generation timed out')), 30000)
-            );
-
-            const { proof, publicSignals } = await Promise.race([proofPromise, timeoutPromise]) as any;
-
-            console.log(`[API/CheckWin] ZK Proof generated. Formatting for Solidity...`);
-
-            const callData = await (snarkjs as any).groth16.exportSolidityCallData(proof, publicSignals);
-            const argv = callData
-                .replace(/["\[\]\s]/g, "")
-                .split(",")
-                .map((x: string) => x.toString());
-
-            return NextResponse.json({
-                winDetected: true,
-                result,
-                formatted: {
-                    a: [argv[0], argv[1]],
-                    b: [
-                        [argv[2], argv[3]],
-                        [argv[4], argv[5]]
-                    ],
-                    c: [argv[6], argv[7]],
-                    inputs: argv.slice(8)
-                }
-            });
-        }
+        const callData = await (snarkjs as any).groth16.exportSolidityCallData(proof, publicSignals);
+        const argv = callData
+            .replace(/["\[\]\s]/g, "")
+            .split(",")
+            .map((x: string) => x.toString());
 
         return NextResponse.json({
-            winDetected: false,
-            message: missingSecrets > 0
-                ? 'Waiting for secrets to sync'
-                : 'Game continues'
+            winDetected: true,
+            result,
+            formatted: {
+                a: [argv[0], argv[1]],
+                b: [
+                    [argv[2], argv[3]],
+                    [argv[4], argv[5]]
+                ],
+                c: [argv[6], argv[7]],
+                inputs: argv.slice(8)
+            }
         });
 
     } catch (error: any) {

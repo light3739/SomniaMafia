@@ -10,6 +10,16 @@ export function buildAvatarMessage(input: {
   return `avatar:${input.roomId}:${input.address.toLowerCase()}:${input.nonce}:${input.timestamp}`;
 }
 
+export function buildRegisterPubkeyMessage(input: {
+  roomId: string;
+  address: string;
+  pubkey: string;
+  nonce: string;
+  timestamp: number;
+}): string {
+  return `register-pubkey:${input.roomId}:${input.address.toLowerCase()}:${input.pubkey}:${input.nonce}:${input.timestamp}`;
+}
+
 export function buildNightActionMessage(input: {
   roomId: string;
   dayCount: number;
