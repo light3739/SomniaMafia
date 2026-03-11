@@ -2,25 +2,20 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
-import { ShuffleService, getShuffleService } from '../../services/shuffleService';
-import { stringToHex, hexToString } from '../../services/cryptoUtils';
 import { usePublicClient, useAccount, useWalletClient } from 'wagmi';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL } from '../../contracts/config';
+import { MAFIA_ABI } from '../../contracts/config';
 import { Role, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
-import { Eye, EyeOff, Check, Users, Skull, Shield, Search, Loader2, RefreshCw } from 'lucide-react';
-import { loadOrCreateKeypair, eciesDecrypt, type EciesEncrypted } from '../../services/eciesService';
-import { signRequest } from '../../services/requestSigning';
+import { Check, Users, Skull, Shield, Search, Loader2, RefreshCw, EyeOff } from 'lucide-react';
+import { ShuffleService, getShuffleService } from '../../services/shuffleService';
+import { registerEciesPubkey, submitSraKeyToGm, fetchMyRoleFromGm } from '../../services/gmService';
 
 interface RevealState {
-    deck: string[];
-    collectedKeys: Map<string, string>; // address -> decryption key
-    myCardIndex: number;
     myRole: Role | null;
     isRevealed: boolean;
     hasConfirmed: boolean;
-    hasSharedKeys: boolean;  // Track if we already shared
-    teammates: string[];     // Addresses of fellow mafia members
+    hasSharedKeys: boolean;
+    eciesRegistered: boolean;
 }
 
 const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; description: string }> = {
@@ -61,11 +56,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         gameState,
         currentRoomId,
         myPlayer,
-        shareKeysToAllOnChain,
-        commitRoleOnChain,
-        confirmRoleOnChain,
         commitAndConfirmRoleOnChain,
-        syncSecretWithServer,
         addLog,
         isTxPending,
         setGameState,
@@ -75,330 +66,113 @@ export const RoleReveal: React.FC = React.memo(() => {
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const { data: walletClient } = useWalletClient();
+
     const [revealState, setRevealState] = useState<RevealState>({
-        deck: [],
-        collectedKeys: new Map(),
-        myCardIndex: -1,
         myRole: null,
         isRevealed: false,
         hasConfirmed: false,
         hasSharedKeys: false,
-        teammates: []
+        eciesRegistered: false
     });
     const [isProcessing, setIsProcessing] = useState(false);
-    const [showRole, setShowRole] = useState(false);
 
-    // FIX: Ref-based guards to prevent race conditions (refs update synchronously, state doesn't)
-    const isShareInFlightRef = useRef(false);
-    const isDecryptInFlightRef = useRef(false);
-    const isConfirmInFlightRef = useRef(false);
+    // Guard refs
+    const isActionInFlightRef = useRef(false);
 
-    // Синхронизируем локальный hasConfirmed с данными из контракта
+    // Sync hasConfirmed with contract
     useEffect(() => {
         if (myPlayer?.hasConfirmedRole && !revealState.hasConfirmed) {
             setRevealState(prev => ({ ...prev, hasConfirmed: true }));
         }
     }, [myPlayer?.hasConfirmedRole, revealState.hasConfirmed]);
 
-    // Найти индекс моей карты в колоде
-    const findMyCardIndex = useCallback((): number => {
-        if (!myPlayer) return -1;
-        const myIndex = gameState.players.findIndex(
-            p => p.address.toLowerCase() === myPlayer.address.toLowerCase()
-        );
-        return myIndex;
-    }, [gameState.players, myPlayer]);
-
-    // Получить колоду из контракта
-    const fetchDeck = useCallback(async () => {
-        if (!currentRoomId) return;
-
-        // V4: Restore keys on mount if missing (Refresh handling)
-        if (myPlayer) {
-            const shuffleService = getShuffleService();
-            if (!shuffleService.hasKeys()) {
-                const loaded = shuffleService.loadKeys(currentRoomId.toString(), myPlayer.address);
-                if (loaded) {
-                    console.log("[RoleReveal] Keys recovered from local storage");
-                }
-            }
-        }
-
-        const myCardIndex = findMyCardIndex();
-        setRevealState(prev => ({ ...prev, myCardIndex }));
-    }, [currentRoomId, findMyCardIndex, myPlayer]);
-
-    // V3.1: Собрать ВСЕ ключи от всех игроков - используем getAllKeysForMe
-    const collectKeys = useCallback(async () => {
-        if (!publicClient || !currentRoomId || !myPlayer || !address) return;
-
+    // Handle ECIES Registration
+    const handleRegisterEcies = useCallback(async () => {
+        if (!currentRoomId || !address || revealState.eciesRegistered || isActionInFlightRef.current) return;
+        isActionInFlightRef.current = true;
         try {
-            // V3.1: getAllKeysForMe возвращает все ключи, которые другие игроки расшарили МНЕ
-            const [senders, keyBytes] = await publicClient.readContract({
-                address: runtimeContractAddress,
-                abi: MAFIA_ABI,
-                functionName: 'getAllKeysForMe',
-                args: [currentRoomId],
-                account: address,
-            }) as [string[], string[]];
-
-            const keys = new Map<string, string>();
-
-            // Собираем все ключи от всех отправителей
-            for (let i = 0; i < senders.length; i++) {
-                if (keyBytes[i] && keyBytes[i] !== '0x') {
-                    keys.set(senders[i], keyBytes[i]);
-                }
-            }
-
-            setRevealState(prev => ({
-                ...prev,
-                collectedKeys: keys
-            }));
-
-            // addLog(`Collected ${keys.size} decryption keys`, "info");
-            return keys;
+            await registerEciesPubkey(currentRoomId.toString(), address);
+            setRevealState(prev => ({ ...prev, eciesRegistered: true }));
+            console.log("[RoleReveal] ECIES registered successfully");
         } catch (e) {
-            console.error("Failed to collect keys:", e);
-            return new Map();
-        }
-    }, [publicClient, currentRoomId, myPlayer, address, addLog, runtimeContractAddress]);
-
-    // FIX: Use refs for isProcessing/isTxPending to avoid re-creating checkIfShared
-    // (which causes the useEffect to restart the interval + fire immediately on every state change)
-    const isProcessingRef = useRef(isProcessing);
-    const isTxPendingRef = useRef(isTxPending);
-    useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
-    useEffect(() => { isTxPendingRef.current = isTxPending; }, [isTxPending]);
-
-    // Check if we already shared keys (from contract)
-    const checkIfShared = useCallback(async () => {
-        if (!publicClient || !currentRoomId || !address) return;
-
-        // Don't overwrite optimistic UI during active transactions
-        if (isProcessingRef.current || isTxPendingRef.current) {
-            return;
-        }
-
-        try {
-            const [isActive, hasConfirmedRole, hasVoted, hasCommitted, hasRevealed, hasSharedKeys, hasClaimedMafia] = await publicClient.readContract({
-                address: runtimeContractAddress,
-                abi: MAFIA_ABI,
-                functionName: 'getPlayerFlags',
-                args: [currentRoomId, address as `0x${string}`],
-            }) as [boolean, boolean, boolean, boolean, boolean, boolean, boolean];
-
-            setRevealState(prev => ({
-                ...prev,
-                // Sticky true: if we know we shared/confirmed locally, keep it true even if RPC lags
-                hasSharedKeys: prev.hasSharedKeys || hasSharedKeys,
-                hasConfirmed: prev.hasConfirmed || hasConfirmedRole
-            }));
-        } catch (e) {
-            console.error("Failed to check flags:", e);
-        }
-    }, [publicClient, currentRoomId, address, runtimeContractAddress]);
-
-    // Check flags on mount and periodically
-    useEffect(() => {
-        checkIfShared();
-        const interval = setInterval(checkIfShared, 1500);
-        return () => clearInterval(interval);
-    }, [checkIfShared]);
-
-    // Share keys: real SRA key → GM (off-chain, private); dummy byte → on-chain (prevents chain observers from decrypting roles)
-    const shareMyKey = useCallback(async () => {
-        if (!myPlayer || isShareInFlightRef.current || isProcessing || revealState.hasSharedKeys) return;
-        isShareInFlightRef.current = true;
-
-        setIsProcessing(true);
-        try {
-            const shuffleService = getShuffleService();
-            const myDecryptionKey = shuffleService.getDecryptionKey();
-
-            // Step 1: Send REAL SRA key to GM off-chain (signed, never goes on-chain)
-            if (currentRoomId && address && walletClient) {
-                try {
-                    const meta = await signRequest({
-                        address,
-                        roomId: Number(currentRoomId),
-                        walletClient,
-                        buildMessage: ({ nonce, timestamp }) =>
-                            `submit-key:${currentRoomId}:${myDecryptionKey}:${nonce}:${timestamp}`,
-                    });
-                    await fetch(`${GM_SERVER_URL}/submit-sra-key`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            roomId: String(currentRoomId),
-                            playerAddress: address,
-                            sraKey: myDecryptionKey,
-                            signature: meta.signature,
-                            signerAddress: meta.signerAddress,
-                            nonce: meta.nonce,
-                            timestamp: meta.timestamp,
-                        }),
-                    });
-                } catch (e) {
-                    console.warn('[ECIES] submit-sra-key failed (non-fatal, GM will retry):', e);
-                }
-            }
-
-            // Step 2: Send DUMMY bytes on-chain to satisfy FLAG_HAS_SHARED_KEYS
-            // Real keys are with GM — on-chain data is intentionally useless
-            const recipients: string[] = [];
-            const dummyKeys: string[] = [];
-            for (const player of gameState.players) {
-                if (player.address.toLowerCase() === myPlayer.address.toLowerCase()) continue;
-                recipients.push(player.address);
-                dummyKeys.push('0x00'); // single null byte — meaningless garbage
-            }
-
-            await shareKeysToAllOnChain(recipients, dummyKeys);
-            setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
-        } catch (e: any) {
-            console.error("Failed to share keys:", e);
-            const errMsg = (e.message || '').toLowerCase();
-            if (errMsg.includes('alreadyshared') || errMsg.includes('keysalreadyshared')) {
-                console.log("[RoleReveal] Keys already shared on-chain, marking as shared.");
-                setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
-            } else {
-                addLog(e.message || "Failed to share keys", "danger");
-            }
+            console.error("[RoleReveal] ECIES registration failed:", e);
         } finally {
-            setIsProcessing(false);
-            setTimeout(() => { isShareInFlightRef.current = false; }, 1500);
+            isActionInFlightRef.current = false;
         }
-    }, [gameState.players, myPlayer, isProcessing, revealState.hasSharedKeys, shareKeysToAllOnChain, addLog, currentRoomId, address, walletClient]);
+    }, [currentRoomId, address, revealState.eciesRegistered]);
 
-    // Расшифровать все карты чтобы найти союзников по роли
-    const decryptAllCardsForTeammates = useCallback(async (
-        keys: Map<string, string>,
-        shuffleService: ShuffleService,
-        targetRole: Role
-    ): Promise<string[]> => {
-        const teammates: string[] = [];
-
-        for (let i = 0; i < revealState.deck.length; i++) {
-            // Пропускаем свою карту
-            if (i === revealState.myCardIndex) continue;
-
-            try {
-                let encryptedCard = revealState.deck[i];
-
-                // Skip empty/uninitialised deck slots
-                if (!encryptedCard) continue;
-
-                // Расшифровываем своим ключом
-                encryptedCard = shuffleService.decrypt(encryptedCard);
-
-                // Расшифровываем ключами других игроков
-                for (const [_, key] of keys) {
-                    const decryptionKey = hexToString(key);
-                    encryptedCard = shuffleService.decryptWithKey(encryptedCard, decryptionKey);
-                }
-
-                const cardRole = ShuffleService.roleNumberToRole(encryptedCard, currentRoomId?.toString());
-
-                if (cardRole === targetRole) {
-                    // Находим игрока по индексу
-                    const player = gameState.players[i];
-                    if (player) {
-                        teammates.push(player.address);
-                    }
-                }
-            } catch (e) {
-                console.warn(`Failed to decrypt card ${i}:`, e);
-            }
-        }
-
-        return teammates;
-    }, [revealState.deck, revealState.myCardIndex, gameState.players]);
-
-    // Decrypt role: ask GM for ECIES-encrypted role, decrypt locally with our private key
-    const decryptMyRole = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient) return;
-        if (isDecryptInFlightRef.current) return;
-        isDecryptInFlightRef.current = true;
-
+    // Handle SRA Key submission
+    const handleShareKey = useCallback(async () => {
+        if (!currentRoomId || !address || !walletClient || revealState.hasSharedKeys || isActionInFlightRef.current) return;
+        isActionInFlightRef.current = true;
         setIsProcessing(true);
         try {
-            // Sign request so GM knows this is really us
-            const meta = await signRequest({
+            const shuffleService = getShuffleService();
+            const sraKey = shuffleService.getDecryptionKey();
+
+            await submitSraKeyToGm({
+                roomId: currentRoomId.toString(),
                 address,
-                roomId: Number(currentRoomId),
-                walletClient,
-                buildMessage: ({ nonce, timestamp }) =>
-                    `my-role:${currentRoomId}:${address.toLowerCase()}:${nonce}:${timestamp}`,
+                sraKey,
+                walletClient
             });
 
-            const params = new URLSearchParams({
-                playerAddress: address,
-                signature: meta.signature,
-                signerAddress: meta.signerAddress,
-                nonce: meta.nonce,
-                timestamp: String(meta.timestamp),
-            });
-
-            const resp = await fetch(`${GM_SERVER_URL}/my-role/${currentRoomId}?${params}`);
-            const data = await resp.json();
-
-            if (resp.status === 202 && data.pending) {
-                // Not all keys collected yet — will auto-retry via polling
-                setIsProcessing(false);
-                setTimeout(() => { isDecryptInFlightRef.current = false; }, 3000);
-                return;
-            }
-
-            if (!resp.ok || !data.encrypted) {
-                throw new Error(data.error || `GM returned ${resp.status}`);
-            }
-
-            // Decrypt with our ECIES private key
-            const keypair = await loadOrCreateKeypair(String(currentRoomId), address);
-            const roleStr = await eciesDecrypt(data.encrypted as EciesEncrypted, keypair.privateKey);
-
-            // Map GM role string to frontend Role enum
-            const roleMap: Record<string, Role> = {
-                MAFIA: Role.MAFIA, DOCTOR: Role.DOCTOR,
-                DETECTIVE: Role.DETECTIVE, CIVILIAN: Role.CIVILIAN,
-            };
-            const role = roleMap[roleStr] ?? Role.UNKNOWN;
-
-            // Persist role
-            if (address) {
-                localStorage.setItem(`my_role_${currentRoomId}_${address.toLowerCase()}`, role);
-            }
-
-            setRevealState(prev => ({ ...prev, myRole: role, isRevealed: true, teammates: [] }));
-
-            setGameState(prev => ({
-                ...prev,
-                players: prev.players.map(p =>
-                    p.address.toLowerCase() === myPlayer?.address.toLowerCase()
-                        ? { ...p, role }
-                        : p
-                ),
-            }));
-
-            addLog(`Your role: ${role}`, "success");
+            setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
+            console.log("[RoleReveal] SRA key submitted to GM");
         } catch (e: any) {
-            console.error("Failed to get role from GM:", e);
-            addLog(e.message || "Failed to get role", "danger");
+            console.error("[RoleReveal] SRA submission failed:", e);
+            addLog(e.message || "Failed to submit SRA key", "danger");
         } finally {
             setIsProcessing(false);
-            setTimeout(() => { isDecryptInFlightRef.current = false; }, 2000);
+            isActionInFlightRef.current = false;
         }
-    }, [revealState.myCardIndex, currentRoomId, address, walletClient, myPlayer, addLog, setGameState]);
+    }, [currentRoomId, address, walletClient, revealState.hasSharedKeys, addLog]);
 
-    // Подтвердить роль (с предварительным коммитом)
+    // Handle Role Fetching
+    const handleFetchRole = useCallback(async () => {
+        if (!currentRoomId || !address || !walletClient || revealState.isRevealed || !revealState.hasSharedKeys || isActionInFlightRef.current) return;
+        isActionInFlightRef.current = true;
+        try {
+            const role = await fetchMyRoleFromGm({
+                roomId: currentRoomId.toString(),
+                address,
+                walletClient
+            });
+
+            if (role) {
+                // Save to localStorage
+                localStorage.setItem(`my_role_${currentRoomId}_${address.toLowerCase()}`, role);
+
+                setRevealState(prev => ({
+                    ...prev,
+                    myRole: role,
+                    isRevealed: true
+                }));
+
+                setGameState(prev => ({
+                    ...prev,
+                    players: prev.players.map(p =>
+                        p.address.toLowerCase() === address.toLowerCase()
+                            ? { ...p, role }
+                            : p
+                    ),
+                }));
+
+                addLog(`Your role: ${role}`, "success");
+            }
+        } catch (e: any) {
+            console.error("[RoleReveal] Role fetch failed:", e);
+        } finally {
+            isActionInFlightRef.current = false;
+        }
+    }, [currentRoomId, address, walletClient, revealState.isRevealed, revealState.hasSharedKeys, addLog, setGameState]);
+
+    // Handle Confirmation
     const handleConfirmRole = useCallback(async () => {
-        if (revealState.myRole === null || revealState.hasConfirmed) return;
-        // FIX: Ref guard to prevent concurrent confirm calls
-        if (isConfirmInFlightRef.current) return;
-        isConfirmInFlightRef.current = true;
+        if (revealState.myRole === null || revealState.hasConfirmed || isProcessing || isTxPending) return;
+        setIsProcessing(true);
 
-        const roleMap: Record<string, number> = {
+        const roleMap: Record<Role, number> = {
             [Role.MAFIA]: 1,
             [Role.DOCTOR]: 2,
             [Role.DETECTIVE]: 3,
@@ -408,73 +182,48 @@ export const RoleReveal: React.FC = React.memo(() => {
 
         const roleNum = roleMap[revealState.myRole] || 4;
 
-        setIsProcessing(true);
         try {
-            // 1. Reuse existing salt if one was already committed (e.g., reload recovery).
-            // Generating a NEW salt here would overwrite the correct one after
-            // commitAndConfirmRoleOnChain uses the old salt internally → hash mismatch on reveal.
-            const existingSalt = (currentRoomId && address)
-                ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`)
-                : null;
-            const salt = existingSalt || ShuffleService.generateSalt();
+            const shuffleService = getShuffleService();
+            const salt = ShuffleService.generateSalt(); // We can generate a new one since we don't manually reveal deck anymore
 
-            if (existingSalt) {
-                console.log("[RoleReveal] Reusing existing salt from localStorage (reload recovery)");
-            }
-
-            // 2. ВЫЗЫВАЕМ АТОМАРНУЮ ФУНКЦИЮ
             await commitAndConfirmRoleOnChain(roleNum, salt);
 
-            // 3. PERSISTENCE: Save salt only AFTER successful commit+confirm TX
-            if (currentRoomId && address) {
-                localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, salt);
-                console.log("[RoleReveal] Salt saved to localStorage (post-TX)");
-
-                // NOTE: syncSecretWithServer is already called inside commitAndConfirmRoleOnChain.
-                // Do NOT call it again here — that causes duplicate MetaMask signature popups.
-            }
+            // Save salt for future reference if needed
+            localStorage.setItem(`role_salt_${currentRoomId}_${address?.toLowerCase()}`, salt);
 
             setRevealState(prev => ({ ...prev, hasConfirmed: true }));
         } catch (e: any) {
-            console.error(e);
-            // FIX: If contract says already committed/confirmed, mark as confirmed to break the loop
-            const errMsg = (e.message || '').toLowerCase() + (e.shortMessage || '').toLowerCase();
-            if (errMsg.includes('alreadycommitted') || errMsg.includes('alreadyconfirmed') || errMsg.includes('alreadyrevealed')) {
-                console.log("[RoleReveal] Role already processed on-chain, marking as confirmed.");
+            console.error("[RoleReveal] Confirmation failed:", e);
+            const errMsg = (e.message || '').toLowerCase();
+            if (errMsg.includes('alreadyconfirmed') || errMsg.includes('alreadyrevealed')) {
                 setRevealState(prev => ({ ...prev, hasConfirmed: true }));
+            } else {
+                addLog(e.message || "Failed to confirm role", "danger");
             }
         } finally {
             setIsProcessing(false);
-            // FIX: Release ref guard after cooldown to prevent rapid retry on failure
-            setTimeout(() => { isConfirmInFlightRef.current = false; }, 2000);
         }
-    }, [revealState.myRole, revealState.hasConfirmed, commitAndConfirmRoleOnChain, currentRoomId, address]);
+    }, [revealState.myRole, revealState.hasConfirmed, isProcessing, isTxPending, commitAndConfirmRoleOnChain, currentRoomId, address, addLog]);
 
-    // Sync state if role is already known in GameContext (recovered from LS)
+    // Automatic flow trigger
     useEffect(() => {
-        if (!revealState.isRevealed && myPlayer?.role && myPlayer.role !== Role.UNKNOWN) {
-            setRevealState(prev => ({
-                ...prev,
-                myRole: myPlayer.role,
-                isRevealed: true
-            }));
+        if (gameState.phase !== GamePhase.REVEAL) return;
+
+        // Sequence: Register ECIES -> Submit SRA -> Fetch Role
+        if (!revealState.eciesRegistered) {
+            handleRegisterEcies();
+        } else if (!revealState.hasSharedKeys) {
+            handleShareKey();
+        } else if (!revealState.isRevealed) {
+            const timer = setTimeout(handleFetchRole, 2000); // Poll every 2s
+            return () => clearTimeout(timer);
         }
-    }, [myPlayer?.role, revealState.isRevealed]);
+    }, [gameState.phase, revealState.eciesRegistered, revealState.hasSharedKeys, revealState.isRevealed, handleRegisterEcies, handleShareKey, handleFetchRole]);
 
-    // Initial fetch
-    useEffect(() => {
-        fetchDeck();
-    }, [fetchDeck]);
-
-    // Polling for keys
-    useEffect(() => {
-        const interval = setInterval(collectKeys, 1500);
-        return () => clearInterval(interval);
-    }, [collectKeys]);
-
+    // UI
     const roleConfig = revealState.myRole ? RoleConfig[revealState.myRole] : RoleConfig[Role.UNKNOWN];
-    const keysCollected = revealState.collectedKeys.size;
-    const keysNeeded = gameState.players.length - 1;
+    const keysCollected = gameState.players.filter(p => p.hasConfirmedRole).length;
+    const keysNeeded = gameState.players.length;
 
     return (
         <div className="w-full h-[100dvh] flex flex-col items-center overflow-y-auto overflow-x-hidden p-8 custom-scrollbar">
@@ -490,151 +239,54 @@ export const RoleReveal: React.FC = React.memo(() => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -20 }}
-                            className="bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl pointer-events-auto"
+                            className="bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl"
                         >
                             <div className="text-center mb-6">
-                                {/* Animated Search Icon */}
                                 <div className="w-10 h-10 mx-auto mb-3 relative">
                                     <motion.div
-                                        animate={{
-                                            x: [-3, 3, -3],
-                                            rotate: [-5, 5, -5]
-                                        }}
-                                        transition={{
-                                            duration: 2,
-                                            repeat: Infinity,
-                                            ease: "easeInOut"
-                                        }}
+                                        animate={{ x: [-3, 3, -3], rotate: [-5, 5, -5] }}
+                                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                                     >
                                         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" className="text-[#916A47]">
-                                            {/* Magnifying glass circle */}
-                                            <motion.circle
-                                                cx="11"
-                                                cy="11"
-                                                r="7"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
-                                                fill="none"
-                                                animate={{
-                                                    scale: [1, 1.05, 1],
-                                                    opacity: [1, 0.8, 1]
-                                                }}
-                                                transition={{
-                                                    duration: 1.5,
-                                                    repeat: Infinity,
-                                                    ease: "easeInOut"
-                                                }}
-                                            />
-                                            {/* Handle */}
+                                            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" fill="none" />
                                             <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                                         </svg>
                                     </motion.div>
                                 </div>
-                                <h2 className="text-2xl font-['Cinzel'] text-white mb-1">
-                                    Role Reveal
-                                </h2>
+                                <h2 className="text-2xl font-['Cinzel'] text-white mb-1">Role Reveal</h2>
                                 <p className="text-white/40 text-[13px]">
-                                    {revealState.hasSharedKeys ? 'Keys shared. Collecting from others...' : 'Decrypting game data...'}
+                                    {!revealState.eciesRegistered ? 'Registering ECIES...' :
+                                        !revealState.hasSharedKeys ? 'Submitting SRA key...' :
+                                            'Waiting for GM response...'}
                                 </p>
                             </div>
 
-                            {/* Players Key Status List */}
-                            <div className="space-y-1.5 mb-4 max-h-[180px] overflow-y-auto custom-scrollbar pr-2">
-                                {gameState.players.map((player, index) => {
-                                    const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
-                                    const hasKey = revealState.collectedKeys.has(player.address.toLowerCase());
-                                    const isProcessingMe = isMe && isProcessing && !revealState.hasSharedKeys;
-
-                                    return (
-                                        <motion.div
-                                            key={player.address}
-                                            layout
-                                            className={`
-                                                flex items-center justify-between p-3 rounded-xl border transition-all h-12 relative overflow-hidden
-                                                ${hasKey || (isMe && revealState.hasSharedKeys)
-                                                    ? 'bg-[#916A47]/15 border-[#916A47]/30 shadow-[0_0_10px_rgba(145,106,71,0.1)]'
-                                                    : isMe
-                                                        ? 'bg-[#916A47]/20 border-[#916A47]/40'
-                                                        : 'bg-white/5 border-white/10'
-                                                }
-                                            `}
-                                        >
-                                            {/* Scanner effect for active tasks */}
-                                            {(isProcessingMe || (!hasKey && !isMe)) && (
-                                                <motion.div
-                                                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"
-                                                    animate={{ x: ['-100%', '100%'] }}
-                                                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                                                />
-                                            )}
-
-                                            <div className="flex items-center gap-3 relative z-10">
-                                                <div className={`
-                                                    w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold
-                                                    ${isMe && !revealState.hasSharedKeys ? 'bg-[#916A47] text-black' : (hasKey || (isMe && revealState.hasSharedKeys)) ? 'bg-[#916A47] text-white' : 'bg-white/10 text-white/40'}
-                                                `}>
-                                                    {(hasKey || (isMe && revealState.hasSharedKeys)) ? <Check className="w-3 h-3" /> : index + 1}
-                                                </div>
-                                                <span className={`text-sm font-medium ${(isMe && !revealState.hasSharedKeys) ? 'text-[#916A47]' : 'text-white'}`}>
-                                                    {player.name} {isMe && '(You)'}
-                                                </span>
-                                            </div>
-                                            <div className="text-[10px] relative z-10 font-mono">
-                                                {(hasKey || (isMe && revealState.hasSharedKeys)) ? (
-                                                    <span className="text-[#916A47] font-bold uppercase tracking-wider">Ready</span>
-                                                ) : isProcessingMe ? (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[#916A47] font-bold">Sharing...</span>
-                                                        <RefreshCw className="w-3 h-3 animate-spin text-[#916A47]" />
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-white/20 uppercase tracking-widest">Waiting</span>
-                                                )}
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Progress Bar with integrated status */}
                             <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center gap-4">
                                 <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[#916A47]/10">
                                     <Loader2 className="w-4 h-4 text-[#916A47] animate-spin" />
                                 </div>
                                 <div className="flex-1">
                                     <div className="flex justify-between text-[10px] mb-1.5">
-                                        <span className="text-white/40 uppercase">
-                                            {!revealState.hasSharedKeys
-                                                ? 'SHARING DECRYPTION KEYS...'
-                                                : keysCollected < keysNeeded
-                                                    ? `WAITING FOR ${keysNeeded - keysCollected} KEYS...`
-                                                    : 'ALL KEYS READY! DECRYPTING...'
-                                            }
-                                        </span>
-                                        <span className="font-mono text-[#916A47] font-bold">{keysCollected} / {keysNeeded}</span>
+                                        <span className="text-white/40 uppercase">EXCHANGING DATA OFF-CHAIN...</span>
                                     </div>
-                                    <div className="h-1.5 bg-black/40 rounded-full overflow-hidden p-[1px]">
+                                    <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
                                         <motion.div
-                                            className="h-full bg-gradient-to-r from-[#916A47] to-[#c9a227] rounded-full"
-                                            initial={{ width: 0 }}
-                                            animate={{ width: `${(keysCollected / keysNeeded) * 100}%` }}
-                                            transition={{ duration: 0.8 }}
+                                            className="h-full bg-gradient-to-r from-[#916A47] to-[#c9a227]"
+                                            animate={{ width: revealState.hasSharedKeys ? '100%' : '50%' }}
                                         />
                                     </div>
                                 </div>
                             </div>
                         </motion.div>
                     ) : (
-                        // Phase 2: Role Revealed
                         <motion.div
                             key="revealed"
                             initial={{ opacity: 0, rotateY: 90 }}
                             animate={{ opacity: 1, rotateY: 0 }}
                             transition={{ type: "spring", duration: 0.8 }}
-                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-12 shadow-2xl pointer-events-auto w-[400px] h-[400px] flex flex-col justify-between mx-auto`}
+                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-12 shadow-2xl w-[400px] h-[400px] flex flex-col justify-between mx-auto`}
                         >
                             <div className="text-center flex-1 flex flex-col justify-center">
-                                {/* Role Name */}
                                 <motion.h2
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -643,8 +295,6 @@ export const RoleReveal: React.FC = React.memo(() => {
                                 >
                                     {revealState.myRole}
                                 </motion.h2>
-
-                                {/* Description */}
                                 <motion.p
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
@@ -656,7 +306,6 @@ export const RoleReveal: React.FC = React.memo(() => {
                             </div>
 
                             <div className="space-y-3 mt-6">
-                                {/* Confirm Button */}
                                 {!revealState.hasConfirmed ? (
                                     <Button
                                         onClick={handleConfirmRole}
@@ -664,228 +313,21 @@ export const RoleReveal: React.FC = React.memo(() => {
                                         disabled={isProcessing || isTxPending}
                                         className="w-full"
                                     >
-                                        {isProcessing ? 'Auto-confirming role...' : 'I Understand My Role'}
+                                        I Understand My Role
                                     </Button>
                                 ) : (
                                     <div className="flex items-center justify-center gap-2 text-[#916A47] py-4">
                                         <Check className="w-5 h-5" />
-                                        <span>Role Confirmed! Waiting for others...</span>
+                                        <span>Role Confirmed!</span>
                                     </div>
                                 )}
-
-                                {/* Confirmation count */}
-                                <div className="text-xs text-white/30 text-center">
-                                    {gameState.players.filter(p => p.hasConfirmedRole).length} / {gameState.players.length} confirmed
-                                </div>
                             </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
-                {/* AUTOMATION: Role Reveal Hands-Free Flow */}
-                <RoleRevealAuto
-                    revealState={revealState}
-                    isProcessing={isProcessing}
-                    isTxPending={isTxPending}
-                    gameState={gameState}
-                    myPlayer={myPlayer}
-                    shareMyKey={shareMyKey}
-                    decryptMyRole={decryptMyRole}
-                    handleConfirmRole={handleConfirmRole}
-                />
-            </motion.div >
-        </div >
+            </motion.div>
+        </div>
     );
 });
 
 RoleReveal.displayName = 'RoleReveal';
-
-// Help automation component to avoid dependency issues and keep main component clean
-const RoleRevealAuto: React.FC<{
-    revealState: RevealState,
-    isProcessing: boolean,
-    isTxPending: boolean,
-    gameState: any,
-    myPlayer: any,
-    shareMyKey: () => Promise<void>,
-    decryptMyRole: () => Promise<void>,
-    handleConfirmRole: () => Promise<void>
-}> = React.memo(({ revealState, isProcessing, isTxPending, gameState, myPlayer, shareMyKey, decryptMyRole, handleConfirmRole }) => {
-
-    const keysNeeded = gameState.players.length - 1;
-
-    // Countdown timer for viewing role before auto-confirm
-    const ROLE_VIEW_TIME = 3; // seconds — quick glance, then auto-confirm
-    const [countdown, setCountdown] = useState<number | null>(null);
-    const [hasStartedCountdown, setHasStartedCountdown] = useState(false);
-
-    // FIX: Ref-based guards to prevent useEffect from firing the same action multiple times
-    // React state batching means isProcessing may still be false on subsequent renders
-    const shareTriggeredRef = useRef(false);
-    const decryptTriggeredRef = useRef(false);
-    const confirmTriggeredRef = useRef(false);
-    // FIX: Retry limits to prevent infinite TX spam on persistent failures
-    const shareRetryCountRef = useRef(0);
-    const confirmRetryCountRef = useRef(0);
-    const MAX_AUTO_RETRIES = 3;
-
-    // Reset triggered refs when the action completes (either success or terminal failure)
-    useEffect(() => {
-        if (revealState.hasSharedKeys) shareTriggeredRef.current = false; // Reset so ref doesn't block future mounts
-    }, [revealState.hasSharedKeys]);
-    useEffect(() => {
-        if (revealState.isRevealed) decryptTriggeredRef.current = false;
-    }, [revealState.isRevealed]);
-    useEffect(() => {
-        if (revealState.hasConfirmed) confirmTriggeredRef.current = false;
-    }, [revealState.hasConfirmed]);
-
-    // 1. Auto-share keys (first step)
-    useEffect(() => {
-        if (shareTriggeredRef.current) return; // Already triggered, waiting for result
-        if (shareRetryCountRef.current >= MAX_AUTO_RETRIES) {
-            console.warn(`[RoleReveal Auto] Share keys max retries (${MAX_AUTO_RETRIES}) reached. Manual action required.`);
-            return;
-        }
-        const canShare = !revealState.hasSharedKeys && !isProcessing && !isTxPending && myPlayer;
-
-        if (canShare) {
-            shareTriggeredRef.current = true;
-            shareRetryCountRef.current += 1;
-            console.log(`[RoleReveal Auto] Sharing my decryption keys... (attempt ${shareRetryCountRef.current})`);
-            shareMyKey().catch(() => {
-                // On failure, release the ref after a cooldown so it can retry
-                setTimeout(() => { shareTriggeredRef.current = false; }, 2000);
-            });
-        }
-    }, [revealState.hasSharedKeys, isProcessing, isTxPending, myPlayer, shareMyKey]);
-
-    // 2. Auto-decrypt role when all keys are present
-    useEffect(() => {
-        if (decryptTriggeredRef.current) return; // Already triggered
-        const canAutoDecrypt =
-            revealState.hasSharedKeys &&  // Must have shared first
-            !revealState.isRevealed &&
-            !isProcessing &&
-            !isTxPending &&
-            revealState.collectedKeys.size >= keysNeeded &&
-            keysNeeded > 0;  // Avoid division by zero
-
-        if (canAutoDecrypt) {
-            decryptTriggeredRef.current = true;
-            console.log("[RoleReveal Auto] All keys collected. Decrypting role...");
-            decryptMyRole().catch(() => {
-                // On failure, release after cooldown
-                setTimeout(() => { decryptTriggeredRef.current = false; }, 2000);
-            });
-        }
-    }, [revealState.hasSharedKeys, revealState.isRevealed, revealState.collectedKeys.size, keysNeeded, isProcessing, isTxPending, decryptMyRole]);
-
-    // 3. Start countdown when role is revealed
-    useEffect(() => {
-        if (revealState.isRevealed && revealState.myRole !== null && !hasStartedCountdown && !revealState.hasConfirmed) {
-            console.log("[RoleReveal Auto] Role revealed. Starting countdown...");
-            setCountdown(ROLE_VIEW_TIME);
-            setHasStartedCountdown(true);
-        }
-    }, [revealState.isRevealed, revealState.myRole, hasStartedCountdown, revealState.hasConfirmed]);
-
-    // 4. Countdown timer tick
-    useEffect(() => {
-        if (countdown === null || countdown <= 0) return;
-
-        const timer = setTimeout(() => {
-            setCountdown(prev => (prev !== null ? prev - 1 : null));
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, [countdown]);
-
-    // 5. Auto-confirm when countdown reaches 0
-    useEffect(() => {
-        if (confirmTriggeredRef.current) return; // Already triggered
-        if (confirmRetryCountRef.current >= MAX_AUTO_RETRIES) {
-            console.warn(`[RoleReveal Auto] Confirm role max retries (${MAX_AUTO_RETRIES}) reached. Manual action required.`);
-            return;
-        }
-        const canAutoConfirm =
-            countdown === 0 &&
-            revealState.isRevealed &&
-            !revealState.hasConfirmed &&
-            !isProcessing &&
-            !isTxPending &&
-            revealState.myRole !== null;
-
-        if (canAutoConfirm) {
-            confirmTriggeredRef.current = true;
-            confirmRetryCountRef.current += 1;
-            console.log(`[RoleReveal Auto] Countdown finished. Auto-confirming... (attempt ${confirmRetryCountRef.current})`);
-            handleConfirmRole().catch(() => {
-                // On failure, release after cooldown
-                setTimeout(() => { confirmTriggeredRef.current = false; }, 2000);
-            });
-        }
-    }, [countdown, revealState.isRevealed, revealState.hasConfirmed, revealState.myRole, isProcessing, isTxPending, handleConfirmRole]);
-
-    // Render countdown UI overlay
-    if (countdown !== null && countdown > 0 && !revealState.hasConfirmed) {
-        return (
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50"
-            >
-                <div className="bg-black/80 backdrop-blur-xl border border-[#916A47]/40 rounded-2xl px-6 py-4 shadow-2xl">
-                    <div className="flex items-center gap-4">
-                        {/* Circular countdown */}
-                        <div className="relative w-14 h-14">
-                            <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
-                                {/* Background circle */}
-                                <circle
-                                    cx="28"
-                                    cy="28"
-                                    r="24"
-                                    fill="none"
-                                    stroke="rgba(145, 106, 71, 0.2)"
-                                    strokeWidth="4"
-                                />
-                                {/* Progress circle */}
-                                <motion.circle
-                                    cx="28"
-                                    cy="28"
-                                    r="24"
-                                    fill="none"
-                                    stroke="#916A47"
-                                    strokeWidth="4"
-                                    strokeLinecap="round"
-                                    strokeDasharray={2 * Math.PI * 24}
-                                    initial={{ strokeDashoffset: 0 }}
-                                    animate={{ strokeDashoffset: 2 * Math.PI * 24 * (1 - countdown / ROLE_VIEW_TIME) }}
-                                    transition={{ duration: 0.3 }}
-                                />
-                            </svg>
-                            {/* Countdown number */}
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <motion.span
-                                    key={countdown}
-                                    initial={{ scale: 1.3, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    className="text-xl font-bold text-[#916A47] font-mono"
-                                >
-                                    {countdown}
-                                </motion.span>
-                            </div>
-                        </div>
-
-                        {/* Text */}
-                        <div>
-                            <p className="text-white font-medium text-sm">Memorize your role</p>
-                            <p className="text-white/40 text-xs">Auto-confirming in {countdown}s...</p>
-                        </div>
-                    </div>
-                </div>
-            </motion.div>
-        );
-    }
-
-    return null;
-});
