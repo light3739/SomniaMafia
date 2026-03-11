@@ -110,6 +110,13 @@ export const RoleReveal: React.FC = React.memo(() => {
         setIsProcessing(true);
         try {
             const shuffleService = getShuffleService();
+            if (!shuffleService.hasKeys()) {
+                const loaded = shuffleService.loadKeys(currentRoomId.toString(), address);
+                if (!loaded) {
+                    addLog('Session keys lost — please rejoin the room', 'danger');
+                    return;
+                }
+            }
             const sraKey = shuffleService.getDecryptionKey();
 
             await submitSraKeyToGm({
