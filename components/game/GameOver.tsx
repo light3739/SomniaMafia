@@ -234,7 +234,13 @@ export const GameOver: React.FC = React.memo(() => {
     // Fetch all roles from GM server (GM has decrypted deck using all SRA keys)
     // Used as fallback when on-chain playerRoles reverts or returns 0 (e.g. dead players)
     const fetchGMRoles = useCallback(async () => {
-        const roomId = roomIdRef.current || currentRoomId;
+        const roomId = roomIdRef.current
+            || currentRoomId
+            || (() => {
+                const s = sessionStorage.getItem('gameOver_roomId');
+                return s ? BigInt(s) : null;
+            })();
+
         if (!roomId) return;
         try {
             const res = await fetch(`/api/game/room-roles?roomId=${roomId.toString()}`);
@@ -312,10 +318,18 @@ export const GameOver: React.FC = React.memo(() => {
         }
     };
 
-    // Reveal на монтирование
+    // Reveal on монтирование
     useEffect(() => {
         revealAllRoles();
     }, [revealAllRoles]);
+
+    // Snapshot roomId for page reload persistence (survives GameContext cleanup)
+    useEffect(() => {
+        const rid = currentRoomId || roomIdRef.current;
+        if (rid) {
+            sessionStorage.setItem('gameOver_roomId', rid.toString());
+        }
+    }, [currentRoomId]);
 
     // After on-chain reveals settle, fetch missing roles from GM (fills in dead players etc.)
     useEffect(() => {
