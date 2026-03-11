@@ -44,7 +44,12 @@ export const GameUIOverlay: React.FC = () => {
         };
 
         fetchDiscussionState();
-        const interval = setInterval(fetchDiscussionState, 2000);
+        const interval = setInterval(() => {
+            // FIX: Stop polling immediately if phase changes
+            if (gameState.phase === GamePhase.DAY && currentRoomId) {
+                fetchDiscussionState();
+            }
+        }, 2000);
         return () => clearInterval(interval);
     }, [currentRoomId, gameState.phase, gameState.dayCount, myPlayer?.address]);
 

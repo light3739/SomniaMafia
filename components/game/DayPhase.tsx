@@ -374,7 +374,14 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         let timeoutId: NodeJS.Timeout;
 
         const poll = async () => {
+            // FIX: Stop polling if phase changed during async fetch
+            if (!isDayPhase || !currentRoomId) return;
+            
             await fetchDiscussionState();
+            
+            // FIX: Re-check after fetch to avoid setting another timeout
+            if (!isDayPhase || !currentRoomId || discussionState?.finished) return;
+
             // Adaptive delay: 1.5s if visible, 10s if hidden background tab
             const delay = typeof document !== 'undefined' && document.hidden ? 10000 : 1500;
             timeoutId = setTimeout(poll, delay);
