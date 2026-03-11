@@ -66,6 +66,7 @@ export const GameOver: React.FC = React.memo(() => {
     const [depositAmount, setDepositAmount] = useState<string>('0');
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const roomIdRef = useRef<bigint | null>(currentRoomId);
 
     // After 30s, stop pulsing and show static "Unknown" for any unresolved roles
     useEffect(() => {
@@ -233,10 +234,14 @@ export const GameOver: React.FC = React.memo(() => {
     // Fetch all roles from GM server (GM has decrypted deck using all SRA keys)
     // Used as fallback when on-chain playerRoles reverts or returns 0 (e.g. dead players)
     const fetchGMRoles = useCallback(async () => {
-        if (!currentRoomId) return;
+        const roomId = roomIdRef.current || currentRoomId;
+        if (!roomId) return;
         try {
-            const res = await fetch(`/api/game/room-roles?roomId=${currentRoomId.toString()}`);
-            if (!res.ok) return;
+            const res = await fetch(`/api/game/room-roles?roomId=${roomId.toString()}`);
+            if (!res.ok) {
+                console.warn(`[GameOver] GM roles fetch failed: ${res.status}`);
+                return;
+            }
             const data = await res.json();
             if (!data.roles || typeof data.roles !== 'object') return;
 
@@ -316,9 +321,16 @@ export const GameOver: React.FC = React.memo(() => {
     useEffect(() => {
         // Try immediately — GM may already have roles cached from previous SRA key collection
         fetchGMRoles();
-        // Retry at 3s in case GM was slow
-        const timer = setTimeout(() => fetchGMRoles(), 3000);
-        return () => clearTimeout(timer);
+        // Retry with backoff to handle chain lag
+        const t1 = setTimeout(() => fetchGMRoles(), 3000);
+        const t2 = setTimeout(() => fetchGMRoles(), 8000);
+        const t3 = setTimeout(() => fetchGMRoles(), 15000);
+
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+        };
     }, [fetchGMRoles]);
 
     // Poll for late on-chain reveals (other players may reveal after us)
