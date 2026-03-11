@@ -154,7 +154,10 @@ export async function verifySignedRequestBody<TBody extends Record<string, any>>
     const timestamp = Number(options.body.timestamp);
 
     if (options.requireReplayProtection !== false) {
-        if (!Number.isFinite(timestamp) || timestamp <= 0 || Math.abs(currentDeps.now() - timestamp) > currentDeps.maxClockSkewMs) {
+        // Normalize timestamp: accept both Unix seconds and milliseconds
+        // requestSigning.ts sends Date.now() (ms), security.ts now() returns seconds
+        const tsNormalized = timestamp > 1e10 ? Math.floor(timestamp / 1000) : timestamp;
+        if (!Number.isFinite(tsNormalized) || tsNormalized <= 0 || Math.abs(currentDeps.now() - tsNormalized) > currentDeps.maxClockSkewMs) {
             return { ok: false, status: 401, error: 'Request expired or invalid timestamp' };
         }
 

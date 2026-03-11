@@ -253,8 +253,10 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                 });
             }
             addLog("Discussion Phase started.", "info");
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to start discussion:", e);
+            addLog(`Discussion start failed: ${e?.message || e}`, "danger");
+            discussionStartedRef.current = false; // allow waterfall retry
         }
     }, [currentRoomId, myPlayer?.address, addLog, isTestMode, gameState.dayCount, gameState.players]);
 
