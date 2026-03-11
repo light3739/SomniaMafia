@@ -32,7 +32,7 @@ function getPrivyName(user: any): string {
 
 // --- Social Provider Card ---
 interface SocialCardProps {
-    icon: string;
+    icon: React.ReactNode;
     name: string;
     linked: boolean;
     username?: string;
@@ -40,37 +40,39 @@ interface SocialCardProps {
     onUnlink?: () => void;
 }
 const SocialCard: React.FC<SocialCardProps> = ({ icon, name, linked, username, onLink, onUnlink }) => (
-    <div className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${linked ? 'border-[#916A47]/50 bg-[#916A47]/10' : 'border-white/10 bg-white/5'}`}>
-        <div className="flex items-center gap-3">
-            <span className="text-2xl">{icon}</span>
-            <div>
-                <p className="text-white text-sm font-semibold">{name}</p>
-                {linked && username && <p className="text-white/40 text-xs mt-0.5">@{username}</p>}
-                {!linked && <p className="text-white/30 text-xs mt-0.5">Not connected</p>}
+    <div className={`flex items-center justify-between px-5 py-4 rounded-2xl border transition-all ${linked ? 'border-[#916A47]/30 bg-gradient-to-r from-[#916A47]/10 to-transparent' : 'border-white/10 bg-white/5'}`}>
+        <div className="flex items-stretch gap-4">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner border border-white/5 transition-colors ${linked ? 'bg-[#19130D] text-white' : 'bg-black/50 text-white/50'}`}>
+                {icon}
+            </div>
+            <div className="flex flex-col justify-center">
+                <p className={`text-base font-montserrat font-medium tracking-wide transition-colors ${linked ? 'text-white' : 'text-white/70'}`}>{name}</p>
+                {linked && username ? (
+                    <p className="text-white/90 text-sm font-mono tracking-wide tabular-nums mt-0.5">{username}</p>
+                ) : (
+                    <p className="text-white/50 text-[10px] uppercase font-bold tracking-[0.15em] mt-1">Not connected</p>
+                )}
             </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
             {linked ? (
                 <>
-                    <span className="flex items-center gap-1 text-green-400 text-xs font-medium">
-                        <Check className="w-3 h-3" /> Linked
-                    </span>
                     {onUnlink && (
                         <button
                             onClick={onUnlink}
-                            className="ml-2 p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-all"
-                            title="Unlink"
+                            className="p-2 text-white/30 hover:text-white/80 transition-colors"
+                            title="Disconnect"
                         >
-                            <Unlink className="w-3.5 h-3.5" />
+                            <Unlink strokeWidth={1.5} className="w-5 h-5" />
                         </button>
                     )}
                 </>
             ) : (
                 <button
                     onClick={onLink}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#ffb01d] border border-[#ffb01d]/30 hover:bg-[#ffb01d]/10 transition-all"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[11px] uppercase font-montserrat font-bold tracking-[0.15em] text-[#C19A6B] hover:text-[#f5d9b3] bg-transparent hover:bg-white/5 transition-all border border-[#C19A6B]/50 hover:border-[#C19A6B]"
                 >
-                    <Link className="w-3 h-3" /> Connect
+                    Connect
                 </button>
             )}
         </div>
@@ -87,7 +89,7 @@ export const SetupProfile: React.FC = () => {
     const [hydrated, setHydrated] = useState(false);
     const [editingName, setEditingName] = useState(false);
     const [tempName, setTempName] = useState('');
-    const [fundAmount, setFundAmount] = useState('0.5');
+    const [fundAmount, setFundAmount] = useState('');
     const [fundingNetwork, setFundingNetwork] = useState<number>(SOMNIA_TESTNET.id);
     const [isFunding, setIsFunding] = useState(false);
 
@@ -189,6 +191,24 @@ export const SetupProfile: React.FC = () => {
 
     const externalWallet = wallets.find(w => w.walletClientType !== 'privy');
 
+    const { data: externalBalance } = useBalance({
+        address: externalWallet?.address as `0x${string}` | undefined,
+        chainId: fundingNetwork,
+        query: { enabled: !!externalWallet?.address }
+    });
+
+    const handleMaxClick = () => {
+        if (!externalBalance) return;
+        let max = Number(formatEther(externalBalance.value));
+        // Simple gas reservation logic to avoid transaction failure
+        if (fundingNetwork === AVALANCHE_FUJI.id && max > 0.005) {
+            max -= 0.005;
+        } else if (fundingNetwork === SOMNIA_TESTNET.id && max > 0.001) {
+            max -= 0.001;
+        }
+        setFundAmount(Math.max(0, max).toFixed(3));
+    };
+
     const handleFundWallet = async () => {
         if (!externalWallet || !embeddedWalletAddress) return;
         try {
@@ -228,15 +248,18 @@ export const SetupProfile: React.FC = () => {
                     <BackButton to="/" />
                     <button
                         onClick={() => logout().then(() => router.push('/'))}
-                        className="flex items-center gap-2 text-white/40 hover:text-red-400 text-xs font-medium transition-colors"
+                        className="group text-white/60 hover:text-white flex items-center gap-3 transition-all cursor-pointer"
                     >
-                        <LogOut className="w-3.5 h-3.5" /> Logout
+                        <span className="font-medium tracking-wide">Logout</span>
+                        <div className="w-10 h-10 rounded-full bg-black/50 border border-white/10 backdrop-blur-sm flex items-center justify-center transition-all group-hover:bg-[#8B2E2E]/40 group-hover:border-[#C94040]/50 group-hover:shadow-[0_0_15px_rgba(201,64,64,0.2)]">
+                            <LogOut className="w-5 h-5" />
+                        </div>
                     </button>
                 </div>
 
                 {/* Profile Card */}
-                <div className="w-full bg-[rgba(40,22,8,0.75)] backdrop-blur-md rounded-[32px] p-6 md:p-8 border border-white/10 shadow-2xl flex flex-col items-center gap-5">
-                    <h2 className="text-white text-xl font-['Cinzel'] tracking-wider">Your Profile</h2>
+                <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] p-5 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-4 md:gap-6 items-center">
+                    <h2 className="text-white text-xl md:text-2xl font-['Cinzel']">Your Profile</h2>
 
                     {/* Avatar */}
                     <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
@@ -254,44 +277,49 @@ export const SetupProfile: React.FC = () => {
                     </div>
 
                     {/* Nickname */}
-                    <div className="flex flex-col items-center gap-2 w-full max-w-[320px] mt-2">
-                        <AnimatePresence mode="wait">
-                            {editingName ? (
-                                <motion.div key="editing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-3 w-full">
-                                    <Input
+                    <div className="flex flex-col items-center gap-1 w-full mt-1">
+                        <div className="flex items-center justify-center w-full h-[50px] relative">
+                            {/* The Main Name / Input Container */}
+                            <motion.div
+                                layout
+                                className={`relative flex items-center justify-center h-[50px] w-[180px] md:w-[220px] rounded-2xl border transition-all ${editingName ? 'bg-[#19130D] border-white/20 shadow-inner' : 'bg-black/40 border-white/5 hover:border-white/10 hover:bg-black/60 shadow-lg cursor-pointer group'}`}
+                                onClick={!editingName ? startEditing : undefined}
+                                title={!editingName ? "Click to edit nickname" : undefined}
+                            >
+                                {editingName ? (
+                                    <input
                                         autoFocus
                                         value={tempName}
                                         onChange={e => setTempName(e.target.value)}
                                         onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false); }}
                                         placeholder="Your nickname"
-                                        containerClassName="w-full"
-                                        className="!text-center !font-montserrat !font-bold tracking-[0.1em] uppercase text-xl py-3"
+                                        className="w-full h-full bg-transparent text-center text-white text-xl md:text-2xl font-montserrat font-semibold outline-none placeholder:text-white/20 px-4"
                                     />
-                                    <div className="flex items-center gap-2 w-full justify-center">
-                                        <button onClick={saveName} className="flex-1 max-w-[120px] py-2.5 rounded-xl bg-gradient-to-r from-[#916A47] to-[#A37B58] text-white text-sm font-bold hover:scale-[1.02] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#916A47]/20 border border-white/10">
-                                            <Check className="w-4 h-4" /> Save
-                                        </button>
-                                        <button onClick={() => setEditingName(false)} className="flex-1 max-w-[120px] py-2.5 rounded-xl bg-white/5 text-white/70 text-sm font-bold hover:bg-white/10 hover:text-white transition-all flex items-center justify-center gap-2 border border-white/5">
-                                            <X className="w-4 h-4" /> Cancel
-                                        </button>
+                                ) : (
+                                    <div className="flex items-center justify-center w-full h-full px-4">
+                                        <span className="text-white text-xl md:text-2xl font-montserrat font-semibold truncate group-hover:text-[#ffb01d] transition-colors text-center w-full">
+                                            {playerName || <span className="text-white/30 italic text-base font-normal">No nickname set</span>}
+                                        </span>
                                     </div>
-                                </motion.div>
-                            ) : (
-                                <motion.div key="display" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center justify-center relative w-full h-[40px]">
-                                    <span className="text-white text-xl md:text-2xl font-montserrat font-bold tracking-[0.15em] uppercase text-center max-w-[280px] truncate">
-                                        {playerName || <span className="text-white/30 italic text-base font-normal tracking-normal normal-case">No nickname set</span>}
-                                    </span>
-                                    <button onClick={startEditing} className="absolute right-0 text-white/30 hover:text-[#ffb01d] transition-colors p-2 rounded-full hover:bg-white/5">
-                                        <Edit2 className="w-4 h-4" />
-                                    </button>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                        {walletAddress && (
-                            <span className="text-white/20 text-[10px] font-mono mt-1">
-                                {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-                            </span>
-                        )}
+                                )}
+                            </motion.div>
+
+                            {/* The Buttons Container (Only shows during edit) */}
+                            <AnimatePresence>
+                                {editingName && (
+                                    <div className="absolute left-1/2 translate-x-[90px] md:translate-x-[110px] flex items-center pl-3">
+                                        <motion.div key="editing-buttons" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="flex gap-1.5" transition={{ duration: 0.15 }}>
+                                            <button onClick={saveName} className="p-2.5 rounded-xl bg-[#916A47] text-white hover:bg-[#A37B58] transition-transform active:scale-95 shadow-md border border-white/10" title="Save">
+                                                <Check className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => setEditingName(false)} className="p-2.5 rounded-xl bg-white/5 text-white/50 hover:text-white hover:bg-white/10 transition-transform active:scale-95 border border-white/5" title="Cancel">
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </motion.div>
+                                    </div>
+                                )}
+                            </AnimatePresence>
+                        </div>
                     </div>
                 </div>
 
@@ -305,12 +333,12 @@ export const SetupProfile: React.FC = () => {
                             <div className="w-10 h-10 rounded-full bg-[#19130D] border border-white/10 flex items-center justify-center">
                                 <Wallet className="w-5 h-5 text-[#ffb01d]" />
                             </div>
-                            <div className="flex flex-col items-start">
-                                <span className="text-white font-montserrat font-bold text-lg tracking-wide">In-Game Wallet</span>
+                            <div className="flex flex-col items-start gap-0.5 mt-1">
+                                <span className="text-white font-montserrat font-bold text-lg md:text-xl tracking-wide leading-none">In-Game Wallet</span>
                                 {hasEmbeddedWallet ? (
-                                    <span className="text-green-400 text-xs flex items-center gap-1 font-medium"><Check className="w-3 h-3" /> Active</span>
+                                    <span className="text-[#C19A6B] text-[11px] font-bold tracking-[0.1em] uppercase flex items-center gap-1.5"><Check className="w-3.5 h-3.5" strokeWidth={2.5} /> Active</span>
                                 ) : (
-                                    <span className="text-white/40 text-xs">Not Created</span>
+                                    <span className="text-white/40 text-[11px] font-bold tracking-[0.1em] uppercase">Not Created</span>
                                 )}
                             </div>
                         </div>
@@ -325,9 +353,9 @@ export const SetupProfile: React.FC = () => {
                             <div className="w-10 h-10 rounded-full bg-[#19130D] border border-white/10 flex items-center justify-center">
                                 <Users className="w-5 h-5 text-[#916A47]" />
                             </div>
-                            <div className="flex flex-col items-start">
-                                <span className="text-white font-montserrat font-bold text-lg tracking-wide">Connected Accounts</span>
-                                <span className="text-white/40 text-xs mt-0.5">Manage Social Links</span>
+                            <div className="flex flex-col items-start gap-0.5 mt-1">
+                                <span className="text-white font-montserrat font-bold text-lg md:text-xl tracking-wide leading-none">Connected Accounts</span>
+                                <span className="text-white/40 text-[11px] font-bold tracking-[0.1em] uppercase">Manage Social Links</span>
                             </div>
                         </div>
                         <ChevronRight className="w-5 h-5 text-white/30 group-hover:text-white/70 transition-colors" />
@@ -361,133 +389,180 @@ export const SetupProfile: React.FC = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
                         onClick={() => setActiveModal(null)}
                     >
                         <motion.div
                             initial={{ y: 50, scale: 0.95 }}
                             animate={{ y: 0, scale: 1 }}
                             exit={{ y: 20, scale: 0.95 }}
-                            className="w-full max-w-[500px] bg-[rgba(40,22,8,0.95)] rounded-[32px] p-6 md:p-8 border border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col gap-5 max-h-[90vh] overflow-y-auto custom-scrollbar"
+                            className="w-full max-w-[500px] bg-[#19130D] rounded-[32px] p-6 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto custom-scrollbar"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="flex items-center justify-between mb-2">
-                                <h2 className="text-white text-xl font-montserrat font-bold tracking-wide flex items-center gap-2">
-                                    <Wallet className="w-6 h-6 text-[#ffb01d]" />
+                            <div className="flex items-center justify-between mb-5 mt-2">
+                                <div className="w-[34px]"></div>
+                                <h2 className="text-white text-2xl md:text-[28px] font-['Cinzel'] tracking-widest text-center">
                                     In-Game Wallet
                                 </h2>
-                                <button onClick={() => setActiveModal(null)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
-                                    <X className="w-5 h-5 text-white/50 hover:text-white" />
+                                <button onClick={() => setActiveModal(null)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors border border-white/5">
+                                    <X className="w-4 h-4 text-white/50 hover:text-white" />
                                 </button>
                             </div>
 
-                            <SocialCard
-                                icon="💳"
-                                name="Embedded Wallet"
-                                linked={hasEmbeddedWallet}
-                                username={embeddedWalletAddress ? `${embeddedWalletAddress.slice(0, 6)}...${embeddedWalletAddress.slice(-4)}` : undefined}
-                                onLink={() => createWallet?.()}
-                            />
+                            <div className={`flex items-center justify-between px-5 py-4 rounded-2xl border transition-all ${hasEmbeddedWallet ? 'border-[#916A47] bg-gradient-to-r from-[#916A47]/20 to-transparent' : 'border-white/10 bg-white/5'}`}>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-xl bg-black/50 border border-white/10 flex items-center justify-center shadow-inner">
+                                        <Wallet className="w-5 h-5 text-white/70" />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-white text-base font-montserrat font-medium tracking-wide">Embedded Wallet</p>
+                                        {hasEmbeddedWallet && embeddedWalletAddress ? (
+                                            <p className="text-white/60 text-sm font-mono border border-white/10 bg-black/40 px-2.5 py-1 rounded-md inline-block w-fit tracking-wide shadow-inner tabular-nums">
+                                                {embeddedWalletAddress.slice(0, 6)}...{embeddedWalletAddress.slice(-4)}
+                                            </p>
+                                        ) : (
+                                            <p className="text-white/30 text-xs mt-1">Not connected</p>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {hasEmbeddedWallet ? (
+                                        <span className="flex items-center gap-1.5 text-[#C19A6B] text-[10px] uppercase font-bold tracking-widest px-3 py-1.5 rounded-lg bg-[#916A47]/20 border border-[#916A47]/30">
+                                            <Check className="w-3.5 h-3.5" /> Active
+                                        </span>
+                                    ) : (
+                                        <button
+                                            onClick={() => createWallet?.()}
+                                            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-black bg-[#C19A6B] hover:bg-[#D4B08C] transition-all shadow-[0_0_15px_rgba(193,154,107,0.3)]"
+                                        >
+                                            <Link className="w-4 h-4" /> Create
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
 
                             {hasEmbeddedWallet && (
-                                <div className="flex flex-col gap-2 mt-2">
-                                    <h4 className="text-white/50 text-xs font-medium mb-1 uppercase tracking-wider">Testnet Balances</h4>
-
-                                    <div className="flex items-center justify-between bg-white/5 rounded-xl p-4 border border-white/10">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-[#19130D] flex items-center justify-center border border-white/20 p-1">
-                                                <img src="/assets/somniayeal.png" alt="Somnia" className="w-full h-full object-contain" />
-                                            </div>
-                                            <span className="text-white font-semibold">Somnia</span>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-[#ffb01d] font-mono shadow-[#ffb01d]/20 drop-shadow-sm">
-                                                {somniaBalance ? Number(formatEther(somniaBalance.value)).toFixed(3) : '0.000'} STT
-                                            </span>
-                                            <a
-                                                href="https://faucet.testnet.somnia.network/"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="px-3 py-1.5 bg-[#ffb01d]/10 hover:bg-[#ffb01d]/20 text-[#ffb01d] border border-[#ffb01d]/30 rounded-lg text-xs font-bold transition-all"
-                                            >
-                                                Faucet
-                                            </a>
-                                        </div>
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex items-center mx-2 mb-1">
+                                        <h4 className="text-white/60 text-[10px] font-montserrat font-bold uppercase tracking-[0.2em] whitespace-nowrap">Testnet Balances</h4>
+                                        <div className="h-[1px] w-full bg-gradient-to-r from-white/20 to-transparent ml-6"></div>
                                     </div>
 
-                                    <div className="flex items-center justify-between bg-white/5 rounded-xl p-4 border border-white/10 mt-1">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-[#19130D] flex items-center justify-center border border-white/20 p-1">
-                                                <img src="/assets/avalanche-avax-logo.png" alt="Avalanche" className="w-full h-full object-contain" />
+                                    {/* Balances block replacing faucets */}
+                                    <div className="flex flex-col gap-2 mt-1 mb-2">
+                                        <div className="flex items-center justify-between bg-black/40 rounded-xl p-3 px-4 border border-white/5 group">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-[#19130D] flex items-center justify-center border border-white/10 shadow-inner p-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                                                    <img src="/assets/somniayeal.png" alt="Somnia" className="w-full h-full object-contain grayscale-[30%] group-hover:grayscale-0 transition-all" />
+                                                </div>
+                                                <span className="text-white font-montserrat text-sm font-medium tracking-wide">Somnia <span className="text-white/60 text-[10px] font-bold uppercase ml-2 tracking-wider">Testnet</span></span>
                                             </div>
-                                            <span className="text-white font-semibold">Avalanche</span>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-red-400 font-mono shadow-red-400/20 drop-shadow-sm">
-                                                {avaxBalance ? Number(formatEther(avaxBalance.value)).toFixed(3) : '0.000'} AVAX
+                                            <span className="text-white font-mono text-base font-medium tabular-nums">
+                                                {somniaBalance ? Number(formatEther(somniaBalance.value)).toFixed(3) : '0.000'} <span className="text-white/60 text-sm ml-1 font-semibold">STT</span>
                                             </span>
-                                            <a
-                                                href="https://core.app/tools/testnet-faucet/?subnet=c&token=c"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="px-3 py-1.5 bg-red-400/10 hover:bg-red-400/20 text-red-400 border border-red-400/30 rounded-lg text-xs font-bold transition-all"
-                                            >
-                                                Faucet
-                                            </a>
+                                        </div>
+
+                                        <div className="flex items-center justify-between bg-black/40 rounded-xl p-3 px-4 border border-white/5 group">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-[#19130D] flex items-center justify-center border border-white/10 shadow-inner p-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                                                    <img src="/assets/avalanche-avax-logo.png" alt="Avalanche" className="w-full h-full object-contain grayscale-[50%] group-hover:grayscale-0 transition-all" />
+                                                </div>
+                                                <span className="text-white font-montserrat text-sm font-medium tracking-wide">Avalanche <span className="text-white/60 text-[10px] uppercase ml-2 tracking-wider">Fuji</span></span>
+                                            </div>
+                                            <span className="text-white font-mono text-base font-medium tabular-nums">
+                                                {avaxBalance ? Number(formatEther(avaxBalance.value)).toFixed(3) : '0.000'} <span className="text-[#C19A6B]/70 text-xs ml-1 font-bold">AVAX</span>
+                                            </span>
                                         </div>
                                     </div>
 
                                     {/* Fund from External Wallet Section */}
-                                    <div className="mt-6 p-5 rounded-2xl border border-[#ffb01d]/30 bg-gradient-to-b from-[#ffb01d]/10 to-transparent flex flex-col gap-4">
-                                        <h4 className="text-[#ffb01d] text-base font-bold flex items-center gap-2">
-                                            💰 Fund from Main Wallet
-                                        </h4>
+                                    <div className="mt-4 p-5 rounded-2xl border border-[#916A47]/30 bg-gradient-to-b from-[#916A47]/10 to-transparent flex flex-col gap-4 relative overflow-hidden">
+                                        <div className="flex items-center justify-between relative z-10">
+                                            <h4 className="text-[#C19A6B] text-[10px] font-montserrat font-bold uppercase tracking-[0.2em] flex items-center gap-2">
+                                                <Wallet className="w-4 h-4 text-[#C19A6B]" /> Fund from Main Wallet
+                                            </h4>
+                                        </div>
+
                                         {!externalWallet ? (
-                                            <div className="flex flex-col items-center gap-3 py-2">
-                                                <p className="text-white/60 text-sm text-center">
-                                                    Connect your external wallet (e.g. MetaMask/Phantom) to send tokens locally securely.
+                                            <div className="flex flex-col items-center gap-4 py-3 relative z-10">
+                                                <p className="text-white/50 text-xs text-center font-montserrat leading-relaxed max-w-[80%]">
+                                                    Connect your external wallet securely to transfer testnet tokens.
                                                 </p>
                                                 <button
                                                     onClick={() => linkWallet()}
-                                                    className="px-6 py-3 bg-[#ffb01d]/20 hover:bg-[#ffb01d]/30 text-[#ffb01d] font-bold rounded-xl transition-colors border border-[#ffb01d]/30 w-full"
+                                                    className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-montserrat font-semibold text-sm rounded-xl transition-colors border border-white/10 w-full flex items-center justify-center gap-2 group"
                                                 >
-                                                    Connect Main Wallet
+                                                    <Link className="w-4 h-4 text-white/50 group-hover:text-white transition-colors" /> Connect Main Wallet
                                                 </button>
                                             </div>
                                         ) : (
-                                            <div className="flex flex-col gap-4">
-                                                <div className="flex justify-between items-center bg-black/50 p-3 rounded-xl border border-white/10">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-white/40 text-[10px] uppercase">From Wallet</span>
-                                                        <span className="text-white text-sm font-mono">{externalWallet.address.slice(0, 6)}...{externalWallet.address.slice(-4)}</span>
+                                            <div className="flex flex-col gap-4 relative z-10">
+                                                <div className="flex justify-between items-center bg-black/60 p-3.5 rounded-xl border border-white/5">
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <span className="text-white/60 text-[10px] font-bold uppercase tracking-[0.15em]">Source Wallet</span>
+                                                        <span className="text-white/60 text-sm font-mono border border-white/10 bg-black/40 px-2.5 py-1 rounded-md inline-block w-fit tracking-wide shadow-inner tabular-nums">
+                                                            {externalWallet.address.slice(0, 6)}...{externalWallet.address.slice(-4)}
+                                                        </span>
                                                     </div>
-                                                    <button onClick={() => linkWallet()} className="text-[#ffb01d] text-xs font-medium hover:underline bg-[#ffb01d]/10 px-3 py-1.5 rounded-lg border border-[#ffb01d]/20">Change</button>
+                                                    <button onClick={() => linkWallet()} className="text-white/70 text-xs font-semibold hover:text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl border border-white/10 transition-all shadow-sm">Change</button>
                                                 </div>
-                                                <div className="flex gap-3 w-full">
-                                                    <select
-                                                        value={fundingNetwork}
-                                                        onChange={(e) => setFundingNetwork(Number(e.target.value))}
-                                                        className="bg-black/60 border border-white/20 text-white font-medium rounded-xl px-3 outline-none w-[100px] p-3 appearance-none focus:border-[#ffb01d]/50 transition-colors"
+
+                                                <div className="flex flex-col gap-2 w-full mt-1">
+                                                    <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.15em] font-bold text-white/60 px-1">
+                                                        <span>Token</span>
+                                                        <span className="text-white/60">
+                                                            Available: <span className="font-mono text-white/80 tabular-nums">{externalBalance ? Number(formatEther(externalBalance.value)).toFixed(3) : '0.000'}</span> {fundingNetwork === SOMNIA_TESTNET.id ? 'STT' : 'AVAX'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex gap-2 w-full">
+                                                        <div className="relative w-[130px]">
+                                                            <select
+                                                                value={fundingNetwork}
+                                                                onChange={(e) => setFundingNetwork(Number(e.target.value))}
+                                                                className="w-full h-[54px] bg-black/60 border border-white/10 text-white font-montserrat text-sm font-semibold rounded-xl outline-none pl-4 pr-11 appearance-none focus:border-[#C19A6B]/50 focus:bg-black/80 transition-colors cursor-pointer"
+                                                            >
+                                                                <option value={SOMNIA_TESTNET.id}>STT</option>
+                                                                <option value={AVALANCHE_FUJI.id}>AVAX</option>
+                                                            </select>
+                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-6 h-6 bg-white/10 rounded-md flex items-center justify-center border border-white/10 shadow-sm">
+                                                                <ChevronRight className="w-3.5 h-3.5 text-white/70 rotate-90" />
+                                                            </div>
+                                                        </div>
+                                                        <div className="relative flex-1 group">
+                                                            <button
+                                                                onClick={handleMaxClick}
+                                                                className="absolute left-3 top-1/2 -translate-y-1/2 px-2.5 py-1.5 bg-gradient-to-r from-[#C19A6B]/20 to-[#916A47]/20 hover:from-[#C19A6B]/30 hover:to-[#916A47]/30 border border-[#C19A6B]/40 rounded-lg text-[10px] font-bold uppercase tracking-widest text-[#f5d9b3] transition-all z-10 shadow-[0_0_10px_rgba(193,154,107,0.1)]"
+                                                            >
+                                                                MAX
+                                                            </button>
+                                                            <input
+                                                                type="text"
+                                                                inputMode="decimal"
+                                                                value={fundAmount}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value.replace(',', '.');
+                                                                    if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                                                                        setFundAmount(val);
+                                                                    }
+                                                                }}
+                                                                className="w-full h-[54px] bg-black/60 border border-white/10 text-white font-mono font-medium text-xl text-right rounded-xl pl-16 pr-5 outline-none focus:border-[#C19A6B] focus:bg-black/80 transition-all placeholder:text-white/30 relative tabular-nums"
+                                                                placeholder="0.00"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col gap-1.5 w-full mt-2">
+                                                    <button
+                                                        onClick={handleFundWallet}
+                                                        disabled={isFunding || !fundAmount || Number(fundAmount) <= 0}
+                                                        className={`w-full py-4 font-montserrat font-semibold text-base tracking-wide rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 border ${isFunding || !fundAmount || Number(fundAmount) <= 0 ? 'bg-white/5 text-white/30 border-white/5 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-[#916A47] to-[#A37B58] hover:from-[#A37B58] hover:to-[#B68E6A] text-white border-[#C19A6B]/50 hover:border-[#E8CBA3]/70 hover:scale-[1.02] shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(193,154,107,0.3)]'}`}
                                                     >
-                                                        <option value={SOMNIA_TESTNET.id}>STT</option>
-                                                        <option value={AVALANCHE_FUJI.id}>AVAX</option>
-                                                    </select>
-                                                    <input
-                                                        type="number"
-                                                        value={fundAmount}
-                                                        onChange={(e) => setFundAmount(e.target.value)}
-                                                        className="flex-1 bg-black/60 border border-white/20 text-white font-mono text-lg rounded-xl px-4 outline-none p-3 text-right focus:border-[#ffb01d]/50 transition-colors"
-                                                        step="0.1"
-                                                        min="0.01"
-                                                    />
+                                                        {isFunding ? 'Processing...' : 'Send Tokens'}
+                                                    </button>
+                                                    <p className="text-center text-white/40 text-[10px] font-semibold uppercase tracking-widest mt-1">
+                                                        Est. Network Fee: <span className="font-mono text-white/50 tabular-nums">~{fundingNetwork === SOMNIA_TESTNET.id ? '0.001 STT' : '0.005 AVAX'}</span>
+                                                    </p>
                                                 </div>
-                                                <button
-                                                    onClick={handleFundWallet}
-                                                    disabled={isFunding}
-                                                    className={`px-4 py-3.5 font-bold text-base rounded-xl transition-all shadow-lg mt-2 ${isFunding ? 'bg-gray-600 text-gray-300 cursor-wait' : 'bg-gradient-to-r from-[#ffb01d] to-[#d68e0d] text-black hover:scale-[1.02]'}`}
-                                                >
-                                                    {isFunding ? 'Processing Transaction...' : 'Send Tokens'}
-                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -502,29 +577,37 @@ export const SetupProfile: React.FC = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
                         onClick={() => setActiveModal(null)}
                     >
                         <motion.div
                             initial={{ y: 50, scale: 0.95 }}
                             animate={{ y: 0, scale: 1 }}
                             exit={{ y: 20, scale: 0.95 }}
-                            className="w-full max-w-[500px] bg-[rgba(40,22,8,0.95)] rounded-[32px] p-6 md:p-8 border border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col gap-6"
+                            className="w-full max-w-[500px] bg-[#19130D] rounded-[32px] p-6 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-6"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-white text-xl font-montserrat font-bold tracking-wide flex items-center gap-2">
-                                    <Users className="w-6 h-6 text-[#916A47]" />
-                                    Connected Accounts
+                            <div className="flex items-center justify-between mb-5 mt-2">
+                                <div className="w-[34px]"></div>
+                                <h2 className="text-white text-2xl md:text-[28px] font-['Cinzel'] tracking-widest text-center flex items-center justify-center gap-3">
+                                    <Users className="w-6 h-6 text-white/70" />
+                                    Accounts
                                 </h2>
-                                <button onClick={() => setActiveModal(null)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
-                                    <X className="w-5 h-5 text-white/50 hover:text-white" />
+                                <button onClick={() => setActiveModal(null)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors border border-white/5">
+                                    <X className="w-4 h-4 text-white/50 hover:text-white" />
                                 </button>
                             </div>
 
                             <div className="flex flex-col gap-3">
                                 <SocialCard
-                                    icon="🔵"
+                                    icon={
+                                        <svg viewBox="0 0 24 24" width="20" height="20" className="opacity-90">
+                                            <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                            <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                            <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                                            <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                                        </svg>
+                                    }
                                     name="Google"
                                     linked={!!google}
                                     username={google?.email ?? undefined}
@@ -532,18 +615,26 @@ export const SetupProfile: React.FC = () => {
                                     onUnlink={google?.subject ? () => unlinkGoogle(google.subject) : undefined}
                                 />
                                 <SocialCard
-                                    icon="𝕏"
-                                    name="Twitter / X"
+                                    icon={
+                                        <svg viewBox="0 0 24 24" width="20" height="20" className="opacity-90">
+                                            <path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                        </svg>
+                                    }
+                                    name="Twitter"
                                     linked={!!twitter}
-                                    username={twitter?.username ?? undefined}
+                                    username={twitter?.username ? `@${twitter.username}` : undefined}
                                     onLink={() => linkTwitter()}
                                     onUnlink={twitter?.subject ? () => unlinkTwitter(twitter.subject) : undefined}
                                 />
                                 <SocialCard
-                                    icon="🟣"
+                                    icon={
+                                        <svg viewBox="0 0 24 24" width="20" height="20" className="opacity-90">
+                                            <path fill="currentColor" d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
+                                        </svg>
+                                    }
                                     name="Discord"
                                     linked={!!discord}
-                                    username={discord?.username ?? undefined}
+                                    username={discord?.username ? `@${discord.username}` : undefined}
                                     onLink={() => linkDiscord()}
                                     onUnlink={discord?.subject ? () => unlinkDiscord(discord.subject) : undefined}
                                 />
