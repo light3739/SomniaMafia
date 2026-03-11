@@ -32,7 +32,7 @@ export async function signRequest(params: {
         throw new Error('Missing address for signing');
     }
 
-    const timestamp = Math.floor(Date.now() / 1000); // Unix seconds — server checks ±5 min window in seconds
+    const timestamp = Date.now(); // Unix milliseconds — GM server expects ms for modern sig (Date.now())
     const nonce = generateNonce(timestamp);
     const message = buildMessage({ nonce, timestamp });
 
