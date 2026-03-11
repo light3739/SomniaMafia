@@ -77,7 +77,9 @@ export const RoleReveal: React.FC = React.memo(() => {
     const [isProcessing, setIsProcessing] = useState(false);
 
     // Guard refs
-    const isActionInFlightRef = useRef(false);
+    const registerInFlightRef = useRef(false);
+    const submitInFlightRef = useRef(false);
+    const fetchInFlightRef = useRef(false);
 
     // Sync hasConfirmed with contract
     useEffect(() => {
@@ -88,8 +90,8 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // Handle ECIES Registration
     const handleRegisterEcies = useCallback(async () => {
-        if (!currentRoomId || !address || revealState.eciesRegistered || isActionInFlightRef.current) return;
-        isActionInFlightRef.current = true;
+        if (!currentRoomId || !address || revealState.eciesRegistered || registerInFlightRef.current) return;
+        registerInFlightRef.current = true;
         try {
             await registerEciesPubkey(currentRoomId.toString(), address);
             setRevealState(prev => ({ ...prev, eciesRegistered: true }));
@@ -97,14 +99,14 @@ export const RoleReveal: React.FC = React.memo(() => {
         } catch (e) {
             console.error("[RoleReveal] ECIES registration failed:", e);
         } finally {
-            isActionInFlightRef.current = false;
+            registerInFlightRef.current = false;
         }
     }, [currentRoomId, address, revealState.eciesRegistered]);
 
     // Handle SRA Key submission
     const handleShareKey = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient || revealState.hasSharedKeys || isActionInFlightRef.current) return;
-        isActionInFlightRef.current = true;
+        if (!currentRoomId || !address || !walletClient || revealState.hasSharedKeys || submitInFlightRef.current) return;
+        submitInFlightRef.current = true;
         setIsProcessing(true);
         try {
             const shuffleService = getShuffleService();
@@ -124,14 +126,14 @@ export const RoleReveal: React.FC = React.memo(() => {
             addLog(e.message || "Failed to submit SRA key", "danger");
         } finally {
             setIsProcessing(false);
-            isActionInFlightRef.current = false;
+            submitInFlightRef.current = false;
         }
     }, [currentRoomId, address, walletClient, revealState.hasSharedKeys, addLog]);
 
     // Handle Role Fetching
     const handleFetchRole = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient || revealState.isRevealed || !revealState.hasSharedKeys || isActionInFlightRef.current) return;
-        isActionInFlightRef.current = true;
+        if (!currentRoomId || !address || !walletClient || revealState.isRevealed || !revealState.hasSharedKeys || fetchInFlightRef.current) return;
+        fetchInFlightRef.current = true;
         try {
             const role = await fetchMyRoleFromGm({
                 roomId: currentRoomId.toString(),
@@ -163,7 +165,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } catch (e: any) {
             console.error("[RoleReveal] Role fetch failed:", e);
         } finally {
-            isActionInFlightRef.current = false;
+            fetchInFlightRef.current = false;
         }
     }, [currentRoomId, address, walletClient, revealState.isRevealed, revealState.hasSharedKeys, addLog, setGameState]);
 
@@ -183,13 +185,17 @@ export const RoleReveal: React.FC = React.memo(() => {
         const roleNum = roleMap[revealState.myRole] || 4;
 
         try {
-            const shuffleService = getShuffleService();
-            const salt = ShuffleService.generateSalt(); // We can generate a new one since we don't manually reveal deck anymore
+            const existingSalt = (currentRoomId && address)
+                ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`)
+                : null;
+            const salt = existingSalt || ShuffleService.generateSalt();
 
             await commitAndConfirmRoleOnChain(roleNum, salt);
 
             // Save salt for future reference if needed
-            localStorage.setItem(`role_salt_${currentRoomId}_${address?.toLowerCase()}`, salt);
+            if (currentRoomId && address) {
+                localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, salt);
+            }
 
             setRevealState(prev => ({ ...prev, hasConfirmed: true }));
         } catch (e: any) {
@@ -215,8 +221,8 @@ export const RoleReveal: React.FC = React.memo(() => {
         } else if (!revealState.hasSharedKeys) {
             handleShareKey();
         } else if (!revealState.isRevealed) {
-            const timer = setTimeout(handleFetchRole, 2000); // Poll every 2s
-            return () => clearTimeout(timer);
+            const interval = setInterval(handleFetchRole, 2000); // Poll every 2s
+            return () => clearInterval(interval);
         }
     }, [gameState.phase, revealState.eciesRegistered, revealState.hasSharedKeys, revealState.isRevealed, handleRegisterEcies, handleShareKey, handleFetchRole]);
 
