@@ -947,8 +947,8 @@ const InvestigationResultTestWrapper: React.FC<{ isMafia: boolean }> = ({ isMafi
     if (!isReady) return null;
 
     const targetAddr = isMafia
-        ? '0x4444444444444444444444444444444444444444'
-        : '0x2222222222222222222222222222222222222222';
+        ? '0x4444444444444444444444444444444444444444' as `0x${string}`
+        : '0x2222222222222222222222222222222222222222' as `0x${string}`;
 
     const initialNightState = {
         hasCommitted: true,
