@@ -171,6 +171,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         currentRoomIdRef.current = currentRoomId;
         roleFetchedRef.current = false;
+        autoClaimAttemptedRef.current = false;
     }, [currentRoomId]);
 
     // === TX QUEUE: Serialize session key transactions to prevent nonce collisions ===
