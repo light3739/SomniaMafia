@@ -199,7 +199,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
             console.error("Failed to fetch discussion state:", e);
             return null;
         }
-    }, [currentRoomId, myPlayer?.address, gameState.dayCount]);
+    }, [currentRoomId, myPlayer?.address]); // Removed gameState.dayCount as it's handled by ref
 
     // Start discussion (host only)
     const startDiscussion = useCallback(async () => {
@@ -257,9 +257,24 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         }
     }, [currentRoomId, myPlayer?.address, addLog, isTestMode, gameState.dayCount, gameState.players]);
 
-    // Skip speech (current speaker only)
+    // Skip speech (current speaker or host only)
     const skipSpeech = useCallback(async () => {
         if (!currentRoomId) return;
+
+        // Security check: Only current speaker or host can skip
+        const myAddressLow = myPlayer?.address?.toLowerCase();
+        const speakerAddressLow = discussionState?.currentSpeakerAddress?.toLowerCase();
+        const hostAddressLow = gameState.players[0]?.address?.toLowerCase();
+
+        const isSpeaker = speakerAddressLow && myAddressLow === speakerAddressLow;
+        const isHost = hostAddressLow && myAddressLow === hostAddressLow;
+
+        if (!isSpeaker && !isHost) {
+            console.warn("[DayPhase] skipSpeech: Unauthorized attempt to skip.");
+            addLog("Only the current speaker or host can skip speech.", "danger");
+            return;
+        }
+
         setIsProcessing(true);
         try {
             const actorAddress = myPlayer?.address;
@@ -872,7 +887,7 @@ const VotingTimer: React.FC = React.memo(() => {
         tick();
         const interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
-    }, [phaseDeadline, myAddress, hasVoted, isAlive, isVotingPhase, voteOnChain, addLog]);
+    }, [phaseDeadline, myAddress, hasVoted, isAlive, isVotingPhase, voteOnChain, addLog, gameState.players]); // Added gameState.players to avoid stale closure
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
