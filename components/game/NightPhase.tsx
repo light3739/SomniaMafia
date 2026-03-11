@@ -288,6 +288,35 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         }
     }, [myRole, loadMafiaTeammates]);
 
+    // Detective Recovery: Fetch investigation result if already committed but not in local state
+    useEffect(() => {
+        if (myRole !== Role.DETECTIVE || !nightState.hasCommitted || !nightState.committedTarget || nightState.investigationResult) return;
+        if (isProcessing || isTxPending) return;
+
+        const recoverResult = async () => {
+            console.log("[Detective] Recovering investigation result for target:", nightState.committedTarget);
+            try {
+                // 1. Try GM Proof FIRST
+                const proof = await fetchInvestigationProofFromGM(nightState.committedTarget as string);
+                if (proof && proof.role !== Role.UNKNOWN) {
+                    setNightState(prev => ({ ...prev, investigationResult: proof.role }));
+                    return;
+                }
+                
+                // 2. Fallback: On-chain check
+                const result = await getInvestigationResultOnChain(address || '', nightState.committedTarget as string);
+                if (result && result.role !== Role.UNKNOWN) {
+                    setNightState(prev => ({ ...prev, investigationResult: result.role }));
+                }
+            } catch (e) {
+                console.error("[Detective] Recovery failed:", e);
+            }
+        };
+
+        const timer = setTimeout(recoverResult, 1000);
+        return () => clearTimeout(timer);
+    }, [myRole, nightState.hasCommitted, nightState.committedTarget, nightState.investigationResult, fetchInvestigationProofFromGM, getInvestigationResultOnChain, address, isProcessing, isTxPending]);
+
     // Load saved commit data from localStorage on mount
     useEffect(() => {
         if (!currentRoomId || !address) return;
