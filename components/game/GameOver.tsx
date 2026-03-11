@@ -378,12 +378,12 @@ export const GameOver: React.FC = React.memo(() => {
     const allRolesKnown = useCallback(() => {
         return gameState.players.length > 0 && gameState.players.every(p => {
             const addr = p.address.toLowerCase();
-            const r = onChainRoles.get(addr)
+            const r = onChainRolesRef.current.get(addr)
                 || revealedRolesRef.current.get(addr)
                 || p.role;
             return r !== Role.UNKNOWN;
         });
-    }, [gameState.players, onChainRoles]);
+    }, [gameState.players]); 
 
     useEffect(() => {
         // Poll until all roles known, or 5 min max
@@ -392,6 +392,8 @@ export const GameOver: React.FC = React.memo(() => {
 
         pollIntervalRef.current = setInterval(async () => {
             pollCount++;
+            
+            // SPEED: Stop immediately if everything is already known (via refs)
             if (pollCount > maxPolls || allRolesKnown()) {
                 if (pollIntervalRef.current) {
                     clearInterval(pollIntervalRef.current);

@@ -3542,9 +3542,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // This reduces RPC spam from ~20 calls/sec to 1 call/2sec while keeping sub-3s event latency.
     useEffect(() => {
         if (!publicClient || !currentRoomId) return;
+        if (gameState.phase === GamePhase.ENDED) return; // ← STOP polling when game ends
+        
         const interval = setInterval(pollEvents, 2000);
         return () => clearInterval(interval);
-    }, [pollEvents, publicClient, currentRoomId]);
+    }, [pollEvents, publicClient, currentRoomId, gameState.phase]);
 
 
 
