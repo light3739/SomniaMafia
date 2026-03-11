@@ -78,7 +78,7 @@ async function verifySessionKeyOwnership(
         return { ok: false, status: 403, error: 'Session key is not registered for this player' };
     }
 
-    if (!session.isActive || Number(session.expiresAt) <= Math.floor(deps.now() / 1000)) {
+    if (!session.isActive || Number(session.expiresAt) <= deps.now()) {
         return { ok: false, status: 403, error: 'Session key inactive or expired' };
     }
 

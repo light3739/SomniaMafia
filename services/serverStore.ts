@@ -4,7 +4,14 @@ import Redis from 'ioredis';
  * Standard Redis client (works with RedisLabs, Upstash, etc. via connection string)
  */
 const redis = process.env.REDIS_URL
-    ? new Redis(process.env.REDIS_URL)
+    ? new Redis(process.env.REDIS_URL, {
+        connectTimeout: 5000, // 5 seconds
+        maxRetriesPerRequest: 3,
+        retryStrategy: (times) => {
+            if (times > 3) return null; // stop retrying after 3 times to prevent hangs
+            return Math.min(times * 100, 1000);
+        }
+    })
     : null;
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';

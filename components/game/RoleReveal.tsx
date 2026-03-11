@@ -91,7 +91,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // Handle ECIES Registration
     const handleRegisterEcies = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient || registerInFlightRef.current) return;
+        if (!currentRoomId || !address || registerInFlightRef.current) return;
         
         const { isNew } = await loadOrCreateKeypair(currentRoomId.toString(), address);
         // Register if not already registered OR if it's a freshly generated key
@@ -99,15 +99,20 @@ export const RoleReveal: React.FC = React.memo(() => {
 
         registerInFlightRef.current = true;
         try {
-            await registerEciesPubkey(currentRoomId.toString(), address, walletClient);
-            setRevealState(prev => ({ ...prev, eciesRegistered: true }));
+            await registerEciesPubkey(currentRoomId.toString(), address);
+            setRevealState(prev => ({ 
+                ...prev, 
+                eciesRegistered: true,
+                // If it's a new key, reset the flow to re-share keys with the new pubkey
+                ...(isNew && { hasSharedKeys: false, isRevealed: false, myRole: null })
+            }));
             console.log("[RoleReveal] ECIES registered successfully");
         } catch (e) {
             console.error("[RoleReveal] ECIES registration failed:", e);
         } finally {
             registerInFlightRef.current = false;
         }
-    }, [currentRoomId, address, walletClient, revealState.eciesRegistered]);
+    }, [currentRoomId, address, revealState.eciesRegistered]);
 
     // Handle SRA Key submission
     const handleShareKey = useCallback(async () => {
