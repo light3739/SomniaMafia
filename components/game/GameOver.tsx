@@ -268,6 +268,9 @@ export const GameOver: React.FC = React.memo(() => {
     // Fetch all roles from GM server (GM has decrypted deck using all SRA keys)
     // Used as fallback when on-chain playerRoles reverts or returns 0 (e.g. dead players)
     const fetchGMRoles = useCallback(async () => {
+        // Skip if all roles already known to reduce RPC/API spam
+        if (allRolesKnown()) return;
+
         const roomId = roomIdRef.current
             || currentRoomId
             || (() => {
@@ -402,6 +405,14 @@ export const GameOver: React.FC = React.memo(() => {
                 fetchOnChainRoles(revealedRolesRef.current),
                 fetchGMRoles(),
             ]);
+
+            // SPEED: Check again immediately after fetches to stop interval faster
+            if (allRolesKnown()) {
+                if (pollIntervalRef.current) {
+                    clearInterval(pollIntervalRef.current);
+                    pollIntervalRef.current = null;
+                }
+            }
         }, 3000);
 
         return () => {
