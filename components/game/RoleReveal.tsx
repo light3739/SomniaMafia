@@ -124,6 +124,9 @@ export const RoleReveal: React.FC = React.memo(() => {
             }
         }
 
+        const myCardIndex = findMyCardIndex();
+        setRevealState(prev => ({ ...prev, myCardIndex }));
+
         try {
             const deck = await publicClient.readContract({
                 address: runtimeContractAddress,
@@ -132,12 +135,9 @@ export const RoleReveal: React.FC = React.memo(() => {
                 args: [currentRoomId],
             }) as string[];
 
-            const myCardIndex = findMyCardIndex();
-
             setRevealState(prev => ({
                 ...prev,
-                deck,
-                myCardIndex
+                deck
             }));
         } catch (e) {
             console.error("Failed to fetch deck:", e);
@@ -783,7 +783,6 @@ const RoleRevealAuto: React.FC<{
             !revealState.isRevealed &&
             !isProcessing &&
             !isTxPending &&
-            revealState.deck.length > 0 &&
             revealState.collectedKeys.size >= keysNeeded &&
             keysNeeded > 0;  // Avoid division by zero
 
@@ -795,7 +794,7 @@ const RoleRevealAuto: React.FC<{
                 setTimeout(() => { decryptTriggeredRef.current = false; }, 2000);
             });
         }
-    }, [revealState.hasSharedKeys, revealState.isRevealed, revealState.collectedKeys.size, revealState.deck.length, keysNeeded, isProcessing, isTxPending, decryptMyRole]);
+    }, [revealState.hasSharedKeys, revealState.isRevealed, revealState.collectedKeys.size, keysNeeded, isProcessing, isTxPending, decryptMyRole]);
 
     // 3. Start countdown when role is revealed
     useEffect(() => {
