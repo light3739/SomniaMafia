@@ -1722,8 +1722,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Попытка 2: восстановить из localStorage (после перезагрузки страницы)
         if (!privKey && currentRoomId && address) {
             try {
-                const kp = await loadOrCreateKeypair(currentRoomId.toString(), address);
-                privKey = kp.privateKey;
+                const { privateKey } = await loadOrCreateKeypair(currentRoomId.toString(), address);
+                privKey = privateKey;
                 eciesPrivKeyRef.current = privKey;
                 console.log('[ECIES] Private key restored from localStorage');
             } catch (e) {
@@ -1752,7 +1752,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
             console.log('[ECIES] Role decrypted successfully:', text, '->', roleNum);
             return roleNum;
-        } catch (e) {
+        } catch (e: any) {
+            // Suppress noise: OperationError just means it's not our payload (encrypted for someone else)
+            if (e instanceof DOMException && e.name === 'OperationError') return null;
             console.error('[ECIES] Decryption failed:', e);
             return null;
         }

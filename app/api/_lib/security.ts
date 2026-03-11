@@ -20,7 +20,7 @@ export function createSecurityDependencies(overrides: Partial<SecurityDependenci
         consumeReplayNonce: (scope, roomId, actorAddress, nonce) =>
             ServerStore.consumeReplayNonce(scope, roomId, actorAddress, nonce),
         now: () => Math.floor(Date.now() / 1000), // Unix seconds — matches requestSigning.ts
-        maxClockSkewMs: 2 * 60, // 120 seconds (field name kept for compat)
+        maxClockSkewMs: 5 * 60, // 300 seconds (field name kept for compat) — sync with GM server 5min window
         nonceMinLength: 8,
     };
 

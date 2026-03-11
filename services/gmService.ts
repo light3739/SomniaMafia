@@ -13,8 +13,8 @@ export interface GmRoleResponse {
  * Register player's ECIES public key with the GM server.
  */
 export async function registerEciesPubkey(roomId: string, address: string, walletClient?: any): Promise<void> {
-    const keypair = await loadOrCreateKeypair(roomId, address);
-    const pubkeyHex = await exportPublicKeyHex(keypair.publicKey);
+    const { publicKey } = await loadOrCreateKeypair(roomId, address);
+    const pubkeyHex = await exportPublicKeyHex(publicKey);
 
     const meta = await signRequest({
         address,
@@ -123,17 +123,22 @@ export async function fetchMyRoleFromGm(params: {
     }
 
     // Decrypt
-    const keypair = await loadOrCreateKeypair(roomId, address);
-    const roleStr = await eciesDecrypt(data.encrypted, keypair.privateKey);
+    try {
+        const { privateKey } = await loadOrCreateKeypair(roomId, address);
+        const roleStr = await eciesDecrypt(data.encrypted, privateKey);
 
-    const roleMap: Record<string, Role> = {
-        MAFIA: Role.MAFIA,
-        DOCTOR: Role.DOCTOR,
-        DETECTIVE: Role.DETECTIVE,
-        CIVILIAN: Role.CIVILIAN,
-    };
+        const roleMap: Record<string, Role> = {
+            MAFIA: Role.MAFIA,
+            DOCTOR: Role.DOCTOR,
+            DETECTIVE: Role.DETECTIVE,
+            CIVILIAN: Role.CIVILIAN,
+        };
 
-    return roleMap[roleStr] || Role.UNKNOWN;
+        return roleMap[roleStr] || Role.UNKNOWN;
+    } catch (e: any) {
+        if (e instanceof DOMException && e.name === 'OperationError') return Role.UNKNOWN;
+        throw e;
+    }
 }
 
 /**

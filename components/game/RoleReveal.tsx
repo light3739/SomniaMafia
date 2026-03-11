@@ -9,6 +9,7 @@ import { Button } from '../ui/Button';
 import { Check, Users, Skull, Shield, Search, Loader2, RefreshCw, EyeOff } from 'lucide-react';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { registerEciesPubkey, submitSraKeyToGm, fetchMyRoleFromGm } from '../../services/gmService';
+import { loadOrCreateKeypair } from '../../services/eciesService';
 
 interface RevealState {
     myRole: Role | null;
@@ -90,7 +91,12 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // Handle ECIES Registration
     const handleRegisterEcies = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient || revealState.eciesRegistered || registerInFlightRef.current) return;
+        if (!currentRoomId || !address || !walletClient || registerInFlightRef.current) return;
+        
+        const { isNew } = await loadOrCreateKeypair(currentRoomId.toString(), address);
+        // Register if not already registered OR if it's a freshly generated key
+        if (revealState.eciesRegistered && !isNew) return;
+
         registerInFlightRef.current = true;
         try {
             await registerEciesPubkey(currentRoomId.toString(), address, walletClient);
