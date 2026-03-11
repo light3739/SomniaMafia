@@ -111,7 +111,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // Получить колоду из контракта
     const fetchDeck = useCallback(async () => {
-        if (!publicClient || !currentRoomId) return;
+        if (!currentRoomId) return;
 
         // V4: Restore keys on mount if missing (Refresh handling)
         if (myPlayer) {
@@ -126,23 +126,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
         const myCardIndex = findMyCardIndex();
         setRevealState(prev => ({ ...prev, myCardIndex }));
-
-        try {
-            const deck = await publicClient.readContract({
-                address: runtimeContractAddress,
-                abi: MAFIA_ABI,
-                functionName: 'getDeck',
-                args: [currentRoomId],
-            }) as string[];
-
-            setRevealState(prev => ({
-                ...prev,
-                deck
-            }));
-        } catch (e) {
-            console.error("Failed to fetch deck:", e);
-        }
-    }, [publicClient, currentRoomId, findMyCardIndex, myPlayer, runtimeContractAddress]);
+    }, [currentRoomId, findMyCardIndex, myPlayer]);
 
     // V3.1: Собрать ВСЕ ключи от всех игроков - используем getAllKeysForMe
     const collectKeys = useCallback(async () => {
@@ -333,7 +317,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // Decrypt role: ask GM for ECIES-encrypted role, decrypt locally with our private key
     const decryptMyRole = useCallback(async () => {
-        if (revealState.myCardIndex < 0 || !currentRoomId || !address || !walletClient) return;
+        if (!currentRoomId || !address || !walletClient) return;
         if (isDecryptInFlightRef.current) return;
         isDecryptInFlightRef.current = true;
 
