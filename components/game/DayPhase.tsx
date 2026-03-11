@@ -160,6 +160,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         }
     }, [isVotingPhase]);
 
+
     // Логируем начало речи каждого игрока
     useEffect(() => {
         if (isDayPhase && discussionState?.active && discussionState.currentSpeakerAddress) {
@@ -458,6 +459,45 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
             setIsProcessing(false);
         }
     }, [startVotingOnChain, addLog]);
+
+    // DAY phase deadline watchdog: if discussion API hangs and the on-chain deadline
+    // passes while we're still in DAY, auto-trigger startVoting directly.
+    const dayTimeoutRef = useRef(false);
+    useEffect(() => {
+        if (!isDayPhase || isTestMode || votingStartedRef.current) return;
+
+        const deadline = gameState.phaseDeadline;
+        if (!deadline) return;
+
+        const sortedSurvivors = [...gameState.players]
+            .filter(p => p.isAlive)
+            .sort((a, b) => a.address.localeCompare(b.address));
+        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+        if (myIndex === -1) return;
+
+        const checkDayDeadline = () => {
+            if (dayTimeoutRef.current || votingStartedRef.current || !isDayPhase) return;
+            const now = Math.floor(Date.now() / 1000);
+            const secondsPast = now - deadline;
+            // Stagger: base 5s + 5s per index
+            const myTriggerTime = 5 + myIndex * 5;
+            if (secondsPast >= myTriggerTime) {
+                console.log(`[DayPhase] DAY deadline passed. Waterfall trigger (Index ${myIndex}) — force startVoting.`);
+                dayTimeoutRef.current = true;
+                votingStartedRef.current = true;
+                setVotingAttemptTs(Date.now());
+                addLog('Day phase timeout. Starting vote...', 'warning');
+                handleStartVoting().catch(() => {
+                    dayTimeoutRef.current = false;
+                    votingStartedRef.current = false;
+                });
+            }
+        };
+
+        checkDayDeadline();
+        const interval = setInterval(checkDayDeadline, 2000);
+        return () => clearInterval(interval);
+    }, [isDayPhase, gameState.phaseDeadline, gameState.players, myPlayer?.address, isTestMode, handleStartVoting, addLog]);
 
     // Auto-transition to voting when discussion finished
     useEffect(() => {
