@@ -14,6 +14,7 @@ import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
 import { signRequest } from '../services/requestSigning';
 import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage, buildDiscussionMessage, buildInvestigateMessage, buildRoleSyncMessage } from '../services/signingSchema';
+import * as GM from '../services/gmService';
 
 const shotSound = "/assets/mafia_shot.wav";
 
@@ -55,6 +56,8 @@ interface GameContextType {
 
     // Night (V4: Mafia uses consensus, Doctor/Detective use commit-reveal)
     submitNightActionToGM: (actionType: 'kill' | 'heal' | 'check', targetAddress: string) => Promise<void>;
+    skipNightActionToGM: () => Promise<void>;
+    fetchInvestigationProofFromGM: (targetAddress: string) => Promise<{ role: Role, source: string } | null>;
 
     revealRoleOnChain: (role: number, salt: string) => Promise<void>;
     tryEndGame: () => Promise<void>;
@@ -2129,11 +2132,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${playerAddress.toLowerCase()}`);
 
-            if (myRoleNum === undefined || !savedSalt) {
-                console.error(`[NightAction] Missing verification data. RoleNum=${myRoleNum}, savedRole=${savedRole}, salt=${savedSalt ? '***' : 'null'}`);
-                addLog("Missing role or salt. Please ensure your role is decrypted.", "danger");
+            // SALT BYPASS: Salt is only strictly necessary for on-chain commit-reveal.
+            // When using GM off-chain actions, the GM verifies our role by ECIES-resolved mapping.
+            // We only throw if myRoleNum is missing (we don't even know who we are).
+            if (myRoleNum === undefined) {
+                console.error(`[NightAction] Missing role data. RoleNum=${myRoleNum}, savedRole=${savedRole}`);
+                addLog("Missing role. Please ensure your role is decrypted.", "danger");
                 setIsTxPending(false);
-                throw new Error("Missing role or salt for cryptographic verification");
+                throw new Error("Missing role for night action submission");
+            }
+
+            if (!savedSalt) {
+                console.warn(`[NightAction] Salt missing for ${playerAddress}, proceeding anyway as GM knows our role.`);
             }
 
             // Retry with backoff for transient 403/5xx (role commit cache miss on GM)
@@ -2222,6 +2232,43 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
         }
     }, [currentRoomId, address, walletClient, applyOptimisticUpdate, addLog, gameState.dayCount, gameState.players, chainId]);
+
+    const skipNightActionToGM = useCallback(async () => {
+        if (!currentRoomId || !address || !walletClient) return;
+        setIsTxPending(true);
+        try {
+            await GM.skipNightActionToGM({
+                roomId: currentRoomId.toString(),
+                address,
+                walletClient,
+                chainId,
+            });
+            // Mark as acted locally
+            applyOptimisticUpdate({ hasNightCommitted: true });
+            addLog("Turn skipped.", "info");
+        } catch (e: any) {
+            addLog(e.message || "Skip failed", "danger");
+            throw e;
+        } finally {
+            setIsTxPending(false);
+        }
+    }, [currentRoomId, address, walletClient, chainId, applyOptimisticUpdate, addLog]);
+
+    const fetchInvestigationProofFromGM = useCallback(async (targetAddress: string) => {
+        if (!currentRoomId || !address || !walletClient) return null;
+        try {
+            return await GM.fetchInvestigationProofFromGM({
+                roomId: currentRoomId.toString(),
+                detectiveAddress: address,
+                targetAddress,
+                walletClient,
+                chainId,
+            });
+        } catch (e) {
+            console.error('[GM API] Failed to fetch investigation proof:', e);
+            return null;
+        }
+    }, [currentRoomId, address, walletClient, chainId]);
 
     const getInvestigationResultOnChain = useCallback(async (detective: string, target: string) => {
         if (isTestMode) {
@@ -3609,6 +3656,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         commitAndConfirmRoleOnChain,
         startVotingOnChain, voteOnChain,
         submitNightActionToGM,
+        skipNightActionToGM,
+        fetchInvestigationProofFromGM,
         getInvestigationResultOnChain, syncSecretWithServer, endGameAutomaticallyOnChain,
         revealRoleOnChain, tryEndGame, claimVictory, endGameZK, claimRefund, forcePhaseTimeoutOnChain,
         sendMafiaMessageOnChain,
@@ -3630,6 +3679,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         commitDeckOnChain, revealDeckOnChain, shareKeysToAllOnChain,
         commitRoleOnChain, confirmRoleOnChain, commitAndConfirmRoleOnChain,
         startVotingOnChain, voteOnChain, submitNightActionToGM,
+        skipNightActionToGM, fetchInvestigationProofFromGM,
         getInvestigationResultOnChain, endGameAutomaticallyOnChain, revealRoleOnChain, forcePhaseTimeoutOnChain,
         tryEndGame, claimVictory, endGameZK, claimRefund, syncSecretWithServer, sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList, addLog,

@@ -123,3 +123,99 @@ export async function fetchMyRoleFromGm(params: {
 
     return roleMap[roleStr] || Role.UNKNOWN;
 }
+
+/**
+ * Fetch investigation result proof directly from GM.
+ * Fallback for when currentBlock data hasn't synced yet.
+ */
+export async function fetchInvestigationProofFromGM(params: {
+    roomId: string;
+    detectiveAddress: string;
+    targetAddress: string;
+    walletClient: any;
+    chainId?: number;
+}): Promise<{ role: Role; source: string } | null> {
+    const { roomId, detectiveAddress, targetAddress, walletClient, chainId } = params;
+
+    const meta = await signRequest({
+        address: detectiveAddress,
+        roomId: Number(roomId),
+        walletClient,
+        buildMessage: ({ nonce, timestamp }) =>
+            `investigate:${roomId}:${targetAddress.toLowerCase()}:${nonce}:${timestamp}`,
+    });
+
+    const body = {
+        roomId,
+        detectiveAddress,
+        targetAddress,
+        signature: meta.signature,
+        signerAddress: meta.signerAddress,
+        nonce: meta.nonce,
+        timestamp: meta.timestamp,
+        chainId
+    };
+
+    const res = await fetch(`${GM_SERVER_URL}/investigation-proof`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+        if (res.status === 404) return null;
+        const error = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(`Failed to fetch proof: ${error.error || res.statusText}`);
+    }
+
+    const data = await res.json();
+    // GM returns { role: Role... } if it has already resolved it
+    // Wait, the GM server /investigation-proof currently returns ok: true + proof details.
+    // Let me check what it returns exactly.
+    return { 
+        role: data.role || Role.UNKNOWN, 
+        source: data.source 
+    };
+}
+
+/**
+ * Skip night action (effectively a pass).
+ * Useful for players who lost their salt or simply want to pass.
+ */
+export async function skipNightActionToGM(params: {
+    roomId: string;
+    address: string;
+    walletClient: any;
+    chainId?: number;
+}): Promise<void> {
+    const { roomId, address, walletClient, chainId } = params;
+
+    const meta = await signRequest({
+        address,
+        roomId: Number(roomId),
+        walletClient,
+        buildMessage: ({ nonce, timestamp }) =>
+            `skip-night:${roomId}:${nonce}:${timestamp}`,
+    });
+
+    const body = {
+        roomId,
+        playerAddress: address,
+        signature: meta.signature,
+        signerAddress: meta.signerAddress,
+        nonce: meta.nonce,
+        timestamp: meta.timestamp,
+        chainId
+    };
+
+    const res = await fetch(`${GM_SERVER_URL}/skip-night-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(`Failed to skip: ${error.error || res.statusText}`);
+    }
+}

@@ -45,6 +45,9 @@ const GameOver = dynamic(() => import('./GameOver').then(m => m.GameOver), {
     loading: () => null,
     ssr: false
 });
+
+import type { NightState } from './NightPhase';
+import type { DiscussionState } from './DayPhase';
 const PostVotingTransition = dynamic(() => import('./PostVotingTransition').then(m => m.PostVotingTransition), {
     ssr: false
 });
@@ -313,15 +316,24 @@ export function getPlayerPositions(count: number): { id: string; x: number; y: n
     return positions;
 }
 
-export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionState?: any }> = ({ initialNightState, initialDiscussionState }) => {
-    const { gameState, setGameState, handlePlayerAction, canActOnPlayer, getActionLabel, myPlayer, currentRoomId, selectedTarget, kickStalledPlayerOnChain, claimVictory, endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, showVotingResults, voteMap, claimRefund, isTestMode } = useGameContext();
+export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; initialDiscussionState?: Partial<DiscussionState> }> = ({ initialNightState, initialDiscussionState }) => {
+    const { 
+        gameState, setGameState, handlePlayerAction, canActOnPlayer, 
+        getActionLabel, myPlayer, currentRoomId, selectedTarget, 
+        endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, 
+        showVotingResults, voteMap, claimRefund, isTestMode 
+    } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const { activeHint, showHint, dismissHint } = useGameHints(currentRoomId?.toString());
     const players = gameState.players || [];
     const { chainId } = useAccount();
     const [scale, setScale] = useState(1);
 
-    // Deterministic shuffle based on roomId for randomized seating
+    // Deterministic shuffle based on roomId for randomized seating.
+    // This ensures all players see everyone at the same positions, 
+    // while also preventing "join order" from revealing anything.
+    // We keep join order in the Lobby for natural feel, then shuffle 
+    // for gameplay phases.
     const visualPlayers = useMemo(() => {
         if (!players.length) return [];
         // Keep join order in Lobby, shuffle in other phases
@@ -363,6 +375,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     // Night announcement state
     const [showNightAnnouncement, setShowNightAnnouncement] = useState(false);
     const lastNightDayRef = useRef<number | null>(null);
+    const nightAnnouncementPendingRef = useRef(false); // Fix double trigger
     const [lastPhase, setLastPhase] = useState<GamePhase | null>(null);
 
     // Discussion state for tracking current speaker (for player card glow effect)
@@ -486,11 +499,15 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
 
         // Trigger when showVotingResults transitions from true → false AND we're in NIGHT phase
         if (wasShowingResults && !showVotingResults && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current) {
+            if (nightAnnouncementPendingRef.current) return;
+            nightAnnouncementPendingRef.current = true;
+            
             lastNightDayRef.current = gameState.dayCount;
             if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
             nightTimerRef.current = setTimeout(() => {
                 playNightTransition();
                 setShowNightAnnouncement(true);
+                nightAnnouncementPendingRef.current = false;
             }, 500); // Brief pause after voting results fade
         }
 
@@ -498,12 +515,16 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         // Prevent race condition: don't eagerly update lastNightDayRef.current until timer finishes,
         // so if showVotingResults becomes true within 1000ms, the main logic can still run later.
         if (!showVotingResults && !wasShowingResults && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current) {
+            if (nightAnnouncementPendingRef.current) return;
+            nightAnnouncementPendingRef.current = true;
+
             if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
             nightTimerRef.current = setTimeout(() => {
                 // Only update if we actually show the announcement
                 lastNightDayRef.current = gameState.dayCount;
                 playNightTransition();
                 setShowNightAnnouncement(true);
+                nightAnnouncementPendingRef.current = false;
             }, 1000);
         }
 
@@ -591,8 +612,6 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             case GamePhase.DAY:
             case GamePhase.VOTING:
                 return <DayPhase />;
-            case GamePhase.NIGHT:
-                return <NightPhase initialNightState={initialNightState} />;
             case GamePhase.ENDED:
                 return <GameOver />;
             default:
@@ -753,7 +772,11 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     {/* Day/Voting Phase Content — stays mounted during showVotingResults to avoid GameLog re-mount */}
                     {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING || showVotingResults) && (
                         <div className="w-full h-full">
-                            <DayPhase initialDiscussionState={initialDiscussionState} hideActions={showVotingResults} />
+                            <DayPhase 
+                                initialDiscussionState={initialDiscussionState} 
+                                hideActions={showVotingResults} 
+                                disablePolling={showVotingResults && gameState.phase === GamePhase.NIGHT} 
+                            />
                         </div>
                     )}
 
@@ -765,7 +788,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     {/* Night Phase Content */}
                     {!showVotingResults && !isOverlayPhase && gameState.phase === GamePhase.NIGHT && (
                         <div className="w-full h-full">
-                            <NightPhase />
+                            <NightPhase initialNightState={initialNightState} />
                         </div>
                     )}
 

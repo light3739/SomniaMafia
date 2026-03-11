@@ -19,24 +19,29 @@ interface VoteState {
     hasVoted: boolean;
 }
 
+export interface DiscussionState {
+    active: boolean;
+    finished: boolean;
+    phase: 'initial_delay' | 'speaking' | 'finished';
+    currentSpeakerIndex: number;
+    currentSpeakerAddress: string | null;
+    totalSpeakers: number;
+    timeRemaining: number;
+    delayDuration?: number;
+    isMyTurn: boolean;
+}
+
 interface DayPhaseProps {
     isNightTransition?: boolean;
     delaySeconds?: number;
     hideActions?: boolean;
-    initialDiscussionState?: {
-        active: boolean;
-        finished: boolean;
-        phase: 'initial_delay' | 'speaking' | 'finished';
-        currentSpeakerIndex: number;
-        currentSpeakerAddress: string | null;
-        totalSpeakers: number;
-        timeRemaining: number;
-        delayDuration?: number;
-        isMyTurn: boolean;
-    };
+    initialDiscussionState?: Partial<DiscussionState>;
+    disablePolling?: boolean;
 }
 
-export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition, delaySeconds, hideActions, initialDiscussionState }) => {
+export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
+    isNightTransition, delaySeconds, hideActions, initialDiscussionState, disablePolling
+}) => {
     const {
         gameState,
         currentRoomId,
@@ -74,17 +79,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
     const [isProcessing, setIsProcessing] = useState(false);
 
     // Discussion Speech Logic (synced with backend or from initialDiscussionState)
-    const [discussionState, setDiscussionState] = useState<{
-        active: boolean;
-        finished: boolean;
-        phase: 'initial_delay' | 'speaking' | 'finished';
-        currentSpeakerIndex: number;
-        currentSpeakerAddress: string | null;
-        totalSpeakers: number;
-        timeRemaining: number;
-        delayDuration?: number;
-        isMyTurn: boolean;
-    } | null>(initialDiscussionState || null);
+    const [discussionState, setDiscussionState] = useState<Partial<DiscussionState> | null>(initialDiscussionState || null);
 
     // Update discussionState when initialDiscussionState changes (for test mode)
     useEffect(() => {
@@ -355,7 +350,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
     // Poll discussion state
     // Poll discussion state (Adaptive)
     useEffect(() => {
-        if (!isDayPhase || !currentRoomId) return;
+        if (!isDayPhase || !currentRoomId || disablePolling) return;
         if (discussionState?.finished) return; // Stop polling if finished
 
         let timeoutId: NodeJS.Timeout;
@@ -391,7 +386,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({ isNightTransition
 
     // 1. Sync state when backend updates
     useEffect(() => {
-        if (discussionState) {
+        if (discussionState && discussionState.timeRemaining !== undefined) {
             const serverTime = discussionState.timeRemaining;
             // Only update refs if time changed significantly or it's a new phase
             if (serverTime !== lastServerTimeRef.current) {

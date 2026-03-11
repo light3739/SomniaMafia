@@ -24,7 +24,7 @@ enum NightActionType {
     CHECK = 3
 }
 
-interface NightState {
+export interface NightState {
     hasCommitted: boolean;
     hasRevealed: boolean;
     commitHash: string | null;
@@ -80,6 +80,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         gameState,
         myPlayer,
         submitNightActionToGM,
+        skipNightActionToGM,
+        fetchInvestigationProofFromGM,
         getInvestigationResultOnChain,
         forcePhaseTimeoutOnChain,
         addLog,
@@ -159,7 +161,6 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 const needsRecovery = hasCommitted && !prev.hasCommitted;
                 if (needsRecovery) {
                     console.log("[NightPhase] Detected state mismatch: Contract committed, Local missing. Triggering recovery...");
-                    // We don't set state here, we rely on the effect below to trigger forceSync
                 }
 
                 return {
@@ -175,47 +176,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             console.error("Failed to sync night state:", e);
         }
     }, [publicClient, currentRoomId, address, isProcessing, isTxPending]);
-
-    // Force Sync Function - Recover local state from blockchain logs
-    const forceSync = useCallback(async () => {
-        if (!publicClient || !currentRoomId || !address) return;
-
-        console.log("[NightPhase] Starting Force Sync Recovery...");
-        addLog("Recovering game state from blockchain...", "info");
-
-        try {
-            const currentBlock = await publicClient.getBlockNumber();
-            const fromBlock = currentBlock > 2000n ? currentBlock - 2000n : 0n; // Search last 2000 blocks
-
-            // 1. Recover Commit (NightActionCommitted or MafiaTargetCommitted)
-            if (myRole === Role.MAFIA) {
-                // For Mafia, we look for MafiaTargetCommitted events? 
-                // Wait, in V4 Mafia uses `commitMafiaTarget`. The event is likely `MafiaTargetCommitted`.
-                // Let's check ABI or assume generic recovery isn't fully possible for encrypted salts without cloud backup.
-                // BUT for Mafia V4, the target is hashed? getMafiaConsensus returns counts.
-                // Re-reading contract logic: `commitMafiaTarget` emits nothing? Or maybe `NightActionCommitted`?
-                // Actually, without the SALT, we cannot REVEAL. 
-                // If we lost localStorage, we lost the SALT.
-                // CRITICAL: We cannot recover the SALT from the blockchain if it was never revealed.
-                // However, if we ALREADY REVEALED, we can recover the fact that we revealed.
-
-                // If we are committed but NOT revealed, and we lost the salt... we are stuck.
-                // The only way is if we can re-generate the same salt? Impossible.
-                // OR if the game allows generic "I forgot my salt" - no, that breaks crypto.
-
-                // WAIT! If we are stuck in "Committed", we can't do anything.
-                // BUT if we are "Revealed" on chain, we just need to update UI.
-                // The syncWithContract already updates `hasCommitted` / `hasRevealed`.
-
-                console.warn("[NightPhase] Cannot recover lost SALT for unrevealed commit. If you cleared cache mid-turn, you are stuck.");
-                // If we are already revealed on chain, we are fine.
-                // If we are committed on chain but not revealed, and no local salt... we can't reveal.
-                // The "kick" mechanic will eventually handle us.
-            }
-        } catch (e) {
-            console.error("[NightPhase] Force sync failed:", e);
-        }
-    }, [publicClient, currentRoomId, address, myRole, addLog]);
+    // Removed on-chain forceSync (V4: using GM off-chain, chain logs not reliable for ephemeral salts)
 
     // Optimize Polling: 2s usually, slower if hidden (adaptive)
     useEffect(() => {
@@ -400,16 +361,12 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         }
 
         // RECOVERY LOGIC for Missing Local Data
-        if (myPlayer?.hasNightCommitted && !nightState.hasCommitted && !localStorage.getItem(NIGHT_COMMIT_KEY)) {
-            // If we are here, it means chain says "Committed", but we found nothing in localStorage.
-            // This is a dangerous state (Lost Salt). 
-            // We can't recover the salt (it's random and local). 
-            // We can only acknowledge the state to UI so the user isn't confused.
-            console.warn("[NightPhase] Critical: Action committed on-chain but local salt lost. You cannot reveal this turn.");
-            setNightState(prev => ({ ...prev, hasCommitted: true }));
-            // Don't show "danger" log constantly, just once is enough via the check above
+        if (myPlayer?.hasNightCommitted && !nightState.hasCommitted) {
+            // GM server knows we acted, but local state isn't showing it (maybe same session reload)
+            console.log("[NightPhase] Recovery: hasNightCommitted=true in context, updating local UI state.");
+            setNightState(prev => ({ ...prev, hasCommitted: true, hasRevealed: true }));
         }
-    }, [myPlayer?.hasNightCommitted, myPlayer?.hasNightRevealed, nightState.hasCommitted, nightState.hasRevealed, NIGHT_COMMIT_KEY]);
+    }, [myPlayer?.hasNightCommitted, myPlayer?.hasNightRevealed, nightState.hasCommitted, nightState.hasRevealed]);
 
     // ========== AUTO-TIMEOUT: Force day transition when night timer expires ==========
     const timeoutTriggeredRef = useRef(false);
@@ -568,15 +525,27 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     for (let i = 0; i < MAX_RETRIES; i++) {
                         await new Promise(resolve => setTimeout(resolve, 2000));
 
-                        const result = await getInvestigationResultOnChain(address || '', committedTarget);
+                        // Primary check: GM Proof
+                        try {
+                            const proof = await fetchInvestigationProofFromGM(committedTarget);
+                            if (proof && proof.role !== Role.UNKNOWN) {
+                                console.log(`[Detective] Investigation proof from GM: ${proof.role}`);
+                                setNightState(prev => ({ ...prev, investigationResult: proof.role }));
+                                return;
+                            }
+                        } catch (e) {
+                            console.warn('[Detective] GM proof fetch failed, falling back to chain:', e);
+                        }
 
+                        // Fallback: On-chain result
+                        const result = await getInvestigationResultOnChain(address || '', committedTarget);
                         if (result && result.role !== Role.UNKNOWN) {
-                            console.log(`[Detective] Investigation result: ${result.isMafia ? 'MAFIA' : 'INNOCENT'}`);
+                            console.log(`[Detective] Investigation result from chain: ${result.role}`);
                             setNightState(prev => ({ ...prev, investigationResult: result.role }));
                             return;
                         }
                     }
-                    console.warn('[Detective] Could not verify investigation result after retries');
+                    addLog("Could not verify investigation. It will be revealed at dawn.", "warning");
                 };
                 // Fire and forget (don't block the commit success path)
                 fetchResult().catch(e => console.error('[Detective] Investigation fetch failed:', e));
@@ -595,7 +564,26 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             setIsProcessing(false);
             commitStartedRef.current = false;
         }
-    }, [selectedTarget, nightState.hasCommitted, myRole, gameState.phase, roleConfig.action, submitNightActionToGM, getInvestigationResultOnChain, addLog, playKillSound, playProtectSound, playInvestigateSound, address, setSelectedTarget, setGameState, isTestMode, gameState.players]);
+    }, [selectedTarget, nightState.hasCommitted, myRole, gameState.phase, roleConfig.action, submitNightActionToGM, fetchInvestigationProofFromGM, getInvestigationResultOnChain, addLog, playKillSound, playProtectSound, playInvestigateSound, address, setSelectedTarget, setGameState, isTestMode, gameState.players]);
+
+    const handleSkip = useCallback(async () => {
+        if (nightState.hasCommitted || isProcessing) return;
+        setIsProcessing(true);
+        try {
+            await skipNightActionToGM();
+            setNightState(prev => ({
+                ...prev,
+                hasCommitted: true,
+                hasRevealed: true,
+                committedTarget: '0x0000000000000000000000000000000000000000' as `0x${string}`
+            }));
+            setSelectedTarget(null);
+        } catch (e: any) {
+            addLog(e.message || "Skip failed", "danger");
+        } finally {
+            setIsProcessing(false);
+        }
+    }, [nightState.hasCommitted, isProcessing, skipNightActionToGM, setSelectedTarget, addLog]);
 
 
 
@@ -836,6 +824,15 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                             >
                                 {selectedTarget ? `${roleConfig.label} ${selectedPlayer?.name}` : 'Select target'}
                             </Button>
+
+                            <button
+                                onClick={handleSkip}
+                                disabled={isProcessing || isTxPending}
+                                className="mt-4 text-white/20 hover:text-white/50 text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center gap-1.5 group"
+                            >
+                                <RefreshCw className={`w-2.5 h-2.5 transition-transform group-hover:rotate-180 duration-500 ${isProcessing ? 'animate-spin' : ''}`} />
+                                Skip my turn
+                            </button>
                         </motion.div>
                     )}
                 </AnimatePresence>
