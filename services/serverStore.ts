@@ -44,6 +44,8 @@ const REPLAY_NONCE_TTL_SECONDS = 180;
 
 export interface PlayerSecret {
     role: number;
+    salt: string;
+    commitment: string;
 }
 
 export type StoreSecretResult =
@@ -115,11 +117,11 @@ export class ServerStore {
      * Stores a player's role and salt in Redis.
      * Uses a Hash structure: room:secrets:{roomId} -> {address: secret}
      */
-    static async storeSecret(roomId: string, address: string, role: number, salt: string): Promise<StoreSecretResult> {
+    static async storeSecret(roomId: string, address: string, role: number, salt: string, commitment: string): Promise<StoreSecretResult> {
         this.ensureSecureStorageForCriticalPath('storeSecret');
 
         const normalizedRoomId = BigInt(roomId).toString();
-        const secret: PlayerSecret = { role };
+        const secret: PlayerSecret = { role, salt, commitment };
         const key = `room:secrets:${normalizedRoomId}`;
         const normalizedAddress = address.toLowerCase();
 
@@ -129,8 +131,8 @@ export class ServerStore {
             const existing = memoryStore[key][normalizedAddress];
             if (existing) {
                 const parsedExisting = JSON.parse(existing) as PlayerSecret;
-                if (parsedExisting.role !== role) {
-                    console.error(`[ServerStore] Secret conflict (memory) for Room #${roomId}, Player ${address}: existing=${parsedExisting.role}, new=${role}`);
+                if (parsedExisting.role !== role || parsedExisting.salt !== salt) {
+                    console.error(`[ServerStore] Secret conflict (memory) for Room #${roomId}, Player ${address}: existingRole=${parsedExisting.role}, newRole=${role}`);
                     return { status: 'conflict', existingRole: parsedExisting.role };
                 }
                 return { status: 'exists_same' };
@@ -144,8 +146,8 @@ export class ServerStore {
             const existing = await redis.hget(key, normalizedAddress);
             if (existing) {
                 const parsedExisting = JSON.parse(existing) as PlayerSecret;
-                if (parsedExisting.role !== role) {
-                    console.error(`[ServerStore] Secret conflict (redis) for Room #${roomId}, Player ${address}: existing=${parsedExisting.role}, new=${role}`);
+                if (parsedExisting.role !== role || parsedExisting.salt !== salt) {
+                    console.error(`[ServerStore] Secret conflict (redis) for Room #${roomId}, Player ${address}: existingRole=${parsedExisting.role}, newRole=${role}`);
                     return { status: 'conflict', existingRole: parsedExisting.role };
                 }
                 await redis.expire(key, GAME_DATA_TTL);
