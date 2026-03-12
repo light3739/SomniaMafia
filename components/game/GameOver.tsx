@@ -72,34 +72,14 @@ export const GameOver: React.FC = React.memo(() => {
     const [isRevealing, setIsRevealing] = useState(false);
     const [revealTimedOut, setRevealTimedOut] = useState(false);
     const roomIdRef = useRef<bigint | null>(currentRoomId);
-    const [winner, setWinner] = useState<Winner>((gameState.winner as Winner) || 'DRAW');
+    const [winner, setWinner] = useState<Winner | null>((gameState.winner as Winner) || null);
 
-    // Change 1: accepts players explicitly
-    const determineWinner = useCallback((roles: Map<string, Role>, players: typeof gameState.players) => {
-        // Contract is the single source of truth - if it already declared a winner, don't overwrite
-        if (contractWinnerRef.current) return;
-
-        const alivePlayers = players.filter(p => p.isAlive);
-
-        let aliveMafia = 0;
-        let aliveTown = 0; // civilian + doctor + detective
-
-        for (const player of alivePlayers) {
-            const role = roles.get(player.address.toLowerCase()) || player.role;
-            if (role === Role.MAFIA) aliveMafia++;
-            else if (role !== Role.UNKNOWN) aliveTown++;
+    // Sync local winner state when gameState.winner changes
+    useEffect(() => {
+        if (gameState.winner) {
+            setWinner(gameState.winner as Winner);
         }
-
-        if (alivePlayers.length === 0) {
-            setWinner('DRAW');
-        } else if (aliveMafia > 0 && aliveMafia >= aliveTown) {
-            setWinner('MAFIA');
-        } else if (aliveMafia === 0) {
-            setWinner('TOWN');
-        } else {
-            setWinner('DRAW');
-        }
-    }, []);
+    }, [gameState.winner]);
 
     // After 30s, stop pulsing and show static "Unknown" for any unresolved roles
     useEffect(() => {
@@ -188,7 +168,6 @@ export const GameOver: React.FC = React.memo(() => {
                 roles.set(p.address.toLowerCase(), p.role);
             });
             setRevealedRoles(roles);
-            determineWinner(roles, gameState.players); // ← Change 3
             return;
         }
 
@@ -204,7 +183,7 @@ export const GameOver: React.FC = React.memo(() => {
         } finally {
             setIsRevealing(false);
         }
-    }, [publicClient, currentRoomId, isRevealing, address, isTestMode, gameState.players, determineWinner]); 
+    }, [publicClient, currentRoomId, isRevealing, address, isTestMode, gameState.players]); 
 
     // Fetch roles revealed on-chain (trustless source)
     const fetchOnChainRoles = useCallback(async (localRoles: Map<string, Role>) => {
@@ -213,9 +192,6 @@ export const GameOver: React.FC = React.memo(() => {
         try {
             const roles = new Map<string, Role>();
 
-            // SPEED: Batch all playerRoles reads into single multicall
-            // Was: N sequential readContract calls (one per player = N roundtrips)
-            // Now: 1 multicall RPC call for all players
             const roleResults = await publicClient.multicall({
                 contracts: gameState.players.map(player => ({
                     address: runtimeContractAddress,
@@ -237,9 +213,8 @@ export const GameOver: React.FC = React.memo(() => {
             }
 
             setOnChainRoles(roles);
-            onChainRolesRef.current = roles; // ← Change 5: synchronously update ref
+            onChainRolesRef.current = roles;
 
-            // Merge: on-chain > local > existing
             const merged = new Map<string, Role>();
             for (const player of gameState.players) {
                 const addr = player.address.toLowerCase();
@@ -248,7 +223,6 @@ export const GameOver: React.FC = React.memo(() => {
                 merged.set(addr, onChain || local || player.role);
             }
 
-            // Update game state with merged roles
             setGameState(prev => ({
                 ...prev,
                 players: prev.players.map(p => ({
@@ -256,19 +230,28 @@ export const GameOver: React.FC = React.memo(() => {
                     role: merged.get(p.address.toLowerCase()) || p.role
                 }))
             }));
-
-            // Determine winner based on merged roles
-            determineWinner(merged, gameState.players); // ← Change 2
-
         } catch (e) {
             console.error("Failed to fetch on-chain roles:", e);
         }
-    }, [publicClient, currentRoomId, gameState.players, setGameState, determineWinner]);
+    }, [publicClient, currentRoomId, gameState.players, setGameState]);
 
-    // Fetch all roles from GM server (GM has decrypted deck using all SRA keys)
-    // Used as fallback when on-chain playerRoles reverts or returns 0 (e.g. dead players)
+    // Poll for late on-chain reveals (other players may reveal after us)
+    const revealedRolesRef = useRef<Map<string, Role>>(revealedRoles);
+    useEffect(() => {
+        revealedRolesRef.current = revealedRoles;
+    }, [revealedRoles]);
+
+    const allRolesKnown = useCallback(() => {
+        return gameState.players.length > 0 && gameState.players.every(p => {
+            const addr = p.address.toLowerCase();
+            const r = onChainRolesRef.current.get(addr)
+                || revealedRolesRef.current.get(addr)
+                || p.role;
+            return r !== Role.UNKNOWN;
+        });
+    }, [gameState.players]);
+
     const fetchGMRoles = useCallback(async () => {
-        // Skip if all roles already known to reduce RPC/API spam
         if (allRolesKnown()) return;
 
         const roomId = roomIdRef.current
@@ -299,9 +282,6 @@ export const GameOver: React.FC = React.memo(() => {
             }
             if (gmRoles.size === 0) return;
 
-            console.log(`[GameOver] GM roles fetched: ${gmRoles.size} players`);
-
-            // Fill in roles not yet revealed on-chain (on-chain takes priority)
             setRevealedRoles(prev => {
                 const merged = new Map(prev);
                 for (const [addr, role] of gmRoles) {
@@ -320,25 +300,10 @@ export const GameOver: React.FC = React.memo(() => {
                     return p;
                 })
             }));
-
-            // Change 4: Build merged map for determineWinner
-            const mergedForWinner = new Map<string, Role>();
-            for (const player of gameState.players) {
-                const addr = player.address.toLowerCase();
-                const onChain = onChainRolesRef.current.get(addr);
-                const gm = gmRoles.get(addr);
-                const existing = player.role;
-                mergedForWinner.set(addr, (onChain && onChain !== Role.UNKNOWN ? onChain : null)
-                    || (gm && gm !== Role.UNKNOWN ? gm : null)
-                    || (existing !== Role.UNKNOWN ? existing : Role.UNKNOWN));
-            }
-            // Recalculate winner
-            determineWinner(mergedForWinner, gameState.players);
-
-        } catch (_e) {
-            // Non-fatal — on-chain reveals are the canonical source
+        } catch (e) {
+            console.error("Failed to fetch GM roles:", e);
         }
-    }, [currentRoomId, setGameState, determineWinner, gameState.players]);
+    }, [currentRoomId, setGameState, gameState.players, allRolesKnown]);
 
     // Reveal on монтирование
     useEffect(() => {
@@ -369,21 +334,6 @@ export const GameOver: React.FC = React.memo(() => {
         };
     }, [fetchGMRoles]);
 
-    // Poll for late on-chain reveals (other players may reveal after us)
-    const revealedRolesRef = useRef<Map<string, Role>>(revealedRoles);
-    useEffect(() => {
-        revealedRolesRef.current = revealedRoles;
-    }, [revealedRoles]);
-
-    const allRolesKnown = useCallback(() => {
-        return gameState.players.length > 0 && gameState.players.every(p => {
-            const addr = p.address.toLowerCase();
-            const r = onChainRolesRef.current.get(addr)
-                || revealedRolesRef.current.get(addr)
-                || p.role;
-            return r !== Role.UNKNOWN;
-        });
-    }, [gameState.players]); 
 
     useEffect(() => {
         // Poll until all roles known, or 5 min max
@@ -466,6 +416,20 @@ export const GameOver: React.FC = React.memo(() => {
             trophy: 'text-gray-500'
         }
     }), []);
+
+    if (!winner) {
+        return (
+            <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+                <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full mb-6"
+                />
+                <h1 className="text-3xl font-bold text-white mb-2">Game Over!</h1>
+                <p className="text-slate-400">Finalizing result and revealing roles...</p>
+            </div>
+        );
+    }
 
     const config = winnerConfig[winner];
 
