@@ -301,9 +301,8 @@ export class ShuffleService {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ role, salt })
             });
-            if (!res.ok) throw new Error(`Hash service failed: ${res.status}`);
             const { commitment } = await res.json();
-            console.log(`[ShuffleService] Poseidon hash generated: ${commitment}`);
+            console.log(`[ShuffleService] Poseidon hash received: ${commitment}`);
             
             // Ensure 0x prefix for viem compatibility
             return commitment.startsWith('0x') ? commitment : `0x${commitment}`;

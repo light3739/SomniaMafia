@@ -78,7 +78,7 @@ export interface GameState {
   mafiaCommittedCount: number; // For night phase (Mafia)
   mafiaRevealedCount: number; // For night phase (Mafia)
   phaseDeadline: number; // Unix timestamp in seconds
-  winner: 'MAFIA' | 'TOWN' | null;
+  winner: 'MAFIA' | 'TOWN' | 'DRAW' | null;
 }
 
 // For Framer Motion variants

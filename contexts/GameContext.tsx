@@ -875,12 +875,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const FLAG_ACTIVE = 2;
 
     // Check win condition on frontend (since contract doesn't know roles)
-    const checkWinCondition = useCallback((players: Player[], contractPhase: GamePhase): 'MAFIA' | 'TOWN' | null => {
+    const checkWinCondition = useCallback((players: Player[], contractPhase: GamePhase): 'MAFIA' | 'TOWN' | 'DRAW' | null => {
         // Don't check in early phases
         if (contractPhase < GamePhase.DAY) return null;
 
         const alivePlayers = players.filter(p => p.isAlive);
-        if (alivePlayers.length === 0) return 'TOWN'; // Draw technically, but contract handles this
+        if (alivePlayers.length === 0) return 'DRAW';
 
         let aliveMafia = 0;
         let aliveTown = 0;
@@ -1091,7 +1091,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const winner = checkWinCondition(formattedPlayers, phase);
             let finalPhase = phase;
-            let resolvedWinner = winner;
+            let resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' | null = winner;
 
             if (winner && phase !== GamePhase.ENDED) {
                 console.log('[Win Condition Calculated Local]', winner);
@@ -2829,17 +2829,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log(`[ZK] Sending transaction (Session: ${useSessionKey})...`);
             const hash = await sendGameTransaction('endGameZK', args as any, useSessionKey);
 
-            const isTownWin = zkData.inputs[0] === 1n;
-            // addLog(`ZK Proof submitted! Winner: ${isTownWin ? "TOWN" : "MAFIA"}`, "success"); // Removed tech log
-
+            const isTownWin = Number(zkData.inputs[0]) === 1;
+            const isMafiaWin = Number(zkData.inputs[1]) === 1;
+            
+            let proactiveWinner: 'MAFIA' | 'TOWN' | 'DRAW' = 'DRAW';
+            if (isTownWin) proactiveWinner = 'TOWN';
+            else if (isMafiaWin) proactiveWinner = 'MAFIA';
+            
             await publicClient.waitForTransactionReceipt({ hash });
             
-            // Proactively set winner from ZK inputs to avoid dependency on fragile event string
-            // isTownWin is already declared above line 2840
             setGameState(prev => ({
                 ...prev,
                 phase: GamePhase.ENDED,
-                winner: isTownWin ? 'TOWN' : 'MAFIA'
+                winner: proactiveWinner
             }));
 
             await refreshPlayersList(currentRoomId);
@@ -2993,7 +2995,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     
                     // Proactively set winner from server result
                     const lowerRes = (data.result || '').toLowerCase();
-                    const resolvedWinner: 'MAFIA' | 'TOWN' = 
+                    const resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' = 
                         lowerRes.includes('town') ? 'TOWN' :
                         lowerRes.includes('mafia') ? 'MAFIA' : 
                         'TOWN';
@@ -3484,9 +3486,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         
                         // ✅ ROBUST PARSING: Explicitly check for both sides.
                         // We prioritize TOWN check as fallback to match user's recommended pattern.
-                        const gameWinner: 'MAFIA' | 'TOWN' = 
+                        const gameWinner: 'MAFIA' | 'TOWN' | 'DRAW' = 
                             lower.includes('town') ? 'TOWN' : 
                             lower.includes('mafia') ? 'MAFIA' : 
+                            lower.includes('draw') ? 'DRAW' :
                             'TOWN'; // Final fallback
                         
                         console.log(`[Event] GameEnded! Winner: ${gameWinner}, condition: ${winCondition}`);
