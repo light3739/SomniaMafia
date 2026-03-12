@@ -3,6 +3,7 @@
 
 import { Role } from '../types';
 import { keccak256, encodePacked, encodeAbiParameters, parseAbiParameters } from 'viem';
+import { GM_SERVER_URL } from '../contracts/config';
 
 // Simple 512-bit prime for SRA optimization
 const PRIME = BigInt('0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1' +
@@ -273,12 +274,14 @@ export class ShuffleService {
     // Создать хэш для фиксации роли (Role Commit)
     // keccak256(abi.encode(role, salt))
     // Salt must NOT have 0x prefix to match contract's revealRole (max 64 bytes)
-    public static createRoleCommitHash(role: number, salt: string): string {
-        const data = encodeAbiParameters(
-            [{ type: 'uint256' }, { type: 'string' }],
-            [BigInt(role), salt]
+    public static createRoleCommitHash(role: number, salt: string): `0x${string}` {
+        const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
+        return keccak256(
+            encodeAbiParameters(
+                parseAbiParameters('uint256, string'),
+                [BigInt(role), cleanSalt]
+            )
         );
-        return keccak256(data);
     }
 
     /**
