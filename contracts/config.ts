@@ -41,12 +41,12 @@ export const DEPLOYMENTS = {
         explorer: 'https://shannon-explorer.somnia.network',
         contracts: {
             MafiaDiamond: '0xb34f8430f8a755c8c1bdc9dd19f14e263fc3f6b1',
-            Groth16Verifier: '0xfa208d4ce645c9ce9c1957267d172d3627b9bd94',
+            Groth16Verifier: '0x2da0427790ff9c2d83cd90076ea4197a1ddbc944',
             LobbyFacet: '0x5e0b3dbc999dc367c8f403bcf6169d6a599025ab',
             ShuffleFacet: '0x08d216915a693a9715cbaecfd34ebff272fd28ea',
             VotingFacet: '0xc1bd63870d30fa3d7f724dddeb28d6b0be3ca331',
             NightFacet: '0x4a3609c0acecf27b5cb02b11bd53a3ecf23dff60',
-            GameEndFacet: '0xdbe019aef9864e859f069f2936a502e5ff051bc9',
+            GameEndFacet: '0xaacdd039d2d2d3f76ec5113cc93eeddc4d8495ef',
         },
     },
     avalanche_fuji: {
