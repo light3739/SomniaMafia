@@ -10,6 +10,15 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'api.dicebear.com', pathname: '**' },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        // Proxy /api/rpc/fuji → Avalanche Fuji RPC (server-side, bypasses CORS)
+        source: '/api/rpc/fuji',
+        destination: 'https://api.avax-test.network/ext/bc/C/rpc',
+      },
+    ];
+  },
   async headers() {
     return [
       {

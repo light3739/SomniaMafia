@@ -741,15 +741,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Effects
     useEffect(() => { localStorage.setItem('playerName', playerName); }, [playerName]);
     useEffect(() => {
-        if (currentRoomId) {
-            sessionStorage.setItem('currentRoomId', currentRoomId.toString());
-            sessionStorage.setItem('lobbyName', lobbyName);
-            // FIX #24: Also persist to localStorage (survives new tab)
-            localStorage.setItem('currentRoomId', currentRoomId.toString());
-        } else {
-            localStorage.removeItem('currentRoomId');
+        if (typeof window !== 'undefined') {
+            if (currentRoomId) {
+                sessionStorage.setItem('currentRoomId', currentRoomId.toString());
+                localStorage.setItem('currentRoomId', currentRoomId.toString());
+            } else {
+                sessionStorage.removeItem('currentRoomId');
+                localStorage.removeItem('currentRoomId');
+            }
         }
-    }, [currentRoomId, lobbyName]);
+    }, [currentRoomId]);
+
+    // Independent lobby name persistence
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            if (lobbyName) {
+                sessionStorage.setItem('lobbyName', lobbyName);
+            }
+        }
+    }, [lobbyName]);
 
     // FIX: Clear stored roomId when game ends to prevent stale polling on next visit
     useEffect(() => {
@@ -2299,7 +2309,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             console.log(`[Investigation API] Fetching result for ${detective} -> ${target}`);
-            
+
             // Use signRequest to generate modern signature with nonce and timestamp
             // signRequest automatically handles session key vs walletClient
             const signed = await signRequest({
@@ -3347,7 +3357,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 1. Fetch ALL logs for this room in one request
             // We use low-level topics filtering: [topic0=null (any event), topic1=roomId]
             const roomIdTopic = pad(toHex(currentRoomId), { size: 32 });
-            
+
             const MAX_BLOCK_RANGE = 500n; // Somnia/Fuji safe limit
             let allRawLogs: any[] = [];
             let chunkFrom = lastProcessedBlockRef.current!;
@@ -3386,7 +3396,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const logId = `${txHash}-${log.logIndex}`; // Unique ID per event
 
                 if (processedEventsRef.current.has(logId)) continue;
-                
+
                 // Memory Optimization: Prevent infinite growth of processedEvents set
                 if (processedEventsRef.current.size > 2000) {
                     const iterator = processedEventsRef.current.values();
@@ -3395,7 +3405,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         if (val !== undefined) processedEventsRef.current.delete(val);
                     }
                 }
-                
+
                 processedEventsRef.current.add(logId);
                 hasChanges = true;
 
