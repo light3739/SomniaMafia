@@ -349,6 +349,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         return;
                     }
 
+                    // Compute the on-chain commitment (keccak256 of role+salt) for ZK proof
+                    const { ShuffleService } = await import('../services/shuffleService');
+                    const commitment = ShuffleService.createRoleCommitHash(role, salt);
+
                     const res = await fetch('/api/game/reveal-secret', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -357,6 +361,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             address: playerAddress,
                             role,
                             salt,
+                            commitment,  // needed by GM server for ZK proof
                             signature,
                             sessionKeyAddress, // optional: server uses this to verify session key sig
                             chainId,
