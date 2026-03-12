@@ -53,7 +53,7 @@ ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "
   done
 
   # Only rebuild frontend; gm-server is managed by its own CI
-  COMPOSE_CMD='docker compose --project-name mafia-dev -f docker-compose.dev.yaml up -d --build frontend'
+  COMPOSE_CMD='docker compose --project-name mafia-dev --env-file .env.dev -f docker-compose.dev.yaml up -d --build frontend'
   if command -v ionice >/dev/null 2>&1; then
     COMPOSE_CMD=\"ionice -c 2 -n 7 nice -n ${FRONT_DEPLOY_NICE} \$COMPOSE_CMD\"
   else
@@ -62,6 +62,9 @@ ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "
 
   echo '[dev:deploy] Running compose (low-priority)'
   sh -lc \"\$COMPOSE_CMD\"
+
+  echo '[dev:deploy] Pruning old images'
+  docker image prune -f
 
   echo '[dev:deploy] Current containers:'
   docker compose --project-name mafia-dev -f docker-compose.dev.yaml ps

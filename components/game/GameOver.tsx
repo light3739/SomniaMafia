@@ -58,14 +58,28 @@ export const GameOver: React.FC = React.memo(() => {
     const router = useRouter();
     const [revealedRoles, setRevealedRoles] = useState<Map<string, Role>>(new Map());
     const [onChainRoles, setOnChainRoles] = useState<Map<string, Role>>(new Map());
-    const [isRevealing, setIsRevealing] = useState(false);
-    const [revealTimedOut, setRevealTimedOut] = useState(false);
-    const [winner, setWinner] = useState<Winner>((gameState.winner as Winner) || 'DRAW');
+    const onChainRolesRef = useRef<Map<string, Role>>(new Map());
+    const contractWinnerRef = useRef<string | null>(gameState.winner); // ← Winner priority fix
+
+    useEffect(() => {
+        contractWinnerRef.current = gameState.winner;
+    }, [gameState.winner]);
     const [refundClaimed, setRefundClaimed] = useState(false);
     const [refundAutomatic, setRefundAutomatic] = useState(false);
     const [depositAmount, setDepositAmount] = useState<string>('0');
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const [isRevealing, setIsRevealing] = useState(false);
+    const [revealTimedOut, setRevealTimedOut] = useState(false);
+    const roomIdRef = useRef<bigint | null>(currentRoomId);
+    const [winner, setWinner] = useState<Winner | null>((gameState.winner as Winner) || null);
+
+    // Sync local winner state when gameState.winner changes
+    useEffect(() => {
+        if (gameState.winner) {
+            setWinner(gameState.winner as Winner);
+        }
+    }, [gameState.winner]);
 
     // After 30s, stop pulsing and show static "Unknown" for any unresolved roles
     useEffect(() => {
@@ -154,7 +168,6 @@ export const GameOver: React.FC = React.memo(() => {
                 roles.set(p.address.toLowerCase(), p.role);
             });
             setRevealedRoles(roles);
-            determineWinner(roles);
             return;
         }
 
@@ -170,7 +183,7 @@ export const GameOver: React.FC = React.memo(() => {
         } finally {
             setIsRevealing(false);
         }
-    }, [publicClient, currentRoomId, isRevealing, address, isTestMode, gameState.players]); // fetchOnChainRoles intentionally omitted — defined after this callback, stable identity
+    }, [publicClient, currentRoomId, isRevealing, address, isTestMode, gameState.players]); 
 
     // Fetch roles revealed on-chain (trustless source)
     const fetchOnChainRoles = useCallback(async (localRoles: Map<string, Role>) => {
@@ -179,9 +192,6 @@ export const GameOver: React.FC = React.memo(() => {
         try {
             const roles = new Map<string, Role>();
 
-            // SPEED: Batch all playerRoles reads into single multicall
-            // Was: N sequential readContract calls (one per player = N roundtrips)
-            // Now: 1 multicall RPC call for all players
             const roleResults = await publicClient.multicall({
                 contracts: gameState.players.map(player => ({
                     address: runtimeContractAddress,
@@ -203,8 +213,8 @@ export const GameOver: React.FC = React.memo(() => {
             }
 
             setOnChainRoles(roles);
+            onChainRolesRef.current = roles;
 
-            // Merge: on-chain > local > existing
             const merged = new Map<string, Role>();
             for (const player of gameState.players) {
                 const addr = player.address.toLowerCase();
@@ -213,7 +223,6 @@ export const GameOver: React.FC = React.memo(() => {
                 merged.set(addr, onChain || local || player.role);
             }
 
-            // Update game state with merged roles
             setGameState(prev => ({
                 ...prev,
                 players: prev.players.map(p => ({
@@ -221,22 +230,44 @@ export const GameOver: React.FC = React.memo(() => {
                     role: merged.get(p.address.toLowerCase()) || p.role
                 }))
             }));
-
-            // Determine winner based on merged roles
-            determineWinner(merged);
-
         } catch (e) {
             console.error("Failed to fetch on-chain roles:", e);
         }
     }, [publicClient, currentRoomId, gameState.players, setGameState]);
 
-    // Fetch all roles from GM server (GM has decrypted deck using all SRA keys)
-    // Used as fallback when on-chain playerRoles reverts or returns 0 (e.g. dead players)
+    // Poll for late on-chain reveals (other players may reveal after us)
+    const revealedRolesRef = useRef<Map<string, Role>>(revealedRoles);
+    useEffect(() => {
+        revealedRolesRef.current = revealedRoles;
+    }, [revealedRoles]);
+
+    const allRolesKnown = useCallback(() => {
+        return gameState.players.length > 0 && gameState.players.every(p => {
+            const addr = p.address.toLowerCase();
+            const r = onChainRolesRef.current.get(addr)
+                || revealedRolesRef.current.get(addr)
+                || p.role;
+            return r !== Role.UNKNOWN;
+        });
+    }, [gameState.players]);
+
     const fetchGMRoles = useCallback(async () => {
-        if (!currentRoomId) return;
+        if (allRolesKnown()) return;
+
+        const roomId = roomIdRef.current
+            || currentRoomId
+            || (() => {
+                const s = sessionStorage.getItem('gameOver_roomId');
+                return s ? BigInt(s) : null;
+            })();
+
+        if (!roomId) return;
         try {
-            const res = await fetch(`/api/game/room-roles?roomId=${currentRoomId.toString()}`);
-            if (!res.ok) return;
+            const res = await fetch(`/api/game/room-roles?roomId=${roomId.toString()}`);
+            if (!res.ok) {
+                console.warn(`[GameOver] GM roles fetch failed: ${res.status}`);
+                return;
+            }
             const data = await res.json();
             if (!data.roles || typeof data.roles !== 'object') return;
 
@@ -251,9 +282,6 @@ export const GameOver: React.FC = React.memo(() => {
             }
             if (gmRoles.size === 0) return;
 
-            console.log(`[GameOver] GM roles fetched: ${gmRoles.size} players`);
-
-            // Fill in roles not yet revealed on-chain (on-chain takes priority)
             setRevealedRoles(prev => {
                 const merged = new Map(prev);
                 for (const [addr, role] of gmRoles) {
@@ -272,70 +300,40 @@ export const GameOver: React.FC = React.memo(() => {
                     return p;
                 })
             }));
-        } catch (_e) {
-            // Non-fatal — on-chain reveals are the canonical source
+        } catch (e) {
+            console.error("Failed to fetch GM roles:", e);
         }
-    }, [currentRoomId, setGameState]);
+    }, [currentRoomId, setGameState, gameState.players, allRolesKnown]);
 
-    // Определяем победителя на основе раскрытых ролей
-    const determineWinner = (roles: Map<string, Role>) => {
-        const alivePlayers = gameState.players.filter(p => p.isAlive);
-
-        let aliveMafia = 0;
-        let aliveTown = 0; // civilian + doctor + detective
-
-        for (const player of alivePlayers) {
-            const role = roles.get(player.address.toLowerCase()) || player.role;
-            if (role === Role.MAFIA) aliveMafia++;
-            else if (role !== Role.UNKNOWN) aliveTown++;
-        }
-
-        // Условия победы:
-        // MAFIA wins: мафия >= город
-        // TOWN wins: мафия = 0
-        // DRAW: никто не выжил
-
-        if (alivePlayers.length === 0) {
-            setWinner('DRAW');
-        } else if (aliveMafia > 0 && aliveMafia >= aliveTown) {
-            setWinner('MAFIA');
-        } else if (aliveMafia === 0) {
-            setWinner('TOWN');
-        } else {
-            // Игра должна продолжаться, но раз мы в GameOver - значит что-то пошло не так
-            setWinner('DRAW');
-        }
-    };
-
-    // Reveal на монтирование
+    // Reveal on монтирование
     useEffect(() => {
         revealAllRoles();
     }, [revealAllRoles]);
+
+    // Snapshot roomId for page reload persistence (survives GameContext cleanup)
+    useEffect(() => {
+        const rid = currentRoomId || roomIdRef.current;
+        if (rid) {
+            sessionStorage.setItem('gameOver_roomId', rid.toString());
+        }
+    }, [currentRoomId]);
 
     // After on-chain reveals settle, fetch missing roles from GM (fills in dead players etc.)
     useEffect(() => {
         // Try immediately — GM may already have roles cached from previous SRA key collection
         fetchGMRoles();
-        // Retry at 3s in case GM was slow
-        const timer = setTimeout(() => fetchGMRoles(), 3000);
-        return () => clearTimeout(timer);
+        // Retry with backoff to handle chain lag
+        const t1 = setTimeout(() => fetchGMRoles(), 3000);
+        const t2 = setTimeout(() => fetchGMRoles(), 8000);
+        const t3 = setTimeout(() => fetchGMRoles(), 15000);
+
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+        };
     }, [fetchGMRoles]);
 
-    // Poll for late on-chain reveals (other players may reveal after us)
-    const revealedRolesRef = useRef<Map<string, Role>>(revealedRoles);
-    useEffect(() => {
-        revealedRolesRef.current = revealedRoles;
-    }, [revealedRoles]);
-
-    const allRolesKnown = useCallback(() => {
-        return gameState.players.length > 0 && gameState.players.every(p => {
-            const addr = p.address.toLowerCase();
-            const r = onChainRoles.get(addr)
-                || revealedRolesRef.current.get(addr)
-                || p.role;
-            return r !== Role.UNKNOWN;
-        });
-    }, [gameState.players, onChainRoles]);
 
     useEffect(() => {
         // Poll until all roles known, or 5 min max
@@ -344,6 +342,8 @@ export const GameOver: React.FC = React.memo(() => {
 
         pollIntervalRef.current = setInterval(async () => {
             pollCount++;
+            
+            // SPEED: Stop immediately if everything is already known (via refs)
             if (pollCount > maxPolls || allRolesKnown()) {
                 if (pollIntervalRef.current) {
                     clearInterval(pollIntervalRef.current);
@@ -357,6 +357,14 @@ export const GameOver: React.FC = React.memo(() => {
                 fetchOnChainRoles(revealedRolesRef.current),
                 fetchGMRoles(),
             ]);
+
+            // SPEED: Check again immediately after fetches to stop interval faster
+            if (allRolesKnown()) {
+                if (pollIntervalRef.current) {
+                    clearInterval(pollIntervalRef.current);
+                    pollIntervalRef.current = null;
+                }
+            }
         }, 3000);
 
         return () => {
@@ -408,6 +416,20 @@ export const GameOver: React.FC = React.memo(() => {
             trophy: 'text-gray-500'
         }
     }), []);
+
+    if (!winner) {
+        return (
+            <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+                <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full mb-6"
+                />
+                <h1 className="text-3xl font-bold text-white mb-2">Game Over!</h1>
+                <p className="text-slate-400">Finalizing result and revealing roles...</p>
+            </div>
+        );
+    }
 
     const config = winnerConfig[winner];
 

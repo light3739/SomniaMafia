@@ -349,6 +349,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         return;
                     }
 
+                    // Compute the on-chain commitment (Poseidon of role+salt) for ZK proof
+                    const { ShuffleService } = await import('../services/shuffleService');
+                    const commitment = await ShuffleService.createRoleCommitHashAsync(role, salt);
+
                     const res = await fetch('/api/game/reveal-secret', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -357,6 +361,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             address: playerAddress,
                             role,
                             salt,
+                            commitment,  // needed by GM server for ZK proof
                             signature,
                             sessionKeyAddress, // optional: server uses this to verify session key sig
                             chainId,
@@ -880,12 +885,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const FLAG_ACTIVE = 2;
 
     // Check win condition on frontend (since contract doesn't know roles)
-    const checkWinCondition = useCallback((players: Player[], contractPhase: GamePhase): 'MAFIA' | 'TOWN' | null => {
+    const checkWinCondition = useCallback((players: Player[], contractPhase: GamePhase): 'MAFIA' | 'TOWN' | 'DRAW' | null => {
         // Don't check in early phases
         if (contractPhase < GamePhase.DAY) return null;
 
         const alivePlayers = players.filter(p => p.isAlive);
-        if (alivePlayers.length === 0) return 'TOWN'; // Draw technically, but contract handles this
+        if (alivePlayers.length === 0) return 'DRAW';
 
         let aliveMafia = 0;
         let aliveTown = 0;
@@ -1096,7 +1101,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const winner = checkWinCondition(formattedPlayers, phase);
             let finalPhase = phase;
-            let resolvedWinner = winner;
+            let resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' | null = winner;
 
             if (winner && phase !== GamePhase.ENDED) {
                 console.log('[Win Condition Calculated Local]', winner);
@@ -1110,20 +1115,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Check if we already have a winner from a GameEnded event
                 if (prev.winner) {
                     resolvedWinner = prev.winner;
-                } else {
-                    // Fallback: derive winner from alive mafia count
-                    const aliveMafia = formattedPlayers.filter(p => p.isAlive && p.role === Role.MAFIA).length;
-                    const aliveTotal = formattedPlayers.filter(p => p.isAlive).length;
-                    const aliveTown = aliveTotal - aliveMafia;
-                    // If we can tell (no unknowns among alive or simple heuristic)
-                    if (aliveMafia === 0) {
-                        resolvedWinner = 'TOWN';
-                    } else if (aliveMafia >= aliveTown) {
-                        resolvedWinner = 'MAFIA';
-                    }
-                    if (resolvedWinner) {
-                        console.log('[Win] Derived winner from contract ENDED phase:', resolvedWinner);
-                    }
                 }
             }
 
@@ -1136,7 +1127,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 mafiaCommittedCount,
                 mafiaRevealedCount,
                 phaseDeadline,
-                winner: resolvedWinner || prev.winner
+                // prev.winner has absolute priority — never overwrite established winner with null or derivation
+                winner: prev.winner || resolvedWinner
             };
         });
         return gameData;
@@ -1732,8 +1724,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Попытка 2: восстановить из localStorage (после перезагрузки страницы)
         if (!privKey && currentRoomId && address) {
             try {
-                const kp = await loadOrCreateKeypair(currentRoomId.toString(), address);
-                privKey = kp.privateKey;
+                const { privateKey } = await loadOrCreateKeypair(currentRoomId.toString(), address);
+                privKey = privateKey;
                 eciesPrivKeyRef.current = privKey;
                 console.log('[ECIES] Private key restored from localStorage');
             } catch (e) {
@@ -1762,7 +1754,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
             console.log('[ECIES] Role decrypted successfully:', text, '->', roleNum);
             return roleNum;
-        } catch (e) {
+        } catch (e: any) {
+            // Suppress noise: OperationError just means it's not our payload (encrypted for someone else)
+            if (e instanceof DOMException && e.name === 'OperationError') return null;
             console.error('[ECIES] Decryption failed:', e);
             return null;
         }
@@ -1866,7 +1860,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (shouldCommitOnChain) {
                 try {
                     const { ShuffleService } = await import('../services/shuffleService');
-                    const roleHash = ShuffleService.createRoleCommitHash(role, saltToUse);
+                    const roleHash = await ShuffleService.createRoleCommitHashAsync(role, saltToUse);
                     const txHash = await sendGameTransaction('commitRole', [currentRoomId, roleHash]);
                     addLog("Role committed!", "success");
                     await publicClient?.waitForTransactionReceipt({ hash: txHash });
@@ -1977,7 +1971,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     console.warn("Fallback confirmRole failed — role may never have been committed. Retrying full commitAndConfirmRole...", err.shortMessage || err.message);
                     try {
                         const { ShuffleService } = await import('../services/shuffleService');
-                        const roleHash = ShuffleService.createRoleCommitHash(role, savedSalt);
+                        const roleHash = await ShuffleService.createRoleCommitHashAsync(role, savedSalt);
                         const retryHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
                         addLog("Role committed & confirmed (recovery).", "success");
                         if (address) {
@@ -1997,7 +1991,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Normal flow: No salt, not confirmed -> Commit + Confirm
                 try {
                     const { ShuffleService } = await import('../services/shuffleService');
-                    const roleHash = ShuffleService.createRoleCommitHash(role, saltToUse);
+                    const roleHash = await ShuffleService.createRoleCommitHashAsync(role, saltToUse);
                     const txHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
                     addLog("Role committed & confirmed on-chain!", "success");
                     if (address) {
@@ -2845,10 +2839,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log(`[ZK] Sending transaction (Session: ${useSessionKey})...`);
             const hash = await sendGameTransaction('endGameZK', args as any, useSessionKey);
 
-            const isTownWin = zkData.inputs[0] === 1n;
-            // addLog(`ZK Proof submitted! Winner: ${isTownWin ? "TOWN" : "MAFIA"}`, "success"); // Removed tech log
-
+            const isTownWin = Number(zkData.inputs[0]) === 1;
+            const isMafiaWin = Number(zkData.inputs[1]) === 1;
+            
+            let proactiveWinner: 'MAFIA' | 'TOWN' | 'DRAW' = 'DRAW';
+            if (isTownWin) proactiveWinner = 'TOWN';
+            else if (isMafiaWin) proactiveWinner = 'MAFIA';
+            
             await publicClient.waitForTransactionReceipt({ hash });
+            
+            setGameState(prev => ({
+                ...prev,
+                phase: GamePhase.ENDED,
+                winner: proactiveWinner
+            }));
+
             await refreshPlayersList(currentRoomId);
 
             // DEBUG: Check deposit status after game end
@@ -2997,6 +3002,20 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const hash = await sendGameTransaction('endGameZK', args as any, useSessionKey);
 
                     await publicClient.waitForTransactionReceipt({ hash });
+                    
+                    // Proactively set winner from server result
+                    const lowerRes = (data.result || '').toLowerCase();
+                    const resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' = 
+                        lowerRes.includes('town') ? 'TOWN' :
+                        lowerRes.includes('mafia') ? 'MAFIA' : 
+                        'TOWN';
+                    
+                    setGameState(prev => ({
+                        ...prev,
+                        phase: GamePhase.ENDED,
+                        winner: resolvedWinner
+                    }));
+
                     addLog("Game ended automatically via Server ZK!", "phase");
                     await refreshPlayersList(roomId);
 
@@ -3473,7 +3492,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     case 'GameEnded': {
                         const winCondition = args.winCondition as string || '';
-                        const gameWinner: 'MAFIA' | 'TOWN' = winCondition.toLowerCase().includes('mafia') ? 'MAFIA' : 'TOWN';
+                        const lower = winCondition.toLowerCase();
+                        
+                        // ✅ ROBUST PARSING: Explicitly check for both sides.
+                        // We prioritize TOWN check as fallback to match user's recommended pattern.
+                        const gameWinner: 'MAFIA' | 'TOWN' | 'DRAW' = 
+                            lower.includes('town') ? 'TOWN' : 
+                            lower.includes('mafia') ? 'MAFIA' : 
+                            lower.includes('draw') ? 'DRAW' :
+                            'TOWN'; // Final fallback
+                        
                         console.log(`[Event] GameEnded! Winner: ${gameWinner}, condition: ${winCondition}`);
                         addLog(`Game Over! ${gameWinner === 'MAFIA' ? '🔪 Mafia wins!' : '🏘️ Town wins!'}`, 'phase');
                         setGameState(prev => ({
@@ -3550,9 +3578,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // This reduces RPC spam from ~20 calls/sec to 1 call/2sec while keeping sub-3s event latency.
     useEffect(() => {
         if (!publicClient || !currentRoomId) return;
+        if (gameState.phase === GamePhase.ENDED) return; // ← STOP polling when game ends
+        
         const interval = setInterval(pollEvents, 2000);
         return () => clearInterval(interval);
-    }, [pollEvents, publicClient, currentRoomId]);
+    }, [pollEvents, publicClient, currentRoomId, gameState.phase]);
 
 
 

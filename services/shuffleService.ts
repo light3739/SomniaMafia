@@ -3,6 +3,7 @@
 
 import { Role } from '../types';
 import { keccak256, encodePacked, encodeAbiParameters, parseAbiParameters } from 'viem';
+import { GM_SERVER_URL } from '../contracts/config';
 
 // Simple 512-bit prime for SRA optimization
 const PRIME = BigInt('0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1' +
@@ -277,10 +278,40 @@ export class ShuffleService {
         const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
         return keccak256(
             encodeAbiParameters(
-                parseAbiParameters('uint8, string'),
-                [role, cleanSalt]
+                parseAbiParameters('uint256, string'),
+                [BigInt(role), cleanSalt]
             )
         );
+    }
+
+    /**
+     * ZK-compatible role commitment using Poseidon.
+     * Calls GM server as a secure hashing service to avoid local ZK weights.
+     */
+    static async createRoleCommitHashAsync(role: number, salt: string): Promise<`0x${string}`> {
+        // Fallback to keccak256 if GM_SERVER_URL is missing (should not happen in prod)
+        if (!GM_SERVER_URL) {
+            console.warn('[ShuffleService] GM_SERVER_URL missing, falling back to keccak256');
+            return this.createRoleCommitHash(role, salt);
+        }
+
+        try {
+            const res = await fetch(`${GM_SERVER_URL}/hash-role`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role, salt })
+            });
+            const { commitment } = await res.json();
+            console.log(`[ShuffleService] Poseidon hash received: ${commitment}`);
+            
+            // Ensure 0x prefix for viem compatibility
+            return commitment.startsWith('0x') ? commitment : `0x${commitment}`;
+        } catch (err) {
+            console.error('[ShuffleService] Remote hashing failed:', err);
+            // We CANNOT fall back to keccak256 for ZK games, it will fail the circuit.
+            // Better to throw so the UI handles the error.
+            throw new Error('Failed to generate ZK-compatible commitment');
+        }
     }
 
     // V4: Создать хэш для mafia target commit-reveal
