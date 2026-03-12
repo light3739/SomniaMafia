@@ -55,12 +55,12 @@ export const DEPLOYMENTS = {
         explorer: 'https://testnet.snowtrace.io',
         contracts: {
             MafiaDiamond: '0x3c1bd1923f8318247e2b60e41b0f280391c4e1e1',
-            Groth16Verifier: '0x5a4dec55540a158cce68c30b6d21a0f1be0fcdad',
+            Groth16Verifier: '0x65dacc2336a6f43552cc2578f5eb24b8c79503ba',
             LobbyFacet: '0xb718ba5b6bccfa418f2971ea094f5b52a105c049',
             ShuffleFacet: '0xffa18547fde97a6d2f4df8af0ac545db9f5ae789',
             VotingFacet: '0x78616f773e7d9fef5dd7c6583dc642b238033a61',
             NightFacet: '0x72d4cfa33b2e7e6cce4a85bbd31147659f04a3be',
-            GameEndFacet: '0xcb5a455e35f82e607b0f77a1d6f0fff45db68cc4',
+            GameEndFacet: '0x970e1fa3c3ea47f6d2911ae7fb0fa01447562009',
 
         },
     },
