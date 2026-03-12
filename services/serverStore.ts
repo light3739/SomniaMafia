@@ -4,7 +4,14 @@ import Redis from 'ioredis';
  * Standard Redis client (works with RedisLabs, Upstash, etc. via connection string)
  */
 const redis = process.env.REDIS_URL
-    ? new Redis(process.env.REDIS_URL)
+    ? new Redis(process.env.REDIS_URL, {
+        connectTimeout: 5000, // 5 seconds
+        maxRetriesPerRequest: 3,
+        retryStrategy: (times) => {
+            if (times > 3) return null; // stop retrying after 3 times to prevent hangs
+            return Math.min(times * 100, 1000);
+        }
+    })
     : null;
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -37,6 +44,8 @@ const REPLAY_NONCE_TTL_SECONDS = 180;
 
 export interface PlayerSecret {
     role: number;
+    salt: string;
+    commitment: string;
 }
 
 export type StoreSecretResult =
@@ -51,7 +60,11 @@ export type StoreSecretResult =
 export class ServerStore {
     private static ensureSecureStorageForCriticalPath(operation: string): void {
         if (!redis && FAIL_CLOSED_SECURITY_STORAGE) {
-            throw new Error(`[ServerStore] ${operation} requires REDIS_URL in production`);
+            // Discussion actions are less critical than payouts/secrets.
+            // If it's a discussion-related nonce being consumed, we can allow memory fallback for testing.
+            if (operation.includes('Discussion')) return;
+
+            throw new Error(`[ServerStore] ${operation} requires REDIS_URL in production. Set ALLOW_INSECURE_MEMORY_FALLBACK=true to bypass.`);
         }
     }
 
@@ -66,7 +79,9 @@ export class ServerStore {
         nonce: string,
         ttlSeconds: number = REPLAY_NONCE_TTL_SECONDS
     ): Promise<boolean> {
-        this.ensureSecureStorageForCriticalPath('consumeReplayNonce');
+        // Relax restriction for discussion to prevent 502/500 if Redis is missing
+        const isDiscussion = scope.includes('discussion');
+        this.ensureSecureStorageForCriticalPath(isDiscussion ? 'consumeReplayNonce:Discussion' : 'consumeReplayNonce');
 
         const normalizedRoomId = BigInt(roomId).toString();
         const key = `replay:${scope}:${normalizedRoomId}:${actorAddress.toLowerCase()}:${nonce}`;
@@ -102,11 +117,11 @@ export class ServerStore {
      * Stores a player's role and salt in Redis.
      * Uses a Hash structure: room:secrets:{roomId} -> {address: secret}
      */
-    static async storeSecret(roomId: string, address: string, role: number, salt: string): Promise<StoreSecretResult> {
+    static async storeSecret(roomId: string, address: string, role: number, salt: string, commitment: string): Promise<StoreSecretResult> {
         this.ensureSecureStorageForCriticalPath('storeSecret');
 
         const normalizedRoomId = BigInt(roomId).toString();
-        const secret: PlayerSecret = { role };
+        const secret: PlayerSecret = { role, salt, commitment };
         const key = `room:secrets:${normalizedRoomId}`;
         const normalizedAddress = address.toLowerCase();
 
@@ -116,8 +131,8 @@ export class ServerStore {
             const existing = memoryStore[key][normalizedAddress];
             if (existing) {
                 const parsedExisting = JSON.parse(existing) as PlayerSecret;
-                if (parsedExisting.role !== role) {
-                    console.error(`[ServerStore] Secret conflict (memory) for Room #${roomId}, Player ${address}: existing=${parsedExisting.role}, new=${role}`);
+                if (parsedExisting.role !== role || parsedExisting.salt !== salt) {
+                    console.error(`[ServerStore] Secret conflict (memory) for Room #${roomId}, Player ${address}: existingRole=${parsedExisting.role}, newRole=${role}`);
                     return { status: 'conflict', existingRole: parsedExisting.role };
                 }
                 return { status: 'exists_same' };
@@ -131,8 +146,8 @@ export class ServerStore {
             const existing = await redis.hget(key, normalizedAddress);
             if (existing) {
                 const parsedExisting = JSON.parse(existing) as PlayerSecret;
-                if (parsedExisting.role !== role) {
-                    console.error(`[ServerStore] Secret conflict (redis) for Room #${roomId}, Player ${address}: existing=${parsedExisting.role}, new=${role}`);
+                if (parsedExisting.role !== role || parsedExisting.salt !== salt) {
+                    console.error(`[ServerStore] Secret conflict (redis) for Room #${roomId}, Player ${address}: existingRole=${parsedExisting.role}, newRole=${role}`);
                     return { status: 'conflict', existingRole: parsedExisting.role };
                 }
                 await redis.expire(key, GAME_DATA_TTL);

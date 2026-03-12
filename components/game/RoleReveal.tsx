@@ -2,13 +2,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
-import { usePublicClient, useAccount, useWalletClient } from 'wagmi';
-import { MAFIA_ABI } from '../../contracts/config';
+import { useAccount, useWalletClient } from 'wagmi';
 import { Role, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
-import { Check, Users, Skull, Shield, Search, Loader2, RefreshCw, EyeOff } from 'lucide-react';
+import { Check, Users, Skull, Shield, Search, Loader2, EyeOff } from 'lucide-react';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { registerEciesPubkey, submitSraKeyToGm, fetchMyRoleFromGm } from '../../services/gmService';
+import { loadOrCreateKeypair } from '../../services/eciesService';
 
 interface RevealState {
     myRole: Role | null;
@@ -59,11 +59,9 @@ export const RoleReveal: React.FC = React.memo(() => {
         commitAndConfirmRoleOnChain,
         addLog,
         isTxPending,
-        setGameState,
-        runtimeContractAddress
+        setGameState
     } = useGameContext();
 
-    const publicClient = usePublicClient();
     const { address } = useAccount();
     const { data: walletClient } = useWalletClient();
 
@@ -90,11 +88,21 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // Handle ECIES Registration
     const handleRegisterEcies = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient || revealState.eciesRegistered || registerInFlightRef.current) return;
+        if (!currentRoomId || !address || !walletClient || registerInFlightRef.current) return;
+        
+        const { isNew } = await loadOrCreateKeypair(currentRoomId.toString(), address);
+        // Register if not already registered OR if it's a freshly generated key
+        if (revealState.eciesRegistered && !isNew) return;
+
         registerInFlightRef.current = true;
         try {
             await registerEciesPubkey(currentRoomId.toString(), address, walletClient);
-            setRevealState(prev => ({ ...prev, eciesRegistered: true }));
+            setRevealState(prev => ({ 
+                ...prev, 
+                eciesRegistered: true,
+                // If it's a new key, reset the flow to re-share keys with the new pubkey
+                ...(isNew && { hasSharedKeys: false, isRevealed: false, myRole: null })
+            }));
             console.log("[RoleReveal] ECIES registered successfully");
         } catch (e) {
             console.error("[RoleReveal] ECIES registration failed:", e);
@@ -131,15 +139,25 @@ export const RoleReveal: React.FC = React.memo(() => {
         } catch (e: any) {
             console.error("[RoleReveal] SRA submission failed:", e);
             addLog(e.message || "Failed to submit SRA key", "danger");
+            
+            // Retry after 3 seconds by allowing the effect to trigger this again
+            setTimeout(() => {
+                submitInFlightRef.current = false;
+            }, 3000);
+            return; // Don't reset flag immediately in finally
         } finally {
             setIsProcessing(false);
-            submitInFlightRef.current = false;
+            // Only reset if it didn't fail (in success case) or if we don't want retry
+            // But here we want the timeout to handle the reset on failure
+            if (revealState.hasSharedKeys) {
+                submitInFlightRef.current = false;
+            }
         }
     }, [currentRoomId, address, walletClient, revealState.hasSharedKeys, addLog]);
 
     // Handle Role Fetching
     const handleFetchRole = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient || revealState.isRevealed || !revealState.hasSharedKeys || fetchInFlightRef.current) return;
+        if (!currentRoomId || !address || !walletClient || revealState.isRevealed || revealState.hasConfirmed || !revealState.hasSharedKeys || fetchInFlightRef.current) return;
         fetchInFlightRef.current = true;
         try {
             const role = await fetchMyRoleFromGm({
@@ -174,7 +192,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } finally {
             fetchInFlightRef.current = false;
         }
-    }, [currentRoomId, address, walletClient, revealState.isRevealed, revealState.hasSharedKeys, addLog, setGameState]);
+    }, [currentRoomId, address, walletClient, revealState.isRevealed, revealState.hasConfirmed, revealState.hasSharedKeys, addLog, setGameState]);
 
     // Handle Confirmation
     const handleConfirmRole = useCallback(async () => {
@@ -222,16 +240,35 @@ export const RoleReveal: React.FC = React.memo(() => {
     useEffect(() => {
         if (gameState.phase !== GamePhase.REVEAL) return;
 
-        // Sequence: Register ECIES -> Submit SRA -> Fetch Role
+        // Sequence: Register ECIES -> Submit SRA -> Fetch Role -> Auto-Confirm
         if (!revealState.eciesRegistered) {
             handleRegisterEcies();
         } else if (!revealState.hasSharedKeys) {
             handleShareKey();
-        } else if (!revealState.isRevealed) {
+        } else if (!revealState.isRevealed && !revealState.hasConfirmed) {
             const interval = setInterval(handleFetchRole, 2000); // Poll every 2s
             return () => clearInterval(interval);
+        } else if (!revealState.hasConfirmed && !isProcessing && !isTxPending) {
+            // Auto-confirm role after a 4 second delay so the user can read it
+            const timeout = setTimeout(() => {
+                handleConfirmRole();
+            }, 4000);
+            return () => clearTimeout(timeout);
         }
-    }, [gameState.phase, revealState.eciesRegistered, revealState.hasSharedKeys, revealState.isRevealed, handleRegisterEcies, handleShareKey, handleFetchRole]);
+    }, [
+        gameState.phase, 
+        revealState.eciesRegistered, 
+        revealState.hasSharedKeys, 
+        revealState.isRevealed, 
+        revealState.hasConfirmed,
+        isProcessing,
+        isTxPending,
+        handleRegisterEcies, 
+        handleShareKey, 
+        handleFetchRole,
+        handleConfirmRole,
+        walletClient
+    ]);
 
     // UI
     const roleConfig = revealState.myRole ? RoleConfig[revealState.myRole] : RoleConfig[Role.UNKNOWN];

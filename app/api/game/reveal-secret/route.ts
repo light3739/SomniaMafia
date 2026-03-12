@@ -5,7 +5,7 @@ import { ServerStore } from '@/services/serverStore';
 
 export async function POST(request: Request) {
     try {
-        const { roomId: rawRoomId, address, role, salt, signature, sessionKeyAddress, chainId } = await request.json();
+        const { roomId: rawRoomId, address, role, salt, commitment, signature, sessionKeyAddress, chainId } = await request.json();
 
         if (!rawRoomId || !address || role === undefined || !salt || !signature) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
 
         const roomId = BigInt(rawRoomId).toString();
         // Store the secret on the server
-        const storeResult = await ServerStore.storeSecret(roomId, address, roleNum, salt);
+        const storeResult = await ServerStore.storeSecret(roomId, address, roleNum, salt, commitment);
         if (storeResult.status === 'conflict') {
             return NextResponse.json({ error: 'Secret conflict detected for this player/room' }, { status: 409 });
         }

@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import path from 'path';
-import * as snarkjs from 'snarkjs';
 import { GM_SERVER_URL } from '@/contracts/config';
 
 export async function POST(request: Request) {
@@ -36,52 +34,52 @@ export async function POST(request: Request) {
             });
         }
 
-        const { result, mafiaCount, townCount } = gmData;
+        const { result } = gmData;
 
-        // 2. Generate ZK Proof
-        console.log(`[API/CheckWin] ${result} detected! Generating ZK Proof in Node...`);
+        // 2. Generate ZK Proof on GM Server (NEW)
+        console.log(`[API/CheckWin] ${result} detected! Requesting ZK Proof from GM Server...`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
-        const wasmPath = path.join(process.cwd(), 'public', 'mafia_outcome.wasm');
-        const zkeyPath = path.join(process.cwd(), 'public', 'mafia_outcome_0001.zkey');
-
-        // Add a timeout for ZK generation
-        const proofPromise = (snarkjs as any).groth16.fullProve(
-            {
-                roomId: roomId.toString(),
-                mafiaCount: mafiaCount.toString(),
-                townCount: townCount.toString()
-            },
-            wasmPath,
-            zkeyPath
-        );
-
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('ZK Proof generation timed out')), 30000)
-        );
-
-        const { proof, publicSignals } = await Promise.race([proofPromise, timeoutPromise]) as any;
-
-        console.log(`[API/CheckWin] ZK Proof generated. Formatting for Solidity...`);
-
-        const callData = await (snarkjs as any).groth16.exportSolidityCallData(proof, publicSignals);
-        const argv = callData
-            .replace(/["\[\]\s]/g, "")
-            .split(",")
-            .map((x: string) => x.toString());
-
-        return NextResponse.json({
-            winDetected: true,
-            result,
-            formatted: {
-                a: [argv[0], argv[1]],
-                b: [
-                    [argv[2], argv[3]],
-                    [argv[4], argv[5]]
-                ],
-                c: [argv[6], argv[7]],
-                inputs: argv.slice(8)
+        try {
+            const zkRes = await fetch(`${GM_SERVER_URL}/end-game-zk/${roomId}`, {
+                method: "POST",
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
+            if (!zkRes.ok) {
+                const zkError = await zkRes.json().catch(() => ({ error: 'Unknown ZK error' }));
+                console.error(`[API/CheckWin] GM Server ZK generation failed:`, zkError);
+                return NextResponse.json({ error: zkError.error || 'GM Server ZK generation failed' }, { status: zkRes.status });
             }
-        });
+            
+            const { callData } = await zkRes.json();
+            
+            // 3. Parse and return for the contract
+            const argv = callData.replace(/["\[\]\s]/g, "").split(",");
+            
+            return NextResponse.json({
+                winDetected: true,
+                result,
+                formatted: {
+                    a: [argv[0], argv[1]],
+                    b: [
+                        [argv[2], argv[3]],
+                        [argv[4], argv[5]]
+                    ],
+                    c: [argv[6], argv[7]],
+                    inputs: argv.slice(8)
+                }
+            });
+        } catch (e: any) {
+            clearTimeout(timeoutId);
+            if (e.name === 'AbortError') {
+                return NextResponse.json({ error: 'ZK Proof generation timed out' }, { status: 504 });
+            }
+            throw e;
+        }
 
     } catch (error: any) {
         console.error('[API/CheckWin] Error:', error);

@@ -20,7 +20,7 @@ export function createSecurityDependencies(overrides: Partial<SecurityDependenci
         consumeReplayNonce: (scope, roomId, actorAddress, nonce) =>
             ServerStore.consumeReplayNonce(scope, roomId, actorAddress, nonce),
         now: () => Math.floor(Date.now() / 1000), // Unix seconds — matches requestSigning.ts
-        maxClockSkewMs: 2 * 60, // 120 seconds (field name kept for compat)
+        maxClockSkewMs: 5 * 60, // 300 seconds (field name kept for compat) — sync with GM server 5min window
         nonceMinLength: 8,
     };
 
@@ -78,7 +78,7 @@ async function verifySessionKeyOwnership(
         return { ok: false, status: 403, error: 'Session key is not registered for this player' };
     }
 
-    if (!session.isActive || Number(session.expiresAt) <= Math.floor(deps.now() / 1000)) {
+    if (!session.isActive || Number(session.expiresAt) <= deps.now()) {
         return { ok: false, status: 403, error: 'Session key inactive or expired' };
     }
 
@@ -154,7 +154,10 @@ export async function verifySignedRequestBody<TBody extends Record<string, any>>
     const timestamp = Number(options.body.timestamp);
 
     if (options.requireReplayProtection !== false) {
-        if (!Number.isFinite(timestamp) || timestamp <= 0 || Math.abs(currentDeps.now() - timestamp) > currentDeps.maxClockSkewMs) {
+        // Normalize timestamp: accept both Unix seconds and milliseconds
+        // requestSigning.ts sends Date.now() (ms), security.ts now() returns seconds
+        const tsNormalized = timestamp > 1e10 ? Math.floor(timestamp / 1000) : timestamp;
+        if (!Number.isFinite(tsNormalized) || tsNormalized <= 0 || Math.abs(currentDeps.now() - tsNormalized) > currentDeps.maxClockSkewMs) {
             return { ok: false, status: 401, error: 'Request expired or invalid timestamp' };
         }
 

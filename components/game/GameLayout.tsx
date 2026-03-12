@@ -414,7 +414,12 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
         }
 
         fetchDiscussionState();
-        const interval = setInterval(fetchDiscussionState, 1000); // Poll every second for accurate time
+        const interval = setInterval(() => {
+            // FIX: Double-check phase inside interval to stop immediately on phase change
+            if (gameState.phase === GamePhase.DAY && currentRoomId) {
+                fetchDiscussionState();
+            }
+        }, 1000); 
 
         return () => clearInterval(interval);
     }, [gameState.phase, currentRoomId, fetchDiscussionState]);

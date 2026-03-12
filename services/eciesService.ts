@@ -36,7 +36,7 @@ function bytesToHex(bytes: Uint8Array): string {
 export async function loadOrCreateKeypair(
   roomId: string,
   address: string
-): Promise<{ publicKey: CryptoKey; privateKey: CryptoKey }> {
+): Promise<{ publicKey: CryptoKey; privateKey: CryptoKey; isNew: boolean }> {
   const stored = localStorage.getItem(`${STORAGE_PREFIX}${roomId}_${address.toLowerCase()}`);
   if (stored) {
     try {
@@ -45,12 +45,13 @@ export async function loadOrCreateKeypair(
         crypto.subtle.importKey('jwk', pub, { name: 'ECDH', namedCurve: 'P-256' }, true, []),
         crypto.subtle.importKey('jwk', priv, { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']),
       ]);
-      return { publicKey, privateKey };
+      return { publicKey, privateKey, isNew: false };
     } catch {
       // Corrupted entry — regenerate below
     }
   }
-  return generateAndSaveKeypair(roomId, address);
+  const keypair = await generateAndSaveKeypair(roomId, address);
+  return { ...keypair, isNew: true };
 }
 
 async function generateAndSaveKeypair(
