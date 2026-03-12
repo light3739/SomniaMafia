@@ -3576,13 +3576,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // FIX: Poll events every 2 seconds instead of on every block (Somnia: 100ms blocks = 10 calls/sec!)
     // This reduces RPC spam from ~20 calls/sec to 1 call/2sec while keeping sub-3s event latency.
+    // IMPORTANT: Do NOT stop polling when phase=ENDED but winner is still unknown.
+    // There is a race where refreshPlayersList sets phase=ENDED before pollEvents
+    // processes the GameEnded event (which carries winCondition). If we stop too early,
+    // winner stays null and those players see infinite loading on the GameOver screen.
     useEffect(() => {
         if (!publicClient || !currentRoomId) return;
-        if (gameState.phase === GamePhase.ENDED) return; // ← STOP polling when game ends
+        // Only stop when we have BOTH phase=ENDED AND a determined winner
+        if (gameState.phase === GamePhase.ENDED && gameState.winner) return;
         
         const interval = setInterval(pollEvents, 2000);
         return () => clearInterval(interval);
-    }, [pollEvents, publicClient, currentRoomId, gameState.phase]);
+    }, [pollEvents, publicClient, currentRoomId, gameState.phase, gameState.winner]);
+
 
 
 
