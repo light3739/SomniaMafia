@@ -288,7 +288,7 @@ export class ShuffleService {
      * ZK-compatible role commitment using Poseidon.
      * Calls GM server as a secure hashing service to avoid local ZK weights.
      */
-    static async createRoleCommitHashAsync(role: number, salt: string): Promise<string> {
+    static async createRoleCommitHashAsync(role: number, salt: string): Promise<`0x${string}`> {
         // Fallback to keccak256 if GM_SERVER_URL is missing (should not happen in prod)
         if (!GM_SERVER_URL) {
             console.warn('[ShuffleService] GM_SERVER_URL missing, falling back to keccak256');
@@ -304,7 +304,9 @@ export class ShuffleService {
             if (!res.ok) throw new Error(`Hash service failed: ${res.status}`);
             const { commitment } = await res.json();
             console.log(`[ShuffleService] Poseidon hash generated: ${commitment}`);
-            return commitment;
+            
+            // Ensure 0x prefix for viem compatibility
+            return commitment.startsWith('0x') ? commitment : `0x${commitment}`;
         } catch (err) {
             console.error('[ShuffleService] Remote hashing failed:', err);
             // We CANNOT fall back to keccak256 for ZK games, it will fail the circuit.
