@@ -39,34 +39,47 @@ export async function POST(request: Request) {
         // 2. Generate ZK Proof on GM Server (NEW)
         console.log(`[API/CheckWin] ${result} detected! Requesting ZK Proof from GM Server...`);
         
-        const zkRes = await fetch(`${GM_SERVER_URL}/end-game-zk/${roomId}`, {
-            method: "POST"
-        });
-        
-        if (!zkRes.ok) {
-            const zkError = await zkRes.json().catch(() => ({ error: 'Unknown ZK error' }));
-            console.error(`[API/CheckWin] GM Server ZK generation failed:`, zkError);
-            return NextResponse.json({ error: zkError.error || 'GM Server ZK generation failed' }, { status: zkRes.status });
-        }
-        
-        const { callData } = await zkRes.json();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
-        // 3. Parse and return for the contract
-        const argv = callData.replace(/["\[\]\s]/g, "").split(",");
-        
-        return NextResponse.json({
-            winDetected: true,
-            result,
-            formatted: {
-                a: [argv[0], argv[1]],
-                b: [
-                    [argv[2], argv[3]],
-                    [argv[4], argv[5]]
-                ],
-                c: [argv[6], argv[7]],
-                inputs: argv.slice(8)
+        try {
+            const zkRes = await fetch(`${GM_SERVER_URL}/end-game-zk/${roomId}`, {
+                method: "POST",
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
+            if (!zkRes.ok) {
+                const zkError = await zkRes.json().catch(() => ({ error: 'Unknown ZK error' }));
+                console.error(`[API/CheckWin] GM Server ZK generation failed:`, zkError);
+                return NextResponse.json({ error: zkError.error || 'GM Server ZK generation failed' }, { status: zkRes.status });
             }
-        });
+            
+            const { callData } = await zkRes.json();
+            
+            // 3. Parse and return for the contract
+            const argv = callData.replace(/["\[\]\s]/g, "").split(",");
+            
+            return NextResponse.json({
+                winDetected: true,
+                result,
+                formatted: {
+                    a: [argv[0], argv[1]],
+                    b: [
+                        [argv[2], argv[3]],
+                        [argv[4], argv[5]]
+                    ],
+                    c: [argv[6], argv[7]],
+                    inputs: argv.slice(8)
+                }
+            });
+        } catch (e: any) {
+            clearTimeout(timeoutId);
+            if (e.name === 'AbortError') {
+                return NextResponse.json({ error: 'ZK Proof generation timed out' }, { status: 504 });
+            }
+            throw e;
+        }
 
     } catch (error: any) {
         console.error('[API/CheckWin] Error:', error);
