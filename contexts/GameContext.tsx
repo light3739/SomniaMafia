@@ -349,9 +349,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         return;
                     }
 
-                    // Compute the on-chain commitment (keccak256 of role+salt) for ZK proof
+                    // Compute the on-chain commitment (Poseidon of role+salt) for ZK proof
                     const { ShuffleService } = await import('../services/shuffleService');
-                    const commitment = ShuffleService.createRoleCommitHash(role, salt);
+                    const commitment = await ShuffleService.createRoleCommitHashAsync(role, salt);
 
                     const res = await fetch('/api/game/reveal-secret', {
                         method: 'POST',
@@ -1850,7 +1850,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (shouldCommitOnChain) {
                 try {
                     const { ShuffleService } = await import('../services/shuffleService');
-                    const roleHash = ShuffleService.createRoleCommitHash(role, saltToUse);
+                    const roleHash = await ShuffleService.createRoleCommitHashAsync(role, saltToUse);
                     const txHash = await sendGameTransaction('commitRole', [currentRoomId, roleHash]);
                     addLog("Role committed!", "success");
                     await publicClient?.waitForTransactionReceipt({ hash: txHash });
@@ -1961,7 +1961,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     console.warn("Fallback confirmRole failed — role may never have been committed. Retrying full commitAndConfirmRole...", err.shortMessage || err.message);
                     try {
                         const { ShuffleService } = await import('../services/shuffleService');
-                        const roleHash = ShuffleService.createRoleCommitHash(role, savedSalt);
+                        const roleHash = await ShuffleService.createRoleCommitHashAsync(role, savedSalt);
                         const retryHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
                         addLog("Role committed & confirmed (recovery).", "success");
                         if (address) {
@@ -1981,7 +1981,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Normal flow: No salt, not confirmed -> Commit + Confirm
                 try {
                     const { ShuffleService } = await import('../services/shuffleService');
-                    const roleHash = ShuffleService.createRoleCommitHash(role, saltToUse);
+                    const roleHash = await ShuffleService.createRoleCommitHashAsync(role, saltToUse);
                     const txHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
                     addLog("Role committed & confirmed on-chain!", "success");
                     if (address) {
