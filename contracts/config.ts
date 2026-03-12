@@ -1,6 +1,12 @@
 import { defineChain } from 'viem';
 import MafiaDiamondABI from './MafiaDiamondABI.json';
 
+// Self-hosted RPC proxy URL — bypasses Avalanche CORS restrictions.
+// On production: https://test.mafiaonchain.live/api/rpc/fuji
+// Locally: /api/rpc/fuji (Next.js rewrite handles it)
+const APP_URL = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_APP_URL) || '';
+const FUJI_PROXY_RPC = `${APP_URL}/api/rpc/fuji`;
+
 export const SOMNIA_TESTNET = defineChain({
     id: 50312,
     name: 'Somnia Testnet',
@@ -17,9 +23,11 @@ export const AVALANCHE_FUJI = defineChain({
     rpcUrls: {
         default: {
             http: [
-                'https://api.avax-test.network/ext/bc/C/rpc',
+                // CORS-friendly public RPCs first — these work from the browser
                 'https://avalanche-fuji.drpc.org',
-                'https://avalanche-fuji-c-chain-rpc.publicnode.com'
+                'https://avalanche-fuji-c-chain-rpc.publicnode.com',
+                // Self-hosted proxy: proxies api.avax-test.network server-side, no CORS issues
+                FUJI_PROXY_RPC,
             ]
         }
     },

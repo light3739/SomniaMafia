@@ -7,7 +7,7 @@ import { createConfig } from '@privy-io/wagmi';
 import { PrivyProvider } from '@privy-io/react-auth';
 import { WagmiProvider } from '@privy-io/wagmi';
 
-import { SOMNIA_TESTNET, AVALANCHE_FUJI } from '../contracts/config';
+import { SOMNIA_TESTNET, AVALANCHE_FUJI, ACTIVE_DEPLOYMENT } from '../contracts/config';
 import { GameProvider } from '../contexts/GameContext';
 import { AudioProvider } from '../contexts/AudioContext';
 import { WalletAutoConnector } from '../components/ui/WalletAutoConnector';
@@ -48,6 +48,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 embeddedWallets: {
                     createOnLogin: 'users-without-wallets',
                 } as any,
+                supportedChains: [SOMNIA_TESTNET, AVALANCHE_FUJI],
+                defaultChain: ACTIVE_DEPLOYMENT.chain,
             }}
         >
             <QueryClientProvider client={queryClient}>
