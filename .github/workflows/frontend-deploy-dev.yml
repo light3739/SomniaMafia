@@ -56,7 +56,7 @@ jobs:
           scp -P ${FRONT_SSH_PORT} /tmp/frontend.tar.gz ${FRONT_SSH_USER}@${FRONT_SSH_HOST}:${FRONT_REMOTE_DIR}/
           
           echo "🔄 Extracting and restarting containers on remote..."
-          ssh -p ${FRONT_SSH_PORT} ${FRONT_SSH_USER}@${FRONT_SSH_HOST} "cd ${FRONT_REMOTE_DIR} && tar -xzf frontend.tar.gz && rm frontend.tar.gz && docker-compose -f ops/frontend-server/docker-compose.dev.yaml up -d --build"
+          ssh -p ${FRONT_SSH_PORT} ${FRONT_SSH_USER}@${FRONT_SSH_HOST} "cd ${FRONT_REMOTE_DIR} && tar -xzf frontend.tar.gz && rm frontend.tar.gz && docker compose -f ops/frontend-server/docker-compose.dev.yaml up -d --build"
 
       - name: Notify success (Telegram)
         if: success()
