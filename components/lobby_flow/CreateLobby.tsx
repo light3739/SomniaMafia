@@ -19,6 +19,8 @@ export const CreateLobby: React.FC = () => {
         setLobbyName,
         createLobbyOnChain,
         isTxPending,
+        lobbyPassword,
+        setLobbyPassword,
     } = useGameContext();
 
     const { isConnected } = useAccount();
@@ -26,16 +28,25 @@ export const CreateLobby: React.FC = () => {
     const router = useRouter();
     const { playMarkSound } = useSoundEffects();
 
-    // Core Settings (Visual only for now, except lobbyName)
-    const [lobbyPassword, setLobbyPassword] = useState('');
+    // Core Settings (Visual only for now, except lobbyName and password)
     const [maxPlayers, setMaxPlayers] = useState(10);
     const [sliderActive, setSliderActive] = useState(false);
 
-    // Tournament Settings
     const [isTournament, setIsTournament] = useState(false);
     const [tournamentType, setTournamentType] = useState<TournamentType>('buy-in');
     const [tournamentAmount, setTournamentAmount] = useState(''); // Used for both entry fee and prize pool
 
+    // Scroll-driven vignette: opacity directly tied to scroll position
+    const [scrollProgress, setScrollProgress] = useState(0);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const el = scrollContainerRef.current;
+        if (!el) return;
+        const onScroll = () => setScrollProgress(Math.min(el.scrollTop / 80, 1));
+        el.addEventListener('scroll', onScroll, { passive: true });
+        return () => el.removeEventListener('scroll', onScroll);
+    }, []);
     const handleCreate = async () => {
         if (!lobbyName.trim() || isTxPending) return;
 
@@ -244,7 +255,6 @@ export const CreateLobby: React.FC = () => {
                                 >
                                     <div className="flex flex-col gap-5 pt-4 pb-2">
 
-                                        {/* Segmented Control: Buy-in vs Free Roll */}
                                         <div className="w-full flex bg-[#19130D] rounded-xl p-1 border border-white/5 shadow-inner">
                                             {(['buy-in', 'free-roll'] as const).map((type) => (
                                                 <button

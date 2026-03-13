@@ -75,6 +75,17 @@
     "type": "error"
   },
   {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "SafeERC20FailedOperation",
+    "type": "error"
+  },
+  {
     "inputs": [],
     "name": "SessionAlreadyRegistered",
     "type": "error"
@@ -87,6 +98,11 @@
   {
     "inputs": [],
     "name": "SessionNotForThisRoom",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "Unauthorized",
     "type": "error"
   },
   {
@@ -111,9 +127,9 @@
       },
       {
         "indexed": false,
-        "internalType": "uint128",
+        "internalType": "uint256",
         "name": "amount",
-        "type": "uint128"
+        "type": "uint256"
       }
     ],
     "name": "DepositCollected",
@@ -143,6 +159,31 @@
       }
     ],
     "name": "EmergencyUnpause",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "readyAt",
+        "type": "uint256"
+      }
+    ],
+    "name": "FeeWithdrawalInitiated",
     "type": "event"
   },
   {
@@ -322,6 +363,16 @@
         "internalType": "address",
         "name": "sessionAddress",
         "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "isPrivate",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
       }
     ],
     "name": "createAndJoin",
@@ -659,6 +710,16 @@
             "internalType": "uint128",
             "name": "depositPerPlayer",
             "type": "uint128"
+          },
+          {
+            "internalType": "bool",
+            "name": "isPrivate",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint256",
+            "name": "tournamentId",
+            "type": "uint256"
           }
         ],
         "internalType": "struct MafiaTypes.GameRoom",
@@ -667,6 +728,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "initiateFeeWithdrawal",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -690,6 +764,11 @@
         "internalType": "address",
         "name": "sessionAddress",
         "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "gmSignature",
+        "type": "bytes"
       }
     ],
     "name": "joinRoom",
@@ -825,7 +904,13 @@
     "type": "function"
   },
   {
-    "inputs": [],
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
     "name": "withdrawFees",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1183,94 +1268,13 @@
   },
   {
     "inputs": [],
-    "name": "DepositAlreadyRefunded",
+    "name": "AlreadyVoted",
     "type": "error"
   },
   {
     "inputs": [],
-    "name": "InvalidRoleReveal",
+    "name": "TooEarly",
     "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NotAllRolesRevealed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "RoleAlreadyRevealed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "SaltTooLong",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "TimeNotExpired",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "WinConditionNotMet",
-    "type": "error"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint128",
-        "name": "amount",
-        "type": "uint128"
-      }
-    ],
-    "name": "DepositRefunded",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint128",
-        "name": "amount",
-        "type": "uint128"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "reason",
-        "type": "string"
-      }
-    ],
-    "name": "DepositSlashed",
-    "type": "event"
   },
   {
     "anonymous": false,
@@ -1299,153 +1303,9 @@
         "internalType": "uint256",
         "name": "roomId",
         "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "cheater",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "enum MafiaTypes.Role",
-        "name": "actualRole",
-        "type": "uint8"
-      }
-    ],
-    "name": "MafiaCheaterPunished",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "killed",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "healed",
-        "type": "address"
-      }
-    ],
-    "name": "NightFinalized",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
       }
     ],
     "name": "NightStarted",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "enum MafiaTypes.GamePhase",
-        "name": "phase",
-        "type": "uint8"
-      }
-    ],
-    "name": "PhaseTimeout",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "reason",
-        "type": "string"
-      }
-    ],
-    "name": "PlayerEliminated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "reason",
-        "type": "string"
-      }
-    ],
-    "name": "PlayerKicked",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "enum MafiaTypes.Role",
-        "name": "role",
-        "type": "uint8"
-      }
-    ],
-    "name": "RoleRevealed",
     "type": "event"
   },
   {
@@ -1519,118 +1379,7 @@
         "type": "uint256"
       }
     ],
-    "name": "claimRefund",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      }
-    ],
-    "name": "endGameAutomatically",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      }
-    ],
-    "name": "forcePhaseTimeout",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getAliveMafiaCount",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getRevealedMafiaCount",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      }
-    ],
-    "name": "playerRoles",
-    "outputs": [
-      {
-        "internalType": "enum MafiaTypes.Role",
-        "name": "",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "enum MafiaTypes.Role",
-        "name": "role",
-        "type": "uint8"
-      },
-      {
-        "internalType": "string",
-        "name": "salt",
-        "type": "string"
-      }
-    ],
-    "name": "revealRole",
+    "name": "finalizeVoting",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1667,86 +1416,8 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      }
-    ],
-    "name": "voteCounts",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "voter",
-        "type": "address"
-      }
-    ],
-    "name": "votes",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
-    "name": "InvalidMafiaTargetReveal",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "MafiaNotReady",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "MafiaTargetAlreadyCommitted",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "MafiaTargetAlreadyRevealed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NotCommitted",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NotGameMaster",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "Unauthorized",
+    "name": "NotMafiaMember",
     "type": "error"
   },
   {
@@ -1757,21 +1428,9 @@
         "internalType": "uint256",
         "name": "roomId",
         "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "target",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "bool",
-        "name": "success",
-        "type": "bool"
       }
     ],
-    "name": "MafiaConsensusReached",
+    "name": "AllMafiaTargetsCommitted",
     "type": "event"
   },
   {
@@ -1782,12 +1441,6 @@
         "internalType": "uint256",
         "name": "roomId",
         "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "sender",
-        "type": "address"
       },
       {
         "indexed": false,
@@ -1807,12 +1460,6 @@
         "internalType": "uint256",
         "name": "roomId",
         "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
       },
       {
         "indexed": false,
@@ -1836,73 +1483,11 @@
       {
         "indexed": false,
         "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
         "name": "target",
         "type": "address"
       }
     ],
     "name": "MafiaTargetRevealed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "commitHash",
-        "type": "bytes32"
-      }
-    ],
-    "name": "NightActionCommitted",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "enum MafiaTypes.NightActionType",
-        "name": "action",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "target",
-        "type": "address"
-      }
-    ],
-    "name": "NightActionRevealed",
     "type": "event"
   },
   {
@@ -1927,7 +1512,7 @@
         "type": "address"
       }
     ],
-    "name": "NightResolvedByGM",
+    "name": "NightFinalized",
     "type": "event"
   },
   {
@@ -1956,126 +1541,12 @@
         "type": "uint256"
       },
       {
-        "internalType": "bytes32",
-        "name": "hash",
-        "type": "bytes32"
+        "internalType": "string",
+        "name": "encryptedMessage",
+        "type": "string"
       }
     ],
-    "name": "commitNightAction",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      }
-    ],
-    "name": "endNight",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "gameMaster",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getMafiaChat",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "bytes",
-            "name": "encryptedMessage",
-            "type": "bytes"
-          },
-          {
-            "internalType": "uint32",
-            "name": "timestamp",
-            "type": "uint32"
-          },
-          {
-            "internalType": "address",
-            "name": "sender",
-            "type": "address"
-          }
-        ],
-        "internalType": "struct MafiaTypes.MafiaMessage[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getMafiaConsensus",
-    "outputs": [
-      {
-        "internalType": "uint8",
-        "name": "committed",
-        "type": "uint8"
-      },
-      {
-        "internalType": "uint8",
-        "name": "revealed",
-        "type": "uint8"
-      },
-      {
-        "internalType": "address",
-        "name": "consensusTarget",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "killTarget",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "healTarget",
-        "type": "address"
-      }
-    ],
-    "name": "resolveNightAsGameMaster",
+    "name": "mafiaMessage",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -2111,100 +1582,6 @@
         "type": "uint256"
       },
       {
-        "internalType": "enum MafiaTypes.NightActionType",
-        "name": "action",
-        "type": "uint8"
-      },
-      {
-        "internalType": "address",
-        "name": "target",
-        "type": "address"
-      },
-      {
-        "internalType": "string",
-        "name": "salt",
-        "type": "string"
-      }
-    ],
-    "name": "revealNightAction",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      }
-    ],
-    "name": "revealedActions",
-    "outputs": [
-      {
-        "internalType": "enum MafiaTypes.NightActionType",
-        "name": "",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      }
-    ],
-    "name": "revealedTargets",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bytes",
-        "name": "encryptedMessage",
-        "type": "bytes"
-      }
-    ],
-    "name": "sendMafiaMessage",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
         "internalType": "uint256[2]",
         "name": "a",
         "type": "uint256[2]"
@@ -2224,9 +1601,242 @@
         "name": "input",
         "type": "uint256[5]"
       }
-
     ],
     "name": "endGameZK",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "AlreadyClaimed",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "winner",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint128",
+        "name": "amount",
+        "type": "uint128"
+      }
+    ],
+    "name": "PrizeDistributed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
+      }
+    ],
+    "name": "TournamentCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "organizer",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "buyIn",
+        "type": "uint256"
+      }
+    ],
+    "name": "TournamentCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "player",
+        "type": "address"
+      }
+    ],
+    "name": "TournamentJoined",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address[]",
+        "name": "players",
+        "type": "address[]"
+      }
+    ],
+    "name": "addToTournamentWhitelist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
+      }
+    ],
+    "name": "cancelTournament",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "internalType": "uint128",
+        "name": "buyIn",
+        "type": "uint128"
+      },
+      {
+        "internalType": "uint8",
+        "name": "maxPlayers",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "playersPerTable",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "passwordHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "paymentToken",
+        "type": "address"
+      },
+      {
+        "internalType": "uint128",
+        "name": "initialPrize",
+        "type": "uint128"
+      }
+    ],
+    "name": "createTournament",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      }
+    ],
+    "name": "distributeMafiaPrizes",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "password",
+        "type": "string"
+      }
+    ],
+    "name": "joinTournament",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address[]",
+        "name": "players",
+        "type": "address[]"
+      }
+    ],
+    "name": "removeFromTournamentWhitelist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "enabled",
+        "type": "bool"
+      }
+    ],
+    "name": "toggleTournamentWhitelist",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
