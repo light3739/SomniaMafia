@@ -132,9 +132,7 @@ export const FUNCTION_MAP = {
     startVoting: 'VotingFacet',
     vote: 'VotingFacet',
     finalizeVoting: 'VotingFacet',
-    endGameAutomatically: 'VotingFacet',
     forcePhaseTimeout: 'VotingFacet',
-    claimRefund: 'VotingFacet',
 
     commitNightAction: 'NightFacet',
     revealNightAction: 'NightFacet',
