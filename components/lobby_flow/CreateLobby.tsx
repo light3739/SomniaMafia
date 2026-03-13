@@ -9,6 +9,7 @@ import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
 import { NetworkSelector } from '../ui/NetworkSelector';
 import { useSoundEffects } from '../ui/SoundEffects';
+import { FlowLayout } from '../layout/FlowLayout';
 
 type TournamentType = 'buy-in' | 'free-roll';
 
@@ -35,18 +36,6 @@ export const CreateLobby: React.FC = () => {
     const [tournamentType, setTournamentType] = useState<TournamentType>('buy-in');
     const [tournamentAmount, setTournamentAmount] = useState(''); // Used for both entry fee and prize pool
 
-    // Scroll-driven vignette: opacity directly tied to scroll position
-    const [scrollProgress, setScrollProgress] = useState(0);
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const el = scrollContainerRef.current;
-        if (!el) return;
-        const onScroll = () => setScrollProgress(Math.min(el.scrollTop / 80, 1));
-        el.addEventListener('scroll', onScroll, { passive: true });
-        return () => el.removeEventListener('scroll', onScroll);
-    }, []);
-
     const handleCreate = async () => {
         if (!lobbyName.trim() || isTxPending) return;
 
@@ -71,33 +60,11 @@ export const CreateLobby: React.FC = () => {
     };
 
     return (
-        <div ref={scrollContainerRef} className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 pb-12 custom-scrollbar">
-
-            {/* Top vignette: fades content behind nav on scroll, no hard bar */}
-            <div
-                className="fixed top-0 left-0 right-0 h-24 pointer-events-none z-40"
-                style={{
-                    opacity: scrollProgress,
-                    background: 'linear-gradient(to bottom, rgba(10,7,4,0.92) 0%, rgba(10,7,4,0.5) 60%, transparent 100%)'
-                }}
-            />
-
-            {/* Navigation: always transparent, always has top padding */}
-            <div className="w-full max-w-[600px] flex items-center justify-between sticky top-0 z-50 px-1 pt-4 pb-3 -mx-1">
-                <div className="-ml-2">
-                    <BackButton to="/setup" />
-                </div>
-                <div className="flex items-center gap-2">
-                    <NetworkSelector compact />
-                </div>
-            </div>
-
-            <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 my-auto pt-4 md:pt-6"
-            >
+        <FlowLayout
+            backTo="/setup"
+            rightElement={<NetworkSelector compact />}
+        >
+            <div className="w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6">
                 {/* Main Card */}
                 <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] p-6 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-6 mt-2">
 
@@ -370,9 +337,8 @@ export const CreateLobby: React.FC = () => {
                                     : "Create & Enter"
                     }
                 </Button>
-            </motion.div>
+            </div>
 
-            {/* Custom styles for the invisible range slider */}
             <style jsx>{`
                 .custom-slider-invisible::-webkit-slider-thumb {
                     -webkit-appearance: none;
@@ -399,6 +365,6 @@ export const CreateLobby: React.FC = () => {
                     height: 44px;
                 }
             `}</style>
-        </div>
+        </FlowLayout>
     );
 };

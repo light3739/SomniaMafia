@@ -7,6 +7,7 @@ import { BackButton } from '../ui/BackButton';
 import { usePublicClient, useAccount, useChainId } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { NetworkSelector } from '../ui/NetworkSelector';
+import { FlowLayout } from '../layout/FlowLayout';
 
 // --- ИКОНКИ ---
 const RefreshIcon = ({ className }: { className?: string }) => (
@@ -78,10 +79,6 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const mountedRef = useRef(true);
     const lastFetchRef = useRef(0);
     const MAX_LOBBY_AGE_SEC = 15 * 60;
-
-    // Scroll-driven vignette: opacity directly tied to scroll position
-    const [scrollProgress, setScrollProgress] = useState(0);
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     // Типизируем причину вызова функции для идеального UX
     type FetchReason = 'initial' | 'refresh' | 'polling';
@@ -217,16 +214,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             unwatch1?.();
             unwatch2?.();
         };
-    }, [fetchRooms, publicClient, runtimeContractAddress]); // Убрали лишние триггеры
-
-    // Scroll-aware header listener
-    useEffect(() => {
-        const el = scrollContainerRef.current;
-        if (!el) return;
-        const onScroll = () => setScrollProgress(Math.min(el.scrollTop / 80, 1));
-        el.addEventListener('scroll', onScroll, { passive: true });
-        return () => el.removeEventListener('scroll', onScroll);
-    }, []);
+    }, [fetchRooms, publicClient, runtimeContractAddress]);
 
     const handleJoin = async (room: any) => {
         if (!isConnected || !authenticated) {
@@ -243,33 +231,11 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const initialRoomData = initialRoomId ? rooms.find(r => r.id === Number(initialRoomId)) : null;
 
     return (
-        <div ref={scrollContainerRef} className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 pb-12 custom-scrollbar">
-            {/* Top vignette: fades content behind nav on scroll, no hard bar */}
-            <div
-                className="fixed top-0 left-0 right-0 h-24 pointer-events-none z-40"
-                style={{
-                    opacity: scrollProgress,
-                    background: 'linear-gradient(to bottom, rgba(10,7,4,0.92) 0%, rgba(10,7,4,0.5) 60%, transparent 100%)'
-                }}
-            />
-
-            {/* Navigation: always transparent, always has top padding */}
-            <div className="w-full max-w-[600px] flex items-center justify-between sticky top-0 z-50 px-1 pt-4 pb-3 -mx-1">
-                <div className="-ml-2">
-                    <BackButton to="/setup" />
-                </div>
-                <div className="flex items-center gap-2">
-                    <NetworkSelector compact />
-                </div>
-            </div>
-
-            {/* Centered layout with safe scrolling via my-auto */}
-            <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 my-auto pt-2 md:pt-4"
-            >
+        <FlowLayout
+            backTo="/setup"
+            rightElement={<NetworkSelector compact />}
+        >
+            <div className="w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6">
 
                 {/* Баннер Инвайта */}
                 {initialRoomId && !isInitialLoad && (
@@ -473,7 +439,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                         * Wallet connection required to enter a session
                     </div>
                 )}
-            </motion.div>
-        </div>
+            </div>
+        </FlowLayout>
     );
 };
