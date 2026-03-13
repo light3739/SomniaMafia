@@ -7,10 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:gm": "node scripts/test_gm_backend_smoke.js",
-    "front:deploy": "bash ops/frontend-server/deploy-mafia.sh",
-    "front:deploy:dev": "bash ops/frontend-server/deploy-dev.sh",
-    "monitor:deploy": "bash ops/monitoring/deploy-mafia-monitor.sh"
+    "test:gm": "node scripts/test_gm_backend_smoke.js"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.19",
