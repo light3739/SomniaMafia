@@ -50,11 +50,10 @@ jobs:
           fi
           
           echo "🚀 Packaging and uploading files to ${FRONT_SSH_HOST}..."
-          # Create a tarball to avoid issues with missing rsync and to exclude unwanted folders
-          # We must exclude the tarball itself to avoid "file changed as we read it" error
-          tar -czf frontend.tar.gz --exclude='frontend.tar.gz' --exclude='.git' --exclude='node_modules' --exclude='.next' ./
+          # Create a tarball in /tmp to avoid "file changed as we read it" error
+          tar -czf /tmp/frontend.tar.gz --exclude='.git' --exclude='node_modules' --exclude='.next' .
           
-          scp -P ${FRONT_SSH_PORT} frontend.tar.gz ${FRONT_SSH_USER}@${FRONT_SSH_HOST}:${FRONT_REMOTE_DIR}/
+          scp -P ${FRONT_SSH_PORT} /tmp/frontend.tar.gz ${FRONT_SSH_USER}@${FRONT_SSH_HOST}:${FRONT_REMOTE_DIR}/
           
           echo "🔄 Extracting and restarting containers on remote..."
           ssh -p ${FRONT_SSH_PORT} ${FRONT_SSH_USER}@${FRONT_SSH_HOST} "cd ${FRONT_REMOTE_DIR} && tar -xzf frontend.tar.gz && rm frontend.tar.gz && docker-compose -f ops/frontend-server/docker-compose.dev.yaml up -d --build"
