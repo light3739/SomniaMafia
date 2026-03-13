@@ -112,8 +112,15 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             const start = scanEnd > scanCount ? scanEnd - scanCount : 0n;
 
             const queries = Array.from({ length: Number(scanEnd - start) }, (_, idx) => scanEnd - 1n - BigInt(idx));
-            if (initialRoomId && !queries.includes(BigInt(initialRoomId))) {
-                queries.push(BigInt(initialRoomId));
+            if (initialRoomId) {
+                try {
+                    const idAsBigInt = BigInt(initialRoomId);
+                    if (!queries.includes(idAsBigInt)) {
+                        queries.push(idAsBigInt);
+                    }
+                } catch (e) {
+                    console.warn('Invalid invite link ID format:', initialRoomId);
+                }
             }
 
             const results = await Promise.allSettled(
@@ -156,7 +163,13 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 setIsInitialLoad(false);
 
                 if (reason === 'refresh') {
-                    setTimeout(() => setIsRefreshing(false), 500); // Крутилка крутится минимум полсекунды
+                    // SE-PATTERN: Calculate remaining time to avoid visual jitter
+                    const elapsed = Date.now() - fetchStartTime;
+                    const MIN_REFRESH_TIME = 500;
+                    const remaining = Math.max(0, MIN_REFRESH_TIME - elapsed);
+                    setTimeout(() => {
+                        if (mountedRef.current) setIsRefreshing(false);
+                    }, remaining);
                 }
             }
         } catch (e) {
@@ -186,13 +199,19 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             fetchRooms('initial');
         }
 
-        const interval = setInterval(() => fetchRooms('polling'), 3000);
+        // SE-PATTERN: Pause polling if tab is not visible to save RPC calls/costs
+        const interval = setInterval(() => {
+            if (!document.hidden) {
+                fetchRooms('polling');
+            }
+        }, 3000);
 
         let unwatch1: (() => void) | undefined;
         let unwatch2: (() => void) | undefined;
 
         if (publicClient) {
             try {
+                // SE-PATTERN: Explicitly store cleanup functions from watchers
                 unwatch1 = publicClient.watchContractEvent({
                     address: runtimeContractAddress, abi: MAFIA_ABI,
                     eventName: 'RoomCreated',
