@@ -254,8 +254,9 @@ export async function setRoomPassword(params: {
     password: string;
     walletClient: any;
     chainId?: number;
+    maxPlayers?: number;
 }): Promise<void> {
-    const { roomId, address, password, walletClient, chainId } = params;
+    const { roomId, address, password, walletClient, chainId, maxPlayers } = params;
 
     const meta = await signRequest({
         address,
@@ -277,6 +278,7 @@ export async function setRoomPassword(params: {
             nonce: meta.nonce,
             timestamp: meta.timestamp,
             chainId,
+            maxPlayers
         }),
     });
 

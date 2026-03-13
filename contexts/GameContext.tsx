@@ -36,7 +36,7 @@ interface GameContextType {
     setShowVotingResults: (val: boolean) => void;
 
     // Lobby
-    createLobbyOnChain: () => Promise<boolean>;
+    createLobbyOnChain: (maxPlayers?: number) => Promise<boolean>;
     joinLobbyOnChain: (roomId: bigint | number) => Promise<boolean>;
 
     // Shuffle (V4: commit-reveal)
@@ -1346,7 +1346,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // --- LOBBY ACTIONS (V3: createRoom only, then joinRoom with session) ---
 
-    const createLobbyOnChain = useCallback(async (): Promise<boolean> => {
+    const createLobbyOnChain = useCallback(async (maxPlayers: number = 10): Promise<boolean> => {
         if (!playerName || !address || !lobbyName || !publicClient) { alert("Enter details and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
@@ -1363,15 +1363,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setKeys(keyPair);
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
-            // 2.5. Revoke logic removed for performance. Contract handles session overwrites.
-            // if (sessionKeys[msg.sender].isActive) { delete ... } in _registerSessionKey
-            /* 
-            try {
-                console.log('[Session] Revoking old session if exists...');
-                // ... (logic removed)
-            } catch (revokeError: any) { ... } 
-            */
-
             // 3. Сессия
             const { sessionAddress } = createNewSession(address, newRoomId);
 
@@ -1381,8 +1372,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const eciesPubKeyHex = await exportPublicKeyHex(eciesKp.publicKey);
             console.log('[ECIES] Public key ready:', eciesPubKeyHex.slice(0, 20) + '...');
 
-            // Sanitize nickname (allow alphanumeric only, fallback to Player_XXXX)
-            // Cyrillic/Special chars can cause contract reverts if validation exists
+            // Sanitize nickname
             const safeName = /^[a-zA-Z0-9_ ]+$/.test(playerName) ? playerName : `Player_${Math.floor(Math.random() * 1000)}`;
             console.log(`[SafeName] Original: "${playerName}", Used: "${safeName}"`);
 
@@ -1394,11 +1384,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
-                    args: [lobbyName, 16, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`], 
+                    args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`], 
                     account: activeAccount,
                     value: LOBBY_FUNDING_VALUE,
                 });
-                gasLimit = (gasEstimate * 150n) / 100n;
+                gasLimit = (gasEstimate * 150n) / 200n;
                 console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
             } catch (e) {
                 console.warn('[Gas] createAndJoin estimation failed, using fallback', e);
@@ -1411,7 +1401,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'createAndJoin',
                 args: [
                     lobbyName,      // string roomName
-                    16,             // uint8 maxPlayers
+                    maxPlayers,      // uint8 maxPlayers
                     safeName,       // string nickname
                     pubKeyHex as `0x${string}`, // bytes publicKey
                     sessionAddress as `0x${string}` // address sessionAddress
@@ -1426,6 +1416,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(`Creating room "${lobbyName}"...`, "info");
             const receipt = await publicClient?.waitForTransactionReceipt({ hash });
 
+
             // 6. IF PRIVATE: Set password on GM server
             if (lobbyPassword) {
                 try {
@@ -1436,6 +1427,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         password: lobbyPassword,
                         walletClient: activeWalletClient,
                         chainId: runtimeChain.id,
+                        maxPlayers: maxPlayers // Pass max players to server too
                     });
                     addLog("Room password protected ✅", "success");
                 } catch (e: any) {
