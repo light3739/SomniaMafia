@@ -88,7 +88,7 @@ Real-time voice chat via LiveKit WebRTC — players discuss during the Day phase
 | ZK Proofs | SnarkJS, Circom, Groth16 |
 | Voice | LiveKit WebRTC |
 | Backend | Next.js API Routes, Redis |
-| Infrastructure | Docker, Caddy, GitHub Actions |
+| Infrastructure | Docker, Caddy, GitHub Actions (GHCR ready) |
 | Network | Avalanche Fuji C-Chain (chainId 43113) |
 
 ---
