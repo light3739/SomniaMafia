@@ -8,17 +8,45 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
     steps:
       - name: Notify start (Telegram)
         run: |
           if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
             curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-              -d text="🚀 Frontend dev deploy started: ${{ github.repository }} @ ${{ github.ref_name }} | ${{ github.sha }}"
+              -d text="🚀 Frontend dev build & deploy started: ${{ github.repository }} @ ${{ github.ref_name }}"
           fi
 
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ops/frontend-server/Dockerfile
+          push: true
+          tags: ghcr.io/light3739/somniamafia:dev
+          build-args: |
+            NEXT_PUBLIC_GM_SERVER_URL=https://gm-test.mafiaonchain.live
+            NEXT_PUBLIC_LIVEKIT_URL=wss://livekit.mafiaonchain.live
+            NEXT_PUBLIC_ACTIVE_NETWORK=avalanche_fuji
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Setup SSH key
         run: |
@@ -31,14 +59,13 @@ jobs:
           if [ -z "$PORT" ]; then PORT=22; fi
           ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts
 
-      - name: Deploy frontend to test server
+      - name: Deploy to test server
         env:
           FRONT_SSH_HOST: ${{ secrets.MAFIATEST_SSH_HOST }}
           FRONT_SSH_USER: ${{ secrets.GM_SSH_USER }}
           FRONT_SSH_PORT: ${{ secrets.GM_SSH_PORT }}
           FRONT_REMOTE_DIR: /root/mafia-dev/frontend
         run: |
-          # Fall back to GM_SSH_HOST if MAFIATEST_SSH_HOST is not set
           if [ -z "${FRONT_SSH_HOST}" ]; then
             export FRONT_SSH_HOST="${{ secrets.GM_SSH_HOST }}"
           fi
@@ -49,14 +76,16 @@ jobs:
             export FRONT_SSH_PORT=22
           fi
           
-          echo "🚀 Packaging and uploading files to ${FRONT_SSH_HOST}..."
-          # Create a tarball in /tmp to avoid "file changed as we read it" error
-          tar -czf /tmp/frontend.tar.gz --exclude='.git' --exclude='node_modules' --exclude='.next' .
+          echo "🚀 Updating docker-compose.dev.yaml on remote..."
+          # Securely transfer only the compose file
+          scp -P ${FRONT_SSH_PORT} ops/frontend-server/docker-compose.dev.yaml ${FRONT_SSH_USER}@${FRONT_SSH_HOST}:${FRONT_REMOTE_DIR}/ops/frontend-server/docker-compose.dev.yaml
           
-          scp -P ${FRONT_SSH_PORT} /tmp/frontend.tar.gz ${FRONT_SSH_USER}@${FRONT_SSH_HOST}:${FRONT_REMOTE_DIR}/
-          
-          echo "🔄 Extracting and restarting containers on remote..."
-          ssh -p ${FRONT_SSH_PORT} ${FRONT_SSH_USER}@${FRONT_SSH_HOST} "cd ${FRONT_REMOTE_DIR} && tar -xzf frontend.tar.gz && rm frontend.tar.gz && docker compose -f ops/frontend-server/docker-compose.dev.yaml up -d --build"
+          echo "🔄 Pulling and restarting containers on remote..."
+          ssh -p ${FRONT_SSH_PORT} ${FRONT_SSH_USER}@${FRONT_SSH_HOST} "
+            cd ${FRONT_REMOTE_DIR} && \
+            docker compose -f ops/frontend-server/docker-compose.dev.yaml pull && \
+            docker compose -f ops/frontend-server/docker-compose.dev.yaml up -d
+          "
 
       - name: Notify success (Telegram)
         if: success()
