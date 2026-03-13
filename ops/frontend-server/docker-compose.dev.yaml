@@ -1,13 +1,7 @@
 name: mafia-dev
 services:
   frontend:
-    build:
-      context: ../..
-      dockerfile: ops/frontend-server/Dockerfile
-      args:
-        NEXT_PUBLIC_GM_SERVER_URL: https://gm-test.mafiaonchain.live
-        NEXT_PUBLIC_LIVEKIT_URL: wss://livekit.mafiaonchain.live
-        NEXT_PUBLIC_ACTIVE_NETWORK: avalanche_fuji
+    image: ghcr.io/light3739/somniamafia:dev
     container_name: mafia-frontend-dev
     restart: unless-stopped
     env_file:
@@ -18,9 +12,7 @@ services:
       - redis
 
   gm-server:
-    build:
-      context: ../../../gm-server
-      dockerfile: Dockerfile
+    image: ghcr.io/light3739/somnia-mafia-gm-server:dev
     container_name: mafia-gm-dev
     restart: unless-stopped
     env_file:
