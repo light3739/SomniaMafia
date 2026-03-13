@@ -52,7 +52,7 @@ const contractRoleToRole = (contractRole: number): Role => {
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = React.memo(() => {
-    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, claimRefund, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const router = useRouter();
@@ -200,15 +200,6 @@ export const GameOver: React.FC = React.memo(() => {
         checkDeposit();
     }, [publicClient, currentRoomId, address]);
 
-    const handleClaimRefund = useCallback(async () => {
-        try {
-            await claimRefund();
-            setRefundClaimed(true);
-            setDepositAmount('0');
-        } catch (e) {
-            console.error('[GameOver] Claim refund failed:', e);
-        }
-    }, [claimRefund]);
 
 
     // Расшифровать все роли в конце игры
@@ -683,30 +674,6 @@ export const GameOver: React.FC = React.memo(() => {
                         </div>
                     </motion.div>
 
-                    {/* Deposit Refund */}
-                    {!refundClaimed && parseFloat(depositAmount) > 0 && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 1.8 }}
-                            className="bg-gradient-to-r from-emerald-950/40 to-emerald-900/20 border border-emerald-500/30 rounded-2xl p-4 mb-4 flex items-center justify-between"
-                        >
-                            <div className="flex items-center gap-3">
-                                <Coins className="w-6 h-6 text-emerald-400" />
-                                <div>
-                                    <p className="text-emerald-300 font-medium text-sm">Deposit Available</p>
-                                    <p className="text-emerald-400/70 text-xs">{depositAmount} STT refundable</p>
-                                </div>
-                            </div>
-                            <Button
-                                onClick={handleClaimRefund}
-                                disabled={isTxPending}
-                                className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 text-sm"
-                            >
-                                {isTxPending ? 'Claiming...' : 'Claim Refund'}
-                            </Button>
-                        </motion.div>
-                    )}
 
                     {refundClaimed && (
                         <motion.div

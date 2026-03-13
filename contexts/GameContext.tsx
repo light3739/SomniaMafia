@@ -60,7 +60,9 @@ interface GameContextType {
     fetchInvestigationProofFromGM: (targetAddress: string) => Promise<{ role: Role, source: string } | null>;
 
     finalizeVotingOnChain: () => Promise<void>;
+    forcePhaseTimeoutOnChain: () => Promise<void>;
     endGameZK: () => Promise<void>;
+    sendMafiaMessageOnChain: (content: MafiaChatMessage["content"]) => Promise<void>;
     getInvestigationResultOnChain: (detective: string, target: string) => Promise<{ role: Role; isMafia: boolean }>;
     syncSecretWithServer: (roomId: string, playerAddress: string, role: number, salt: string) => Promise<void>;
     setCurrentRoomId: (id: bigint | null) => void;

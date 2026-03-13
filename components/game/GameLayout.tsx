@@ -321,7 +321,7 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
         gameState, setGameState, handlePlayerAction, canActOnPlayer, 
         getActionLabel, myPlayer, currentRoomId, selectedTarget, 
         endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, 
-        showVotingResults, voteMap, claimRefund, isTestMode 
+        showVotingResults, voteMap, isTestMode 
     } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const { activeHint, showHint, dismissHint } = useGameHints(currentRoomId?.toString());
@@ -830,7 +830,7 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
             <div className="fixed top-0 left-0 right-0 z-[100] h-16 px-6 flex items-center justify-between pointer-events-none select-none">
                 {/* Left */}
                 <div className="flex items-center gap-4 pointer-events-auto">
-                    <BackButton to="/lobby" className="" label="" exitGame onExitGame={claimRefund} isLoading={isTxPending} />
+                    <BackButton to="/lobby" className="" label="" exitGame isLoading={isTxPending} />
                     <div className="hidden md:block">
                         <h1 className="text-white font-['Cinzel'] text-lg tracking-wider">Onchain Mafia</h1>
                     </div>
