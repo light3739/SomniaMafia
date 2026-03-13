@@ -93,6 +93,7 @@ export const SetupProfile: React.FC = () => {
     const [fundingNetwork, setFundingNetwork] = useState<number>(SOMNIA_TESTNET.id);
     const [isFunding, setIsFunding] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
+    const [scrollProgress, setScrollProgress] = useState(0);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     // Modal state: null = closed, 'wallet' | 'accounts' = open
@@ -100,11 +101,11 @@ export const SetupProfile: React.FC = () => {
 
     useEffect(() => { setHydrated(true); }, []);
 
-    // Scroll-aware header: becomes visible after scrolling 40px
+    // Scroll-driven vignette: opacity tied directly to scroll position
     useEffect(() => {
         const el = scrollContainerRef.current;
         if (!el) return;
-        const onScroll = () => setIsScrolled(el.scrollTop > 40);
+        const onScroll = () => setScrollProgress(Math.min(el.scrollTop / 80, 1));
         el.addEventListener('scroll', onScroll, { passive: true });
         return () => el.removeEventListener('scroll', onScroll);
     }, []);
@@ -248,11 +249,11 @@ export const SetupProfile: React.FC = () => {
     return (
         <div ref={scrollContainerRef} className="relative w-full h-[100dvh] font-montserrat flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 pb-12 custom-scrollbar">
 
-            {/* Top vignette: fades content behind nav on scroll, no hard bar */}
+            {/* Top vignette: opacity directly tied to scroll position */}
             <div
-                className="fixed top-0 left-0 right-0 h-24 pointer-events-none z-40 transition-opacity duration-500"
+                className="fixed top-0 left-0 right-0 h-24 pointer-events-none z-40"
                 style={{
-                    opacity: isScrolled ? 1 : 0,
+                    opacity: scrollProgress,
                     background: 'linear-gradient(to bottom, rgba(10,7,4,0.92) 0%, rgba(10,7,4,0.5) 60%, transparent 100%)'
                 }}
             />
