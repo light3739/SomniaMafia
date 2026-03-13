@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useBalance } from 'wagmi';
-import { formatEther } from 'viem';
+import { formatEther, parseEther } from 'viem';
 import { SOMNIA_TESTNET, AVALANCHE_FUJI } from '../../contracts/config';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -155,6 +155,9 @@ export const SetupProfile: React.FC = () => {
                 localStorage.setItem(AVATAR_STORAGE_KEY, base64);
                 setAvatarUrl(base64);
             };
+            img.onerror = () => {
+                alert('Oops! This file is not a valid image or is corrupted.');
+            };
             img.src = event.target?.result as string;
         };
         reader.readAsDataURL(file);
@@ -224,7 +227,7 @@ export const SetupProfile: React.FC = () => {
             await externalWallet.switchChain(fundingNetwork);
             const provider = await externalWallet.getEthereumProvider() as any;
 
-            const valueWei = BigInt(Math.floor(parseFloat(fundAmount) * 1e18));
+            const valueWei = parseEther(fundAmount);
             await provider.request({
                 method: 'eth_sendTransaction',
                 params: [{

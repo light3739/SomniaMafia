@@ -39,20 +39,19 @@ export const CreateLobby: React.FC = () => {
     const handleCreate = async () => {
         if (!lobbyName.trim() || isTxPending) return;
 
-        // ВНИМАНИЕ: password, maxPlayers, tournamentType и tournamentAmount
-        // сейчас никак не передаются в контракт, они сделаны только визуально!
-        // TODO: Когда смарт-контракт будет обновлен, передавать эти параметры:
-        /*
-        const lobbyParams = {
+        // STERILIZATION: Ensure hidden fields don't "leak" stale data
+        const finalParams = {
             name: lobbyName,
-            password: lobbyPassword,
+            password: lobbyPassword.trim() || '', // In future we might use this
             maxPlayers: maxPlayers,
             isTournament: isTournament,
-            tournamentType: tournamentType,
-            amount: tournamentAmount
+            tournamentType: isTournament ? tournamentType : 'buy-in',
+            amount: isTournament ? tournamentAmount : ''
         };
-        */
 
+        // Note: Currently createLobbyOnChain doesn't take params, 
+        // but we prepare them here for future contract integration.
+        // For now, we just pass the lobby name behavior as before.
         const success = await createLobbyOnChain();
         if (success) {
             router.push('/waiting');
@@ -282,7 +281,13 @@ export const CreateLobby: React.FC = () => {
                                             <div className="relative">
                                                 <Input
                                                     value={tournamentAmount}
-                                                    onChange={(e) => setTournamentAmount(e.target.value)}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value.replace(',', '.');
+                                                        // SE-PATTERN: Regex validation to prevent parseEther crash
+                                                        if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                                                            setTournamentAmount(val);
+                                                        }
+                                                    }}
                                                     placeholder="0.00"
                                                     disabled={isTxPending}
                                                     containerClassName="w-full"
