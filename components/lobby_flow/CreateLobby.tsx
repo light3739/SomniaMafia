@@ -35,14 +35,14 @@ export const CreateLobby: React.FC = () => {
     const [tournamentType, setTournamentType] = useState<TournamentType>('buy-in');
     const [tournamentAmount, setTournamentAmount] = useState(''); // Used for both entry fee and prize pool
 
-    // Scroll-aware header
-    const [isScrolled, setIsScrolled] = useState(false);
+    // Scroll-driven vignette: opacity directly tied to scroll position
+    const [scrollProgress, setScrollProgress] = useState(0);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const el = scrollContainerRef.current;
         if (!el) return;
-        const onScroll = () => setIsScrolled(el.scrollTop > 40);
+        const onScroll = () => setScrollProgress(Math.min(el.scrollTop / 80, 1));
         el.addEventListener('scroll', onScroll, { passive: true });
         return () => el.removeEventListener('scroll', onScroll);
     }, []);
@@ -75,9 +75,9 @@ export const CreateLobby: React.FC = () => {
 
             {/* Top vignette: fades content behind nav on scroll, no hard bar */}
             <div
-                className="fixed top-0 left-0 right-0 h-24 pointer-events-none z-40 transition-opacity duration-500"
+                className="fixed top-0 left-0 right-0 h-24 pointer-events-none z-40"
                 style={{
-                    opacity: isScrolled ? 1 : 0,
+                    opacity: scrollProgress,
                     background: 'linear-gradient(to bottom, rgba(10,7,4,0.92) 0%, rgba(10,7,4,0.5) 60%, transparent 100%)'
                 }}
             />
