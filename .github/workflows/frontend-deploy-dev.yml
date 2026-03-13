@@ -48,7 +48,14 @@ jobs:
           if [ -z "${FRONT_SSH_PORT}" ]; then
             export FRONT_SSH_PORT=22
           fi
-          npm run front:deploy:dev
+          
+          echo "🚀 Syncing files to ${FRONT_SSH_HOST}..."
+          rsync -avz --exclude '.git' --exclude 'node_modules' --exclude '.next' \
+            -e "ssh -p ${FRONT_SSH_PORT}" \
+            ./ ${FRONT_SSH_USER}@${FRONT_SSH_HOST}:${FRONT_REMOTE_DIR}/
+            
+          echo "🔄 Restarting containers on remote..."
+          ssh -p ${FRONT_SSH_PORT} ${FRONT_SSH_USER}@${FRONT_SSH_HOST} "cd ${FRONT_REMOTE_DIR} && docker-compose -f ops/frontend-server/docker-compose.dev.yaml up -d --build"
 
       - name: Notify success (Telegram)
         if: success()
