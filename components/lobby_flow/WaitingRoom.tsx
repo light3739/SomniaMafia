@@ -6,8 +6,9 @@ import { useSessionKey } from '../../hooks/useSessionKey';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { GamePhase } from '../../types';
-import { Check, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useAccount } from 'wagmi';
+import { SessionKeyBanner } from '../game/SessionKeyBanner';
 import { loadOrCreateKeypair, exportPublicKeyHex } from '../../services/eciesService';
 import { GM_SERVER_URL } from '../../contracts/config';
 
@@ -143,42 +144,14 @@ export const WaitingRoom: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Session Key Status - V4: Already registered on join */}
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="w-full bg-[rgba(15,10,5,0.85)] backdrop-blur-xl rounded-2xl p-4 md:p-5 border border-white/5"
-                >
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasSession
-                                ? 'bg-green-500/20 border border-green-500/40'
-                                : 'bg-yellow-500/20 border border-yellow-500/40'
-                                }`}>
-                                {hasSession ? (
-                                    <Check className="w-5 h-5 text-green-400" />
-                                ) : (
-                                    <Loader2 className="w-5 h-5 text-yellow-400 animate-spin" />
-                                )}
-                            </div>
-                            <div>
-                                <h3 className={`font-medium ${hasSession ? 'text-green-400' : 'text-yellow-400'}`}>
-                                    {hasSession ? 'Auto-Sign Active ✓' : 'Checking Session...'}
-                                </h3>
-                                <p className="text-[11px] text-white/40">
-                                    {hasSession
-                                        ? 'All game actions signed automatically • Gas funded'
-                                        : 'Session registered when you joined the room'}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {sessionError && (
-                        <p className="mt-2 text-xs text-red-400">{sessionError}</p>
-                    )}
-                </motion.div>
+                {/* Session Key Management */}
+                {currentRoomId !== null && (
+                    <SessionKeyBanner 
+                        roomId={Number(currentRoomId)} 
+                        className="w-full" 
+                        defaultExpanded={true}
+                    />
+                )}
 
                 {/* Room creator can start the game when enough players */}
                 {canStartGame ? (
