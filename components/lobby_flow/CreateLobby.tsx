@@ -81,7 +81,7 @@ export const CreateLobby: React.FC = () => {
             }
         } else {
             // STANDARD LOBBY FLOW
-            const success = await createLobbyOnChain();
+            const success = await createLobbyOnChain(maxPlayers);
             if (success) {
                 router.push('/waiting');
             }
