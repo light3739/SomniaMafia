@@ -11,6 +11,36 @@ const FLAG_ACTIVE = 2;
 const SPEAKER_DURATION = 60; // seconds per speaker
 const DELAY_INITIAL = 5; // seconds before first speaker
 
+// ─── RPC Cache ─────────────────────────────────────────────────────────────
+// getPlayers() is called every second per player during DAY phase.
+// Cache results for 10 seconds per room to avoid RPC rate-limit bans.
+// (Player list only changes at voting end — safe to cache.)
+const rpcPlayersCache = new Map<string, { players: any[]; expiresAt: number }>();
+const RPC_CACHE_TTL_MS = 10_000; // 10 seconds
+
+async function getCachedPlayers(
+    roomId: string,
+    chainId: number,
+    contractAddress: string,
+    dynamicClient: any
+): Promise<any[]> {
+    const cacheKey = `${roomId}:${chainId}`;
+    const cached = rpcPlayersCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.players;
+    }
+    const players: any = await dynamicClient.readContract({
+        address: contractAddress as `0x${string}`,
+        abi: MAFIA_ABI,
+        functionName: 'getPlayers',
+        args: [BigInt(roomId)],
+    });
+    const allShuffled = shufflePlayers(players, roomId);
+    const alivePlayers = allShuffled.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
+    rpcPlayersCache.set(cacheKey, { players: alivePlayers, expiresAt: Date.now() + RPC_CACHE_TTL_MS });
+    return alivePlayers;
+}
+
 /**
  * Deterministic shuffle using roomId as seed (must match frontend GameLayout.tsx logic)
  */
@@ -67,17 +97,10 @@ export async function GET(request: Request) {
             });
         }
 
-        // Get alive players to determine speaker order
+        // Get alive players — uses 10-second RPC cache to prevent rate-limit bans
         let alivePlayers: any[] = [];
         try {
-            const players: any = await dynamicClient.readContract({
-                address: contractAddress as `0x${string}`,
-                abi: MAFIA_ABI,
-                functionName: 'getPlayers',
-                args: [BigInt(roomId)],
-            });
-            const allShuffled = shufflePlayers(players, roomId);
-            alivePlayers = allShuffled.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
+            alivePlayers = await getCachedPlayers(roomId, requestChainId, contractAddress, dynamicClient);
         } catch (e) {
             if (roomId === '999') {
                 alivePlayers = Array(10).fill(null).map((_, i) => ({
@@ -186,7 +209,7 @@ export async function POST(request: Request) {
             }
         }
 
-        // Get alive players
+        // Get alive players — use cache for GET performance, but POST (skip/start) can afford uncached
         let alivePlayers: any[] = [];
         let hostAddress = '0x0000000000000000000000000000000000000000';
 
@@ -196,14 +219,9 @@ export async function POST(request: Request) {
         const contractAddress = deployment.contracts.MafiaDiamond;
 
         try {
-            const players: any = await dynamicClient.readContract({
-                address: contractAddress as `0x${string}`,
-                abi: MAFIA_ABI,
-                functionName: 'getPlayers',
-                args: [BigInt(roomId)],
-            });
-            const allShuffled = shufflePlayers(players, roomId);
-            alivePlayers = allShuffled.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
+            // For POST we also want the host address — do a fresh uncached read only for host,
+            // but for alivePlayers we still use the cache to avoid hammering RPC on skip.
+            alivePlayers = await getCachedPlayers(roomId, requestChainId, contractAddress, dynamicClient);
 
             const roomData = await dynamicClient.readContract({
                 address: contractAddress as `0x${string}`,
