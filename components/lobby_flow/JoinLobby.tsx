@@ -32,29 +32,26 @@ interface JoinLobbyProps {
 // Parse a room struct (handles both tuple-array and object forms from viem)
 function parseRoom(id: bigint, data: any): {
     id: number; host: string; name: string; players: number; max: number;
-    phase: number; timestamp: number; isPrivate: boolean;
+    phase: number; timestamp: number; isPrivate: boolean; tournamentId: bigint;
 } | null {
     try {
-        let phase: number, timestamp: number, host: string, name: string, playersCount: number, maxPlayers: number, isPrivate: boolean;
+        let phase: number, timestamp: number, host: string, name: string, playersCount: number, maxPlayers: number, isPrivate: boolean, tournamentId: bigint;
         if (Array.isArray(data)) {
-            // Updated indices based on getRoom implementation in LobbyFacet
-            // data is [uint256 id, address host, string name, uint8 phase, uint8 maxPlayers, uint8 playersCount, ...]
-            // isPrivate is likely at index 17 based on the struct order:
-            // struct GameRoom { uint256 id; address host; string name; GamePhase phase; uint8 maxPlayers; uint8 playersCount; ... uint128 depositPerPlayer; bool isPrivate; }
-            // Let's check indices:
-            // 0:id, 1:host, 2:name, 3:phase (enum), 4:maxPlayers, 5:playersCount, 6:lastActionTimestamp, 7:players, 8:deckTags, 
-            // 9:deckHandicaps, 10:deckHandicaps_indices, 11:roleHashes, 12:roleHashes_indices, 
-            // 13:votedOut, 14:gameWinner, 15:depositPool, 16:depositPerPlayer, 17:isPrivate
-            phase = Number(data[3]); timestamp = Number(data[6]); host = data[1];
+            phase = Number(data[3]); timestamp = Number(data[9]); host = data[1];
             name = data[2]; playersCount = Number(data[5]); maxPlayers = Number(data[4]);
             isPrivate = Boolean(data[18]);
+            tournamentId = BigInt(data[19] || 0);
         } else {
             phase = Number(data.phase); timestamp = Number(data.lastActionTimestamp);
             host = data.host; name = data.name;
             playersCount = Number(data.playersCount); maxPlayers = Number(data.maxPlayers);
             isPrivate = Boolean(data.isPrivate);
+            tournamentId = BigInt(data.tournamentId || 0);
         }
-        return { id: Number(data.id ?? id), host, name, players: playersCount, max: maxPlayers, phase, timestamp, isPrivate };
+        return { 
+            id: Number(data.id ?? id), host, name, players: playersCount, 
+            max: maxPlayers, phase, timestamp, isPrivate, tournamentId 
+        };
     } catch (e) { 
         console.error("[JoinLobby] parseRoom error:", e);
         return null; 
@@ -72,8 +69,10 @@ interface TournamentInfo {
 }
 
 function getTournamentInfo(room: any): TournamentInfo {
+    const isTournament = room.tournamentId && room.tournamentId > 0n;
     return { 
-        isTournament: false,
+        isTournament,
+        prize: isTournament ? "TBD" : undefined, // In future fetch t.prizePool
         hasPassword: room.isPrivate 
     };
 }
@@ -264,15 +263,17 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             return;
         }
 
+        let pass = '';
         if (room.isPrivate) {
-            const pass = prompt("Enter room password:");
-            if (!pass) return;
+            const inputPass = prompt("Enter room password:");
+            if (!inputPass) return;
+            pass = inputPass;
             setLobbyPassword(pass);
         } else {
             setLobbyPassword('');
         }
 
-        const success = await joinLobbyOnChain(room.id);
+        const success = await joinLobbyOnChain(BigInt(room.id));
         if (success) {
             setLobbyName(room.name || `Room #${room.id}`);
             router.push('/waiting');

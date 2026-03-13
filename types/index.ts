@@ -79,6 +79,11 @@ export interface GameState {
   mafiaRevealedCount: number; // For night phase (Mafia)
   phaseDeadline: number; // Unix timestamp in seconds
   winner: 'MAFIA' | 'TOWN' | 'DRAW' | null;
+  // Tournament info
+  tournamentId?: bigint;
+  isTournament?: boolean;
+  prizePool?: bigint;
+  paymentToken?: `0x${string}`;
 }
 
 // For Framer Motion variants

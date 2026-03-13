@@ -37,7 +37,7 @@ interface GameContextType {
 
     // Lobby
     createLobbyOnChain: () => Promise<boolean>;
-    joinLobbyOnChain: (roomId: number) => Promise<boolean>;
+    joinLobbyOnChain: (roomId: bigint | number) => Promise<boolean>;
 
     // Shuffle (V4: commit-reveal)
     startGameOnChain: () => Promise<void>;
@@ -59,14 +59,10 @@ interface GameContextType {
     skipNightActionToGM: () => Promise<void>;
     fetchInvestigationProofFromGM: (targetAddress: string) => Promise<{ role: Role, source: string } | null>;
 
-    revealRoleOnChain: (role: number, salt: string) => Promise<void>;
-    tryEndGame: () => Promise<void>;
-    claimVictory: () => Promise<void>;
-    sendMafiaMessageOnChain: (content: MafiaChatMessage['content']) => Promise<void>;
+    finalizeVotingOnChain: () => Promise<void>;
     forcePhaseTimeoutOnChain: () => Promise<void>;
-    endGameAutomaticallyOnChain: () => Promise<void>;
     endGameZK: () => Promise<void>;
-    claimRefund: () => Promise<void>;
+    sendMafiaMessageOnChain: (content: MafiaChatMessage["content"]) => Promise<void>;
     getInvestigationResultOnChain: (detective: string, target: string) => Promise<{ role: Role; isMafia: boolean }>;
     syncSecretWithServer: (roomId: string, playerAddress: string, role: number, salt: string) => Promise<void>;
     setCurrentRoomId: (id: bigint | null) => void;
@@ -95,6 +91,20 @@ interface GameContextType {
 
     lobbyPassword: string;
     setLobbyPassword: (pass: string) => void;
+
+    // Tournaments
+    createTournamentOnChain: (params: {
+        name: string;
+        buyIn: string; // token amount as string
+        maxPlayers: number;
+        playersPerTable: number;
+        password?: string;
+        paymentToken: `0x${string}`;
+        initialPrize: string; // token amount as string
+    }) => Promise<bigint | null>;
+    joinTournamentOnChain: (tournamentId: bigint, password?: string, amount?: string) => Promise<boolean>;
+    distributePrizesOnChain: (roomId: bigint) => Promise<void>;
+    cancelTournamentOnChain: (tournamentId: bigint) => Promise<void>;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -170,12 +180,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const autoWinLockRef = useRef(false);
     const checkWinInProgressRef = useRef(false);
     const votingFinalizedTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const autoClaimAttemptedRef = useRef(false);
     const avatarCacheRef = useRef<Record<string, string>>({});
     useEffect(() => {
         currentRoomIdRef.current = currentRoomId;
         roleFetchedRef.current = false;
-        autoClaimAttemptedRef.current = false;
     }, [currentRoomId]);
 
     // === TX QUEUE: Serialize session key transactions to prevent nonce collisions ===
@@ -193,7 +201,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const lastPhaseKeyRef = useRef<string>('');
 
     // Web3
-    const { address, chainId } = useAccount();
+    const { address, chainId, isConnected } = useAccount();
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
     const { data: walletClient } = useWalletClient();
@@ -549,10 +557,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             revealMafiaTarget: 3_000_000n,
             vote: 1_500_000n,
             startVoting: 4_000_000n,
-            revealRole: 800_000n,
+            finalizeVoting: 8_000_000n,
             forcePhaseTimeout: 8_000_000n,
-            sendMafiaMessage: 1_500_000n,
-            claimRefund: 2_000_000n,
+            mafiaMessage: 1_500_000n,
         };
 
         const knownLimit = KNOWN_GAS_LIMITS[functionName];
@@ -1048,6 +1055,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let revealedCount: number;
             let phaseDeadline: number;
 
+            let tournamentId: bigint = 0n;
+
             if (Array.isArray(roomData)) {
                 phase = Number(roomData[3]) as GamePhase;
                 aliveCount = Number(roomData[6]);
@@ -1055,6 +1064,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 committedCount = Number(roomData[13]);
                 revealedCount = Number(roomData[14]);
                 phaseDeadline = Number(roomData[10]);
+                tournamentId = BigInt(roomData[19] || 0);
             } else {
                 phase = Number(roomData.phase) as GamePhase;
                 dayCount = Number(roomData.dayCount);
@@ -1062,6 +1072,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 committedCount = Number(roomData.committedCount);
                 revealedCount = Number(roomData.revealedCount);
                 phaseDeadline = Number(roomData.phaseDeadline);
+                tournamentId = BigInt(roomData.tournamentId || 0);
             }
 
             return {
@@ -1073,7 +1084,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 revealedCount,
                 phaseDeadline,
                 mafiaCommittedCount: Number(mafiaCommitted),
-                mafiaRevealedCount: Number(mafiaRevealed)
+                mafiaRevealedCount: Number(mafiaRevealed),
+                tournamentId
             };
         } catch (e: any) {
             console.error("[FetchGameData] Error:", e);
@@ -1087,7 +1099,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const {
             rawPlayers, phase, dayCount, revealedCount,
-            mafiaCommittedCount, mafiaRevealedCount, phaseDeadline
+            mafiaCommittedCount, mafiaRevealedCount, phaseDeadline,
+            tournamentId, aliveCount
         } = gameData;
 
         // FIX: If rawPlayers is empty (transient RPC issue), skip update to prevent role loss
@@ -1214,6 +1227,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 mafiaCommittedCount,
                 mafiaRevealedCount,
                 phaseDeadline,
+                aliveCount,
+                tournamentId,
+                isTournament: tournamentId > 0n,
                 // prev.winner has absolute priority — never overwrite established winner with null or derivation
                 winner: prev.winner || resolvedWinner
             };
@@ -1324,9 +1340,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
 
-    // Auto-check win condition after player list updates (after eliminations)
-    // This triggers tryEndGame when a win condition is locally detected
-    const tryEndGameRef = useRef<(() => Promise<void>) | null>(null);
 
     // Local win check is disabled because Town players don't know all roles.
     // We rely on Server-Side "Smart Polling" triggerAutoWinCheck instead.
@@ -1548,13 +1561,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [playerName, address, lobbyName, publicClient, getActiveWalletClient, addLog, refreshPlayersList, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain, lobbyPassword]);
 
-    const joinLobbyOnChain = useCallback(async (roomId: number): Promise<boolean> => {
+    const joinLobbyOnChain = useCallback(async (roomId: bigint | number): Promise<boolean> => {
+        const rId = BigInt(roomId);
         if (!playerName || !address || !publicClient) { alert("Enter name and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
             // 0. Check abandonment
             const abandoned = JSON.parse(localStorage.getItem('mafia_abandoned_rooms') || '[]');
-            if (abandoned.includes(roomId.toString())) {
+            if (abandoned.includes(rId.toString())) {
                 addLog("You have already left this game session and cannot rejoin.", "danger");
                 setIsTxPending(false);
                 return false;
@@ -1566,7 +1580,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
             // 2. Generate session key
-            const { sessionAddress } = createNewSession(address, roomId);
+            const { sessionAddress } = createNewSession(address, Number(roomId));
 
             // ✅ ДОБАВИТЬ: ECIES keypair для join
             const eciesKp = await loadOrCreateKeypair(roomId.toString(), address);
@@ -2736,7 +2750,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         try {
-            const hash = await sendGameTransaction('sendMafiaMessage', [currentRoomId, hexData]);
+            const hash = await sendGameTransaction('mafiaMessage', [currentRoomId, hexData]);
             // OPTIMISTIC: Add message to local state immediately
             if (address) {
                 const myPlayer = playersRef.current.find(p => p.address.toLowerCase() === address.toLowerCase());
@@ -2752,10 +2766,164 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }));
             }
             // Background: confirm + refresh chat from chain
-            confirmInBackground(hash, 'sendMafiaMessage');
+            confirmInBackground(hash, 'mafiaMessage');
         } catch (e: any) {
             addLog(`Chat failed: ${e.shortMessage || e.message}`, "danger");
             throw e;
+        }
+    };
+    
+    // ==================== TOURNAMENTS ====================
+
+    const createTournamentOnChain = async (params: {
+        name: string;
+        buyIn: string;
+        maxPlayers: number;
+        playersPerTable: number;
+        password?: string;
+        paymentToken: `0x${string}`;
+        initialPrize: string;
+    }): Promise<bigint | null> => {
+        if (!isConnected) return null;
+        try {
+            setIsTxPending(true);
+            const { client, account } = await getActiveWalletClient();
+
+            // Handle password hash
+            let passwordHash = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
+            if (params.password) {
+                passwordHash = keccak256(toHex(params.password));
+            }
+
+            const isNative = params.paymentToken === '0x0000000000000000000000000000000000000000';
+            const buyInUnits = parseEther(params.buyIn);
+            const initialPrizeUnits = parseEther(params.initialPrize);
+            const value = isNative ? initialPrizeUnits : 0n;
+
+            const hash = await client.writeContract({
+                address: runtimeContractAddress,
+                abi: MAFIA_ABI,
+                functionName: 'createTournament',
+                args: [
+                    params.name,
+                    buyInUnits,
+                    params.maxPlayers,
+                    params.playersPerTable,
+                    passwordHash,
+                    params.paymentToken,
+                    initialPrizeUnits
+                ],
+                account,
+                value
+            });
+
+            addLog(`Tournament ${params.name} created!`, 'success');
+            setIsTxConfirming(true);
+            const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+            setIsTxConfirming(false);
+
+            if (receipt) {
+                const logs = parseEventLogs({
+                    abi: MAFIA_ABI,
+                    eventName: 'TournamentCreated',
+                    logs: receipt.logs
+                });
+
+                if (logs.length > 0) {
+                    return (logs[0] as any).args.tournamentId;
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to create tournament:', error);
+            const msg = (error as any).message || 'Unknown error';
+            addLog(`Creation failed: ${msg.slice(0, 60)}...`, 'danger');
+            return null;
+        } finally {
+            setIsTxPending(false);
+        }
+    };
+
+    const joinTournamentOnChain = async (tournamentId: bigint, password?: string, amount?: string): Promise<boolean> => {
+        if (!isConnected) return false;
+        try {
+            setIsTxPending(true);
+            const { client, account } = await getActiveWalletClient();
+            const value = amount ? parseEther(amount) : 0n;
+
+            const hash = await client.writeContract({
+                address: runtimeContractAddress,
+                abi: MAFIA_ABI,
+                functionName: 'joinTournament',
+                args: [tournamentId, password || ""],
+                account,
+                value
+            });
+
+            addLog(`Joined tournament #${tournamentId}`, 'success');
+            setIsTxConfirming(true);
+            await publicClient?.waitForTransactionReceipt({ hash });
+            setIsTxConfirming(false);
+            return true;
+        } catch (error) {
+            console.error('Failed to join tournament:', error);
+            const msg = (error as any).message || 'Unknown error';
+            addLog(`Join failed: ${msg.slice(0, 60)}...`, 'danger');
+            return false;
+        } finally {
+            setIsTxPending(false);
+        }
+    };
+
+    const distributePrizesOnChain = async (roomId: bigint) => {
+        if (!isConnected) return;
+        try {
+            setIsTxPending(true);
+            const { client, account } = await getActiveWalletClient();
+            const hash = await client.writeContract({
+                address: runtimeContractAddress,
+                abi: MAFIA_ABI,
+                functionName: 'distributeMafiaPrizes',
+                args: [roomId],
+                account
+            });
+
+            addLog(`Prizes distributed for room #${roomId}`, 'success');
+            setIsTxConfirming(true);
+            await publicClient?.waitForTransactionReceipt({ hash });
+            setIsTxConfirming(false);
+        } catch (error) {
+            console.error('Failed to distribute prizes:', error);
+            const msg = (error as any).message || 'Unknown error';
+            addLog(`Distribution failed: ${msg.slice(0, 60)}...`, 'danger');
+        } finally {
+            setIsTxPending(false);
+        }
+    };
+
+    const cancelTournamentOnChain = async (tournamentId: bigint) => {
+        if (!isConnected) return;
+        try {
+            setIsTxPending(true);
+            const { client, account } = await getActiveWalletClient();
+            const hash = await client.writeContract({
+                address: runtimeContractAddress,
+                abi: MAFIA_ABI,
+                functionName: 'cancelTournament',
+                args: [tournamentId],
+                account
+            });
+
+            addLog(`Tournament #${tournamentId} cancelled & refunded`, 'info');
+            setIsTxConfirming(true);
+            await publicClient?.waitForTransactionReceipt({ hash });
+            setIsTxConfirming(false);
+        } catch (error) {
+            console.error('Failed to cancel tournament:', error);
+            const msg = (error as any).message || 'Unknown error';
+            addLog(`Cancellation failed: ${msg.slice(0, 60)}...`, 'danger');
+        } finally {
+            setIsTxPending(false);
         }
     };
 
@@ -2789,57 +2957,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [currentRoomId, publicClient, fetchMafiaChat]);
 
 
-    const endGameAutomaticallyOnChain = useCallback(async () => {
+
+    // Finalize voting day (elimination)
+    const finalizeVotingOnChain = useCallback(async () => {
         if (!currentRoomId) return;
         try {
-            const hash = await sendGameTransaction('endGameAutomatically', [currentRoomId]);
-            addLog("Game ended automatically!", "phase");
-            await publicClient?.waitForTransactionReceipt({ hash });
-
-            // DEBUG: Check deposit status after auto-end
-            if (address && publicClient) {
-                try {
-                    const deposit = await publicClient.readContract({
-                        address: runtimeContractAddress,
-                        abi: MAFIA_ABI,
-                        functionName: 'getPlayerDeposit',
-                        args: [currentRoomId, address],
-                    }) as bigint;
-                    console.log(`[Deposit Debug] After endGameAutomatically:`, {
-                        myDeposit: formatEther(deposit) + ' STT',
-                        autoRefunded: deposit === 0n,
-                    });
-                    if (deposit === 0n) {
-                        console.log(`[Deposit Debug] ✅ Contract AUTO-REFUNDED deposit during endGameAutomatically.`);
-                    }
-                } catch (depErr) {
-                    console.warn('[Deposit Debug] Failed to check deposit after endGameAutomatically:', depErr);
-                }
-            }
-
-            await refreshPlayersList(currentRoomId);
-        } catch (e: any) {
-            addLog(e.shortMessage || e.message, "danger");
-            throw e;
-        }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient, refreshPlayersList, address]);
-
-    // Reveal role on-chain (used at game end to allow contract to verify win condition)
-    const revealRoleOnChain = useCallback(async (role: number, salt: string) => {
-        if (!currentRoomId) return;
-        try {
-            // Strip 0x prefix if present — contract enforces bytes(salt).length <= 64
-            // New salts are 64 hex chars (no prefix). Old salts may have 0x prefix (66 chars).
-            // NOTE: If commit hash was computed with 0x prefix, stripping here will cause
-            // InvalidRoleReveal. But 66-char salt always reverts SaltTooLong, so this is
-            // the best-effort approach for backward compat.
-            const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
-            const hash = await sendGameTransaction('revealRole', [currentRoomId, role, cleanSalt]);
-            addLog("Role revealed on-chain!", "success");
+            const hash = await sendGameTransaction('finalizeVoting', [currentRoomId]);
+            addLog("Voting finalized!", "success");
             await publicClient?.waitForTransactionReceipt({ hash });
         } catch (e: any) {
-            // Ignore "already revealed" errors
-            if (e.message?.includes("RoleAlreadyRevealed")) return;
             addLog(e.shortMessage || e.message, "danger");
             throw e;
         }
@@ -2856,87 +2982,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    // Automatically reveal my role on-chain after game ends (for trustless verification)
-    const revealMyRoleAfterGameEnd = useCallback(async () => {
-        if (!currentRoomId || !myPlayer || !address || !publicClient) return;
-
-        try {
-            // Get saved salt from localStorage (set during commitRole phase)
-            const salt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
-            if (!salt) {
-                console.warn("[RoleReveal] No salt found in localStorage, skipping reveal");
-                return;
-            }
-
-            // FIX: Check if already revealed ON-CHAIN before submitting to avoid revert during estimation
-            const onChainRole = await publicClient.readContract({
-                address: runtimeContractAddress,
-                abi: MAFIA_ABI,
-                functionName: 'playerRoles',
-                args: [currentRoomId, address],
-            }) as number;
-
-            if (onChainRole !== 0) {
-                console.log("[RoleReveal] Role already revealed on-chain (contract state), skipping");
-                return;
-            }
-
-            // Get role from myPlayer (locally decrypted)
-            let roleNum = getRoleNumber(myPlayer.role);
-
-            // FALLBACK #1: If myPlayer.role is UNKNOWN, check localStorage (common after page refresh)
-            if (roleNum === 0 && address) {
-                const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${address.toLowerCase()}`);
-                if (savedRole) {
-                    const roleMap: Record<string, number> = { 'MAFIA': 1, 'DOCTOR': 2, 'DETECTIVE': 3, 'CIVILIAN': 4 };
-                    roleNum = roleMap[savedRole] || 0;
-                    console.log(`[RoleReveal] Recovered role from localStorage for reveal: ${savedRole} -> ${roleNum}`);
-                }
-            }
-
-            if (roleNum === 0) {
-                console.warn("[RoleReveal] Unknown role even after fallback, skipping reveal");
-                return;
-            }
-
-            addLog("Revealing your role on-chain...", "info");
-            await revealRoleOnChain(roleNum, salt);
-            addLog("Role revealed on-chain!", "success");
-
-        } catch (e: any) {
-            const msg = e.message || '';
-            // Benign: already revealed, or player is dead (PlayerInactive / FLAG_ACTIVE=0)
-            if (msg.includes("RoleAlreadyRevealed") || msg.includes("already revealed") ||
-                msg.includes("PlayerInactive") || msg.includes("0x5416eb98")) {
-                console.log("[RoleReveal] Skipping — already revealed or player inactive");
-                return;
-            }
-            console.warn("[RoleReveal] Failed:", e);
-        }
-    }, [currentRoomId, myPlayer, address, revealRoleOnChain, addLog]);
-
-    // FIX: Automatically reveal my role on-chain when the game ends
-    // This ensures roles are visible to everyone via the polling in GameOver screen,
-    // even for players who didn't trigger the end-game transaction themselves.
-    const hasAttemptedRevealRef = useRef(false);
-    useEffect(() => {
-        if (gameState.phase === GamePhase.ENDED && !hasAttemptedRevealRef.current) {
-            console.log('[RoleReveal] Game ended phase detected, triggering auto-reveal...');
-            hasAttemptedRevealRef.current = true;
-
-            // Small initial delay to ensure contract state is stable
-            const timer = setTimeout(() => {
-                revealMyRoleAfterGameEnd().catch(e => {
-                    console.error("[RoleReveal] Auto-reveal failed:", e);
-                    // allow retry once on next tick if it was a transient error? 
-                    // No, let's keep it simple for now.
-                });
-            }, 2000);
-            return () => clearTimeout(timer);
-        } else if (gameState.phase !== GamePhase.ENDED) {
-            hasAttemptedRevealRef.current = false;
-        }
-    }, [gameState.phase, revealMyRoleAfterGameEnd]);
 
 
     // V4: ZK End Game (Client generates proof of win)
@@ -3090,16 +3135,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
 
-            // Auto-reveal my role on-chain for trustless verification
-            await revealMyRoleAfterGameEnd();
-
-        } catch (txErr: any) {
-            console.error("[ZK] Transaction Failed:", txErr);
-            addLog(`ZK Error: ${txErr.shortMessage || txErr.message}`, "danger");
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList, address, myPlayer?.address, revealMyRoleAfterGameEnd]);
+    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList, address, myPlayer?.address]);
 
     /**
      * TRIGGER AUTO WIN: A silent background check that pings the server
@@ -3248,17 +3287,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             console.warn('[Deposit Debug] Failed to check deposit after AutoWin:', depErr);
                         }
                     }
-
-                    // Auto-reveal my role on-chain for trustless verification
-                    // Only after successful endGame — if TX failed, game is still active
-                    try {
-                        await revealMyRoleAfterGameEnd();
-                    } catch (revealErr) {
-                        console.warn("[AutoWin] Role reveal after game end failed (non-critical):", revealErr);
-                    }
                 } catch (txErr: any) {
                     console.error("[AutoWin ZK Debug] Transaction FAILED:", txErr);
-                    // Don't call revealMyRoleAfterGameEnd here — game didn't end
                     addLog(`Auto-Win Failed: ${txErr.shortMessage || txErr.message}`, "danger");
                 } finally {
                     autoWinLockRef.current = false;
@@ -3273,265 +3303,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             checkWinInProgressRef.current = false; // FIX #23: Always release
         }
-    }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, address, revealMyRoleAfterGameEnd]);
+    }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, address]);
 
-    // Manual triggers for victory claim (reveals role + checks win condition)
-    const claimVictory = useCallback(async () => {
-        if (!currentRoomId || !myPlayer) return;
-
-        try {
-            const salt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
-            if (salt) {
-                try {
-                    const roleNum = getRoleNumber(myPlayer.role);
-                    addLog("Revealing role for victory claim...", "info");
-                    await revealRoleOnChain(roleNum, salt);
-                } catch (e: any) {
-                    if (!e.message.includes("RoleAlreadyRevealed")) {
-                        console.warn("Reveal role failed during claim:", e);
-                    }
-                }
-            }
-
-            // TRY ZK PATH FIRST (More reliable, doesn't need all roles revealed)
-            try {
-                addLog("Triggering ZK win check for victory claim...", "info");
-                await triggerAutoWinCheck();
-            } catch (zkErr: any) {
-                console.error("[claimVictory] ZK path failed, trying fallback:", zkErr);
-                try {
-                    await endGameAutomaticallyOnChain();
-                    addLog("Game ended via fallback!", "phase");
-                } catch (e: any) {
-                    if (e.message.includes("NotAllRolesRevealed")) {
-                        addLog("Victory claimed! Waiting for other survivors to claim...", "info");
-                    } else {
-                        addLog(e.shortMessage || e.message, "danger");
-                    }
-                }
-            }
-        } catch (e) {
-            console.error("Claim victory failed:", e);
-            addLog("Failed to claim victory.", "danger");
-        }
-    }, [currentRoomId, myPlayer, address, revealRoleOnChain, endGameAutomaticallyOnChain, triggerAutoWinCheck, addLog]);
-
-    // Claim deposit refund after game ends
-    const claimRefund = useCallback(async () => {
-        if (!currentRoomId || !publicClient) {
-            addLog("No active room to claim refund from.", "danger");
-            return;
-        }
-
-        setIsTxPending(true);
-        try {
-            // Check deposit + balance before claiming
-            if (address) {
-                try {
-                    const [deposit, balanceBefore, room] = await Promise.all([
-                        publicClient.readContract({
-                            address: runtimeContractAddress,
-                            abi: MAFIA_ABI,
-                            functionName: 'getPlayerDeposit',
-                            args: [currentRoomId, address],
-                        }) as Promise<bigint>,
-                        publicClient.getBalance({ address }),
-                        publicClient.readContract({
-                            address: runtimeContractAddress,
-                            abi: MAFIA_ABI,
-                            functionName: 'getRoom',
-                            args: [currentRoomId],
-                        }) as Promise<any>,
-                    ]);
-
-                    const depositPool = Array.isArray(room) ? room[room.length - 2] : room.depositPool;
-                    const phase = Number(Array.isArray(room) ? room[3] : room.phase);
-
-                    console.log(`[Deposit Debug] Before claimRefund:`, {
-                        roomId: currentRoomId.toString(),
-                        phase,
-                        myDeposit: formatEther(deposit) + ' STT',
-                        depositPool: formatEther(depositPool) + ' STT',
-                        myBalance: formatEther(balanceBefore) + ' STT',
-                        contractAddress: runtimeContractAddress,
-                    });
-
-                    if (deposit === 0n) {
-                        addLog("No deposit to refund (already claimed or not deposited).", "info");
-                        console.log(`[Deposit Debug] Deposit is 0 — either already refunded, auto-refunded by contract, or never collected.`);
-                        setIsTxPending(false);
-                        return;
-                    }
-
-                    addLog(`Claiming deposit refund (${formatEther(deposit)} STT)...`, "info");
-                } catch (e) {
-                    console.warn("[Deposit Debug] Could not check deposit, attempting claim anyway:", e);
-                    addLog("Claiming deposit refund...", "info");
-                }
-            }
-
-            const hash = await sendGameTransaction('claimRefund', [currentRoomId], false);
-            await publicClient.waitForTransactionReceipt({ hash });
-
-            // Check balance after refund
-            if (address) {
-                try {
-                    const [balanceAfter, depositAfter] = await Promise.all([
-                        publicClient.getBalance({ address }),
-                        publicClient.readContract({
-                            address: runtimeContractAddress,
-                            abi: MAFIA_ABI,
-                            functionName: 'getPlayerDeposit',
-                            args: [currentRoomId, address],
-                        }) as Promise<bigint>,
-                    ]);
-                    console.log(`[Deposit Debug] After claimRefund:`, {
-                        myBalance: formatEther(balanceAfter) + ' STT',
-                        depositRemaining: formatEther(depositAfter) + ' STT',
-                        refundSuccess: depositAfter === 0n,
-                    });
-                } catch (e) {
-                    console.warn("[Deposit Debug] Could not verify post-refund state:", e);
-                }
-            }
-
-            addLog("Deposit refunded successfully!", "success");
-        } catch (e: any) {
-            console.error("[Deposit Debug] claimRefund FAILED:", e);
-            if (e.message?.includes("DepositAlreadyRefunded")) {
-                addLog("Deposit was already refunded.", "info");
-            } else if (e.message?.includes("WrongPhase")) {
-                addLog("Cannot claim refund yet — game still in progress.", "danger");
-            } else {
-                addLog(`Refund failed: ${e.shortMessage || e.message}`, "danger");
-            }
-        } finally {
-            setIsTxPending(false);
-        }
-    }, [currentRoomId, publicClient, address, sendGameTransaction, addLog]);
-
-
-    // === SMART POLLING ===
-    // === SMART POLLING (Auto-Win Check) ===
-    useEffect(() => {
-        if (isTestMode || !currentRoomId || !publicClient || !myPlayer) return;
-        // Only run during active gameplay (Day/Night)
-        if (gameState.phase < GamePhase.DAY || gameState.phase === GamePhase.ENDED) return;
-
-        // Waterfall Logic: Any ALIVE player can trigger, but staggered by index to save gas
-        // Dead players should NOT trigger expensive chain interactions
-        const sortedSurvivors = [...gameState.players]
-            .filter(p => p.isAlive)
-            .sort((a, b) => a.address.localeCompare(b.address));
-
-        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer.address.toLowerCase());
-
-        // If I'm dead, I don't pay gas for the win check transaction (someone else will)
-        if (myIndex === -1) return;
-
-        // Base interval 5s, staggered by 3s per index
-        // Index 0: 5s, 10s, 15s...
-        // Index 1: 8s, 13s, 18s...
-        // This ensures they don't overlap exactly
-        const delay = 5000 + (myIndex * 3000);
-
-        const checkWin = () => {
-            if (isTxPending) return;
-            triggerAutoWinCheck().catch(err =>
-                console.warn("[AutoWin] Check failed silently:", err)
-            );
-        };
-
-        const interval = setInterval(checkWin, delay);
-        return () => clearInterval(interval);
-    }, [currentRoomId, publicClient, isTestMode, gameState.phase, isTxPending, triggerAutoWinCheck, gameState.players, myPlayer]);
-
-    // Try to end the game by first revealing our role on-chain, then calling endGameAutomatically
-    const tryEndGame = useCallback(async () => {
-        if (!currentRoomId || !address) return;
-
-        // Check if we have win condition locally
-        const alivePlayers = gameState.players.filter(p => p.isAlive);
-        let aliveMafia = 0;
-        let aliveTown = 0;
-        let unknownRoles = 0;
-
-        for (const player of alivePlayers) {
-            if (player.role === Role.MAFIA) aliveMafia++;
-            else if (player.role === Role.UNKNOWN) unknownRoles++;
-            else aliveTown++;
-        }
-
-        // Can't determine winner if we don't know all roles locally
-        if (unknownRoles > 0) {
-            console.log("[tryEndGame] Can't determine winner - unknown roles exist");
-            return;
-        }
-
-        // Check win conditions
-        const mafiaWins = aliveMafia > 0 && aliveMafia >= aliveTown;
-        const townWins = aliveMafia === 0 && aliveTown > 0;
-
-        if (!mafiaWins && !townWins) {
-            console.log("[tryEndGame] No win condition met yet");
-            return;
-        }
-
-        console.log("[tryEndGame] Win condition detected!", { mafiaWins, townWins, aliveMafia, aliveTown });
-
-        // Try to reveal our role on-chain (required for contract to verify)
-        const myRole = gameState.players.find(p => p.address.toLowerCase() === address.toLowerCase())?.role;
-        const savedSalt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
-
-        if (myRole && myRole !== Role.UNKNOWN && savedSalt) {
-            const roleMap: Record<string, number> = {
-                [Role.MAFIA]: 1,
-                [Role.DOCTOR]: 2,
-                [Role.DETECTIVE]: 3,
-                [Role.CIVILIAN]: 4,
-            };
-            const roleNum = roleMap[myRole] || 4;
-
-            try {
-                addLog("Revealing role for game end...", "info");
-                await revealRoleOnChain(roleNum, savedSalt);
-            } catch (e) {
-                console.error("[tryEndGame] Failed to reveal role:", e);
-                // Continue anyway - maybe role was already revealed
-            }
-        }
-
-        // Try to end the game on-chain
-        try {
-            // First try ZK path by triggering a manual check-win which produces a proof
-            addLog("Triggering final ZK win check...", "info");
-            await triggerAutoWinCheck();
-        } catch (e: any) {
-            console.error("[tryEndGame] ZK path failed, trying fallback:", e);
-            try {
-                await endGameAutomaticallyOnChain();
-                addLog("Game ended on-chain!", "phase");
-            } catch (fallbackErr: any) {
-                console.error("[tryEndGame] Fallback failed:", fallbackErr);
-                // If contract rejects, force frontend transition to ENDED
-                if (mafiaWins || townWins) {
-                    addLog("Transitioning to Game Over...", "phase");
-                    setGameState(prev => ({
-                        ...prev,
-                        phase: GamePhase.ENDED,
-                        winner: mafiaWins ? 'MAFIA' : 'TOWN'
-                    }));
-                }
-            }
-        }
-    }, [currentRoomId, address, gameState.players, revealRoleOnChain, endGameAutomaticallyOnChain, addLog, setGameState, triggerAutoWinCheck]);
-
-
-
-    // Set ref for auto-trigger useEffect 
-    useEffect(() => {
-        tryEndGameRef.current = tryEndGame;
-    }, [tryEndGame]);
 
     // --- UTILITY ---
 
@@ -3866,42 +3639,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [gameState.phase, fetchMyRoleFromGM]);
 
-    // AUTO-END GAME CHECKER (Safe Hybrid Approach)
-    useEffect(() => {
-        if (!currentRoomId || !myPlayer || !myPlayer.isAlive) return;
-
-        const checkAndClaim = async () => {
-            // 1. MAFIA LOGIC (Automatic but Conservative)
-            // We only auto-claim if we are mathematically certain of victory.
-            // Since we might not know teammates (hidden roles), we count conservatively.
-            if (myPlayer.role === Role.MAFIA) {
-                const alivePlayers = gameState.players.filter(p => p.isAlive);
-                let knownMafia = 0;
-                let potentialTown = 0;
-
-                alivePlayers.forEach(p => {
-                    // We know OUR role is Mafia.
-                    // Others are UNKNOWN (potential Town) unless revealed.
-                    if (p.role === Role.MAFIA) knownMafia++;
-                    else potentialTown++;
-                });
-
-                // If Known Mafia >= Potential Town, we have won (or tied for win).
-                if (!autoClaimAttemptedRef.current && knownMafia > 0 && knownMafia >= potentialTown) {
-                    autoClaimAttemptedRef.current = true;
-                    await claimVictory();
-                }
-            }
-
-            // 2. TOWN LOGIC (Manual Only)
-            // Town players cannot know for sure if they won (dead roles are hidden).
-            // Auto-revealing risks doxxing innocent players.
-            // Town must use the manual "Claim Victory" button.
-        };
-
-        const timer = setTimeout(checkAndClaim, 3000);
-        return () => clearTimeout(timer);
-    }, [gameState.phase, gameState.players, currentRoomId, myPlayer]);
 
 
 
@@ -3912,7 +3649,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [gameState.phase]);
 
 
-    const contextValue = useMemo(() => ({
+    const contextValue = useMemo<GameContextType>(() => ({
         playerName, setPlayerName, avatarUrl, setAvatarUrl, lobbyName, setLobbyName,
         gameState, setGameState, isTxPending, isTxConfirming, currentRoomId,
         createLobbyOnChain, joinLobbyOnChain,
@@ -3923,8 +3660,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         submitNightActionToGM,
         skipNightActionToGM,
         fetchInvestigationProofFromGM,
-        getInvestigationResultOnChain, syncSecretWithServer, endGameAutomaticallyOnChain,
-        revealRoleOnChain, tryEndGame, claimVictory, endGameZK, claimRefund, forcePhaseTimeoutOnChain,
+        getInvestigationResultOnChain, syncSecretWithServer, 
+        finalizeVotingOnChain, endGameZK, forcePhaseTimeoutOnChain,
         sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList,
         addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
@@ -3939,7 +3676,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setCurrentRoomId,
         decryptMyRoleFromGM,
         lobbyPassword,
-        setLobbyPassword
+        setLobbyPassword,
+        createTournamentOnChain,
+        joinTournamentOnChain,
+        distributePrizesOnChain,
+        cancelTournamentOnChain
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, isTxConfirming, currentRoomId,
         createLobbyOnChain, joinLobbyOnChain, startGameOnChain,
@@ -3947,20 +3688,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         commitRoleOnChain, confirmRoleOnChain, commitAndConfirmRoleOnChain,
         startVotingOnChain, voteOnChain, submitNightActionToGM,
         skipNightActionToGM, fetchInvestigationProofFromGM,
-        getInvestigationResultOnChain, endGameAutomaticallyOnChain, revealRoleOnChain, forcePhaseTimeoutOnChain,
-        tryEndGame, claimVictory, endGameZK, claimRefund, syncSecretWithServer, sendMafiaMessageOnChain,
+        getInvestigationResultOnChain, finalizeVotingOnChain, forcePhaseTimeoutOnChain,
+        endGameZK, syncSecretWithServer, sendMafiaMessageOnChain,
         kickStalledPlayerOnChain, refreshPlayersList, addLog,
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         isTestMode, setIsTestMode,
         selectedTarget,
         showVotingResults, setShowVotingResults,
         playerMarks, setPlayerMark,
-        voteMap,
+        voteMap, setVoteMap,
         runtimeChain.nativeCurrency.symbol,
         setCurrentRoomId,
         decryptMyRoleFromGM,
         lobbyPassword,
         setLobbyPassword,
+        createTournamentOnChain,
+        joinTournamentOnChain,
+        distributePrizesOnChain,
+        cancelTournamentOnChain,
     ]);
 
     return (
