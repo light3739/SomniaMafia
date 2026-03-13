@@ -85,3 +85,10 @@ export function buildTeammatesMessage(input: {
 }): string {
   return `teammates:${input.roomId}:${input.nonce}:${input.timestamp}`;
 }
+export function buildMafiaMembersMessage(input: {
+  roomId: string;
+  nonce: string;
+  timestamp: number;
+}): string {
+  return `mafia-members:${input.roomId}:${input.nonce}:${input.timestamp}`;
+}

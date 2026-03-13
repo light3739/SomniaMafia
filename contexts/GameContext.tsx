@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { useAccount, useWriteContract, usePublicClient, useWalletClient, useWatchContractEvent, useWatchBlockNumber } from 'wagmi';
-import { createWalletClient, http, fallback, parseEther, formatEther, parseEventLogs, toHex, pad, custom, type WalletClient } from 'viem';
+import { createWalletClient, http, fallback, parseEther, formatEther, parseEventLogs, toHex, pad, custom, type WalletClient, keccak256, encodePacked } from 'viem';
 import { privateKeyToAccount, nonceManager } from 'viem/accounts';
 import { useWallets } from '@privy-io/react-auth';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
@@ -13,7 +13,7 @@ import { loadOrCreateKeypair, exportPublicKeyHex, eciesDecrypt, EciesEncrypted }
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
 import { signRequest } from '../services/requestSigning';
-import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage, buildDiscussionMessage, buildInvestigateMessage, buildRoleSyncMessage } from '../services/signingSchema';
+import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage, buildDiscussionMessage, buildInvestigateMessage, buildRoleSyncMessage, buildMafiaMembersMessage } from '../services/signingSchema';
 import * as GM from '../services/gmService';
 
 const shotSound = "/assets/mafia_shot.wav";
@@ -713,6 +713,89 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         playersRef.current = gameState.players;
     }, [gameState.players]);
+
+    const mafiaKeyRef = useRef<CryptoKey | null>(null);
+    const mafiaKeyVerifyingRef = useRef(false);
+
+    /**
+     * Helper to derive the shared Mafia key using room-specific salt and Mafia members list.
+     * Only works if the character is a member of the Mafia and has signed an auth message.
+     */
+    const getMafiaChatKey = useCallback(async (roomId: bigint): Promise<CryptoKey | null> => {
+        if (mafiaKeyRef.current) return mafiaKeyRef.current;
+        if (mafiaKeyVerifyingRef.current) return null;
+
+        const roomIdStr = roomId.toString();
+        const myAddr = address;
+        if (!myAddr) return null;
+
+        try {
+            mafiaKeyVerifyingRef.current = true;
+            // 1. Get or generate salt
+            let salt = localStorage.getItem(`mafia_salt_${roomIdStr}`);
+            if (!salt) {
+                salt = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('');
+                localStorage.setItem(`mafia_salt_${roomIdStr}`, salt);
+            }
+
+            // 2. Fetch Mafia members from GM
+            const meta = await signRequest({
+                address: myAddr,
+                roomId: Number(roomId),
+                walletClient: walletClient as any,
+                buildMessage: (inp) => buildMafiaMembersMessage({ roomId: roomIdStr, ...inp })
+            });
+
+            const queryParams = new URLSearchParams({
+                roomId: roomIdStr,
+                playerAddress: meta.signerAddress,
+                signature: meta.signature,
+                nonce: meta.nonce,
+                timestamp: meta.timestamp.toString(),
+            });
+
+            const res = await fetch(`/api/game/mafia-members?${queryParams.toString()}`);
+            if (!res.ok) {
+                const err = await res.json();
+                console.warn('[MafiaChat] Failed to fetch teammates:', err.error);
+                return null;
+            }
+
+            const { mafia } = await res.json() as { mafia: string[] };
+            if (!mafia || mafia.length === 0) return null;
+
+            // 3. Derive Key: keccak256(roomId + salt + sortedMafiaAddresses)
+            const sortedMafia = [...mafia].map(a => a.toLowerCase()).sort();
+            const inputHash = keccak256(encodePacked(
+                ['uint256', 'string', 'address[]'],
+                [roomId, salt, sortedMafia as `0x${string}`[]]
+            ));
+
+            // Use first 32 bytes as AES key
+            const keyBytes = new Uint8Array(32);
+            for (let i = 0; i < 32; i++) {
+                keyBytes[i] = parseInt(inputHash.slice(2 + i * 2, 4 + i * 2), 16);
+            }
+
+            const key = await crypto.subtle.importKey(
+                'raw',
+                keyBytes,
+                'AES-GCM',
+                false,
+                ['encrypt', 'decrypt']
+            );
+
+            mafiaKeyRef.current = key;
+            return key;
+        } catch (e) {
+            console.error('[MafiaChat] Key derivation error:', e);
+            return null;
+        } finally {
+            mafiaKeyVerifyingRef.current = false;
+        }
+    }, [address, walletClient]);
 
     // Fix for "Night Action" flashing before Voting Results:
     // When detecting a transition from VOTING to NIGHT (e.g. via polling), 
@@ -2477,16 +2560,46 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Import helper locally to avoid closure issues if possible, or use from top level
             // We need hexToString from services/cryptoUtils
 
-            const formattedMessages: MafiaChatMessage[] = messages.map((msg: any, index: number) => {
-                const hexContent = msg.encryptedMessage;
+            const formattedMessages: MafiaChatMessage[] = await Promise.all(messages.map(async (msg: any, index: number) => {
+                const hexContent = msg.encryptedMessage as string;
                 let content = { type: 'text' as const, text: '' };
 
                 try {
-                    // Try to decode hex -> string -> JSON
-                    // We need to make sure hexToString is available
-                    // Use simple hex to string if function not imported, but it is imported as hexToString
+                    // Try to decrypt if we are Mafia
+                    const isMafia = playersRef.current.some(p => p.address.toLowerCase() === address?.toLowerCase() && p.role === Role.MAFIA);
+                    
+                    let decryptedStr = '';
+                    if (isMafia && hexContent.length > 24) { // 12 bytes IV = 24 hex chars
+                        const key = await getMafiaChatKey(roomId);
+                        if (key) {
+                            try {
+                                const fullBytes = new Uint8Array(
+                                    hexContent.startsWith('0x') ? 
+                                    hexContent.slice(2).match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)) :
+                                    hexContent.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16))
+                                );
+                                
+                                // Last 12 bytes are IV
+                                const iv = fullBytes.slice(-12);
+                                const ciphertext = fullBytes.slice(0, -12);
+                                
+                                const decrypted = await crypto.subtle.decrypt(
+                                    { name: 'AES-GCM', iv },
+                                    key,
+                                    ciphertext
+                                );
+                                decryptedStr = new TextDecoder().decode(decrypted);
+                            } catch (decError) {
+                                // Decryption failed, might be old plaintext message
+                                console.debug('[MafiaChat] Decryption failed (old message?):', decError);
+                            }
+                        }
+                    }
+
                     let str = '';
-                    if (hexContent.startsWith('0x')) {
+                    if (decryptedStr) {
+                        str = decryptedStr;
+                    } else if (hexContent.startsWith('0x')) {
                         const hex = hexContent.slice(2);
                         for (let i = 0; i < hex.length; i += 2) {
                             str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
@@ -2516,7 +2629,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     content,
                     timestamp: Number(msg.timestamp) * 1000
                 };
-            });
+            }));
 
             setGameState(prev => ({ ...prev, mafiaMessages: formattedMessages }));
         } catch (e) {
@@ -2527,12 +2640,43 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const sendMafiaMessageOnChain = async (content: MafiaChatMessage['content']) => {
         if (!currentRoomId) return;
 
-        // Encode content to JSON then Hex
-        const jsonStr = JSON.stringify(content);
+        const myPlayer = playersRef.current.find(p => p.address.toLowerCase() === address?.toLowerCase());
+        const isMafia = myPlayer?.role === Role.MAFIA;
+        
         // Inline stringToHex
         let hexData = '0x' as `0x${string}`;
-        for (let i = 0; i < jsonStr.length; i++) {
-            hexData += jsonStr.charCodeAt(i).toString(16).padStart(2, '0');
+
+        if (isMafia) {
+            const key = await getMafiaChatKey(currentRoomId);
+            if (key) {
+                try {
+                    const jsonStr = JSON.stringify(content);
+                    const iv = crypto.getRandomValues(new Uint8Array(12));
+                    const encrypted = await crypto.subtle.encrypt(
+                        { name: 'AES-GCM', iv },
+                        key,
+                        new TextEncoder().encode(jsonStr)
+                    );
+                    
+                    const encryptedBytes = new Uint8Array(encrypted);
+                    const fullBytes = new Uint8Array(encryptedBytes.length + iv.length);
+                    fullBytes.set(encryptedBytes);
+                    fullBytes.set(iv, encryptedBytes.length);
+                    
+                    hexData = ('0x' + Array.from(fullBytes)
+                        .map(b => b.toString(16).padStart(2, '0'))
+                        .join('')) as `0x${string}`;
+                } catch (encErr) {
+                    console.error('[MafiaChat] Encryption failed, falling back to plaintext:', encErr);
+                }
+            }
+        }
+
+        if (hexData === '0x') {
+            const jsonStr = JSON.stringify(content);
+            for (let i = 0; i < jsonStr.length; i++) {
+                hexData += jsonStr.charCodeAt(i).toString(16).padStart(2, '0');
+            }
         }
 
         try {
