@@ -10,6 +10,7 @@ import { SOMNIA_TESTNET, AVALANCHE_FUJI } from '../../contracts/config';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
+import { FlowLayout } from '../layout/FlowLayout';
 
 const AVATAR_STORAGE_KEY = 'mafia_player_avatar';
 const NAME_STORAGE_KEY = 'mafia_player_name';
@@ -92,23 +93,11 @@ export const SetupProfile: React.FC = () => {
     const [fundAmount, setFundAmount] = useState('');
     const [fundingNetwork, setFundingNetwork] = useState<number>(SOMNIA_TESTNET.id);
     const [isFunding, setIsFunding] = useState(false);
-    const [isScrolled, setIsScrolled] = useState(false);
-    const [scrollProgress, setScrollProgress] = useState(0);
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     // Modal state: null = closed, 'wallet' | 'accounts' = open
     const [activeModal, setActiveModal] = useState<'wallet' | 'accounts' | null>(null);
 
     useEffect(() => { setHydrated(true); }, []);
-
-    // Scroll-driven vignette: opacity tied directly to scroll position
-    useEffect(() => {
-        const el = scrollContainerRef.current;
-        if (!el) return;
-        const onScroll = () => setScrollProgress(Math.min(el.scrollTop / 80, 1));
-        el.addEventListener('scroll', onScroll, { passive: true });
-        return () => el.removeEventListener('scroll', onScroll);
-    }, []);
 
     // Auto-fill name from Privy on first load
     useEffect(() => {
@@ -147,15 +136,22 @@ export const SetupProfile: React.FC = () => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 if (!ctx) return;
-                let width = img.width, height = img.height;
-                if (width > height) {
-                    if (width > MAX_AVATAR_SIZE) { height = (height * MAX_AVATAR_SIZE) / width; width = MAX_AVATAR_SIZE; }
-                } else {
-                    if (height > MAX_AVATAR_SIZE) { width = (width * MAX_AVATAR_SIZE) / height; height = MAX_AVATAR_SIZE; }
-                }
-                canvas.width = width; canvas.height = height;
-                ctx.drawImage(img, 0, 0, width, height);
-                const base64 = canvas.toDataURL('image/jpeg', 0.8);
+                // CENTER CROP LOGIC
+                const size = Math.min(img.width, img.height);
+                const sourceX = (img.width - size) / 2;
+                const sourceY = (img.height - size) / 2;
+                
+                canvas.width = MAX_AVATAR_SIZE;
+                canvas.height = MAX_AVATAR_SIZE;
+                
+                // Draw only the central square of the image into the canvas
+                ctx.drawImage(
+                    img, 
+                    sourceX, sourceY, size, size, // Source rect (center square)
+                    0, 0, MAX_AVATAR_SIZE, MAX_AVATAR_SIZE // Target rect
+                );
+                
+                const base64 = canvas.toDataURL('image/jpeg', 0.82);
                 localStorage.setItem(AVATAR_STORAGE_KEY, base64);
                 setAvatarUrl(base64);
             };
@@ -247,22 +243,10 @@ export const SetupProfile: React.FC = () => {
     };
 
     return (
-        <div ref={scrollContainerRef} className="relative w-full h-[100dvh] font-montserrat flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 pb-12 custom-scrollbar">
-
-            {/* Top vignette: opacity directly tied to scroll position */}
-            <div
-                className="fixed top-0 left-0 right-0 h-24 pointer-events-none z-40"
-                style={{
-                    opacity: scrollProgress,
-                    background: 'linear-gradient(to bottom, rgba(10,7,4,0.92) 0%, rgba(10,7,4,0.5) 60%, transparent 100%)'
-                }}
-            />
-
-            {/* Navigation: always transparent, always has top padding */}
-            <div className="w-full max-w-[560px] flex items-center justify-between sticky top-0 z-50 px-2 pt-4 pb-3 -mx-2">
-                <div className="-ml-2">
-                    <BackButton to="/" />
-                </div>
+        <FlowLayout
+            backTo="/"
+            maxWidth="560px"
+            rightElement={
                 <button
                     onClick={() => logout().then(() => router.push('/'))}
                     className="group text-white/60 hover:text-white flex items-center gap-3 transition-all cursor-pointer"
@@ -272,18 +256,9 @@ export const SetupProfile: React.FC = () => {
                         <LogOut className="w-5 h-5" />
                     </div>
                 </button>
-            </div>
-
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.4 }}
-                // Убрали шапку отсюда, оставили my-auto и gap
-                className="relative z-10 w-full max-w-[560px] flex flex-col items-center gap-4 py-4 md:py-6 my-auto"
-            >
-
-                {/* Profile Card */}
+            }
+        >
+            {/* Profile Card */}
                 <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] p-5 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-4 md:gap-6 items-center">
                     <h2 className="text-white text-xl md:text-2xl font-['Cinzel']">Your Profile</h2>
 
@@ -319,11 +294,11 @@ export const SetupProfile: React.FC = () => {
                                         onChange={e => setTempName(e.target.value)}
                                         onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false); }}
                                         placeholder="Your nickname"
-                                        className="w-full h-full bg-transparent text-center text-white text-xl md:text-2xl font-montserrat font-semibold outline-none placeholder:text-white/20 px-4"
+                                        className="w-full h-full bg-transparent text-center text-white text-xl md:text-2xl font-montserrat font-medium outline-none placeholder:text-white/20 px-4"
                                     />
                                 ) : (
                                     <div className="flex items-center justify-center w-full h-full px-4">
-                                        <span className="text-white text-xl md:text-2xl font-montserrat font-semibold truncate group-hover:text-[#ffb01d] transition-colors text-center w-full">
+                                        <span className="text-white text-xl md:text-2xl font-montserrat font-medium truncate group-hover:text-[#ffb01d] transition-colors text-center w-full">
                                             {playerName || <span className="text-white/30 italic text-base font-normal">No nickname set</span>}
                                         </span>
                                     </div>
@@ -360,11 +335,11 @@ export const SetupProfile: React.FC = () => {
                                 <Wallet className="w-5 h-5 text-[#ffb01d]" />
                             </div>
                             <div className="flex flex-col items-start gap-0.5 mt-1">
-                                <span className="text-white font-montserrat font-bold text-lg md:text-xl tracking-wide leading-none">In-Game Wallet</span>
+                                <span className="text-white font-montserrat font-medium text-lg md:text-xl tracking-wide leading-none">In-Game Wallet</span>
                                 {hasEmbeddedWallet ? (
-                                    <span className="text-[#C19A6B] text-[11px] font-bold tracking-[0.1em] uppercase flex items-center gap-1.5"><Check className="w-3.5 h-3.5" strokeWidth={2.5} /> Active</span>
+                                    <span className="text-[#C19A6B] text-[11px] font-medium tracking-[0.1em] uppercase flex items-center gap-1.5"><Check className="w-3.5 h-3.5" strokeWidth={2.5} /> Active</span>
                                 ) : (
-                                    <span className="text-white/40 text-[11px] font-bold tracking-[0.1em] uppercase">Not Created</span>
+                                    <span className="text-white/40 text-[11px] font-medium tracking-[0.1em] uppercase">Not Created</span>
                                 )}
                             </div>
                         </div>
@@ -380,8 +355,8 @@ export const SetupProfile: React.FC = () => {
                                 <Users className="w-5 h-5 text-[#916A47]" />
                             </div>
                             <div className="flex flex-col items-start gap-0.5 mt-1">
-                                <span className="text-white font-montserrat font-bold text-lg md:text-xl tracking-wide leading-none">Connected Accounts</span>
-                                <span className="text-white/40 text-[11px] font-bold tracking-[0.1em] uppercase">Manage Social Links</span>
+                                <span className="text-white font-montserrat font-medium text-lg md:text-xl tracking-wide leading-none">Connected Accounts</span>
+                                <span className="text-white/40 text-[11px] font-medium tracking-[0.1em] uppercase">Manage Social Links</span>
                             </div>
                         </div>
                         <ChevronRight className="w-5 h-5 text-white/30 group-hover:text-white/70 transition-colors" />
@@ -406,7 +381,6 @@ export const SetupProfile: React.FC = () => {
                         Connect to Lobby
                     </Button>
                 </div>
-            </motion.div>
 
             {/* MODALS */}
             <AnimatePresence>
@@ -580,8 +554,8 @@ export const SetupProfile: React.FC = () => {
                                                 <div className="flex flex-col gap-1.5 w-full mt-2">
                                                     <button
                                                         onClick={handleFundWallet}
-                                                        disabled={isFunding || !fundAmount || Number(fundAmount) <= 0}
-                                                        className={`w-full py-4 font-montserrat font-semibold text-base tracking-wide rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 border ${isFunding || !fundAmount || Number(fundAmount) <= 0 ? 'bg-white/5 text-white/30 border-white/5 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-[#916A47] to-[#A37B58] hover:from-[#A37B58] hover:to-[#B68E6A] text-white border-[#C19A6B]/50 hover:border-[#E8CBA3]/70 hover:scale-[1.02] shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(193,154,107,0.3)]'}`}
+                                                        disabled={isFunding || !fundAmount || isNaN(Number(fundAmount)) || Number(fundAmount) <= 0}
+                                                        className={`w-full py-4 font-montserrat font-semibold text-base tracking-wide rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 border ${isFunding || !fundAmount || isNaN(Number(fundAmount)) || Number(fundAmount) <= 0 ? 'bg-white/5 text-white/30 border-white/5 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-[#916A47] to-[#A37B58] hover:from-[#A37B58] hover:to-[#B68E6A] text-white border-[#C19A6B]/50 hover:border-[#E8CBA3]/70 hover:scale-[1.02] shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(193,154,107,0.3)]'}`}
                                                     >
                                                         {isFunding ? 'Processing...' : 'Send Tokens'}
                                                     </button>
@@ -669,6 +643,6 @@ export const SetupProfile: React.FC = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div>
+        </FlowLayout>
     );
 };
