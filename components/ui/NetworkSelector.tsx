@@ -56,6 +56,7 @@ export const NetworkSelector: React.FC<NetworkSelectorProps> = ({
           <button
             onClick={() => handleSwitch('avalanche_fuji')}
             disabled={!!targetNetwork || isAvalanche}
+            data-custom-sound="true"
             className={`relative py-2.5 px-4 font-sans font-bold text-[11px] md:text-xs transition-all duration-300 z-10 flex items-center justify-center gap-2 rounded-[14px] whitespace-nowrap min-w-[100px] md:min-w-[120px] ${isAvalanche ? 'text-[#ffb01d] drop-shadow-md' : 'text-white/30 hover:text-white/50'
               }`}
           >
@@ -66,6 +67,7 @@ export const NetworkSelector: React.FC<NetworkSelectorProps> = ({
           <button
             onClick={() => handleSwitch('somnia_testnet')}
             disabled={!!targetNetwork || isSomnia}
+            data-custom-sound="true"
             className={`relative py-2.5 px-4 font-sans font-bold text-[11px] md:text-xs transition-all duration-300 z-10 flex items-center justify-center gap-2 rounded-[14px] whitespace-nowrap min-w-[100px] md:min-w-[120px] ${isSomnia ? 'text-[#ffb01d] drop-shadow-md' : 'text-white/30 hover:text-white/50'
               }`}
           >
