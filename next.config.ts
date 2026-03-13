@@ -35,7 +35,7 @@ const nextConfig: NextConfig = {
               // Fonts
               "font-src 'self' https://fonts.gstatic.com",
               // Frames: Privy uses an iframe for its auth modal
-              "frame-src 'self' https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org",
+              "frame-src 'self' https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://verify.walletconnect.com",
               // Connections: Privy API, WalletConnect, RPC providers
               "connect-src 'self' https://auth.privy.io https://api.privy.io wss://relay.walletconnect.com wss://relay.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org https://*.rpc.privy.systems https://*.somnia.network https://*.avax.network https://*.avax-test.network wss://*.somnia.network https://*.drpc.org wss://*.drpc.org https://*.publicnode.com wss://*.publicnode.com https://*.llamarpc.com https://*.ankr.com https://*.infura.io https://*.alchemy.com https://*.mafiaonchain.live wss://*.mafiaonchain.live",
               // Images
