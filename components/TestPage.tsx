@@ -2283,28 +2283,28 @@ const MockSessionKeyBanner: React.FC<{
             btnPrimary: 'bg-[#916A47]/12 border-[#916A47]/35 hover:bg-[#916A47]/22 text-[#C8904A]',
         }
         : isLowBalance
-        ? {
-            wrap: 'bg-[#1E0E07]/95 border-[#8B3A1A]/30',
-            iconWrap: 'bg-[#8B3A1A]/18 border border-[#8B3A1A]/35 shadow-inner',
-            accent: 'text-[#D4724A]',
-            label: 'text-[#D4724A]/80',
-            pulse: 'bg-[#D4724A]',
-            divider: 'border-[#8B3A1A]/25',
-            footerBg: 'bg-[#8B3A1A]/08',
-            footerText: 'text-[#D4724A]/60',
-            btnPrimary: 'bg-[#8B3A1A]/15 border-[#8B3A1A]/40 hover:bg-[#8B3A1A]/25 text-[#D4724A]',
-        }
-        : {
-            wrap: 'bg-[#110D07]/95 border-[#916A47]/28',
-            iconWrap: 'bg-[#916A47]/18 border border-[#916A47]/32 shadow-inner',
-            accent: 'text-[#C8904A]',
-            label: 'text-[#C8904A]/75',
-            pulse: 'bg-[#C8904A]',
-            divider: 'border-[#916A47]/20',
-            footerBg: 'bg-[#916A47]/05',
-            footerText: 'text-[#916A47]/55',
-            btnPrimary: 'bg-[#916A47]/12 border-[#916A47]/35 hover:bg-[#916A47]/22 text-[#C8904A]',
-        };
+            ? {
+                wrap: 'bg-[#1E0E07]/95 border-[#8B3A1A]/30',
+                iconWrap: 'bg-[#8B3A1A]/18 border border-[#8B3A1A]/35 shadow-inner',
+                accent: 'text-[#D4724A]',
+                label: 'text-[#D4724A]/80',
+                pulse: 'bg-[#D4724A]',
+                divider: 'border-[#8B3A1A]/25',
+                footerBg: 'bg-[#8B3A1A]/08',
+                footerText: 'text-[#D4724A]/60',
+                btnPrimary: 'bg-[#8B3A1A]/15 border-[#8B3A1A]/40 hover:bg-[#8B3A1A]/25 text-[#D4724A]',
+            }
+            : {
+                wrap: 'bg-[#110D07]/95 border-[#916A47]/28',
+                iconWrap: 'bg-[#916A47]/18 border border-[#916A47]/32 shadow-inner',
+                accent: 'text-[#C8904A]',
+                label: 'text-[#C8904A]/75',
+                pulse: 'bg-[#C8904A]',
+                divider: 'border-[#916A47]/20',
+                footerBg: 'bg-[#916A47]/05',
+                footerText: 'text-[#916A47]/55',
+                btnPrimary: 'bg-[#916A47]/12 border-[#916A47]/35 hover:bg-[#916A47]/22 text-[#C8904A]',
+            };
 
     return (
         <div className={`w-full rounded-2xl border backdrop-blur-2xl overflow-hidden shadow-2xl transition-all duration-300 ${theme.wrap}`}>
@@ -2370,7 +2370,7 @@ const MockSessionKeyBanner: React.FC<{
                     </div>
                 )}
             </div>
-            
+
             {!hasSession && !isRegistering && (
                 <div className={`px-4 py-2.5 border-t ${theme.divider} ${theme.footerBg}`}>
                     <p className={`text-[10px] font-['Montserrat'] leading-relaxed ${theme.footerText}`}>
@@ -2439,7 +2439,7 @@ const SessionKeyTestWrapper: React.FC = () => {
                         <h4 className="text-sm font-['Cinzel'] text-white/60 tracking-widest uppercase">Lobby Sequence Variants</h4>
                         <p className="text-[10px] text-white/30">As seen in the Waiting Room (WaitingRoom.tsx integration)</p>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-3">
                             <span className="text-[9px] font-bold text-white/15 uppercase tracking-widest pl-2">Checking State</span>
@@ -2462,14 +2462,14 @@ const ActivePhaseSessionTestWrapper: React.FC = () => {
         <div className="w-full h-[650px] relative bg-[#050505] overflow-hidden rounded-[32px] border border-white/10 shadow-2xl">
             {/* Mock Game Background */}
             <div className="absolute inset-0 opacity-40">
-                <img 
-                    src="/assets/game_background.png" 
-                    alt="bg" 
-                    className="w-full h-full object-cover" 
+                <img
+                    src="/assets/game_background.png"
+                    alt="bg"
+                    className="w-full h-full object-cover"
                     style={{ filter: 'grayscale(0.5) brightness(0.3)' }}
                 />
             </div>
-            
+
             {/* Scale the phase component to fit the test area */}
             <div className="absolute inset-0 flex items-center justify-center transform scale-90">
                 <NightPhaseTestWrapper testRole={Role.MAFIA} />
@@ -2479,7 +2479,7 @@ const ActivePhaseSessionTestWrapper: React.FC = () => {
             <div className="absolute bottom-6 left-6 z-50">
                 <SessionKeyBanner roomId={123} />
             </div>
-            
+
             {/* Legend/Info Badge */}
             <div className="absolute top-6 left-6 flex flex-col gap-1">
                 <div className="bg-black/80 backdrop-blur-md px-4 py-2 rounded-full border border-[#ffb01d]/30 text-[#ffb01d] text-[10px] font-bold uppercase tracking-[0.2em] shadow-lg">
@@ -2490,11 +2490,11 @@ const ActivePhaseSessionTestWrapper: React.FC = () => {
 
             {/* Interactive hint for the tester */}
             <div className="absolute top-6 right-6">
-                 <div className="bg-white/5 border border-white/10 backdrop-blur-md p-3 rounded-2xl max-w-[150px]">
-                     <p className="text-white/60 text-[10px] leading-tight">
-                         The banner is placed exactly as it appears in <strong>GameLayout.tsx</strong>
-                     </p>
-                 </div>
+                <div className="bg-white/5 border border-white/10 backdrop-blur-md p-3 rounded-2xl max-w-[150px]">
+                    <p className="text-white/60 text-[10px] leading-tight">
+                        The banner is placed exactly as it appears in <strong>GameLayout.tsx</strong>
+                    </p>
+                </div>
             </div>
         </div>
     );

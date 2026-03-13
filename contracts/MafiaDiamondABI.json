@@ -77,6 +77,17 @@
   {
     "inputs": [
       {
+        "internalType": "bytes4",
+        "name": "selector",
+        "type": "bytes4"
+      }
+    ],
+    "name": "FunctionNotFound",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "token",
         "type": "address"
@@ -363,16 +374,6 @@
         "internalType": "address",
         "name": "sessionAddress",
         "type": "address"
-      },
-      {
-        "internalType": "bool",
-        "name": "isPrivate",
-        "type": "bool"
-      },
-      {
-        "internalType": "uint256",
-        "name": "tournamentId",
-        "type": "uint256"
       }
     ],
     "name": "createAndJoin",
@@ -700,26 +701,6 @@
             "internalType": "uint8",
             "name": "keysSharedCount",
             "type": "uint8"
-          },
-          {
-            "internalType": "uint128",
-            "name": "depositPool",
-            "type": "uint128"
-          },
-          {
-            "internalType": "uint128",
-            "name": "depositPerPlayer",
-            "type": "uint128"
-          },
-          {
-            "internalType": "bool",
-            "name": "isPrivate",
-            "type": "bool"
-          },
-          {
-            "internalType": "uint256",
-            "name": "tournamentId",
-            "type": "uint256"
           }
         ],
         "internalType": "struct MafiaTypes.GameRoom",
