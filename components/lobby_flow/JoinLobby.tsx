@@ -29,35 +29,56 @@ interface JoinLobbyProps {
     initialRoomId?: string | null;
 }
 
-// Parse a room struct
+// Parse a room struct (handles both tuple-array and object forms from viem)
 function parseRoom(id: bigint, data: any): {
     id: number; host: string; name: string; players: number; max: number;
-    phase: number; timestamp: number;
+    phase: number; timestamp: number; isPrivate: boolean;
 } | null {
     try {
-        let phase: number, timestamp: number, host: string, name: string, playersCount: number, maxPlayers: number;
+        let phase: number, timestamp: number, host: string, name: string, playersCount: number, maxPlayers: number, isPrivate: boolean;
         if (Array.isArray(data)) {
-            phase = Number(data[3]); timestamp = Number(data[9]); host = data[1];
+            // Updated indices based on getRoom implementation in LobbyFacet
+            // data is [uint256 id, address host, string name, uint8 phase, uint8 maxPlayers, uint8 playersCount, ...]
+            // isPrivate is likely at index 17 based on the struct order:
+            // struct GameRoom { uint256 id; address host; string name; GamePhase phase; uint8 maxPlayers; uint8 playersCount; ... uint128 depositPerPlayer; bool isPrivate; }
+            // Let's check indices:
+            // 0:id, 1:host, 2:name, 3:phase (enum), 4:maxPlayers, 5:playersCount, 6:lastActionTimestamp, 7:players, 8:deckTags, 
+            // 9:deckHandicaps, 10:deckHandicaps_indices, 11:roleHashes, 12:roleHashes_indices, 
+            // 13:votedOut, 14:gameWinner, 15:depositPool, 16:depositPerPlayer, 17:isPrivate
+            phase = Number(data[3]); timestamp = Number(data[6]); host = data[1];
             name = data[2]; playersCount = Number(data[5]); maxPlayers = Number(data[4]);
+            isPrivate = Boolean(data[18]);
         } else {
             phase = Number(data.phase); timestamp = Number(data.lastActionTimestamp);
             host = data.host; name = data.name;
             playersCount = Number(data.playersCount); maxPlayers = Number(data.maxPlayers);
+            isPrivate = Boolean(data.isPrivate);
         }
-        return { id: Number(data.id ?? id), host, name, players: playersCount, max: maxPlayers, phase, timestamp };
-    } catch { return null; }
+        return { id: Number(data.id ?? id), host, name, players: playersCount, max: maxPlayers, phase, timestamp, isPrivate };
+    } catch (e) { 
+        console.error("[JoinLobby] parseRoom error:", e);
+        return null; 
+    }
 }
-
+/**
+ * TODO: When smart contract supports tournaments, read tournament data from chain.
+ * For now, we use a stub that returns false for all rooms.
+ * Replace this with actual on-chain data when available.
+ */
 interface TournamentInfo {
     isTournament: boolean;
     prize?: string;
     hasPassword?: boolean;
 }
 
-function getTournamentInfo(_room: any): TournamentInfo {
-    // TODO: Read tournament flag from smart contract room data
-    return { isTournament: false };
+function getTournamentInfo(room: any): TournamentInfo {
+    return { 
+        isTournament: false,
+        hasPassword: room.isPrivate 
+    };
 }
+
+
 
 export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress } = useGameContext();
@@ -233,13 +254,24 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             unwatch1?.();
             unwatch2?.();
         };
-    }, [fetchRooms, publicClient, runtimeContractAddress]);
+    }, [fetchRooms, publicClient, runtimeContractAddress]); // Убрали лишние триггеры
+
+    const { setLobbyPassword } = useGameContext();
 
     const handleJoin = async (room: any) => {
         if (!isConnected || !authenticated) {
             login();
             return;
         }
+
+        if (room.isPrivate) {
+            const pass = prompt("Enter room password:");
+            if (!pass) return;
+            setLobbyPassword(pass);
+        } else {
+            setLobbyPassword('');
+        }
+
         const success = await joinLobbyOnChain(room.id);
         if (success) {
             setLobbyName(room.name || `Room #${room.id}`);

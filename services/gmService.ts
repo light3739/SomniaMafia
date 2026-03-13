@@ -244,3 +244,73 @@ export async function skipNightActionToGM(params: {
         throw new Error(`Failed to skip: ${error.error || res.statusText}`);
     }
 }
+
+/**
+ * Set room password on GM server (called by host).
+ */
+export async function setRoomPassword(params: {
+    roomId: string;
+    address: string;
+    password: string;
+    walletClient: any;
+    chainId?: number;
+}): Promise<void> {
+    const { roomId, address, password, walletClient, chainId } = params;
+
+    const meta = await signRequest({
+        address,
+        roomId: Number(roomId),
+        walletClient,
+        buildMessage: ({ nonce, timestamp }) =>
+            `setRoomPassword:${roomId}:${address.toLowerCase()}:${nonce}:${timestamp}`,
+    });
+
+    const res = await fetch(`${GM_SERVER_URL}/room-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            roomId,
+            password,
+            hostAddress: address,
+            signature: meta.signature,
+            signerAddress: meta.signerAddress,
+            nonce: meta.nonce,
+            timestamp: meta.timestamp,
+            chainId,
+        }),
+    });
+
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(`Failed to set password: ${error.error || res.statusText}`);
+    }
+}
+
+/**
+ * Request a join permit (GM signature) from GM server by providing the room password.
+ */
+export async function requestJoinPermit(params: {
+    roomId: string;
+    password: string;
+    playerAddress: string;
+}): Promise<`0x${string}`> {
+    const { roomId, password, playerAddress } = params;
+
+    const res = await fetch(`${GM_SERVER_URL}/request-join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            roomId,
+            password,
+            playerAddress,
+        }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error || `Failed to get join permit: ${res.status}`);
+    }
+
+    return data.gmSignature;
+}
+

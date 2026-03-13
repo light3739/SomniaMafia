@@ -92,6 +92,9 @@ interface GameContextType {
     runtimeContractAddress: `0x${string}`;
     currencySymbol: string;
     decryptMyRoleFromGM: (encrypted: EciesEncrypted) => Promise<number | null>;
+
+    lobbyPassword: string;
+    setLobbyPassword: (pass: string) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -116,6 +119,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         return '';
     });
+    const [lobbyPassword, setLobbyPassword] = useState('');
     const [currentRoomId, setCurrentRoomId] = useState<bigint | null>(() => {
         if (typeof window !== 'undefined') {
             // FIX #24: Try URL param first, then sessionStorage, then localStorage
@@ -1377,7 +1381,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
-                    args: [lobbyName, 16, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
+                    args: [lobbyName, 16, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, 0n], // 🆕 Added tournamentId
                     account: activeAccount,
                     value: LOBBY_FUNDING_VALUE,
                 });
@@ -1397,7 +1401,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     16,             // uint8 maxPlayers
                     safeName,       // string nickname (SANITIZED)
                     pubKeyHex as `0x${string}`,      // bytes publicKey
-                    sessionAddress as `0x${string}`  // address sessionAddress
+                    sessionAddress as `0x${string}`, // address sessionAddress
+                    !!lobbyPassword,                 // bool isPrivate
+                    0n                               // uint256 tournamentId
                 ],
                 account: activeAccount,
                 chain: runtimeChain,
@@ -1408,6 +1414,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             addLog(`Creating room "${lobbyName}"...`, "info");
             const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+
+            // 6. IF PRIVATE: Set password on GM server
+            if (lobbyPassword) {
+                try {
+                    addLog("Setting room password on GM server...", "info");
+                    await GM.setRoomPassword({
+                        roomId: newRoomId.toString(),
+                        address: address,
+                        password: lobbyPassword,
+                        walletClient: activeWalletClient,
+                        chainId: runtimeChain.id,
+                    });
+                    addLog("Room password protected ✅", "success");
+                } catch (e: any) {
+                    console.error("[PrivateRoom] Failed to set password on GM:", e);
+                    addLog(`Error setting password: ${e.message}`, "danger");
+                }
+            }
 
             // DEBUG: Check deposit collection
             try {
@@ -1524,7 +1548,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, lobbyName, publicClient, getActiveWalletClient, addLog, refreshPlayersList, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain]);
+    }, [playerName, address, lobbyName, publicClient, getActiveWalletClient, addLog, refreshPlayersList, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain, lobbyPassword]);
 
     const joinLobbyOnChain = useCallback(async (roomId: number): Promise<boolean> => {
         if (!playerName || !address || !publicClient) { alert("Enter name and connect wallet!"); return false; }
@@ -1552,7 +1576,41 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const eciesPubKeyHex = await exportPublicKeyHex(eciesKp.publicKey);
             console.log('[ECIES] Public key ready:', eciesPubKeyHex.slice(0, 20) + '...');
 
-            // 3. Оценка газа с буфером
+            // 3. Check if room is private & get GM signature if needed
+            let roomData: any = null;
+            let gmSignature: `0x${string}` = '0x';
+            try {
+                roomData = await publicClient.readContract({
+                    address: runtimeContractAddress,
+                    abi: MAFIA_ABI,
+                    functionName: 'getRoom',
+                    args: [BigInt(roomId)],
+                }) as any;
+
+                if (roomData && roomData.isPrivate) {
+                    if (!lobbyPassword) {
+                        alert("This room is private. Please enter the password.");
+                        setIsTxPending(false);
+                        return false;
+                    }
+                    addLog("Requesting join permit (private room)...", "info");
+                    gmSignature = await GM.requestJoinPermit({
+                        roomId: roomId.toString(),
+                        password: lobbyPassword,
+                        playerAddress: address,
+                    });
+                }
+            } catch (e: any) {
+                console.warn("[Join] Error checking room privacy or tournament:", e);
+                // Fallback: assume public or contract call failed
+            }
+
+            // 3.1. Determine if deposit is needed (Skip if it's a tournament room)
+            const isTournamentRoom = roomData ? (roomData.tournamentId || 0n) > 0n : false;
+            const txValue = isTournamentRoom ? 0n : LOBBY_FUNDING_VALUE;
+            console.log(`[Join] Tournament status: ${isTournamentRoom}, sending value: ${txValue}`);
+
+            // 3.5. Оценка газа с буфером
             let gasLimit = 14_500_000n;
             const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
             try {
@@ -1560,9 +1618,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'joinRoom',
-                    args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
+                    args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                     account: activeAccount,
-                    value: LOBBY_FUNDING_VALUE,
+                    value: txValue,
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -1575,10 +1633,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
-                args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`],
+                args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                 account: activeAccount,
                 chain: runtimeChain,
-                value: LOBBY_FUNDING_VALUE,
+                value: txValue,
                 gas: gasLimit,
                 type: 'legacy',
             });
@@ -1670,7 +1728,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, publicClient, getActiveWalletClient, addLog, refreshPlayersList, avatarUrl, walletClient, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain]);
+    }, [playerName, address, publicClient, getActiveWalletClient, addLog, refreshPlayersList, avatarUrl, walletClient, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain, lobbyPassword]);
 
     // --- SHUFFLE PHASE ---
 
@@ -3881,7 +3939,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         runtimeContractAddress,
         currencySymbol: runtimeChain.nativeCurrency.symbol,
         setCurrentRoomId,
-        decryptMyRoleFromGM
+        decryptMyRoleFromGM,
+        lobbyPassword,
+        setLobbyPassword
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, isTxConfirming, currentRoomId,
         createLobbyOnChain, joinLobbyOnChain, startGameOnChain,
@@ -3900,7 +3960,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         voteMap,
         runtimeChain.nativeCurrency.symbol,
         setCurrentRoomId,
-        decryptMyRoleFromGM
+        decryptMyRoleFromGM,
+        lobbyPassword,
+        setLobbyPassword,
     ]);
 
     return (

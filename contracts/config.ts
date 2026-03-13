@@ -48,13 +48,14 @@ export const DEPLOYMENTS = {
         chainId: 50312,
         explorer: 'https://shannon-explorer.somnia.network',
         contracts: {
-            MafiaDiamond: '0xb34f8430f8a755c8c1bdc9dd19f14e263fc3f6b1',
-            Groth16Verifier: '0x2da0427790ff9c2d83cd90076ea4197a1ddbc944',
-            LobbyFacet: '0x5e0b3dbc999dc367c8f403bcf6169d6a599025ab',
-            ShuffleFacet: '0x08d216915a693a9715cbaecfd34ebff272fd28ea',
-            VotingFacet: '0xc1bd63870d30fa3d7f724dddeb28d6b0be3ca331',
-            NightFacet: '0x4a3609c0acecf27b5cb02b11bd53a3ecf23dff60',
-            GameEndFacet: '0xaacdd039d2d2d3f76ec5113cc93eeddc4d8495ef',
+            MafiaDiamond: '0x36d37e145abfcf38b97fa44a5154445758ce7bf0',
+            Groth16Verifier: '0x41f1bcef33bd2f061b8fac1336c32eecc58a4147',
+            LobbyFacet: '0x6ad9823da327009b73c63ba742bcc466ed955b57',
+            ShuffleFacet: '0x377d87cc3da7daafaf8b3480250b8894eea0f4c5',
+            VotingFacet: '0x19ed5b973e684d845dccf9d7d01696bcbef19b19',
+            NightFacet: '0x578c47708419995f66489ff2d8678f900d4bc0fa',
+            GameEndFacet: '0x2728ab6375b570ef7d068270a3f1564a47accbd7',
+            TournamentFacet: '0x65d785c6fd135a45fa83b15bda7762920c110c38',
         },
     },
     avalanche_fuji: {
@@ -62,14 +63,14 @@ export const DEPLOYMENTS = {
         chainId: 43113,
         explorer: 'https://testnet.snowtrace.io',
         contracts: {
-            MafiaDiamond: '0x3c1bd1923f8318247e2b60e41b0f280391c4e1e1',
-            Groth16Verifier: '0x65dacc2336a6f43552cc2578f5eb24b8c79503ba',
-            LobbyFacet: '0xb718ba5b6bccfa418f2971ea094f5b52a105c049',
-            ShuffleFacet: '0xffa18547fde97a6d2f4df8af0ac545db9f5ae789',
-            VotingFacet: '0x78616f773e7d9fef5dd7c6583dc642b238033a61',
-            NightFacet: '0x72d4cfa33b2e7e6cce4a85bbd31147659f04a3be',
-            GameEndFacet: '0x970e1fa3c3ea47f6d2911ae7fb0fa01447562009',
-
+            MafiaDiamond: '0xa7f0fa14e49721ce598dd39b860b54b0e600b099',
+            Groth16Verifier: '0x6460f8d7ad88a20d7518f2f8bdf654ad71ce22b3',
+            LobbyFacet: '0x5f17355387906d243d43470d1bdd52b782c26969',
+            ShuffleFacet: '0xa6a099c6e3e32bbbdb8df66a9ceaa6752b412f00',
+            VotingFacet: '0x150bf40b8d36566152b16ec2f0e8dc63825fbac0',
+            NightFacet: '0xe50e12c76cb73c74b72901ff340d886c2aec8d9f',
+            GameEndFacet: '0xf19ec0c7f1cfe5edd96f9e157dcc30c857218c92',
+            TournamentFacet: '0xa748d120a94bf6598d81d6276eba86a59eb72be3',
         },
     },
 } as const;
@@ -144,6 +145,14 @@ export const FUNCTION_MAP = {
     resolveNightAsGameMaster: 'NightFacet',
 
     endGameZK: 'GameEndFacet',
+
+    createTournament: 'TournamentFacet',
+    cancelTournament: 'TournamentFacet',
+    joinTournament: 'TournamentFacet',
+    distributeMafiaPrizes: 'TournamentFacet',
+    toggleTournamentWhitelist: 'TournamentFacet',
+    addToTournamentWhitelist: 'TournamentFacet',
+    removeFromTournamentWhitelist: 'TournamentFacet',
 } as const;
 
 // Backward-compatible exports used across existing frontend modules
