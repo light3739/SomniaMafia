@@ -140,7 +140,7 @@ export const WaitingRoom: React.FC = () => {
                             {/* Refresh button removed per user request */}
                         </div>
                         <div className="text-white/60 text-sm">
-                            Players: <span className="text-[#916A47] font-bold">{gameState.players.length}/16</span>
+                            Players: <span className="text-[#916A47] font-bold">{gameState.players.length}/{gameState.maxPlayers}</span>
                         </div>
                     </div>
                 </div>

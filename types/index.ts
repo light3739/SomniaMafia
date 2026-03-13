@@ -84,6 +84,7 @@ export interface GameState {
   isTournament?: boolean;
   prizePool?: bigint;
   paymentToken?: `0x${string}`;
+  maxPlayers: number;
 }
 
 // For Framer Motion variants
