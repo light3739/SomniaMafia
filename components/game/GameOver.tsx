@@ -52,7 +52,7 @@ const contractRoleToRole = (contractRole: number): Role => {
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = React.memo(() => {
-    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, claimRefund, isTxPending, runtimeContractAddress, currencySymbol } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const router = useRouter();
@@ -200,15 +200,6 @@ export const GameOver: React.FC = React.memo(() => {
         checkDeposit();
     }, [publicClient, currentRoomId, address]);
 
-    const handleClaimRefund = useCallback(async () => {
-        try {
-            await claimRefund();
-            setRefundClaimed(true);
-            setDepositAmount('0');
-        } catch (e) {
-            console.error('[GameOver] Claim refund failed:', e);
-        }
-    }, [claimRefund]);
 
 
     // Расшифровать все роли в конце игры
@@ -683,30 +674,6 @@ export const GameOver: React.FC = React.memo(() => {
                         </div>
                     </motion.div>
 
-                    {/* Deposit Refund */}
-                    {!refundClaimed && parseFloat(depositAmount) > 0 && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 1.8 }}
-                            className="bg-gradient-to-r from-emerald-950/40 to-emerald-900/20 border border-emerald-500/30 rounded-2xl p-4 mb-4 flex items-center justify-between"
-                        >
-                            <div className="flex items-center gap-3">
-                                <Coins className="w-6 h-6 text-emerald-400" />
-                                <div>
-                                    <p className="text-emerald-300 font-medium text-sm">Deposit Available</p>
-                                    <p className="text-emerald-400/70 text-xs">{depositAmount} STT refundable</p>
-                                </div>
-                            </div>
-                            <Button
-                                onClick={handleClaimRefund}
-                                disabled={isTxPending}
-                                className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 text-sm"
-                            >
-                                {isTxPending ? 'Claiming...' : 'Claim Refund'}
-                            </Button>
-                        </motion.div>
-                    )}
 
                     {refundClaimed && (
                         <motion.div
@@ -723,23 +690,40 @@ export const GameOver: React.FC = React.memo(() => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 2 }}
-                        className="flex gap-4"
+                        className="flex flex-col gap-4 w-full"
                     >
-                        <Button
-                            onClick={handlePlayAgain}
-                            className="flex-1 h-[60px] text-lg"
-                        >
-                            <RotateCcw className="w-5 h-5 mr-2" />
-                            Play Again
-                        </Button>
-                        <Button
-                            onClick={handleHome}
-                            variant="outline-gold"
-                            className="flex-1 h-[60px] text-lg"
-                        >
-                            <Home className="w-5 h-5 mr-2" />
-                            Home
-                        </Button>
+                        {gameState.isTournament && (
+                            <Button
+                                onClick={async () => {
+                                    if (currentRoomId) {
+                                        await distributePrizesOnChain(currentRoomId);
+                                    }
+                                }}
+                                isLoading={isTxPending}
+                                className="w-full h-[60px] text-lg bg-gradient-to-r from-[#D4A54A] to-[#F0C868] text-[#281608]"
+                            >
+                                <Trophy className="w-5 h-5 mr-2" />
+                                Distribute Prize Pool
+                            </Button>
+                        )}
+
+                        <div className="flex gap-4">
+                            <Button
+                                onClick={handlePlayAgain}
+                                className="flex-1 h-[60px] text-lg"
+                            >
+                                <RotateCcw className="w-5 h-5 mr-2" />
+                                Play Again
+                            </Button>
+                            <Button
+                                onClick={handleHome}
+                                variant="outline-gold"
+                                className="flex-1 h-[60px] text-lg"
+                            >
+                                <Home className="w-5 h-5 mr-2" />
+                                Home
+                            </Button>
+                        </div>
                     </motion.div>
 
                 </motion.div>

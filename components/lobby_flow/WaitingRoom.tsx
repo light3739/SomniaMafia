@@ -20,7 +20,8 @@ export const WaitingRoom: React.FC = () => {
         isTxPending,
         currentRoomId,
         myPlayer,
-        refreshPlayersList
+        refreshPlayersList,
+        cancelTournamentOnChain
     } = useGameContext();
 
     const { address } = useAccount();
@@ -155,14 +156,30 @@ export const WaitingRoom: React.FC = () => {
 
                 {/* Room creator can start the game when enough players */}
                 {canStartGame ? (
-                    <Button
-                        onClick={handleStart}
-                        isLoading={isTxPending}
-                        disabled={isTxPending}
-                        className="w-full h-[60px] md:h-[70px] text-xl tracking-widest uppercase shadow-[0_10px_40px_rgba(145,106,71,0.2)]"
-                    >
-                        {isTxPending ? "Starting..." : "Start Game"}
-                    </Button>
+                    <div className="w-full flex flex-col gap-3">
+                        <Button
+                            onClick={handleStart}
+                            isLoading={isTxPending}
+                            disabled={isTxPending}
+                            className="w-full h-[60px] md:h-[70px] text-xl tracking-widest uppercase shadow-[0_10px_40px_rgba(145,106,71,0.2)]"
+                        >
+                            {isTxPending ? "Starting..." : "Start Game"}
+                        </Button>
+
+                        {gameState.isTournament && (
+                            <button
+                                onClick={async () => {
+                                    if (gameState.tournamentId && confirm("Are you sure you want to cancel this tournament? All players will be refunded.")) {
+                                        await cancelTournamentOnChain(gameState.tournamentId);
+                                    }
+                                }}
+                                disabled={isTxPending}
+                                className="w-full py-3 text-red-500/60 hover:text-red-500 transition-colors text-xs uppercase tracking-widest font-bold"
+                            >
+                                Cancel Tournament
+                            </button>
+                        )}
+                    </div>
                 ) : isParticipant ? (
                     <div className="w-full p-6 rounded-2xl bg-white/[0.02] border border-white/5 text-center backdrop-blur-sm">
                         <p className="text-white/30 text-sm italic">
