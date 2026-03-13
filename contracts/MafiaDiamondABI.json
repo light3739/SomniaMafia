@@ -1,7 +1,53 @@
 [
   {
     "inputs": [],
+    "name": "AccessControlBadConfirmation",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "neededRole",
+        "type": "bytes32"
+      }
+    ],
+    "name": "AccessControlUnauthorizedAccount",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "AlreadyCommitted",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "AlreadyJoined",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "AlreadyRevealed",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "AlreadySharedKeys",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "AlreadyVoted",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ArrayTooLarge",
     "type": "error"
   },
   {
@@ -11,12 +57,47 @@
   },
   {
     "inputs": [],
+    "name": "EnforcedPause",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ExpectedPause",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "InsufficientDeposit",
     "type": "error"
   },
   {
     "inputs": [],
+    "name": "InvalidArrayLength",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidDeckSize",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidMafiaTargetReveal",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "InvalidPlayerCount",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidReveal",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidRoleReveal",
     "type": "error"
   },
   {
@@ -31,12 +112,47 @@
   },
   {
     "inputs": [],
+    "name": "MafiaNotReady",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "MafiaTargetAlreadyCommitted",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "MafiaTargetAlreadyRevealed",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "NicknameTooLong",
     "type": "error"
   },
   {
     "inputs": [],
+    "name": "NoStalledPlayers",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotAllRolesRevealed",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotCommitted",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "NotEnoughPlayers",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotMafiaMember",
     "type": "error"
   },
   {
@@ -47,6 +163,16 @@
   {
     "inputs": [],
     "name": "NotParticipant",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotYourTurn",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "PhaseDeadlinePassed",
     "type": "error"
   },
   {
@@ -66,6 +192,26 @@
   },
   {
     "inputs": [],
+    "name": "ReentrancyGuardReentrantCall",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "RoleAlreadyCommitted",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "RoleAlreadyRevealed",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "RoleNotCommitted",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "RoomFull",
     "type": "error"
   },
@@ -75,14 +221,8 @@
     "type": "error"
   },
   {
-    "inputs": [
-      {
-        "internalType": "bytes4",
-        "name": "selector",
-        "type": "bytes4"
-      }
-    ],
-    "name": "FunctionNotFound",
+    "inputs": [],
+    "name": "SaltTooLong",
     "type": "error"
   },
   {
@@ -94,6 +234,52 @@
       }
     ],
     "name": "SafeERC20FailedOperation",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "SessionAlreadyRegistered",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "SessionExpired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "SessionNotForThisRoom",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "TimeNotExpired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "Unauthorized",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "WinConditionNotMet",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "WrongPhase",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes4",
+        "name": "selector",
+        "type": "bytes4"
+      }
+    ],
+    "name": "FunctionNotFound",
     "type": "error"
   },
   {
