@@ -131,14 +131,14 @@ export const FUNCTION_MAP = {
 
     startVoting: 'VotingFacet',
     vote: 'VotingFacet',
-    revealRole: 'VotingFacet',
+    finalizeVoting: 'VotingFacet',
     endGameAutomatically: 'VotingFacet',
     forcePhaseTimeout: 'VotingFacet',
     claimRefund: 'VotingFacet',
 
     commitNightAction: 'NightFacet',
     revealNightAction: 'NightFacet',
-    sendMafiaMessage: 'NightFacet',
+    mafiaMessage: 'NightFacet',
     commitMafiaTarget: 'NightFacet',
     revealMafiaTarget: 'NightFacet',
     endNight: 'NightFacet',

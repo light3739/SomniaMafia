@@ -52,7 +52,7 @@ const contractRoleToRole = (contractRole: number): Role => {
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = React.memo(() => {
-    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, claimRefund, isTxPending, runtimeContractAddress, currencySymbol } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, claimRefund, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const router = useRouter();
@@ -723,23 +723,40 @@ export const GameOver: React.FC = React.memo(() => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 2 }}
-                        className="flex gap-4"
+                        className="flex flex-col gap-4 w-full"
                     >
-                        <Button
-                            onClick={handlePlayAgain}
-                            className="flex-1 h-[60px] text-lg"
-                        >
-                            <RotateCcw className="w-5 h-5 mr-2" />
-                            Play Again
-                        </Button>
-                        <Button
-                            onClick={handleHome}
-                            variant="outline-gold"
-                            className="flex-1 h-[60px] text-lg"
-                        >
-                            <Home className="w-5 h-5 mr-2" />
-                            Home
-                        </Button>
+                        {gameState.isTournament && (
+                            <Button
+                                onClick={async () => {
+                                    if (currentRoomId) {
+                                        await distributePrizesOnChain(currentRoomId);
+                                    }
+                                }}
+                                isLoading={isTxPending}
+                                className="w-full h-[60px] text-lg bg-gradient-to-r from-[#D4A54A] to-[#F0C868] text-[#281608]"
+                            >
+                                <Trophy className="w-5 h-5 mr-2" />
+                                Distribute Prize Pool
+                            </Button>
+                        )}
+
+                        <div className="flex gap-4">
+                            <Button
+                                onClick={handlePlayAgain}
+                                className="flex-1 h-[60px] text-lg"
+                            >
+                                <RotateCcw className="w-5 h-5 mr-2" />
+                                Play Again
+                            </Button>
+                            <Button
+                                onClick={handleHome}
+                                variant="outline-gold"
+                                className="flex-1 h-[60px] text-lg"
+                            >
+                                <Home className="w-5 h-5 mr-2" />
+                                Home
+                            </Button>
+                        </div>
                     </motion.div>
 
                 </motion.div>
