@@ -18,9 +18,11 @@ export const CreateLobby: React.FC = () => {
         lobbyName,
         setLobbyName,
         createLobbyOnChain,
+        createTournamentOnChain,
         isTxPending,
         lobbyPassword,
         setLobbyPassword,
+        currencySymbol
     } = useGameContext();
 
     const { isConnected } = useAccount();
@@ -50,22 +52,39 @@ export const CreateLobby: React.FC = () => {
     const handleCreate = async () => {
         if (!lobbyName.trim() || isTxPending) return;
 
-        // STERILIZATION: Ensure hidden fields don't "leak" stale data
-        const finalParams = {
-            name: lobbyName,
-            password: lobbyPassword.trim() || '', // In future we might use this
-            maxPlayers: maxPlayers,
-            isTournament: isTournament,
-            tournamentType: isTournament ? tournamentType : 'buy-in',
-            amount: isTournament ? tournamentAmount : ''
-        };
+        if (isTournament) {
+            // TOURNAMENT FLOW
+            const buyIn = tournamentType === 'buy-in' ? tournamentAmount : '0';
+            const initialPrize = tournamentType === 'free-roll' ? tournamentAmount : '0';
+            
+            // For now, use native token
+            const paymentToken = '0x0000000000000000000000000000000000000000' as `0x${string}`;
 
-        // Note: Currently createLobbyOnChain doesn't take params, 
-        // but we prepare them here for future contract integration.
-        // For now, we just pass the lobby name behavior as before.
-        const success = await createLobbyOnChain();
-        if (success) {
-            router.push('/waiting');
+            const tournamentId = await createTournamentOnChain({
+                name: lobbyName,
+                buyIn: buyIn || '0',
+                maxPlayers: 100, // Tournament max total players (not per table)
+                playersPerTable: maxPlayers, // This is our "Room Size"
+                password: lobbyPassword.trim(),
+                paymentToken,
+                initialPrize: initialPrize || '0'
+            });
+
+            if (tournamentId !== null) {
+                // After creating tournament, we could redirect to a tournament dashboard 
+                // or just to join the first room. For now, let's go to waiting room 
+                // (the context should have updated currentRoomId if it auto-joined, 
+                // but createTournament doesn't auto-join yet).
+                // Actually, our createLobbyOnChain implementation Redirects to /waiting.
+                // For tournaments, the user might need to MANUALLY join or we can auto-call join.
+                router.push('/waiting');
+            }
+        } else {
+            // STANDARD LOBBY FLOW
+            const success = await createLobbyOnChain();
+            if (success) {
+                router.push('/waiting');
+            }
         }
     };
 
@@ -306,7 +325,7 @@ export const CreateLobby: React.FC = () => {
                                                     inputMode="decimal"
                                                 />
                                                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#D4A54A]/50 text-sm font-bold pointer-events-none">
-                                                    STT
+                                                    {currencySymbol}
                                                 </span>
                                             </div>
 
