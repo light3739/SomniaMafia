@@ -1,18 +1,34 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { usePrivy } from '@privy-io/react-auth';
 import { useGameContext } from '../../contexts/GameContext';
 import { BackButton } from '../ui/BackButton';
-import { usePublicClient, useAccount } from 'wagmi';
+import { usePublicClient, useAccount, useChainId } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { NetworkSelector } from '../ui/NetworkSelector';
+
+// --- ИКОНКИ ---
+const RefreshIcon = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" />
+    </svg>
+);
+const LockIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+);
+const TrophyIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D4A54A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
+);
+const ChevronRight = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+);
 
 interface JoinLobbyProps {
     initialRoomId?: string | null;
 }
 
-// Parse a room struct (handles both tuple-array and object forms from viem)
+// Parse a room struct
 function parseRoom(id: bigint, data: any): {
     id: number; host: string; name: string; players: number; max: number;
     phase: number; timestamp: number;
@@ -31,144 +47,168 @@ function parseRoom(id: bigint, data: any): {
     } catch { return null; }
 }
 
-/**
- * TODO: When smart contract supports tournaments, read tournament data from chain.
- * For now, we use a stub that returns false for all rooms.
- * Replace this with actual on-chain data when available.
- */
 interface TournamentInfo {
     isTournament: boolean;
-    prize?: string;       // e.g. "5.0 STT"
+    prize?: string;
     hasPassword?: boolean;
 }
 
 function getTournamentInfo(_room: any): TournamentInfo {
     // TODO: Read tournament flag from smart contract room data
-    // Example future implementation:
-    // return {
-    //     isTournament: room.isTournament,
-    //     prize: room.prize ? `${formatEther(room.prize)} STT` : undefined,
-    //     hasPassword: room.hasPassword,
-    // };
     return { isTournament: false };
 }
 
 export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress } = useGameContext();
-    const { login } = usePrivy();
+    const { login, authenticated } = usePrivy();
+    const { isConnected } = useAccount();
+
+    // Отслеживаем смену сети явно
+    const chainId = useChainId();
+    const prevChainIdRef = useRef(chainId);
+
     const router = useRouter();
     const publicClient = usePublicClient();
+
     const [rooms, setRooms] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isInitialLoad, setIsInitialLoad] = useState(true); // Для Радара
+    const [isRefreshing, setIsRefreshing] = useState(false);  // Для крутилки
+
     const [lastUpdate, setLastUpdate] = useState<number>(0);
     const mountedRef = useRef(true);
-    const lastFetchRef = useRef(0); // debounce: min 1.5s between fetches
+    const lastFetchRef = useRef(0);
     const MAX_LOBBY_AGE_SEC = 15 * 60;
 
-    // Core fetch function — no generation counter, just a simple mounted check + debounce
-    const fetchRooms = useCallback(async (silent = false) => {
+    // Scroll-aware header
+    const [isScrolled, setIsScrolled] = useState(false);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    // Типизируем причину вызова функции для идеального UX
+    type FetchReason = 'initial' | 'refresh' | 'polling';
+
+    const fetchRooms = useCallback(async (reason: FetchReason = 'polling') => {
         if (!publicClient) return;
 
-        // Debounce: skip if last fetch was < 1.5s ago (prevents RPC spam from events + polling overlap)
         const now = Date.now();
-        if (silent && now - lastFetchRef.current < 1500) return;
+        // Дебаунс только для фонового поллинга
+        if (reason === 'polling' && now - lastFetchRef.current < 1500) return;
         lastFetchRef.current = now;
 
-        if (!silent) setIsLoading(true);
+        // ИЗМЕНЕНИЕ ЗДЕСЬ: Теперь и заход на страницу, и ручной рефреш вызывают Радар
+        const isHardLoad = reason === 'initial' || reason === 'refresh';
+
+        if (isHardLoad) setIsInitialLoad(true);
+        if (reason === 'refresh') setIsRefreshing(true);
+
+        const fetchStartTime = Date.now(); // Засекаем время начала запроса
+
         try {
             const roomList: any[] = [];
+            const nextId = await publicClient.readContract({
+                address: runtimeContractAddress, abi: MAFIA_ABI,
+                functionName: 'nextRoomId',
+            }) as bigint;
 
-            if (initialRoomId) {
-                const roomId = BigInt(initialRoomId);
-                const roomData = await publicClient.readContract({
+            const lookAhead = 3n;
+            const scanEnd = nextId + lookAhead;
+            const scanCount = 15n + lookAhead;
+            const start = scanEnd > scanCount ? scanEnd - scanCount : 0n;
+
+            const queries = Array.from({ length: Number(scanEnd - start) }, (_, idx) => scanEnd - 1n - BigInt(idx));
+            if (initialRoomId && !queries.includes(BigInt(initialRoomId))) {
+                queries.push(BigInt(initialRoomId));
+            }
+
+            const results = await Promise.allSettled(
+                queries.map(i => publicClient.readContract({
                     address: runtimeContractAddress, abi: MAFIA_ABI,
-                    functionName: 'getRoom', args: [roomId],
-                }) as any;
-                const parsed = parseRoom(roomId, roomData);
-                if (parsed && parsed.phase === 0) {
+                    functionName: 'getRoom', args: [i],
+                }).then(data => ({ i, data })))
+            );
+
+            const nowSec = Math.floor(Date.now() / 1000);
+            for (const res of results) {
+                if (res.status !== 'fulfilled') continue;
+                const parsed = parseRoom(res.value.i, res.value.data);
+                if (!parsed) continue;
+
+                const isLobby = parsed.phase === 0;
+                const isRecent = parsed.timestamp === 0 || (nowSec - parsed.timestamp) < MAX_LOBBY_AGE_SEC;
+                const isValid = parsed.host !== '0x0000000000000000000000000000000000000000' && parsed.max > 0;
+
+                if (isLobby && isRecent && isValid) {
                     roomList.push(parsed);
-                }
-            } else {
-                const nextId = await publicClient.readContract({
-                    address: runtimeContractAddress, abi: MAFIA_ABI,
-                    functionName: 'nextRoomId',
-                }) as bigint;
-
-                // LOOK-AHEAD: scan 3 rooms BEYOND nextRoomId to catch rooms
-                // created between the nextRoomId read and the getRoom reads.
-                // Non-existent rooms return zero-address host → filtered by isValid.
-                const lookAhead = 3n;
-                const scanEnd = nextId + lookAhead;
-                const scanCount = 15n + lookAhead; // 15 real + 3 look-ahead
-                const start = scanEnd > scanCount ? scanEnd - scanCount : 0n;
-
-                const results = await Promise.allSettled(
-                    Array.from({ length: Number(scanEnd - start) }, (_, idx) => {
-                        const i = scanEnd - 1n - BigInt(idx);
-                        return publicClient.readContract({
-                            address: runtimeContractAddress, abi: MAFIA_ABI,
-                            functionName: 'getRoom', args: [i],
-                        }).then(data => ({ i, data }));
-                    })
-                );
-
-                const nowSec = Math.floor(Date.now() / 1000);
-                for (const res of results) {
-                    if (res.status !== 'fulfilled') continue;
-                    const parsed = parseRoom(res.value.i, res.value.data);
-                    if (!parsed) continue;
-
-                    const isLobby = parsed.phase === 0;
-                    const isRecent = parsed.timestamp === 0 || (nowSec - parsed.timestamp) < MAX_LOBBY_AGE_SEC;
-                    const isValid = parsed.host !== '0x0000000000000000000000000000000000000000' && parsed.max > 0;
-
-                    if (isLobby && isRecent && isValid) {
-                        roomList.push(parsed);
-                    }
                 }
             }
 
             roomList.sort((a, b) => b.id - a.id);
 
+            // АНТИ-МЕРЦАНИЕ (ARTIFICIAL DELAY):
+            // Если это хард-лоад (Радар), гарантируем, что он висит минимум 800мс.
+            if (isHardLoad && mountedRef.current) {
+                const elapsed = Date.now() - fetchStartTime;
+                const MIN_RADAR_TIME = 800;
+                if (elapsed < MIN_RADAR_TIME) {
+                    await new Promise(resolve => setTimeout(resolve, MIN_RADAR_TIME - elapsed));
+                }
+            }
+
             if (mountedRef.current) {
                 setRooms(roomList);
                 setLastUpdate(Date.now());
-                if (!silent) setIsLoading(false);
+                setIsInitialLoad(false);
+
+                if (reason === 'refresh') {
+                    setTimeout(() => setIsRefreshing(false), 500); // Крутилка крутится минимум полсекунды
+                }
             }
         } catch (e) {
             console.error('[JoinLobby] fetchRooms error:', e);
-            if (mountedRef.current && !silent) setIsLoading(false);
+            if (mountedRef.current) {
+                setIsInitialLoad(false);
+                setIsRefreshing(false);
+            }
         }
-    }, [publicClient, initialRoomId]);
+    }, [publicClient, initialRoomId, runtimeContractAddress]);
 
-    // Lifecycle: initial fetch + polling + event subscriptions
+    // Обработка смены сети (Жесткий сброс)
+    useEffect(() => {
+        if (chainId !== prevChainIdRef.current) {
+            prevChainIdRef.current = chainId;
+            setRooms([]); // Мгновенно очищаем старые комнаты
+            fetchRooms('initial'); // Запускаем Радар для новой сети
+        }
+    }, [chainId, fetchRooms]);
+
+    // Жизненный цикл (Первый рендер, фоновый поллинг и ивенты)
     useEffect(() => {
         mountedRef.current = true;
 
-        // Immediate fetch
-        fetchRooms();
+        // Вызываем initial только если комнат еще нет
+        if (rooms.length === 0 && isInitialLoad) {
+            fetchRooms('initial');
+        }
 
-        // 3-second polling
-        const interval = setInterval(() => fetchRooms(true), 3000);
+        const interval = setInterval(() => fetchRooms('polling'), 3000);
 
-        // Event subscriptions for instant updates (RoomCreated, PlayerJoined)
         let unwatch1: (() => void) | undefined;
         let unwatch2: (() => void) | undefined;
-        if (publicClient && !initialRoomId) {
+
+        if (publicClient) {
             try {
                 unwatch1 = publicClient.watchContractEvent({
                     address: runtimeContractAddress, abi: MAFIA_ABI,
                     eventName: 'RoomCreated',
-                    onLogs: () => { fetchRooms(true); },
+                    onLogs: () => { fetchRooms('polling'); },
                 });
-            } catch { }
-            try {
                 unwatch2 = publicClient.watchContractEvent({
                     address: runtimeContractAddress, abi: MAFIA_ABI,
                     eventName: 'PlayerJoined',
-                    onLogs: () => { fetchRooms(true); },
+                    onLogs: () => { fetchRooms('polling'); },
                 });
-            } catch { }
+            } catch (e) {
+                console.warn("Event watch failed", e);
+            }
         }
 
         return () => {
@@ -177,15 +217,22 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             unwatch1?.();
             unwatch2?.();
         };
-    }, [fetchRooms, publicClient, initialRoomId]);
+    }, [fetchRooms, publicClient, runtimeContractAddress]); // Убрали лишние триггеры
 
-    const { isConnected } = useAccount();
+    // Scroll-aware header listener
+    useEffect(() => {
+        const el = scrollContainerRef.current;
+        if (!el) return;
+        const onScroll = () => setIsScrolled(el.scrollTop > 40);
+        el.addEventListener('scroll', onScroll, { passive: true });
+        return () => el.removeEventListener('scroll', onScroll);
+    }, []);
 
     const handleJoin = async (room: any) => {
-        if (!isConnected) {
+        if (!isConnected || !authenticated) {
+            login();
             return;
         }
-        // TODO: If tournament room has a password, show password prompt before joining
         const success = await joinLobbyOnChain(room.id);
         if (success) {
             setLobbyName(room.name || `Room #${room.id}`);
@@ -193,167 +240,237 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         }
     };
 
+    const initialRoomData = initialRoomId ? rooms.find(r => r.id === Number(initialRoomId)) : null;
+
     return (
-        <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
-            {/* Background is provided by RootLayout/DynamicBackground */}
+        <div ref={scrollContainerRef} className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 pb-12 custom-scrollbar">
+            {/* Top vignette: fades content behind nav on scroll, no hard bar */}
+            <div
+                className="fixed top-0 left-0 right-0 h-24 pointer-events-none z-40 transition-opacity duration-500"
+                style={{
+                    opacity: isScrolled ? 1 : 0,
+                    background: 'linear-gradient(to bottom, rgba(10,7,4,0.92) 0%, rgba(10,7,4,0.5) 60%, transparent 100%)'
+                }}
+            />
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10">
-                <div className="w-full flex items-center justify-between">
-                    <div className="-ml-3">
-                        <BackButton to="/setup" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <NetworkSelector compact />
-                    </div>
+            {/* Navigation: always transparent, always has top padding */}
+            <div className="w-full max-w-[600px] flex items-center justify-between sticky top-0 z-50 px-1 pt-4 pb-3 -mx-1">
+                <div className="-ml-2">
+                    <BackButton to="/setup" />
                 </div>
+                <div className="flex items-center gap-2">
+                    <NetworkSelector compact />
+                </div>
+            </div>
 
-                {initialRoomId && !isLoading && (
-                    <div className="w-full p-4 bg-[#916A47]/20 border border-[#916A47] rounded-xl text-center mb-4">
-                        <h3 className="text-white text-xl font-bold mb-2">You were invited to Room #{initialRoomId}</h3>
-                        {rooms.find(r => r.id === Number(initialRoomId)) ? (
-                            <div className="flex flex-col gap-3">
-                                <p className="text-white/70 text-sm">Join the conspiracy now.</p>
-                                {!isConnected ? (
-                                    <div className="flex justify-center">
-                                        {(() => {
-                                            const { login, authenticated } = require('@privy-io/react-auth').usePrivy();
-                                            if (authenticated) {
-                                                return (
-                                                    <button disabled className="bg-[#916A47]/50 text-white/50 py-2 px-4 rounded-lg font-bold transition-all cursor-wait">
-                                                        Connecting...
-                                                    </button>
-                                                );
-                                            }
-                                            return (
-                                                <button onClick={() => login()} className="bg-[#916A47] hover:bg-[#A37B58] text-white py-2 px-4 rounded-lg font-bold transition-all">
-                                                    Connect & Join
-                                                </button>
-                                            );
-                                        })()}
-                                    </div>
+            {/* Centered layout with safe scrolling via my-auto */}
+            <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 my-auto pt-2 md:pt-4"
+            >
+
+                {/* Баннер Инвайта */}
+                {initialRoomId && !isInitialLoad && (
+                    <div className="w-full p-6 bg-gradient-to-br from-[#19130D] to-[#281608] border border-[#D4A54A]/30 rounded-[24px] shadow-[0_0_20px_rgba(212,165,74,0.15)] flex flex-col items-center text-center">
+                        <h3 className="text-white text-xl md:text-2xl font-['Cinzel'] mb-1">Room #{initialRoomId} Invite</h3>
+
+                        {initialRoomData ? (
+                            <div className="flex flex-col gap-4 w-full mt-2">
+                                <p className="text-white/60 text-sm">You have been invited to join <span className="text-[#D4A54A] font-semibold">{initialRoomData.name || 'this session'}</span>.</p>
+
+                                {(!isConnected || !authenticated) ? (
+                                    <button onClick={() => login()} className="w-full bg-gradient-to-r from-[#D4A54A] to-[#F0C868] text-[#281608] py-3.5 px-6 rounded-xl font-bold transition-transform hover:scale-[1.02] shadow-lg">
+                                        Connect Wallet to Join
+                                    </button>
                                 ) : (
                                     <button
-                                        onClick={() => handleJoin(rooms.find(r => r.id === Number(initialRoomId)))}
+                                        onClick={() => handleJoin(initialRoomData)}
                                         disabled={isTxPending}
-                                        className="bg-[#916A47] hover:bg-[#A37B58] text-white py-3 px-6 rounded-lg font-bold transition-all"
+                                        className="w-full bg-gradient-to-r from-[#D4A54A] to-[#F0C868] text-[#281608] py-3.5 px-6 rounded-xl font-bold transition-transform hover:scale-[1.02] shadow-lg disabled:opacity-50 disabled:hover:scale-100"
                                     >
-                                        JOIN ROOM #{initialRoomId}
+                                        {isTxPending ? 'Joining...' : 'Accept Invite & Join'}
                                     </button>
                                 )}
                             </div>
                         ) : (
-                            <p className="text-red-400">Room not found or game already started.</p>
+                            <p className="text-red-400/80 mt-2 text-sm bg-red-950/30 py-2 px-4 rounded-lg border border-red-900/50">
+                                This room no longer exists or the game has already started.
+                            </p>
                         )}
                     </div>
                 )}
 
-                <div className="flex items-center justify-between w-full">
-                    <h2 className="text-white text-2xl md:text-3xl font-['Cinzel'] font-light tracking-widest uppercase">Live Sessions</h2>
+                {/* Заголовок списка */}
+                <div className="flex items-center justify-between w-full mt-2">
+                    <h2 className="text-white/90 text-xl md:text-2xl font-['Cinzel'] uppercase tracking-widest">
+                        Live Sessions
+                    </h2>
                     <div className="flex items-center gap-3">
-                        {lastUpdate > 0 && (
-                            <span className="text-white/20 text-[10px] font-mono">
+                        {lastUpdate > 0 && !isInitialLoad && (
+                            <span className="text-white/30 text-[10px] md:text-xs font-mono">
                                 {new Date(lastUpdate).toLocaleTimeString()}
                             </span>
                         )}
                         <button
-                            onClick={() => fetchRooms(false)}
-                            className="text-[#916A47] hover:text-white transition-colors text-xl md:text-2xl"
+                            onClick={() => fetchRooms('refresh')}
+                            disabled={isRefreshing || isInitialLoad}
+                            className="text-[#D4A54A] hover:text-[#F0C868] transition-colors p-1 disabled:opacity-50"
                             title="Refresh List"
                         >
-                            ⟳
+                            <motion.div animate={{ rotate: isRefreshing ? 360 : 0 }} transition={{ duration: 0.5, ease: "easeInOut" }}>
+                                <RefreshIcon className="w-5 h-5 md:w-6 md:h-6" />
+                            </motion.div>
                         </button>
                     </div>
                 </div>
 
-                <div className="w-full flex flex-col gap-3 min-h-[200px] md:min-h-[300px]">
-                    {isLoading ? (
-                        <div className="text-white/40 text-center flex-1 flex items-center justify-center bg-black/20 rounded-2xl border border-white/5 animate-pulse">Scanning Network...</div>
-                    ) : rooms.length === 0 ? (
-                        <div className="text-white/40 text-center flex-1 flex flex-col items-center justify-center bg-black/20 rounded-2xl border border-white/5">
-                            No active lobbies found. <br /> Be the first to create one!
-                        </div>
-                    ) : rooms.map((room) => {
-                        const tournament = getTournamentInfo(room);
-
-                        return (
-                            <motion.button
-                                key={room.id}
-                                whileHover={{ scale: 1.02, backgroundColor: tournament.isTournament ? "rgba(212, 165, 74, 0.15)" : "rgba(145, 106, 71, 0.2)" }}
-                                onClick={() => {
-                                    if (!isConnected) {
-                                        login();
-                                        return;
-                                    }
-                                    handleJoin(room);
-                                }}
-                                disabled={isTxPending}
-                                className={`w-full p-4 md:p-5 backdrop-blur-sm rounded-[15px] flex items-center justify-between group transition-all relative overflow-hidden
-                                    ${tournament.isTournament
-                                        ? 'bg-gradient-to-r from-[#2A1F0A]/90 to-[#19130D]/90 border border-[#D4A54A]/30 shadow-[0_0_15px_rgba(212,165,74,0.1)]'
-                                        : 'bg-[#19130D]/80 border border-white/10'
-                                    }
-                                    ${!isConnected ? 'hover:border-[#916A47]/40' : ''}
-                                `}
+                {/* Список комнат */}
+                <div className="w-full flex flex-col gap-3 min-h-[250px]">
+                    <AnimatePresence mode="wait">
+                        {isInitialLoad || rooms.length === 0 ? (
+                            // ЕДИНЫЙ КОНТЕЙНЕР для загрузки и пустого стейта (он не моргает!)
+                            <motion.div
+                                key="status-box"
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.98 }}
+                                transition={{ duration: 0.2 }}
+                                className="w-full min-h-[250px] flex flex-col items-center justify-center bg-[#19130D]/40 rounded-[24px] border border-white/5 py-10 relative"
                             >
-                                {/* Tournament glow effect */}
-                                {tournament.isTournament && (
-                                    <div className="absolute inset-0 pointer-events-none">
-                                        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4A54A]/50 to-transparent" />
-                                        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4A54A]/30 to-transparent" />
-                                    </div>
-                                )}
-
-                                <div className="flex flex-col items-start gap-1">
-                                    <div className="flex items-center gap-2">
-                                        {tournament.isTournament && (
-                                            <span className="text-sm" title="Tournament Game">🏆</span>
-                                        )}
-                                        <span className={`text-base md:text-lg font-medium ${tournament.isTournament ? 'text-[#F0C868]' : 'text-white'}`}>
-                                            {room.name || `Room #${room.id}`}
-                                        </span>
-                                        {tournament.hasPassword && (
-                                            <span className="text-[10px] text-white/30" title="Password protected">🔒</span>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-white/40 text-[9px] md:text-[10px] font-mono uppercase">By {room.host.slice(0, 10)}...</span>
-                                        {tournament.isTournament && (
-                                            <span className="text-[8px] md:text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#D4A54A]/15 text-[#D4A54A] border border-[#D4A54A]/20">
-                                                Tournament
+                                {/* Вложенная анимация: меняем только начинку */}
+                                <AnimatePresence mode="wait">
+                                    {isInitialLoad ? (
+                                        <motion.div
+                                            key="radar-content"
+                                            initial={{ opacity: 0, y: 5 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -5 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="flex flex-col items-center"
+                                        >
+                                            <div className="relative flex items-center justify-center mb-6 mt-2">
+                                                <div className="absolute w-16 h-16 border-2 border-[#D4A54A] rounded-full animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-20" />
+                                                <div className="absolute w-10 h-10 border-2 border-[#D4A54A] rounded-full animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-40" style={{ animationDelay: '0.4s' }} />
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D4A54A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                                                    <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                                                </svg>
+                                            </div>
+                                            <span className="text-white/40 font-medium tracking-wide text-sm animate-pulse">
+                                                Scanning Network...
                                             </span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    {/* Prize display for tournament rooms */}
-                                    {tournament.isTournament && tournament.prize && (
-                                        <div className="text-right mr-2">
-                                            <span className="text-[#D4A54A] font-bold text-sm block">💰 {tournament.prize}</span>
-                                            <span className="text-[#D4A54A]/40 text-[7px] md:text-[8px] uppercase tracking-wider">Prize Pool</span>
-                                        </div>
+                                        </motion.div>
+                                    ) : (
+                                        <motion.div
+                                            key="empty-content"
+                                            initial={{ opacity: 0, y: 5 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -5 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="flex flex-col items-center"
+                                        >
+                                            <span className="text-[#D4A54A]/30 mb-3">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                            </span>
+                                            <span className="text-white/40 text-center leading-relaxed">
+                                                No active lobbies found.<br />Be the first to create one!
+                                            </span>
+                                        </motion.div>
                                     )}
-                                    <div className="text-right">
-                                        <span className={`font-bold block ${tournament.isTournament ? 'text-[#D4A54A]' : 'text-[#916A47]'}`}>
-                                            {room.players}/{room.max}
-                                        </span>
-                                        <span className="text-white/20 text-[7px] md:text-[8px] uppercase tracking-wider">Players Joined</span>
-                                    </div>
-                                    <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center transition-all
-                                        ${tournament.isTournament
-                                            ? 'bg-[#D4A54A]/20 text-[#D4A54A] group-hover:bg-[#D4A54A] group-hover:text-[#281608]'
-                                            : 'bg-[#916A47]/20 text-[#916A47] group-hover:bg-[#916A47] group-hover:text-white'
-                                        }
-                                    `}>
-                                        →
-                                    </div>
-                                </div>
-                            </motion.button>
-                        );
-                    })}
+                                </AnimatePresence>
+                            </motion.div>
+                        ) : (
+                            // А вот СПИСОК КОМНАТ — это уже отдельный блок, 
+                            // он плавно заменит статус-бокс, когда найдутся игры
+                            <motion.div
+                                key="list"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="w-full flex flex-col gap-3"
+                            >
+                                <AnimatePresence>
+                                    {rooms.map((room) => {
+                                        const tournament = getTournamentInfo(room);
+                                        return (
+                                            <motion.button
+                                                key={room.id}
+                                                layout
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, scale: 0.95 }}
+                                                whileHover={{ scale: 1.015 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => handleJoin(room)}
+                                                disabled={isTxPending}
+                                                className={`w-full p-4 md:p-5 backdrop-blur-md rounded-[16px] flex items-center justify-between group transition-colors relative overflow-hidden text-left
+                                                    ${tournament.isTournament
+                                                        ? 'bg-gradient-to-r from-[#2A1F0A] to-[#19130D] border border-[#D4A54A]/30 hover:border-[#D4A54A]/60 shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
+                                                        : 'bg-[#19130D]/80 border border-white/5 hover:border-white/20 shadow-lg'
+                                                    }
+                                                `}
+                                            >
+                                                {tournament.isTournament && (
+                                                    <div className="absolute inset-0 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity">
+                                                        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4A54A]/50 to-transparent" />
+                                                    </div>
+                                                )}
+
+                                                <div className="flex flex-col items-start gap-1.5">
+                                                    <div className="flex items-center gap-2">
+                                                        {tournament.isTournament && <TrophyIcon />}
+                                                        <span className={`text-base md:text-lg font-bold tracking-wide ${tournament.isTournament ? 'text-[#F0C868]' : 'text-white/90'}`}>
+                                                            {room.name || `Room #${room.id}`}
+                                                        </span>
+                                                        {tournament.hasPassword && <LockIcon />}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-white/40 text-[10px] font-mono uppercase">HOST: {room.host.slice(0, 8)}...</span>
+                                                        {tournament.isTournament && (
+                                                            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#D4A54A]/10 text-[#D4A54A] border border-[#D4A54A]/20">
+                                                                Tournament
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-5">
+                                                    {tournament.isTournament && tournament.prize && (
+                                                        <div className="text-right hidden sm:block">
+                                                            <span className="text-[#D4A54A] font-bold text-sm block">{tournament.prize}</span>
+                                                            <span className="text-[#D4A54A]/50 text-[9px] uppercase tracking-widest">Prize Pool</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="text-right">
+                                                        <span className={`font-bold text-lg block leading-none ${tournament.isTournament ? 'text-[#D4A54A]' : 'text-white/80'}`}>
+                                                            {room.players}<span className="text-white/30 text-sm">/{room.max}</span>
+                                                        </span>
+                                                        <span className="text-white/30 text-[9px] uppercase tracking-widest mt-1 block">Players</span>
+                                                    </div>
+
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300
+                                                        ${tournament.isTournament
+                                                            ? 'bg-[#D4A54A]/10 text-[#D4A54A] group-hover:bg-[#D4A54A] group-hover:text-[#281608]'
+                                                            : 'bg-white/5 text-white/50 group-hover:bg-white/20 group-hover:text-white'
+                                                        }
+                                                    `}>
+                                                        <ChevronRight />
+                                                    </div>
+                                                </div>
+                                            </motion.button>
+                                        );
+                                    })}
+                                </AnimatePresence>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
-                {!isConnected && rooms.length > 0 && !initialRoomId && (
-                    <div className="mt-4 text-white/50 text-xs">
-                        * Connect Wallet to join a session
+
+                {(!isConnected || !authenticated) && rooms.length > 0 && !initialRoomId && (
+                    <div className="mt-2 text-white/40 text-xs italic">
+                        * Wallet connection required to enter a session
                     </div>
                 )}
             </motion.div>

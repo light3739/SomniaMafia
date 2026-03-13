@@ -92,11 +92,22 @@ export const SetupProfile: React.FC = () => {
     const [fundAmount, setFundAmount] = useState('');
     const [fundingNetwork, setFundingNetwork] = useState<number>(SOMNIA_TESTNET.id);
     const [isFunding, setIsFunding] = useState(false);
+    const [isScrolled, setIsScrolled] = useState(false);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     // Modal state: null = closed, 'wallet' | 'accounts' = open
     const [activeModal, setActiveModal] = useState<'wallet' | 'accounts' | null>(null);
 
     useEffect(() => { setHydrated(true); }, []);
+
+    // Scroll-aware header: becomes visible after scrolling 40px
+    useEffect(() => {
+        const el = scrollContainerRef.current;
+        if (!el) return;
+        const onScroll = () => setIsScrolled(el.scrollTop > 40);
+        el.addEventListener('scroll', onScroll, { passive: true });
+        return () => el.removeEventListener('scroll', onScroll);
+    }, []);
 
     // Auto-fill name from Privy on first load
     useEffect(() => {
@@ -235,27 +246,41 @@ export const SetupProfile: React.FC = () => {
     };
 
     return (
-        <div className="relative w-full h-[100dvh] font-montserrat flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
+        <div ref={scrollContainerRef} className="relative w-full h-[100dvh] font-montserrat flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 pb-12 custom-scrollbar">
+
+            {/* Top vignette: fades content behind nav on scroll, no hard bar */}
+            <div
+                className="fixed top-0 left-0 right-0 h-24 pointer-events-none z-40 transition-opacity duration-500"
+                style={{
+                    opacity: isScrolled ? 1 : 0,
+                    background: 'linear-gradient(to bottom, rgba(10,7,4,0.92) 0%, rgba(10,7,4,0.5) 60%, transparent 100%)'
+                }}
+            />
+
+            {/* Navigation: always transparent, always has top padding */}
+            <div className="w-full max-w-[560px] flex items-center justify-between sticky top-0 z-50 px-2 pt-4 pb-3 -mx-2">
+                <div className="-ml-2">
+                    <BackButton to="/" />
+                </div>
+                <button
+                    onClick={() => logout().then(() => router.push('/'))}
+                    className="group text-white/60 hover:text-white flex items-center gap-3 transition-all cursor-pointer"
+                >
+                    <span className="font-medium tracking-wide hidden sm:inline">Logout</span>
+                    <div className="w-10 h-10 rounded-full bg-black/50 border border-white/10 backdrop-blur-sm flex items-center justify-center transition-all group-hover:bg-[#8B2E2E]/40 group-hover:border-[#C94040]/50 group-hover:shadow-[0_0_15px_rgba(201,64,64,0.2)]">
+                        <LogOut className="w-5 h-5" />
+                    </div>
+                </button>
+            </div>
+
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.4 }}
-                className="relative z-10 w-full max-w-[560px] flex flex-col items-center gap-4 py-6 md:py-10 my-auto"
+                // Убрали шапку отсюда, оставили my-auto и gap
+                className="relative z-10 w-full max-w-[560px] flex flex-col items-center gap-4 py-4 md:py-6 my-auto"
             >
-                {/* Header */}
-                <div className="w-full flex items-center justify-between">
-                    <BackButton to="/" />
-                    <button
-                        onClick={() => logout().then(() => router.push('/'))}
-                        className="group text-white/60 hover:text-white flex items-center gap-3 transition-all cursor-pointer"
-                    >
-                        <span className="font-medium tracking-wide">Logout</span>
-                        <div className="w-10 h-10 rounded-full bg-black/50 border border-white/10 backdrop-blur-sm flex items-center justify-center transition-all group-hover:bg-[#8B2E2E]/40 group-hover:border-[#C94040]/50 group-hover:shadow-[0_0_15px_rgba(201,64,64,0.2)]">
-                            <LogOut className="w-5 h-5" />
-                        </div>
-                    </button>
-                </div>
 
                 {/* Profile Card */}
                 <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] p-5 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-4 md:gap-6 items-center">
@@ -389,7 +414,7 @@ export const SetupProfile: React.FC = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
                         onClick={() => setActiveModal(null)}
                     >
                         <motion.div
@@ -577,7 +602,7 @@ export const SetupProfile: React.FC = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
                         onClick={() => setActiveModal(null)}
                     >
                         <motion.div
