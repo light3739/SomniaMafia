@@ -716,7 +716,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         mafiaCommittedCount: 0,
         mafiaRevealedCount: 0,
         phaseDeadline: 0,
-        winner: null
+        winner: null,
+        maxPlayers: 16
     });
 
     // Ref for players to avoid stale closure in event handlers
@@ -1054,6 +1055,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let committedCount: number;
             let revealedCount: number;
             let phaseDeadline: number;
+            let maxPlayers: number;
 
             let tournamentId: bigint = 0n;
 
@@ -1064,6 +1066,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 committedCount = Number(roomData[13]);
                 revealedCount = Number(roomData[14]);
                 phaseDeadline = Number(roomData[10]);
+                maxPlayers = Number(roomData[4]);
                 tournamentId = BigInt(roomData[19] || 0);
             } else {
                 phase = Number(roomData.phase) as GamePhase;
@@ -1072,6 +1075,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 committedCount = Number(roomData.committedCount);
                 revealedCount = Number(roomData.revealedCount);
                 phaseDeadline = Number(roomData.phaseDeadline);
+                maxPlayers = Number(roomData.maxPlayers);
                 tournamentId = BigInt(roomData.tournamentId || 0);
             }
 
@@ -1085,7 +1089,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 phaseDeadline,
                 mafiaCommittedCount: Number(mafiaCommitted),
                 mafiaRevealedCount: Number(mafiaRevealed),
-                tournamentId
+                tournamentId,
+                maxPlayers
             };
         } catch (e: any) {
             console.error("[FetchGameData] Error:", e);
@@ -1100,7 +1105,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const {
             rawPlayers, phase, dayCount, revealedCount,
             mafiaCommittedCount, mafiaRevealedCount, phaseDeadline,
-            tournamentId, aliveCount
+            tournamentId, aliveCount, maxPlayers
         } = gameData;
 
         // FIX: If rawPlayers is empty (transient RPC issue), skip update to prevent role loss
@@ -1230,6 +1235,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 aliveCount,
                 tournamentId,
                 isTournament: tournamentId > 0n,
+                maxPlayers,
                 // prev.winner has absolute priority — never overwrite established winner with null or derivation
                 winner: prev.winner || resolvedWinner
             };

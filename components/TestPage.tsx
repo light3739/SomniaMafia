@@ -149,8 +149,7 @@ const NightPhaseTestWrapper: React.FC<{ testRole: Role }> = ({ testRole }) => {
 
     useEffect(() => {
         // Set up test game state with Night phase and proper role
-        setGameState({
-            phase: GamePhase.NIGHT,
+        setGameState({phase: GamePhase.NIGHT,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(testRole, TEST_ADDRESS),
@@ -159,11 +158,12 @@ const NightPhaseTestWrapper: React.FC<{ testRole: Role }> = ({ testRole }) => {
                 { id: '2', timestamp: '12:00:01', message: `You are a ${testRole}`, type: 'info' }
             ],
             revealedCount: 0,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 60,
             winner: null,
-            mafiaMessages: []
+            mafiaMessages: [],
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
         });
         // Small delay to ensure state is propagated
         setTimeout(() => setIsReady(true), 50);
@@ -206,8 +206,7 @@ const DayPhaseTestWrapper: React.FC = () => {
     useEffect(() => {
         setIsTestMode(true);
         setCurrentRoomId(BigInt(12345));
-        setGameState({
-            phase: GamePhase.DAY,
+        setGameState({phase: GamePhase.DAY,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: players,
@@ -216,11 +215,12 @@ const DayPhaseTestWrapper: React.FC = () => {
                 { id: '2', timestamp: '12:00:05', message: 'Discussion phase started.', type: 'info' }
             ],
             revealedCount: 0,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 120,
             winner: null,
-            mafiaMessages: []
+            mafiaMessages: [],
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
         });
         setTimeout(() => setIsReady(true), 50);
     }, [setGameState, setCurrentRoomId, setIsTestMode]);
@@ -283,8 +283,7 @@ const VotingPhaseTestWrapper: React.FC = () => {
     const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
-        setGameState({
-            phase: GamePhase.VOTING,
+        setGameState({phase: GamePhase.VOTING,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS),
@@ -292,11 +291,12 @@ const VotingPhaseTestWrapper: React.FC = () => {
                 { id: '1', timestamp: '12:00:00', message: 'Voting has started!', type: 'phase' }
             ],
             revealedCount: 0,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 60,
             winner: null,
-            mafiaMessages: []
+            mafiaMessages: [],
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
         });
         // Clear any existing votes
         setVoteMap({});
@@ -323,8 +323,7 @@ const VotingVisualizationTestWrapper: React.FC = () => {
         // Set a mock room ID for the test
         setCurrentRoomId(BigInt(12345));
 
-        setGameState({
-            phase: GamePhase.VOTING,
+        setGameState({phase: GamePhase.VOTING,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: players,
@@ -332,11 +331,12 @@ const VotingVisualizationTestWrapper: React.FC = () => {
                 { id: '1', timestamp: '12:00:00', message: 'Voting Visualization Test', type: 'phase' }
             ],
             revealedCount: 0,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 600,
             winner: null,
-            mafiaMessages: []
+            mafiaMessages: [],
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
         });
         setVoteMap({});
         setTimeout(() => setIsReady(true), 50);
@@ -895,8 +895,7 @@ export // Wrapper for testing phase timeout transition
             // Now + 10 seconds
             const deadline = Math.floor(Date.now() / 1000) + 10;
 
-            setGameState({
-                phase: GamePhase.NIGHT,
+            setGameState({phase: GamePhase.NIGHT,
                 dayCount: 1,
                 myPlayerId: TEST_ADDRESS,
                 players: generateMockPlayers(Role.MAFIA, TEST_ADDRESS),
@@ -905,12 +904,13 @@ export // Wrapper for testing phase timeout transition
                     { id: '2', timestamp: '12:00:01', message: `Wait 10 seconds for auto-transition`, type: 'info' }
                 ],
                 revealedCount: 0,
-                mafiaCommittedCount: 0,
                 mafiaRevealedCount: 0,
                 phaseDeadline: deadline,
                 winner: null,
-                mafiaMessages: []
-            });
+                mafiaMessages: [],
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
+        });
             setTimeout(() => setIsReady(true), 50);
         }, [setGameState]);
 
@@ -929,18 +929,18 @@ const InvestigationResultTestWrapper: React.FC<{ isMafia: boolean }> = ({ isMafi
     useEffect(() => {
         console.log('[InvestigationTest] Initializing test mode...');
         setIsTestMode(true);
-        setGameState({
-            phase: GamePhase.NIGHT,
+        setGameState({phase: GamePhase.NIGHT,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.DETECTIVE, TEST_ADDRESS),
             logs: [],
             revealedCount: 0,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 60,
             winner: null,
-            mafiaMessages: []
+            mafiaMessages: [],
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
         });
         setTimeout(() => setIsReady(true), 100);
     }, [setGameState, isMafia, setIsTestMode]);
@@ -968,8 +968,7 @@ const GameOverTestWrapper: React.FC<{ winner: 'MAFIA' | 'TOWN' }> = ({ winner })
     const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
-        setGameState({
-            phase: GamePhase.ENDED,
+        setGameState({phase: GamePhase.ENDED,
             dayCount: 3,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(winner === 'MAFIA' ? Role.MAFIA : Role.CIVILIAN, TEST_ADDRESS).map(p => {
@@ -983,14 +982,15 @@ const GameOverTestWrapper: React.FC<{ winner: 'MAFIA' | 'TOWN' }> = ({ winner })
                         return { ...p, isAlive: false };
                     }
                 }
-                return p;
-            }),
+                return p;,
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
+        }),
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'The game has ended.', type: 'phase' },
                 { id: '2', timestamp: '12:00:01', message: `${winner === 'MAFIA' ? 'Mafia' : 'Town'} has won!`, type: winner === 'MAFIA' ? 'danger' : 'success' }
             ],
             revealedCount: 6,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: 0,
             winner: winner,
@@ -1011,8 +1011,7 @@ const PostVotingTransitionTestWrapper: React.FC = () => {
 
     useEffect(() => {
         // Set up mock game state with some logs to display
-        setGameState({
-            phase: GamePhase.VOTING,
+        setGameState({phase: GamePhase.VOTING,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS),
@@ -1028,11 +1027,12 @@ const PostVotingTransitionTestWrapper: React.FC = () => {
                 { id: '9', timestamp: '12:06:15', message: 'Charlie was a Mafia!', type: 'success' },
             ],
             revealedCount: 0,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: 0,
             winner: null,
-            mafiaMessages: []
+            mafiaMessages: [],
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
         });
         setTimeout(() => setIsReady(true), 50);
     }, [setGameState]);
@@ -1060,19 +1060,19 @@ const ShufflePhaseAnimatedTest: React.FC = () => {
     const players = generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS);
 
     useEffect(() => {
-        setGameState({
-            phase: GamePhase.SHUFFLING,
+        setGameState({phase: GamePhase.SHUFFLING,
             dayCount: 0,
             myPlayerId: TEST_ADDRESS,
             players: players.map((p, idx) => ({
                 ...p,
                 hasDeckCommitted: idx < currentShuffler,
-            })),
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
+        })),
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Shuffling deck...', type: 'phase' }
             ],
             revealedCount: 0,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 120,
             winner: null,
@@ -1135,19 +1135,19 @@ const RoleRevealAnimatedTest: React.FC = () => {
     const totalKeys = players.length;
 
     useEffect(() => {
-        setGameState({
-            phase: GamePhase.REVEAL,
+        setGameState({phase: GamePhase.REVEAL,
             dayCount: 0,
             myPlayerId: TEST_ADDRESS,
             players: players.map((p, idx) => ({
                 ...p,
                 hasConfirmedRole: isRevealed && idx < keysCollected,
-            })),
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
+        })),
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Revealing roles...', type: 'phase' }
             ],
             revealedCount: keysCollected,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 120,
             winner: null,
@@ -1404,19 +1404,19 @@ const ShufflePhaseTestWrapper: React.FC = () => {
     const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
-        setGameState({
-            phase: GamePhase.SHUFFLING,
+        setGameState({phase: GamePhase.SHUFFLING,
             dayCount: 0,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS).map((p, idx) => ({
                 ...p,
                 hasDeckCommitted: idx < 2,
-            })),
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
+        })),
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Shuffling deck...', type: 'phase' }
             ],
             revealedCount: 0,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 120,
             winner: null,
@@ -1439,18 +1439,18 @@ const GameFeedTestWrapper: React.FC = () => {
     const { setGameState, addLog, gameState } = useGameContext();
 
     useEffect(() => {
-        setGameState({
-            phase: GamePhase.DAY,
+        setGameState({phase: GamePhase.DAY,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMock16Players(TEST_ADDRESS),
             logs: [],
             revealedCount: 0,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 120,
             winner: null,
-            mafiaMessages: []
+            mafiaMessages: [],
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
         });
     }, [setGameState]);
 
@@ -1547,19 +1547,19 @@ const RoleRevealTestWrapper: React.FC = () => {
     const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
-        setGameState({
-            phase: GamePhase.REVEAL,
+        setGameState({phase: GamePhase.REVEAL,
             dayCount: 0,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.MAFIA, TEST_ADDRESS).map((p, idx) => ({
                 ...p,
                 hasConfirmedRole: idx < 3,
-            })),
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
+        })),
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Revealing roles...', type: 'phase' }
             ],
             revealedCount: 3,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 120,
             winner: null,
@@ -1583,18 +1583,18 @@ const PlayerSpotTestWrapper: React.FC = () => {
     const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
 
     useEffect(() => {
-        setGameState({
-            phase: GamePhase.NIGHT,
+        setGameState({phase: GamePhase.NIGHT,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.DETECTIVE, TEST_ADDRESS),
             logs: [],
             revealedCount: 0,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 60,
             winner: null,
-            mafiaMessages: []
+            mafiaMessages: [],
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
         });
     }, [setGameState]);
 
@@ -2108,18 +2108,18 @@ const GameFeedSimulationTest: React.FC = () => {
 
     // Initial setup
     useEffect(() => {
-        setGameState({
-            phase: GamePhase.DAY,
+        setGameState({phase: GamePhase.DAY,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMock16Players(TEST_ADDRESS),
             logs: [], // Start empty
             revealedCount: 0,
-            mafiaCommittedCount: 0,
             mafiaRevealedCount: 0,
             phaseDeadline: 0,
             winner: null,
-            mafiaMessages: []
+            mafiaMessages: [],
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
         });
     }, [setGameState]);
 
