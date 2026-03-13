@@ -23,10 +23,11 @@ import { RoleCompositionAnnouncement } from './game/RoleCompositionAnnouncement'
 import { MafiaChat } from './game/MafiaChat';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../contexts/GameContext';
-import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X } from 'lucide-react';
+import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X, Key, Clock, Fuel, Wallet, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import { MicButton } from './game/MicButton';
 import { useSoundEffects } from './ui/SoundEffects';
 import { GameHintsOverlay } from './game/GameHints';
+import { SessionKeyBanner } from './game/SessionKeyBanner';
 
 type HintType = 'discussion' | 'voting' | 'night_mafia' | 'night_doctor' | 'night_detective' | 'night_civilian';
 
@@ -2253,6 +2254,252 @@ const GameHintsTestWrapper: React.FC = () => {
     );
 };
 
+// --- REUSABLE MOCK BANNER FOR VISUAL TESTING ---
+const MockSessionKeyBanner: React.FC<{
+    state: 'initial' | 'active' | 'low_gas' | 'registering' | 'error';
+    errorMsg?: string;
+}> = ({ state, errorMsg }) => {
+    const hasSession = state === 'active' || state === 'low_gas';
+    const isLowBalance = state === 'low_gas';
+    const isRegistering = state === 'registering';
+    const error = state === 'error' ? (errorMsg || 'Session not found. Please rejoin the room.') : null;
+    const sessionAddress = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
+    const sessionBalance = isLowBalance ? 1000000000000000n : 50000000000000000n; // 0.001 vs 0.05
+    const expiresAt = '3h 30m';
+
+    const shortenAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+    const formatBalance = (bal: bigint) => (Number(bal) / 1e18).toFixed(4);
+
+    const theme = !hasSession
+        ? {
+            wrap: 'bg-[#000000]/95 border-white/8',
+            iconWrap: 'bg-white/4 border border-white/8 shadow-inner',
+            accent: 'text-white/40',
+            label: 'text-white/55',
+            pulse: 'bg-white/25',
+            divider: 'border-white/6',
+            footerBg: 'bg-black/25',
+            footerText: 'text-white/35',
+            btnPrimary: 'bg-[#916A47]/12 border-[#916A47]/35 hover:bg-[#916A47]/22 text-[#C8904A]',
+        }
+        : isLowBalance
+        ? {
+            wrap: 'bg-[#1E0E07]/95 border-[#8B3A1A]/30',
+            iconWrap: 'bg-[#8B3A1A]/18 border border-[#8B3A1A]/35 shadow-inner',
+            accent: 'text-[#D4724A]',
+            label: 'text-[#D4724A]/80',
+            pulse: 'bg-[#D4724A]',
+            divider: 'border-[#8B3A1A]/25',
+            footerBg: 'bg-[#8B3A1A]/08',
+            footerText: 'text-[#D4724A]/60',
+            btnPrimary: 'bg-[#8B3A1A]/15 border-[#8B3A1A]/40 hover:bg-[#8B3A1A]/25 text-[#D4724A]',
+        }
+        : {
+            wrap: 'bg-[#110D07]/95 border-[#916A47]/28',
+            iconWrap: 'bg-[#916A47]/18 border border-[#916A47]/32 shadow-inner',
+            accent: 'text-[#C8904A]',
+            label: 'text-[#C8904A]/75',
+            pulse: 'bg-[#C8904A]',
+            divider: 'border-[#916A47]/20',
+            footerBg: 'bg-[#916A47]/05',
+            footerText: 'text-[#916A47]/55',
+            btnPrimary: 'bg-[#916A47]/12 border-[#916A47]/35 hover:bg-[#916A47]/22 text-[#C8904A]',
+        };
+
+    return (
+        <div className={`w-full rounded-2xl border backdrop-blur-2xl overflow-hidden shadow-2xl transition-all duration-300 ${theme.wrap}`}>
+            <div className="flex items-center justify-between px-4 pt-4 pb-3">
+                <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${theme.iconWrap}`}>
+                        {hasSession ? (isLowBalance ? <Fuel className={`w-4 h-4 ${theme.accent}`} /> : <Shield className={`w-4 h-4 ${theme.accent}`} />) : <Key className={`w-4 h-4 ${theme.accent}`} />}
+                    </div>
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                        <p className={`text-[13px] font-bold tracking-wide font-['Cinzel'] leading-none ${theme.accent}`}>
+                            {state === 'initial' && 'No Session Key'}
+                            {state === 'active' && 'Session Active'}
+                            {state === 'low_gas' && 'Low Gas'}
+                            {state === 'registering' && 'Activating Key'}
+                            {state === 'error' && 'Session Error'}
+                        </p>
+                        {hasSession ? (
+                            <div className={`flex items-center gap-1.5 text-[10px] font-mono ${theme.label}`}>
+                                <span>{shortenAddress(sessionAddress)}</span>
+                                <span className="text-white/20">·</span>
+                                <Wallet className="w-2.5 h-2.5" />
+                                <span className={isLowBalance ? 'text-[#D4724A]' : ''}>{formatBalance(sessionBalance)} STT</span>
+                                <span className="text-white/20">·</span>
+                                <Clock className="w-2.5 h-2.5" />
+                                <span>{expiresAt}</span>
+                            </div>
+                        ) : (
+                            <p className={`text-[10px] font-['Montserrat'] ${theme.label}`}>
+                                {isRegistering ? 'Initialising...' : 'Manual signature required'}
+                            </p>
+                        )}
+                    </div>
+                </div>
+                <ChevronDown className="w-4 h-4 text-white/25 ml-2" />
+            </div>
+
+            <div className="px-4 pb-4 flex flex-col gap-2">
+                {hasSession ? (
+                    <div className="flex items-center gap-2">
+                        {isLowBalance && (
+                            <button className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-bold tracking-wide font-['Montserrat'] uppercase transition-all ${theme.btnPrimary}`}>
+                                <Fuel className="w-3.5 h-3.5" /> +0.02 STT
+                            </button>
+                        )}
+                        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/8 bg-white/4 hover:bg-white/8 text-white/40 hover:text-[#C8904A] text-[11px] font-medium font-['Montserrat'] transition-all">
+                            Withdraw
+                        </button>
+                        <button className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-white/8 bg-white/4 hover:bg-white/8 text-white/40 hover:text-[#C94040] text-[11px] font-medium font-['Montserrat'] transition-all">
+                            <X className="w-3.5 h-3.5" /> Revoke
+                        </button>
+                    </div>
+                ) : (
+                    <button className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-[12px] font-bold tracking-widest font-['Cinzel'] uppercase transition-all ${theme.btnPrimary}`}>
+                        {isRegistering ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
+                        {isRegistering ? 'Signing...' : 'Enable Auto-Sign'}
+                    </button>
+                )}
+
+                {error && (
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-[#C94040]/10 border border-[#C94040]/20">
+                        <AlertTriangle className="w-3 h-3 text-[#C94040] shrink-0 mt-0.5" />
+                        <p className="text-[10px] text-[#C94040]/90 font-medium font-['Montserrat'] leading-snug">{error}</p>
+                    </div>
+                )}
+            </div>
+            
+            {!hasSession && !isRegistering && (
+                <div className={`px-4 py-2.5 border-t ${theme.divider} ${theme.footerBg}`}>
+                    <p className={`text-[10px] font-['Montserrat'] leading-relaxed ${theme.footerText}`}>
+                        <span className={`font-bold ${theme.accent}`}>Session Keys</span> — one signature, no popups for 4 hours.
+                    </p>
+                </div>
+            )}
+            {isLowBalance && (
+                <div className={`px-4 py-2.5 border-t ${theme.divider} ${theme.footerBg}`}>
+                    <p className={`text-[10px] font-['Montserrat'] leading-relaxed italic ${theme.footerText}`}>
+                        Session wallet is low on gas. Add funds to continue playing.
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- Outdated component removed ---
+
+// --- Standalone Test Wrapper for Session Key Gallery ---
+const SessionKeyTestWrapper: React.FC = () => {
+    return (
+        <div className="w-full max-w-4xl flex flex-col items-center gap-12 p-8">
+            <div className="text-center space-y-2">
+                <h3 className="text-3xl font-['Cinzel'] text-[#ffb01d] tracking-widest">Session Key Gallery</h3>
+                <p className="text-white/40 text-sm max-w-md mx-auto">
+                    Visual library of all possible banner states. No blockchain connection required for this preview.
+                </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full">
+                {/* 1. DISCONNECTED */}
+                <div className="space-y-3">
+                    <span className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] pl-2">1. Disconnected (Initial)</span>
+                    <MockSessionKeyBanner state="initial" />
+                </div>
+
+                {/* 2. REGISTERING */}
+                <div className="space-y-3">
+                    <span className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] pl-2">2. Activating (Loading)</span>
+                    <MockSessionKeyBanner state="registering" />
+                </div>
+
+                {/* 3. ACTIVE */}
+                <div className="space-y-3">
+                    <span className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] pl-2">3. Healthy Session</span>
+                    <MockSessionKeyBanner state="active" />
+                </div>
+
+                {/* 4. LOW GAS */}
+                <div className="space-y-3">
+                    <span className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] pl-2">4. Resource Warning</span>
+                    <MockSessionKeyBanner state="low_gas" />
+                </div>
+
+                {/* 5. ERROR */}
+                <div className="space-y-3 lg:col-span-2 max-w-md mx-auto w-full">
+                    <span className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] pl-2">5. Critical Error</span>
+                    <MockSessionKeyBanner state="error" errorMsg="Session key has expired or was revoked. Please sign a new one." />
+                </div>
+
+                {/* 6. WAITING ROOM VARIANTS */}
+                <div className="lg:col-span-2 pt-8 border-t border-white/5 space-y-6">
+                    <div className="text-center space-y-1">
+                        <h4 className="text-sm font-['Cinzel'] text-white/60 tracking-widest uppercase">Lobby Sequence Variants</h4>
+                        <p className="text-[10px] text-white/30">As seen in the Waiting Room (WaitingRoom.tsx integration)</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-3">
+                            <span className="text-[9px] font-bold text-white/15 uppercase tracking-widest pl-2">Checking State</span>
+                            <MockSessionKeyBanner state="registering" />
+                        </div>
+                        <div className="space-y-3">
+                            <span className="text-[9px] font-bold text-[#C8904A]/40 uppercase tracking-widest pl-2">Active State</span>
+                            <MockSessionKeyBanner state="active" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Test wrapper for Session Key in an Active Game Phase
+const ActivePhaseSessionTestWrapper: React.FC = () => {
+    return (
+        <div className="w-full h-[650px] relative bg-[#050505] overflow-hidden rounded-[32px] border border-white/10 shadow-2xl">
+            {/* Mock Game Background */}
+            <div className="absolute inset-0 opacity-40">
+                <img 
+                    src="/assets/game_background.png" 
+                    alt="bg" 
+                    className="w-full h-full object-cover" 
+                    style={{ filter: 'grayscale(0.5) brightness(0.3)' }}
+                />
+            </div>
+            
+            {/* Scale the phase component to fit the test area */}
+            <div className="absolute inset-0 flex items-center justify-center transform scale-90">
+                <NightPhaseTestWrapper testRole={Role.MAFIA} />
+            </div>
+
+            {/* Session Key Banner in its real-world "fixed" position (relative to this container) */}
+            <div className="absolute bottom-6 left-6 z-50">
+                <SessionKeyBanner roomId={123} />
+            </div>
+            
+            {/* Legend/Info Badge */}
+            <div className="absolute top-6 left-6 flex flex-col gap-1">
+                <div className="bg-black/80 backdrop-blur-md px-4 py-2 rounded-full border border-[#ffb01d]/30 text-[#ffb01d] text-[10px] font-bold uppercase tracking-[0.2em] shadow-lg">
+                    Game Phase + Session Control
+                </div>
+                <p className="text-white/40 text-[10px] pl-4">Testing banner visibility during interactive Night phase</p>
+            </div>
+
+            {/* Interactive hint for the tester */}
+            <div className="absolute top-6 right-6">
+                 <div className="bg-white/5 border border-white/10 backdrop-blur-md p-3 rounded-2xl max-w-[150px]">
+                     <p className="text-white/60 text-[10px] leading-tight">
+                         The banner is placed exactly as it appears in <strong>GameLayout.tsx</strong>
+                     </p>
+                 </div>
+            </div>
+        </div>
+    );
+};
+
 const TestPage: React.FC = () => {
     const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
@@ -2316,6 +2563,10 @@ const TestPage: React.FC = () => {
         { name: 'Layout Preview', group: 'Game Phases', component: <LayoutPreviewTestWrapper /> },
         { name: 'Speech Warning Glow', group: 'Game Components', component: <SpeechWarningGlowTestWrapper /> },
         { name: 'Game Hints', group: 'Game Components', component: <GameHintsTestWrapper /> },
+
+        // Test Test
+        { name: 'Session Key', group: 'Test Test', component: <SessionKeyTestWrapper /> },
+        { name: 'Active Phase + Banner', group: 'Test Test', component: <ActivePhaseSessionTestWrapper /> },
     ];
 
     const groupedComponents = components.reduce((acc, curr) => {
