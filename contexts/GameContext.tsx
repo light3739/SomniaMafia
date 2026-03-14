@@ -66,13 +66,15 @@ interface GameContextType {
     getInvestigationResultOnChain: (detective: string, target: string) => Promise<{ role: Role; isMafia: boolean }>;
     syncSecretWithServer: (roomId: string, playerAddress: string, role: number, salt: string) => Promise<void>;
     setCurrentRoomId: (id: bigint | null) => void;
+    handleIncomingMafiaSignal: (sender: string, encryptedHex: string) => Promise<void>;
+    getMafiaChatKey: (roomId: bigint) => Promise<CryptoKey | null>;
 
     // Utility
     kickStalledPlayerOnChain: () => Promise<void>;
     refreshPlayersList: (roomId: bigint) => Promise<any>;
     // Mafia Chat
 
-    addLog: (message: string, type?: LogEntry['type']) => void;
+    addLog: (message: string, type?: LogEntry['type'], eventType?: import('../types').GameEventType, eventData?: import('../types').GameEventData) => void;
     handlePlayerAction: (targetId: `0x${string}`) => void;
     myPlayer: Player | undefined;
     getActionLabel: () => string;
@@ -905,12 +907,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return () => clearTimeout(timer);
     }, [isTxPending]);
 
-    const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
+    const addLog = useCallback((message: string, type: LogEntry['type'] = 'info', eventType?: import('../types').GameEventType, eventData?: import('../types').GameEventData) => {
         const now = new Date();
         const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
         setGameState(prev => ({
             ...prev,
-            logs: [...prev.logs, { id: Math.random().toString(36).substr(2, 9), timestamp: timeString, message, type }]
+            logs: [...prev.logs, { id: Math.random().toString(36).substr(2, 9), timestamp: timeString, message, type, eventType, eventData }]
         }));
     }, []);
 
@@ -2770,6 +2772,48 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             throw e;
         }
     };
+
+    const handleIncomingMafiaSignal = useCallback(async (sender: string, encryptedHex: string) => {
+        if (!currentRoomId) return;
+        try {
+            const key = await getMafiaChatKey(currentRoomId);
+            if (!key) return;
+            const fullBytes = new Uint8Array(
+                encryptedHex.startsWith('0x') ?
+                    encryptedHex.slice(2).match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)) :
+                    encryptedHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16))
+            );
+            const iv = fullBytes.slice(-12);
+            const ciphertext = fullBytes.slice(0, -12);
+            const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+            const decryptedStr = new TextDecoder().decode(decrypted);
+            if (decryptedStr.trim().startsWith('{')) {
+                const content = JSON.parse(decryptedStr);
+                const senderPlayer = playersRef.current.find(p => p.address.toLowerCase() === sender.toLowerCase());
+                setGameState(prev => {
+                    const signalId = `signal-${sender}-${Date.now()}`;
+                    const isDuplicate = prev.mafiaMessages.slice(-5).some(m => 
+                        m.sender.toLowerCase() === sender.toLowerCase() && 
+                        JSON.stringify(m.content) === JSON.stringify(content)
+                    );
+                    if (isDuplicate) return prev;
+                    return {
+                        ...prev,
+                        mafiaMessages: [...prev.mafiaMessages, {
+                            id: signalId,
+                            sender,
+                            playerName: senderPlayer?.name || sender.slice(0, 6),
+                            content,
+                            timestamp: Date.now(),
+                        }]
+                    };
+                });
+            }
+        } catch (e) {
+            console.warn('[MafiaSignaling] Failed to decrypt signal:', e);
+        }
+    }, [currentRoomId, setGameState]);
+
     
     // ==================== TOURNAMENTS ====================
 
@@ -3419,7 +3463,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         break;
 
                     case 'VotingStarted':
-                        addLog("Voting Phase Started", "phase");
+                        addLog("Voting Phase Started", "phase", 'VOTING_STARTED');
                         break;
 
                     case 'NightStarted':
@@ -3433,7 +3477,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                             // If Doctor saved the Mafia target, nobody dies
                             if (killedStr === healedStr) {
-                                addLog("Night Result: No one died last night.", "success");
+                                addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true });
                             } else {
                                 let killedPlayer = playersRef.current.find(p => p.address.toLowerCase() === killedStr);
 
@@ -3442,11 +3486,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                                 }
 
                                 const name = killedPlayer?.name || args.killed.slice(0, 6);
-                                addLog(`Night Result: ${name} was killed by Mafia!`, "danger");
+                                addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name });
                             }
                         } else {
                             // No mafia target at all
-                            addLog("Night Result: No one died last night.", "success");
+                            addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true });
                         }
                         // Note: Don't log "Doctor saved" publicly — reveals doctor's role
                         break;
@@ -3495,7 +3539,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             const voterName = voter?.name || args.voter.slice(0, 6);
                             const targetName = target?.name || args.target.slice(0, 6);
 
-                            addLog(`${voterName} voted for ${targetName}`, "info");
+                            addLog(`${voterName} voted for ${targetName}`, "info", 'PLAYER_VOTED', { playerName: voterName, targetName });
 
                             // Update the global vote map so other players' votes become visible immediately
                             setVoteMap(prev => ({ ...prev, [voterStr]: targetStr }));
@@ -3509,9 +3553,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             const elimStr = (args.eliminated as string).toLowerCase();
                             const elimPlayer = playersRef.current.find(p => p.address.toLowerCase() === elimStr);
                             const elimName = elimPlayer?.name || (args.eliminated as string).slice(0, 6) || "Unknown";
-                            addLog(`Voting Finalized: ${elimName} was eliminated!`, "danger");
+                            addLog(`Voting Finalized: ${elimName} was eliminated!`, "danger", 'VOTING_RESULT', { isEliminated: true, playerName: elimName });
                         } else {
-                            addLog(`Voting Finalized: No one was eliminated.`, "warning");
+                            addLog(`Voting Finalized: No one was eliminated.`, "warning", 'VOTING_RESULT', { isSafe: true });
                         }
 
                         // NEW: Trigger Voting Results Phase (10s delay with cancellation ref)
@@ -3522,7 +3566,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         votingFinalizedTimerRef.current = setTimeout(() => {
                             console.log("[VotingFinalized] Results phase ended. Proceeding to Night.");
                             setShowVotingResults(false);
-                            addLog("Night has fallen...", "night");
+                            addLog("Night has fallen...", "night", 'NIGHT_FALLS');
                             // Clear votes directly at the end of the results phase
                             setVoteMap({});
                             votingFinalizedTimerRef.current = null;
@@ -3618,34 +3662,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [gameState.phase, gameState.players, canActOnPlayer]);
 
-
-
     // Запрашиваем зашифрованную роль от GM при переходе в фазу DAY (первый день)
-    // Именно тогда GM уже имеет все SRA ключи и может выдать роль
     const prevPhaseForRoleRef = useRef<GamePhase>(GamePhase.LOBBY);
     useEffect(() => {
         const prev = prevPhaseForRoleRef.current;
         const curr = gameState.phase;
         prevPhaseForRoleRef.current = curr;
 
-        // Переход в DAY фазу = роли уже расшифрованы GM
         if (curr === GamePhase.DAY && prev !== GamePhase.DAY) {
-            // Небольшая задержка: даём GM собрать все SRA ключи
             setTimeout(() => {
                 fetchMyRoleFromGM();
             }, 2000);
         }
     }, [gameState.phase, fetchMyRoleFromGM]);
 
-
-
-
     const getActionLabel = useCallback(() => {
         if (gameState.phase === GamePhase.VOTING) return "VOTE";
         if (gameState.phase === GamePhase.NIGHT) return "TARGET";
         return "SELECT";
     }, [gameState.phase]);
-
 
     const contextValue = useMemo<GameContextType>(() => ({
         playerName, setPlayerName, avatarUrl, setAvatarUrl, lobbyName, setLobbyName,
@@ -3660,7 +3695,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         fetchInvestigationProofFromGM,
         getInvestigationResultOnChain, syncSecretWithServer, 
         finalizeVotingOnChain, endGameZK, forcePhaseTimeoutOnChain,
-        sendMafiaMessageOnChain,
+        sendMafiaMessageOnChain, handleIncomingMafiaSignal, getMafiaChatKey,
         kickStalledPlayerOnChain, refreshPlayersList,
         addLog, handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         selectedTarget, setSelectedTarget,
@@ -3688,6 +3723,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         skipNightActionToGM, fetchInvestigationProofFromGM,
         getInvestigationResultOnChain, finalizeVotingOnChain, forcePhaseTimeoutOnChain,
         endGameZK, syncSecretWithServer, sendMafiaMessageOnChain,
+        handleIncomingMafiaSignal, getMafiaChatKey,
         kickStalledPlayerOnChain, refreshPlayersList, addLog,
         handlePlayerAction, myPlayer, canActOnPlayer, getActionLabel,
         isTestMode, setIsTestMode,
@@ -3718,3 +3754,4 @@ export const useGameContext = () => {
     if (!context) throw new Error("GameProvider error");
     return context;
 };
+
