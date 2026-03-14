@@ -1,5 +1,5 @@
 import { defineChain } from 'viem';
-import MafiaDiamondABI from './MafiaDiamondABI.json';
+import MafiaPortalArtifact from './MafiaPortal.json';
 
 // Self-hosted RPC proxy URL — bypasses Avalanche CORS restrictions.
 // On production: https://test.mafiaonchain.live/api/rpc/fuji
@@ -63,6 +63,7 @@ export const DEPLOYMENTS = {
         chainId: 43113,
         explorer: 'https://testnet.snowtrace.io',
         contracts: {
+            // TODO: Update MafiaDiamond address here after deploying the new monolithic SomniaMafia.sol contract!
             MafiaDiamond: '0xa7f0fa14e49721ce598dd39b860b54b0e600b099',
             Groth16Verifier: '0x6460f8d7ad88a20d7518f2f8bdf654ad71ce22b3',
             LobbyFacet: '0x5f17355387906d243d43470d1bdd52b782c26969',
@@ -103,7 +104,8 @@ export const FACETS = {
 
 export const ZK_VERIFIER = ACTIVE_DEPLOYMENT.contracts.Groth16Verifier as `0x${string}`;
 
-export const DIAMOND_ABI = MafiaDiamondABI;
+// Use the new monolithic ABI instead of the out-of-date Diamond ABI
+export const DIAMOND_ABI = MafiaPortalArtifact.abi;
 
 export const FUNCTION_MAP = {
     createAndJoin: 'LobbyFacet',
