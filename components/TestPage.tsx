@@ -982,10 +982,10 @@ const GameOverTestWrapper: React.FC<{ winner: 'MAFIA' | 'TOWN' }> = ({ winner })
                         return { ...p, isAlive: false };
                     }
                 }
-                return p;,
+                return p;
+            }),
             maxPlayers: 16,
             mafiaCommittedCount: 0,
-        }),
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'The game has ended.', type: 'phase' },
                 { id: '2', timestamp: '12:00:01', message: `${winner === 'MAFIA' ? 'Mafia' : 'Town'} has won!`, type: winner === 'MAFIA' ? 'danger' : 'success' }
@@ -1066,9 +1066,9 @@ const ShufflePhaseAnimatedTest: React.FC = () => {
             players: players.map((p, idx) => ({
                 ...p,
                 hasDeckCommitted: idx < currentShuffler,
+            })),
             maxPlayers: 16,
             mafiaCommittedCount: 0,
-        })),
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Shuffling deck...', type: 'phase' }
             ],
@@ -1141,9 +1141,9 @@ const RoleRevealAnimatedTest: React.FC = () => {
             players: players.map((p, idx) => ({
                 ...p,
                 hasConfirmedRole: isRevealed && idx < keysCollected,
+            })),
             maxPlayers: 16,
             mafiaCommittedCount: 0,
-        })),
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Revealing roles...', type: 'phase' }
             ],
@@ -1410,9 +1410,9 @@ const ShufflePhaseTestWrapper: React.FC = () => {
             players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS).map((p, idx) => ({
                 ...p,
                 hasDeckCommitted: idx < 2,
+            })),
             maxPlayers: 16,
             mafiaCommittedCount: 0,
-        })),
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Shuffling deck...', type: 'phase' }
             ],
@@ -1553,9 +1553,9 @@ const RoleRevealTestWrapper: React.FC = () => {
             players: generateMockPlayers(Role.MAFIA, TEST_ADDRESS).map((p, idx) => ({
                 ...p,
                 hasConfirmedRole: idx < 3,
+            })),
             maxPlayers: 16,
             mafiaCommittedCount: 0,
-        })),
             logs: [
                 { id: '1', timestamp: '12:00:00', message: 'Revealing roles...', type: 'phase' }
             ],
