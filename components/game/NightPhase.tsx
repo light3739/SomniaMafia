@@ -118,6 +118,26 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         mafiaConsensusTarget: initialNightState?.mafiaConsensusTarget ?? null
     });
 
+    // Timer state for UX
+    const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (!gameState.phaseDeadline || gameState.phaseDeadline === 0) {
+            setTimeLeft(null);
+            return;
+        }
+        
+        const tick = () => {
+            const now = Math.floor(Date.now() / 1000);
+            const remaining = Math.max(0, gameState.phaseDeadline - now);
+            setTimeLeft(remaining);
+        };
+
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [gameState.phaseDeadline]);
+
     // Handle initialNightState updates for testing
     useEffect(() => {
         if (initialNightState) {
@@ -704,14 +724,33 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                             exit={{ opacity: 0, scale: 0.95 }}
                             className="text-center mb-2"
                         >
-                            <h2 className="text-2xl font-['Cinzel'] text-white mb-1">
-                                {myRole === Role.MAFIA && 'Choose your victim'}
-                                {myRole === Role.DOCTOR && 'Choose who to protect'}
-                                {myRole === Role.DETECTIVE && 'Choose who to investigate'}
-                            </h2>
-                            <p className="text-white/40 text-[10px] tracking-wide">
-                                {myRole === Role.MAFIA ? 'Target to eliminate' : (myRole === Role.DOCTOR ? 'Player to protect' : 'Player to investigate')}
-                            </p>
+                            {timeLeft === 0 ? (
+                                <div className="flex flex-col items-center justify-center space-y-2">
+                                    <h2 className="text-2xl font-['Cinzel'] text-amber-400/80 animate-pulse transition-all duration-1000">
+                                        The sun is rising...
+                                    </h2>
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
+                                        <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />
+                                        <span className="text-amber-400 text-[9px] uppercase tracking-widest font-bold">GM is calculating</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <h2 className="text-2xl font-['Cinzel'] text-white mb-1">
+                                        {myRole === Role.MAFIA && 'Choose your victim'}
+                                        {myRole === Role.DOCTOR && 'Choose who to protect'}
+                                        {myRole === Role.DETECTIVE && 'Choose who to investigate'}
+                                    </h2>
+                                    <p className="text-white/40 text-[10px] tracking-wide">
+                                        {myRole === Role.MAFIA ? 'Target to eliminate' : (myRole === Role.DOCTOR ? 'Player to protect' : 'Player to investigate')}
+                                    </p>
+                                    {timeLeft !== null && timeLeft <= 10 && (
+                                        <p className="text-rose-500 text-[10px] font-bold tracking-widest mt-2 uppercase animate-pulse">
+                                            {timeLeft}s remaining
+                                        </p>
+                                    )}
+                                </>
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>
