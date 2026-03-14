@@ -15,7 +15,7 @@ import { MafiaChat } from './MafiaChat';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { Moon, Skull, Shield, Search, Eye, Check, Clock, User, Lock, AlertCircle, Users, RefreshCw } from 'lucide-react';
 import { NightActionFeedback } from './NightActionFeedback';
-import { signalingBroadcastRef } from './LiveKitVoiceChat';
+import { emitGameSignal } from '../../services/signalBus';
 
 // Night action types matching contract enum
 enum NightActionType {
@@ -545,7 +545,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             // ⚡ INSTANT: Broadcast to all players via LiveKit (~50ms)
             // Others see the N/M committed counter update before next poll cycle
             if (address && currentRoomId) {
-                signalingBroadcastRef.current?.({
+                emitGameSignal({
                     type: 'OPTIMISTIC_COMMITTED',
                     player: address.toLowerCase(),
                     roomId: currentRoomId.toString(),

@@ -15,6 +15,7 @@ import { ShuffleService } from '../services/shuffleService';
 import { signRequest } from '../services/requestSigning';
 import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage, buildDiscussionMessage, buildInvestigateMessage, buildRoleSyncMessage, buildMafiaMembersMessage } from '../services/signingSchema';
 import * as GM from '../services/gmService';
+import { emitGameSignal } from '../services/signalBus';
 
 const shotSound = "/assets/mafia_shot.wav";
 
@@ -2747,6 +2748,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             for (let i = 0; i < jsonStr.length; i++) {
                 hexData += jsonStr.charCodeAt(i).toString(16).padStart(2, '0');
             }
+        }
+
+        // ⚡ INSTANT: Broadcast to other Mafia members via LiveKit (~50ms)
+        // We broadcast ONLY if it's encrypted (mafia-to-mafia) or if it's the only way
+        if (address && currentRoomId) {
+            emitGameSignal({
+                type: 'MAFIA_CHAT',
+                sender: address,
+                encryptedData: hexData,
+                roomId: currentRoomId.toString()
+            });
         }
 
         try {
