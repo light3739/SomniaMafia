@@ -30,15 +30,21 @@ function normalizeLiveKitWsUrl(rawUrl?: string): string | undefined {
 
 /**
  * Mounted INSIDE <LiveKitRoom> — bridges LiveKit DataChannel to GameContext.
- * Exposes broadcast() via signalingRef so external code (DayPhase, NightPhase)
- * can send optimistic signals without knowing about LiveKit.
+ * Uses the global Signal Bus (Event Bus pattern) to send outgoing signals.
  */
-function GameSignalingBridge({ signalingRef }: { signalingRef: React.MutableRefObject<((signal: GameSignal) => void) | null> }) {
+function GameSignalingBridge() {
     const { broadcast } = useGameSignaling();
+
     useEffect(() => {
-        signalingRef.current = broadcast;
-        return () => { signalingRef.current = null; };
-    }, [broadcast, signalingRef]);
+        const handleSignal = (e: Event) => {
+            const customEvent = e as CustomEvent<GameSignal>;
+            broadcast(customEvent.detail);
+        };
+
+        window.addEventListener('send-game-signal', handleSignal);
+        return () => window.removeEventListener('send-game-signal', handleSignal);
+    }, [broadcast]);
+
     return null;
 }
 
@@ -222,13 +228,6 @@ interface LiveKitVoiceChatProps {
     showTextChat?: boolean; // Show text chat alongside voice
 }
 
-/**
- * Module-level singleton ref — allows DayPhase/NightPhase to broadcast
- * game signals without prop-drilling. Set when LiveKit connects, null when disconnected.
- */
-export const signalingBroadcastRef: React.MutableRefObject<((signal: GameSignal) => void) | null> = {
-    current: null
-};
 
 /** Stable session identity — created once per userName, survives reconnects */
 function makeSessionIdentity(baseName: string): string {
@@ -627,7 +626,7 @@ export function LiveKitVoiceChat({
                                         className="bg-gray-800/50 rounded-lg"
                                     />
                                     {/* Game signaling bridge — listens for DataReceived and updates GameContext */}
-                                    <GameSignalingBridge signalingRef={signalingBroadcastRef} />
+                                    <GameSignalingBridge />
 
                                     {showTextChat && <SafeTextChat displayName={userName} />}
                                 </LiveKitRoom>

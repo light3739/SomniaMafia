@@ -12,7 +12,7 @@ import { Button } from '../ui/Button';
 import { Sun, Vote, Check, Clock, User, Skull, Mic, MicOff, ChevronRight } from 'lucide-react';
 import { GameLog } from './GameLog';
 import { MicButton } from './MicButton';
-import { signalingBroadcastRef } from './LiveKitVoiceChat';
+import { emitGameSignal } from '../../services/signalBus';
 
 interface VoteState {
     myVote: string | null;
@@ -644,7 +644,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
 
         // ⚡ INSTANT: Broadcast to all players via LiveKit (~50ms) before blockchain (2-5s)
         if (address && currentRoomId) {
-            signalingBroadcastRef.current?.({
+            emitGameSignal({
                 type: 'OPTIMISTIC_VOTE',
                 voter: address.toLowerCase(),
                 target: selectedTarget.toLowerCase(),
