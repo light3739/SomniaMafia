@@ -8,6 +8,7 @@ import { useAccount, useWalletClient } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
 import { buildTokenMessage } from '@/services/signingSchema';
 import { ConnectionState, RoomEvent } from 'livekit-client';
+import { useGameSignaling, type GameSignal } from '@/hooks/useGameSignaling';
 
 interface VoiceChatMessage {
     id: string;
@@ -25,6 +26,20 @@ function normalizeLiveKitWsUrl(rawUrl?: string): string | undefined {
     if (rawUrl.startsWith('https://')) return rawUrl.replace('https://', 'wss://');
     if (rawUrl.startsWith('http://')) return rawUrl.replace('http://', 'ws://');
     return `wss://${rawUrl}`;
+}
+
+/**
+ * Mounted INSIDE <LiveKitRoom> — bridges LiveKit DataChannel to GameContext.
+ * Exposes broadcast() via signalingRef so external code (DayPhase, NightPhase)
+ * can send optimistic signals without knowing about LiveKit.
+ */
+function GameSignalingBridge({ signalingRef }: { signalingRef: React.MutableRefObject<((signal: GameSignal) => void) | null> }) {
+    const { broadcast } = useGameSignaling();
+    useEffect(() => {
+        signalingRef.current = broadcast;
+        return () => { signalingRef.current = null; };
+    }, [broadcast, signalingRef]);
+    return null;
 }
 
 function shouldPreferSameOriginLiveKit(): boolean {
@@ -206,6 +221,14 @@ interface LiveKitVoiceChatProps {
     onClose?: () => void;
     showTextChat?: boolean; // Show text chat alongside voice
 }
+
+/**
+ * Module-level singleton ref — allows DayPhase/NightPhase to broadcast
+ * game signals without prop-drilling. Set when LiveKit connects, null when disconnected.
+ */
+export const signalingBroadcastRef: React.MutableRefObject<((signal: GameSignal) => void) | null> = {
+    current: null
+};
 
 /** Stable session identity — created once per userName, survives reconnects */
 function makeSessionIdentity(baseName: string): string {
@@ -603,6 +626,8 @@ export function LiveKitVoiceChat({
                                         }}
                                         className="bg-gray-800/50 rounded-lg"
                                     />
+                                    {/* Game signaling bridge — listens for DataReceived and updates GameContext */}
+                                    <GameSignalingBridge signalingRef={signalingBroadcastRef} />
 
                                     {showTextChat && <SafeTextChat displayName={userName} />}
                                 </LiveKitRoom>

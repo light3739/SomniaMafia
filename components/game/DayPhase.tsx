@@ -12,6 +12,7 @@ import { Button } from '../ui/Button';
 import { Sun, Vote, Check, Clock, User, Skull, Mic, MicOff, ChevronRight } from 'lucide-react';
 import { GameLog } from './GameLog';
 import { MicButton } from './MicButton';
+import { signalingBroadcastRef } from './LiveKitVoiceChat';
 
 interface VoteState {
     myVote: string | null;
@@ -167,7 +168,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
             if (discussionState.currentSpeakerAddress !== lastSpeakerRef.current) {
                 const speaker = gameState.players.find(p => p.address.toLowerCase() === discussionState.currentSpeakerAddress?.toLowerCase());
                 if (speaker) {
-                    addLog(`${speaker.name} is now speaking.`, "info");
+                    addLog(`${speaker.name} is now speaking.`, "info", 'PLAYER_SPEAKING', { playerName: speaker.name });
                 }
                 lastSpeakerRef.current = discussionState.currentSpeakerAddress;
             }
@@ -325,11 +326,11 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
             if (isDayPhase) {
                 discussionStartedRef.current = false;
                 setDiscussionState(null); // Clear stale state from previous days
-                addLog("Day Phase: Discussion starting...", "info");
+                addLog("Day Phase: Discussion starting...", "info", 'DISCUSSION_STARTED');
             } else if (isVotingPhase) {
                 playVotingStart(); // Play sound for everyone
                 const quorum = Math.floor(alivePlayers.length / 2) + 1;
-                addLog(`Voting Phase Started. Quorum needed: ${quorum}.`, "warning");
+                addLog(`Voting Phase Started. Quorum needed: ${quorum}.`, "warning", 'VOTING_STARTED');
             }
             lastLoggedPhase.current = gameState.phase;
         }
@@ -546,7 +547,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                 votingStartedRef.current = true;
                 setVotingAttemptTs(Date.now());
                 console.log(`[DayPhase] Discussion finished. Waterfall Trigger (Index ${myIndex})...`);
-                addLog("All players have spoken. Starting vote...", "warning");
+                addLog("All players have spoken. Starting vote...", "warning", 'DISCUSSION_ENDED');
 
                 handleStartVoting();
             }, myDelay + 1000); // Base 1s + staggered delay
@@ -629,6 +630,8 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
 
 
 
+    const { address } = useAccount();
+
     const handleVote = async () => {
         if (!selectedTarget) return;
         playVoteSound();
@@ -638,6 +641,17 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         setVoteState(prev => ({ ...prev, hasVoted: true, myVote: selectedTarget }));
         setSelectedTarget(null);
         setIsProcessing(true);
+
+        // ⚡ INSTANT: Broadcast to all players via LiveKit (~50ms) before blockchain (2-5s)
+        if (address && currentRoomId) {
+            signalingBroadcastRef.current?.({
+                type: 'OPTIMISTIC_VOTE',
+                voter: address.toLowerCase(),
+                target: selectedTarget.toLowerCase(),
+                roomId: currentRoomId.toString(),
+            });
+        }
+
         try {
             await voteOnChain(selectedTarget);
         } catch (e: any) {

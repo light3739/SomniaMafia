@@ -48,11 +48,32 @@ export interface Player {
   hasNightRevealed: boolean;   // Night Phase (FLAG_HAS_REVEALED = 16)
 }
 
+export type GameEventType = 
+  | 'DAY_STARTED'
+  | 'NIGHT_RESULT'
+  | 'DISCUSSION_STARTED'
+  | 'PLAYER_SPEAKING'
+  | 'DISCUSSION_ENDED'
+  | 'VOTING_STARTED'
+  | 'PLAYER_VOTED'
+  | 'VOTING_RESULT'
+  | 'NIGHT_FALLS'
+  | 'SYSTEM_MESSAGE';
+
+export interface GameEventData {
+  playerName?: string;
+  targetName?: string;
+  isSafe?: boolean;
+  isEliminated?: boolean;
+}
+
 export interface LogEntry {
   id: string;
   timestamp: string;
   message: string;
   type: 'info' | 'danger' | 'success' | 'phase' | 'warning' | 'night';
+  eventType?: GameEventType;
+  eventData?: GameEventData;
 }
 
 export interface MafiaChatMessage {

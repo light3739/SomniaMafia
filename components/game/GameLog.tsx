@@ -84,67 +84,107 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         let voteCasts: { voter: string; target: string }[] = [];
 
         for (const log of todayLogs) {
-            const msg = log.message;
-
-            // Night results
-            if (msg.includes('Night Result: No one died')) {
-                nightResult = { type: 'safe' };
-            } else if (msg.includes('Night Result:') && msg.includes('was killed')) {
-                const match = msg.match(/Night Result: (.+?) was killed/);
-                nightResult = { type: 'killed', playerName: match?.[1] || 'Unknown' };
-            }
-
-            // Discussion
-            if (msg.includes('Discussion Phase started') || msg.includes('Discussion starting')) {
-                discussionStarted = true;
-                discussionFinished = false;
-            }
-            if (msg.includes('is now speaking')) {
-                const match = msg.match(/(.+?) is now speaking/);
-                currentSpeaker = match?.[1] || null;
-            }
-            if (msg.includes('All players have spoken') || msg.includes('Starting Vote')) {
-                discussionFinished = true;
-            }
-
-            // Voting
-            if (msg === 'Voting Phase Started' || msg.includes('Voting Phase Started')) {
-                votingStarted = true;
-            }
-
-            // Individual votes
-            if (msg.includes('voted for')) {
-                const match = msg.match(/(.+?) voted for (.+)/);
-                if (match) {
-                    voteCasts.push({ voter: match[1], target: match[2] });
+            if (log.eventType) {
+                switch (log.eventType) {
+                    case 'NIGHT_RESULT':
+                        if (log.eventData?.isSafe) {
+                            nightResult = { type: 'safe' };
+                        } else if (log.eventData?.isEliminated) {
+                            nightResult = { type: 'killed', playerName: log.eventData.playerName };
+                        }
+                        break;
+                    case 'DISCUSSION_STARTED':
+                        discussionStarted = true;
+                        discussionFinished = false;
+                        break;
+                    case 'PLAYER_SPEAKING':
+                        currentSpeaker = log.eventData?.playerName || null;
+                        break;
+                    case 'DISCUSSION_ENDED':
+                        discussionFinished = true;
+                        break;
+                    case 'VOTING_STARTED':
+                        votingStarted = true;
+                        break;
+                    case 'PLAYER_VOTED':
+                        if (log.eventData?.playerName && log.eventData?.targetName) {
+                            voteCasts.push({ voter: log.eventData.playerName, target: log.eventData.targetName });
+                        }
+                        break;
+                    case 'VOTING_RESULT':
+                        if (log.eventData?.isSafe) {
+                            votingResult = { type: 'no_one' };
+                        } else if (log.eventData?.isEliminated) {
+                            votingResult = { type: 'eliminated', playerName: log.eventData.playerName };
+                        }
+                        break;
+                    case 'NIGHT_FALLS':
+                        nightFallen = true;
+                        break;
                 }
-            }
+            } else {
+                const msg = log.message;
 
-            // Voting result
-            const votingFinalizedEliminatedMatch = msg.match(/^Voting Finalized:\s+(.+?)\s+was eliminated!?$/i);
-            if (votingFinalizedEliminatedMatch) {
-                votingResult = {
-                    type: 'eliminated',
-                    playerName: votingFinalizedEliminatedMatch[1]
-                };
-            } else if (msg.includes('Voting Finalized: Player eliminated')) {
-                votingResult = { type: 'eliminated' };
-            } else if (msg.includes('eliminated') && log.type === 'danger' && !msg.includes('Night') && !msg.includes('Voting Finalized')) {
-                const nameMatch = msg.match(/^(.+?) eliminated[:\s]/);
-                if (nameMatch) {
+                // Night results
+                if (msg.includes('Night Result: No one died')) {
+                    nightResult = { type: 'safe' };
+                } else if (msg.includes('Night Result:') && msg.includes('was killed')) {
+                    const match = msg.match(/Night Result: (.+?) was killed/);
+                    nightResult = { type: 'killed', playerName: match?.[1] || 'Unknown' };
+                }
+
+                // Discussion
+                if (msg.includes('Discussion Phase started') || msg.includes('Discussion starting')) {
+                    discussionStarted = true;
+                    discussionFinished = false;
+                }
+                if (msg.includes('is now speaking')) {
+                    const match = msg.match(/(.+?) is now speaking/);
+                    currentSpeaker = match?.[1] || null;
+                }
+                if (msg.includes('All players have spoken') || msg.includes('Starting Vote')) {
+                    discussionFinished = true;
+                }
+
+                // Voting
+                if (msg === 'Voting Phase Started' || msg.includes('Voting Phase Started')) {
+                    votingStarted = true;
+                }
+
+                // Individual votes
+                if (msg.includes('voted for')) {
+                    const match = msg.match(/(.+?) voted for (.+)/);
+                    if (match) {
+                        voteCasts.push({ voter: match[1], target: match[2] });
+                    }
+                }
+
+                // Voting result
+                const votingFinalizedEliminatedMatch = msg.match(/^Voting Finalized:\s+(.+?)\s+was eliminated!?$/i);
+                if (votingFinalizedEliminatedMatch) {
                     votingResult = {
                         type: 'eliminated',
-                        playerName: nameMatch[1]
+                        playerName: votingFinalizedEliminatedMatch[1]
                     };
+                } else if (msg.includes('Voting Finalized: Player eliminated')) {
+                    votingResult = { type: 'eliminated' };
+                } else if (msg.includes('eliminated') && log.type === 'danger' && !msg.includes('Night') && !msg.includes('Voting Finalized')) {
+                    const nameMatch = msg.match(/^(.+?) eliminated[:\s]/);
+                    if (nameMatch) {
+                        votingResult = {
+                            type: 'eliminated',
+                            playerName: nameMatch[1]
+                        };
+                    }
                 }
-            }
-            if (msg.includes('Voting Finalized: No one was eliminated') || msg.includes('No one was eliminated')) {
-                votingResult = { type: 'no_one' };
-            }
+                if (msg.includes('Voting Finalized: No one was eliminated') || msg.includes('No one was eliminated')) {
+                    votingResult = { type: 'no_one' };
+                }
 
-            // Night falls
-            if (msg === 'Night has fallen...' || msg.includes('Night has fallen')) {
-                nightFallen = true;
+                // Night falls
+                if (msg === 'Night has fallen...' || msg.includes('Night has fallen')) {
+                    nightFallen = true;
+                }
             }
         }
 
