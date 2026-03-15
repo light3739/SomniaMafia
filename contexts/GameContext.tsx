@@ -1428,7 +1428,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     pubKeyHex as `0x${string}`, // bytes publicKey
                     sessionAddress as `0x${string}`, // address sessionAddress
                     !!lobbyPassword, // bool isPrivate
-                    0n,             // uint256 tournamentId (standalone)
+                    tournamentId,     // uint256 tournamentId
                 ],
                 account: activeAccount,
                 chain: runtimeChain,
