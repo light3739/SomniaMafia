@@ -24,7 +24,8 @@ export async function signRequest(params: {
     address: string;
     roomId?: number;
     walletClient?: SignCapableClient | null;
-    signerAddress?: string; // NEW
+    signerAddress?: string;
+    forceWallet?: boolean; // NEW: bypass session key even if registered
     buildMessage: (input: { nonce: string; timestamp: number }) => string;
 }): Promise<SignedRequestMeta> {
     const { address, roomId, walletClient, signerAddress, buildMessage } = params;
@@ -41,15 +42,13 @@ export async function signRequest(params: {
     const session = loadSession();
 
     if (
+        !params.forceWallet &&
         roomId !== undefined &&
         Number.isFinite(roomId) &&
         session &&
         session.mainWallet.toLowerCase() === normalizedAddress &&
         session.roomId === roomId &&
         Date.now() < session.expiresAt &&
-        // Session must be registered on-chain to be used for authorized GM actions.
-        // Exception: if it's NOT registered yet, we only use it if specifically allowed (not implemented here yet)
-        // or just fallback to walletClient to be safe during race conditions.
         session.registeredOnChain
     ) {
         const sessionAccount = privateKeyToAccount(session.privateKey);

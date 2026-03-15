@@ -1470,30 +1470,36 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 6. IF PRIVATE: Set password on GM server
             if (lobbyPassword) {
-                try {
-                    addLog("Setting room password on GM server...", "info");
-                    
-                    // Always use main wallet for initial setup to avoid session registration race conditions
-                    console.log(`[createLobbyOnChain] Setting room password using main wallet (host)`);
+                addLog("Setting room password on GM server...", "info");
+                
+                let passwordSet = false;
+                for (let attempt = 1; attempt <= 6; attempt++) {
+                    const delay = 1000 + (attempt - 1) * 2000; // 1s, 3s, 5s, 7s, 9s, 11s
+                    if (attempt > 1) {
+                        addLog(`Retry setting password (attempt ${attempt}/6) in ${delay/1000}s...`, "info");
+                        await new Promise(r => setTimeout(r, delay));
+                    }
 
-                    await GM.setRoomPassword({
-                        roomId: finalRoomId.toString(),
-                        address: address,
-                        password: lobbyPassword,
-                        walletClient: activeWalletClient,
-                        signerAddress: address,
-                        chainId: runtimeChain.id,
-                        maxPlayers: maxPlayers
-                    });
-                    addLog("Room password protected ✅", "success");
-                } catch (e: any) {
-                    console.error("[PrivateRoom] Failed to set password on GM:", e);
-                    addLog(`Error setting password: ${e.message}`, "danger");
-                    
-                    // IF it failed because of "not registered", it's likely lag.
-                    // The GM server now has retries, but we should inform the user it might be still syncing.
-                    if (e.message.includes('not registered')) {
-                        addLog("GM is still syncing session data. Password set might need manual retry if it fails for all players.", "warning");
+                    try {
+                        const { client: activeWalletClient } = await getActiveWalletClient();
+                        await GM.setRoomPassword({
+                            roomId: finalRoomId.toString(),
+                            address: address,
+                            password: lobbyPassword,
+                            walletClient: activeWalletClient,
+                            signerAddress: address,
+                            chainId: runtimeChain.id,
+                            maxPlayers: maxPlayers,
+                            forceWallet: true // Always use main wallet for setup
+                        });
+                        addLog("Room password protected ✅", "success");
+                        passwordSet = true;
+                        break;
+                    } catch (e: any) {
+                        console.warn(`[PrivateRoom] Attempt ${attempt}/6 failed:`, e.message);
+                        if (attempt === 6) {
+                            addLog(`Failed to set room password: ${e.message}`, "danger");
+                        }
                     }
                 }
             }
@@ -1528,13 +1534,30 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
 
-            // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере
-            try {
-                const { client: activeWalletClient } = await getActiveWalletClient();
-                await GM.registerEciesPubkey(finalRoomId.toString(), address, activeWalletClient, runtimeChain.id);
-                console.log('[ECIES] Public key registered with GM server');
-            } catch (e) {
-                console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
+            // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере (с ретраями)
+            let pubkeyRegistered = false;
+            for (let attempt = 1; attempt <= 4; attempt++) {
+                const delay = 500 + (attempt - 1) * 1500; // 0.5s, 2s, 3.5s, 5s
+                if (attempt > 1) await new Promise(r => setTimeout(r, delay));
+
+                try {
+                    const { client: activeWalletClient } = await getActiveWalletClient();
+                    await GM.registerEciesPubkey(
+                        finalRoomId.toString(),
+                        address,
+                        activeWalletClient,
+                        runtimeChain.id,
+                        true // forceWallet
+                    );
+                    console.log('[ECIES] Public key registered with GM server');
+                    pubkeyRegistered = true;
+                    break;
+                } catch (e: any) {
+                    console.warn(`[ECIES] Attempt ${attempt}/4 failed:`, e.message);
+                }
+            }
+            if (!pubkeyRegistered) {
+                addLog("Warning: Could not register encryption keys. You may need to refresh the page.", "warning");
             }
 
             setCurrentRoomId(finalRoomId);
