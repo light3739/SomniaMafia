@@ -24,24 +24,20 @@ const nextConfig: NextConfig = {
       {
         source: '/(.*)',
         headers: [
+          /*
           {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              // Scripts: allow self, inline (needed by Next.js), and Privy's auth iframe
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://auth.privy.io https://privy.io",
-              // Styles: allow self and inline
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              // Fonts
               "font-src 'self' https://fonts.gstatic.com",
-              // Frames: Privy uses an iframe for its auth modal
-              "frame-src 'self' https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://verify.walletconnect.com",
-              // Connections: Privy API, WalletConnect, RPC providers
+              "frame-src 'self' https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org",
               "connect-src 'self' https://auth.privy.io https://api.privy.io wss://relay.walletconnect.com wss://relay.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org https://*.rpc.privy.systems https://*.somnia.network https://*.avax.network https://*.avax-test.network wss://*.somnia.network https://*.drpc.org wss://*.drpc.org https://*.publicnode.com wss://*.publicnode.com https://*.llamarpc.com https://*.ankr.com https://*.infura.io https://*.alchemy.com https://*.mafiaonchain.live wss://*.mafiaonchain.live",
-              // Images
               "img-src 'self' data: blob: https:",
             ].join('; '),
           },
+          */
         ],
       },
     ];
