@@ -110,7 +110,7 @@ export const NightActionFeedback: React.FC<NightActionFeedbackProps> = ({ myRole
                             <div className="flex items-center gap-2">
                                 <Check className="w-4 h-4 text-rose-400" />
                                 <span className="text-rose-300 text-sm">
-                                    Kill order submitted to Game Master
+                                    Kill order sealed
                                 </span>
                             </div>
                             <p className="text-rose-200/40 text-xs mt-2">

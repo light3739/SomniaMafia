@@ -190,7 +190,7 @@ const stopVictoryMusic = () => {
     }
 };
 
-export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'kill' | 'investigate' | 'propose' | 'approve' | 'reject' | 'chat_message') => {
+export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'kill' | 'mafia_sealed' | 'investigate' | 'propose' | 'approve' | 'reject' | 'chat_message') => {
     // ... существующий код playSound ...
     const ctx = initCtx();
     if (!ctx) return;
@@ -236,6 +236,10 @@ export const playSound = (type: 'button' | 'keyboard' | 'vote' | 'protect' | 'ki
 
         case 'kill':
             playAudioFile('/assets/kill.wav', 2, 0.05, 0.12);
+            break;
+
+        case 'mafia_sealed':
+            playAudioFile('/assets/mafia_shot.wav', 3, 0.02, 0.18);
             break;
 
         case 'investigate':
@@ -308,7 +312,8 @@ export const useSoundEffects = () => {
         playTypeSound: () => playSound('keyboard'),
         playVoteSound: () => playSound('vote'), // Звук "печати" при голосовании за кого-то
         playProtectSound: () => playSound('protect'),
-        playKillSound: () => playSound('kill'), // Keep 'kill' key, actual sound logic is in playSound below
+        playKillSound: () => playSound('kill'),
+        playMafiaShot: () => playSound('mafia_sealed'),
         playInvestigateSound: () => playSound('investigate'),
         playProposeSound: () => playSound('propose'),
         playApproveSound: () => playSound('approve'),
