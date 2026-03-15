@@ -1,11 +1,8 @@
-// components/game/CinematicNightFeedback.tsx
-// Cinematic full-screen overlay for night phase feedback.
-// Replaces the old NightActionFeedback with immersive, role-specific visuals.
-
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Role } from '../../types';
-import { Skull, Shield, Search, Moon } from 'lucide-react';
+import { Skull, Shield, Search, Moon, CheckCircle2 } from 'lucide-react';
 import { useSoundEffects } from '../ui/SoundEffects';
 
 interface CinematicFeedbackProps {
@@ -18,86 +15,6 @@ interface CinematicFeedbackProps {
     totalMafia?: number;
 }
 
-// ── Role config builder ──────────────────────────────────────────────────────
-
-const getRoleConfig = (
-    role: Role,
-    targetName: string,
-    isWaitingConsensus: boolean,
-    consensusCount: number,
-    totalMafia: number,
-    investigationResult?: Role | null,
-) => {
-    const configs: Record<string, {
-        icon: React.ReactNode;
-        bgGlow: string;
-        border: string;
-        bg: string;
-        title: string;
-        desc: string | undefined;
-        accent: string;
-        titleColor: string;
-    }> = {
-        [Role.MAFIA]: {
-            icon: <Skull className="w-16 h-16 md:w-20 md:h-20 text-red-700 drop-shadow-[0_0_25px_rgba(185,28,28,0.8)]" />,
-            bgGlow: 'shadow-[0_0_60px_rgba(153,27,27,0.15)]',
-            border: 'border-red-900/40',
-            bg: 'bg-gradient-to-b from-[#3A0A0A]/80 to-black/95',
-            title: isWaitingConsensus ? 'AWAITING THE FAMILY' : 'CONTRACT SEALED',
-            desc: isWaitingConsensus
-                ? `Waiting for consensus on ${targetName}... (${consensusCount}/${totalMafia} agreed)`
-                : `The hit is out on ${targetName}. No one can save them now.`,
-            accent: 'bg-red-700',
-            titleColor: 'text-red-600',
-        },
-        [Role.DOCTOR]: {
-            icon: <Shield className="w-16 h-16 md:w-20 md:h-20 text-teal-500 drop-shadow-[0_0_25px_rgba(20,184,166,0.8)]" />,
-            bgGlow: 'shadow-[0_0_60px_rgba(20,184,166,0.15)]',
-            border: 'border-teal-900/40',
-            bg: 'bg-gradient-to-b from-[#0A2A27]/80 to-black/95',
-            title: 'STANDING WATCH',
-            desc: `Your medical bag is packed. You are guarding ${targetName}'s door tonight.`,
-            accent: 'bg-teal-500',
-            titleColor: 'text-teal-400',
-        },
-        [Role.DETECTIVE]: {
-            icon: <Search className="w-16 h-16 md:w-20 md:h-20 text-amber-600 drop-shadow-[0_0_25px_rgba(217,119,6,0.8)]" />,
-            bgGlow: 'shadow-[0_0_60px_rgba(217,119,6,0.15)]',
-            border: 'border-amber-900/40',
-            bg: 'bg-gradient-to-b from-[#3A220A]/80 to-black/95',
-            title: investigationResult != null ? 'CASE CLOSED' : 'GATHERING INTEL',
-            desc: investigationResult != null
-                ? undefined
-                : `Following the trail... The dossier on ${targetName} will be ready by dawn.`,
-            accent: 'bg-amber-600',
-            titleColor: 'text-amber-500',
-        },
-        [Role.CIVILIAN]: {
-            icon: <Moon className="w-16 h-16 md:w-20 md:h-20 text-[#916A47]/60 drop-shadow-[0_0_15px_rgba(145,106,71,0.4)]" />,
-            bgGlow: 'shadow-[0_0_40px_rgba(0,0,0,0.8)]',
-            border: 'border-[#1A1510]/80',
-            bg: 'bg-[#050403]/95',
-            title: 'THE TOWN SLEEPS',
-            desc: 'You are asleep in your bed. Every sound in the dark makes your heart race. Pray for sunrise.',
-            accent: 'bg-[#916A47]',
-            titleColor: 'text-[#916A47]',
-        },
-    };
-
-    return configs[role] || {
-        icon: <Moon className="w-16 h-16 md:w-20 md:h-20 text-gray-500" />,
-        bgGlow: 'shadow-none',
-        border: 'border-gray-800',
-        bg: 'bg-black/95',
-        title: 'WAITING',
-        desc: 'The night continues...',
-        accent: 'bg-gray-600',
-        titleColor: 'text-gray-400',
-    };
-};
-
-// ── Component ────────────────────────────────────────────────────────────────
-
 export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
     role,
     targetName = 'someone',
@@ -108,111 +25,172 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
     totalMafia = 1,
 }) => {
     const { playMafiaShot, playProtectSound, playInvestigateSound } = useSoundEffects();
+    const hasPlayedRef = React.useRef(false);
 
-    // Play role-specific sealed sound once on mount
     useEffect(() => {
-        if (isWaitingConsensus) return;
+        if (isWaitingConsensus || hasPlayedRef.current) return;
         if (role === Role.CIVILIAN || role === Role.UNKNOWN) return;
+
+        hasPlayedRef.current = true;
 
         switch (role) {
             case Role.MAFIA: playMafiaShot(); break;
             case Role.DOCTOR: playProtectSound(); break;
             case Role.DETECTIVE: playInvestigateSound(); break;
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [role, isWaitingConsensus]);
+    }, [role, isWaitingConsensus, playMafiaShot, playProtectSound, playInvestigateSound]);
 
-    const config = getRoleConfig(role, targetName, isWaitingConsensus, consensusCount, totalMafia, investigationResult);
-    const isCivilian = role === Role.CIVILIAN;
+    // АБСОЛЮТНО ПЛОСКИЙ И ЖЕСТКИЙ ДИЗАЙН (Minimalist Brutalism / Noir)
+    const configs: Record<string, {
+        icon: React.ReactNode;
+        title: string;
+        desc: string | undefined;
+        accent: string;
+    }> = {
+        [Role.MAFIA]: {
+            icon: <Skull strokeWidth={1} className="w-24 h-24 md:w-32 md:h-32 text-[#8B0000]" />, // Цвет засохшей крови
+            title: isWaitingConsensus ? 'AWAITING ORDERS' : 'CONTRACT SEALED',
+            desc: isWaitingConsensus
+                ? `The family is deciding on ${targetName}... (${consensusCount}/${totalMafia})`
+                : `The hit on ${targetName} is confirmed.`,
+            accent: 'bg-[#8B0000]'
+        },
+        [Role.DOCTOR]: {
+            icon: <Shield strokeWidth={1} className="w-24 h-24 md:w-32 md:h-32 text-[#0D9488]" />, // Темный хирургический тил
+            title: 'STANDING WATCH',
+            desc: `You are guarding ${targetName}'s door tonight.`,
+            accent: 'bg-[#0D9488]'
+        },
+        [Role.DETECTIVE]: {
+            icon: <Search strokeWidth={1} className="w-24 h-24 md:w-32 md:h-32 text-[#B45309]" />, // Ржавый янтарь (виски/лампа)
+            title: investigationResult != null ? 'CASE CLOSED' : 'GATHERING INTEL',
+            desc: investigationResult != null
+                ? undefined
+                : `The dossier on ${targetName} will be ready by dawn.`,
+            accent: 'bg-[#B45309]'
+        },
+        [Role.CIVILIAN]: {
+            icon: <Moon strokeWidth={1} className="w-24 h-24 md:w-32 md:h-32 text-[#3A3A3A]" />, // Тусклый серый/пепельный
+            title: 'DEEP SLEEP',
+            desc: `Every sound in the dark makes your heart race. Pray for sunrise.`,
+            accent: 'bg-[#3A3A3A]'
+        },
+    };
+
+    const fallbackConfig = {
+        icon: <CheckCircle2 strokeWidth={1} className="w-24 h-24 md:w-32 md:h-32 text-gray-700" />,
+        title: 'ACTION CONFIRMED',
+        desc: 'Waiting for the night to end...',
+        accent: 'bg-gray-700'
+    };
+
+    const config = configs[role] || fallbackConfig;
     const isSunRising = timeLeft !== null && timeLeft !== undefined && timeLeft <= 0;
 
-    return (
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+
+    const content = (
+        // Используем fixed inset-0 z-[9999] чтобы гарантированно поглотить ВЕСЬ экран, 
+        // невзирая на родительские relative контейнеры в NightPhase или GameLayout.
+        // Это решит проблему "чёрного квадрата" и сделает затемнение 100% кинематографичным.
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.6 }}
-            className="w-full max-w-lg mx-auto flex flex-col items-center"
+            transition={{ duration: 1.5, ease: "easeOut" }} // Медленное, кинематографичное затухание
+            className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4 bg-[#050505]"
         >
-            <motion.div
-                initial={{ scale: 0.9, y: 20 }}
-                animate={{
-                    scale: isCivilian ? [1, 1.015, 1] : 1,
-                    y: 0,
-                }}
-                transition={{
-                    type: isCivilian ? 'tween' : 'spring',
-                    damping: 25,
-                    stiffness: 300,
-                    duration: isCivilian ? 5 : undefined,
-                    repeat: isCivilian ? Infinity : 0,
-                    repeatType: 'mirror',
-                }}
-                className={`w-full p-8 md:p-10 rounded-[32px] border ${config.border} ${config.bg} ${config.bgGlow} flex flex-col items-center text-center relative overflow-hidden`}
-            >
-                {/* Inner vignette */}
-                <div className="absolute inset-0 shadow-[inset_0_0_60px_rgba(0,0,0,0.85)] pointer-events-none rounded-[32px]" />
+            {/* ОЧЕНЬ тусклый, едва заметный радиальный свет только ровно за иконкой (без границ) */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.10]">
+                <div className={`w-[250px] h-[250px] md:w-[350px] md:h-[350px] rounded-full blur-[100px] ${config.accent.replace('bg-', 'bg-')}`} />
+            </div>
 
-                {/* Role icon */}
+            <div className="flex flex-col items-center text-center relative z-10 w-full max-w-lg pb-10">
+
+                {/* Иконка медленно выплывает из темноты */}
                 <motion.div
-                    initial={{ scale: 0, rotate: -15 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ type: 'spring', delay: 0.2 }}
-                    className="mb-5 relative z-10"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 2, ease: "easeOut", delay: 0.5 }}
+                    className="mb-8 md:mb-10"
                 >
                     {config.icon}
                 </motion.div>
 
-                {/* Title */}
-                <h3 className={`text-2xl md:text-3xl font-['Cinzel'] font-bold tracking-[0.15em] mb-3 drop-shadow-2xl relative z-10 ${config.titleColor}`}>
+                {/* Жесткая типографика */}
+                <motion.h3
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 2, delay: 1.5 }}
+                    className="text-2xl md:text-3xl font-['Cinzel'] font-light tracking-[0.3em] text-white/90 uppercase"
+                >
                     {config.title}
-                </h3>
+                </motion.h3>
 
-                {/* Description / Investigation result */}
+                {/* Резкая линия-разделитель (Ключевой элемент премиального дизайна) */}
+                <motion.div
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ duration: 1.5, delay: 2, ease: "circOut" }}
+                    className={`w-16 h-[1px] my-6 md:my-8 ${config.accent}`}
+                />
+
+                {/* Строгий текст без лишнего форматирования / Результат расследования */}
                 <AnimatePresence mode="wait">
                     {role === Role.DETECTIVE && investigationResult != null ? (
                         <motion.div
                             key="result"
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ type: 'spring', delay: 0.1 }}
-                            className="relative z-10 p-4 rounded-xl bg-amber-900/30 border border-amber-700/30 w-full max-w-[300px]"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 2, delay: 2.5 }}
+                            className="flex flex-col items-center"
                         >
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-amber-500/60 mb-2">Investigation Result</p>
-                            <p className="text-xl font-bold text-white">
-                                {targetName} is{' '}
-                                <span className={investigationResult === Role.MAFIA ? 'text-red-500' : 'text-emerald-400'}>
-                                    {investigationResult === Role.MAFIA ? 'GUILTY' : 'CLEAN'}
-                                </span>
-                            </p>
+                            <span className="text-white/30 text-[10px] md:text-xs font-mono uppercase tracking-[0.4em] mb-4">
+                                Result
+                            </span>
+                            <span className={`text-lg md:text-xl font-mono uppercase tracking-widest ${investigationResult === Role.MAFIA ? 'text-[#8B0000]' : 'text-[#0D9488]'}`}>
+                                {targetName} IS {investigationResult === Role.MAFIA ? 'GUILTY' : 'CLEAN'}
+                            </span>
                         </motion.div>
                     ) : (
                         <motion.p
                             key="desc"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="text-white/50 text-sm font-medium leading-relaxed max-w-[300px] relative z-10"
+                            transition={{ duration: 2, delay: 2.5 }}
+                            className="text-white/40 text-xs md:text-sm font-mono uppercase tracking-widest max-w-[280px] leading-relaxed"
                         >
                             {config.desc}
                         </motion.p>
                     )}
                 </AnimatePresence>
 
-                {/* Scanning progress bar */}
-                <div className="mt-8 w-full max-w-[240px] h-0.5 bg-white/5 rounded-full overflow-hidden relative z-10">
-                    <motion.div
-                        className={`absolute top-0 bottom-0 w-1/3 ${config.accent} rounded-full blur-[1px]`}
-                        animate={{ left: ['-33%', '100%'] }}
-                        transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                    />
-                </div>
+            </div>
 
-                {/* Footer text */}
-                <p className={`text-[9px] uppercase tracking-[0.3em] font-bold mt-4 relative z-10 ${isSunRising ? 'text-amber-400/60 animate-pulse' : 'text-white/25'}`}>
+            {/* Awaiting Sunrise */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 2, delay: 3.5 }}
+                className="absolute bottom-8 md:bottom-12 flex flex-col items-center z-10"
+            >
+                <p className={`text-[10px] font-mono uppercase tracking-[0.4em] ${isSunRising ? 'text-[#B45309]/80 animate-pulse' : 'text-white/20'}`}>
                     {isSunRising ? 'The sun is rising...' : 'Awaiting Sunrise'}
                 </p>
+                {/* Minimalist timer progress line (optional visual touch) */}
+                <div className="w-[100px] h-[1px] bg-white/5 mt-4 relative overflow-hidden">
+                    <motion.div
+                        className={`absolute top-0 bottom-0 w-1/4 ${config.accent}`}
+                        animate={{ left: ["-25%", "100%"] }}
+                        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                    />
+                </div>
             </motion.div>
+
         </motion.div>
     );
+
+    if (!mounted) return null;
+    return createPortal(content, document.body);
 };
