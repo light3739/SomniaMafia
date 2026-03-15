@@ -37,7 +37,7 @@ interface GameContextType {
     setShowVotingResults: (val: boolean) => void;
 
     // Lobby
-    createLobbyOnChain: (maxPlayers?: number) => Promise<boolean>;
+    createLobbyOnChain: (maxPlayers?: number, tournamentId?: bigint) => Promise<boolean>;
     joinLobbyOnChain: (roomId: bigint | number) => Promise<boolean>;
 
     // Shuffle (V4: commit-reveal)
@@ -1352,7 +1352,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // --- LOBBY ACTIONS (V3: createRoom only, then joinRoom with session) ---
 
-    const createLobbyOnChain = useCallback(async (maxPlayers: number = 10): Promise<boolean> => {
+    const createLobbyOnChain = useCallback(async (maxPlayers: number = 10, tournamentId: bigint = 0n): Promise<boolean> => {
         if (!playerName || !address || !lobbyName || !publicClient) { alert("Enter details and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
@@ -1405,7 +1405,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         pubKeyHex as `0x${string}`,
                         sessionAddress as `0x${string}`,
                         !!lobbyPassword,
-                        0n
+                        tournamentId
                     ],
                     account: activeAccount as `0x${string}`,
                     value: LOBBY_FUNDING_VALUE,
