@@ -44,7 +44,9 @@ export async function signRequest(params: {
         roomId !== undefined &&
         Number.isFinite(roomId) &&
         session &&
-        session.registeredOnChain &&
+        // For room creation, session is not registered yet, but we need to use it for initial GM setup (e.g. password)
+        // So we trust the local session if it matches the roomId and mainWallet.
+        (session.registeredOnChain || session.roomId === roomId) &&
         Date.now() < session.expiresAt &&
         session.mainWallet.toLowerCase() === normalizedAddress &&
         session.roomId === roomId

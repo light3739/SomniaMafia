@@ -8,7 +8,7 @@ import { useWallets } from '@privy-io/react-auth';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL, AVALANCHE_FUJI, getDeploymentByChainId } from '../contracts/config';
 import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
-import { loadSession, createNewSession, markSessionRegistered, getSessionAccount } from '../services/sessionKeyService';
+import { loadSession, createNewSession, markSessionRegistered, getSessionAccount, createSessionWalletClient } from '../services/sessionKeyService';
 import { loadOrCreateKeypair, exportPublicKeyHex, eciesDecrypt, EciesEncrypted } from '../services/eciesService';
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
@@ -1454,7 +1454,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         roomId: finalRoomId.toString(),
                         address: address,
                         password: lobbyPassword,
-                        walletClient: useSessionForPassword ? getSessionWalletClient() : activeWalletClient,
+                        walletClient: useSessionForPassword ? createSessionWalletClient(true) : activeWalletClient,
                         signerAddress: useSessionForPassword ? session.address : address,
                         chainId: runtimeChain.id,
                         maxPlayers: maxPlayers

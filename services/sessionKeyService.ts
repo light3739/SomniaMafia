@@ -101,9 +101,10 @@ export function hasValidSession(roomId: number, mainWallet: string): boolean {
 /**
  * Create a wallet client using the session key
  */
-export function createSessionWalletClient(): WalletClient | null {
+export function createSessionWalletClient(ignoreRegistration: boolean = false): WalletClient | null {
   const session = loadSession();
-  if (!session || !session.registeredOnChain) return null;
+  if (!session) return null;
+  if (!session.registeredOnChain && !ignoreRegistration) return null;
 
   const account = privateKeyToAccount(session.privateKey);
   const chain = getSessionChain();
