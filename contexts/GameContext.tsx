@@ -1471,20 +1471,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 6. IF PRIVATE: Set password on GM server
             if (lobbyPassword) {
                 try {
-                    // Give RPC a moment to sync before GM check
-                    await new Promise(r => setTimeout(r, 1000));
-
                     addLog("Setting room password on GM server...", "info");
-                    // Use session key for silent password setting if possible
-                    const session = loadSession();
-                    const useSessionForPassword = session && session.roomId === Number(finalRoomId) && session.registeredOnChain;
+                    
+                    // Always use main wallet for initial setup to avoid session registration race conditions
+                    console.log(`[createLobbyOnChain] Setting room password using main wallet (host)`);
 
                     await GM.setRoomPassword({
                         roomId: finalRoomId.toString(),
                         address: address,
                         password: lobbyPassword,
-                        walletClient: useSessionForPassword ? createSessionWalletClient(true) : activeWalletClient,
-                        signerAddress: useSessionForPassword ? session.address : address,
+                        walletClient: activeWalletClient,
+                        signerAddress: address,
                         chainId: runtimeChain.id,
                         maxPlayers: maxPlayers
                     });
