@@ -7,10 +7,9 @@ import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { GamePhase } from '../../types';
 import { Loader2 } from 'lucide-react';
-import { useAccount } from 'wagmi';
+import { useAccount, useWalletClient } from 'wagmi';
 import { SessionKeyBanner } from '../game/SessionKeyBanner';
-import { loadOrCreateKeypair, exportPublicKeyHex } from '../../services/eciesService';
-import { GM_SERVER_URL } from '../../contracts/config';
+import * as GM from '../../services/gmService';
 
 export const WaitingRoom: React.FC = () => {
     const {
@@ -25,6 +24,7 @@ export const WaitingRoom: React.FC = () => {
     } = useGameContext();
 
     const { address } = useAccount();
+    const { data: walletClient } = useWalletClient();
     const roomIdNumber = currentRoomId ? Number(currentRoomId) : null;
     const {
         hasSession,
@@ -35,21 +35,13 @@ export const WaitingRoom: React.FC = () => {
 
     // Register ECIES pubkey with GM so it can encrypt our role privately
     useEffect(() => {
-        if (!currentRoomId || !address) return;
+        if (!currentRoomId || !address || !walletClient) return;
         const roomId = String(currentRoomId);
 
-        loadOrCreateKeypair(roomId, address)
-            .then(keypair => exportPublicKeyHex(keypair.publicKey))
-            .then(pubkey =>
-                fetch(`${GM_SERVER_URL}/register-pubkey`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ roomId, playerAddress: address, pubkey }),
-                })
-            )
-            .then(r => { if (!r.ok) console.warn('[ECIES] register-pubkey failed', r.status); })
+        GM.registerEciesPubkey(roomId, address, walletClient)
+            .then(() => console.log('[ECIES] Public key registered with GM server'))
             .catch(e => console.warn('[ECIES] register-pubkey error:', e));
-    }, [currentRoomId, address]);
+    }, [currentRoomId, address, walletClient]);
 
     // 1. Авто-переход при смене фазы в блокчейне
     useEffect(() => {

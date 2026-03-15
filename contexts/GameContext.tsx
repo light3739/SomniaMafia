@@ -1378,8 +1378,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // ✅ ДОБАВИТЬ: Загружаем/генерируем ECIES keypair для этого игрока
             const eciesKp = await loadOrCreateKeypair(newRoomId.toString(), address);
             eciesPrivKeyRef.current = eciesKp.privateKey;
-            const eciesPubKeyHex = await exportPublicKeyHex(eciesKp.publicKey);
-            console.log('[ECIES] Public key ready:', eciesPubKeyHex.slice(0, 20) + '...');
+
 
             // Sanitize nickname
             const safeName = /^[a-zA-Z0-9_ ]+$/.test(playerName) ? playerName : `Player_${Math.floor(Math.random() * 1000)}`;
@@ -1509,16 +1508,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере
             try {
-                await fetch('/api/game/register-pubkey', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        roomId: finalRoomId.toString(),
-                        address,
-                        eciesPubKey: eciesPubKeyHex,
-                        chainId,
-                    })
-                });
+                const { client: activeWalletClient } = await getActiveWalletClient();
+                await GM.registerEciesPubkey(finalRoomId.toString(), address, activeWalletClient);
                 console.log('[ECIES] Public key registered with GM server');
             } catch (e) {
                 console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
@@ -1597,8 +1588,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // ✅ ДОБАВИТЬ: ECIES keypair для join
             const eciesKp = await loadOrCreateKeypair(roomId.toString(), address);
             eciesPrivKeyRef.current = eciesKp.privateKey;
-            const eciesPubKeyHex = await exportPublicKeyHex(eciesKp.publicKey);
-            console.log('[ECIES] Public key ready:', eciesPubKeyHex.slice(0, 20) + '...');
 
             // 3. Check if room is private & get GM signature if needed
             let roomData: any = null;
@@ -1622,6 +1611,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         roomId: roomId.toString(),
                         password: lobbyPassword,
                         playerAddress: address,
+                        chainId: runtimeChain.id,
                     });
                 }
             } catch (e: any) {
@@ -1692,16 +1682,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере
             try {
-                await fetch('/api/game/register-pubkey', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        roomId: roomId.toString(),
-                        address,
-                        eciesPubKey: eciesPubKeyHex,
-                        chainId,
-                    })
-                });
+                const { client: activeWalletClient } = await getActiveWalletClient();
+                await GM.registerEciesPubkey(roomId.toString(), address, activeWalletClient);
                 console.log('[ECIES] Public key registered with GM server');
             } catch (e) {
                 console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
