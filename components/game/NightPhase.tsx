@@ -14,7 +14,7 @@ import { Button } from '../ui/Button';
 import { MafiaChat } from './MafiaChat';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { Moon, Skull, Shield, Search, Eye, Check, Clock, User, Lock, AlertCircle, Users, RefreshCw } from 'lucide-react';
-import { NightActionFeedback } from './NightActionFeedback';
+import { CinematicNightFeedback } from './CinematicNightFeedback';
 import { emitGameSignal } from '../../services/signalBus';
 
 // Night action types matching contract enum
@@ -44,7 +44,7 @@ const RoleActions: Record<Role, { action: NightActionType; label: string; icon: 
         action: NightActionType.KILL,
         label: 'Kill',
         icon: <Skull className="w-5 h-5" />,
-        color: 'text-rose-500'
+        color: 'text-red-700'
     },
     [Role.DOCTOR]: {
         action: NightActionType.HEAL,
@@ -56,7 +56,7 @@ const RoleActions: Record<Role, { action: NightActionType; label: string; icon: 
         action: NightActionType.CHECK,
         label: 'Investigate',
         icon: <Search className="w-5 h-5" />,
-        color: 'text-sky-500'
+        color: 'text-amber-600'
     },
     [Role.CIVILIAN]: {
         action: NightActionType.NONE,
@@ -241,6 +241,12 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
 
     // Get selected player name (from side card selection)
     const selectedPlayer = gameState.players.find(p => p.address.toLowerCase() === selectedTarget?.toLowerCase());
+
+    // Name of the committed target (persists after commit for cinematic feedback)
+    const committedTargetName = React.useMemo(() => {
+        if (!nightState.committedTarget) return 'someone';
+        return gameState.players.find(p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase())?.name || 'Unknown';
+    }, [gameState.players, nightState.committedTarget]);
 
     // Storage key for night commit data
     const NIGHT_COMMIT_KEY = `mafia_night_commit_${currentRoomId}_${address ? address.toLowerCase() : ''}`;
@@ -559,7 +565,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 committedTarget: committedTarget
             }));
 
-            addLog("Night action submitted!", "success");
+            addLog("Your decision is sealed.", "success");
             setSelectedTarget(null);
 
             // ⚡ INSTANT: Broadcast to all players via LiveKit (~50ms)
@@ -654,55 +660,10 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
     if (!canAct) {
         return (
             <div className="w-full h-full flex flex-col items-center justify-center p-4 md:p-8 no-scrollbar relative">
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.98 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="max-w-lg w-full flex flex-col items-stretch"
-                >
-                    {/* Header - matching other roles */}
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="text-center mb-2"
-                    >
-                        <h2 className="text-2xl font-['Cinzel'] text-white mb-1">
-                            Night Phase
-                        </h2>
-                        <p className="text-white/40 text-[10px] tracking-wide">
-                            Close your eyes and wait
-                        </p>
-                    </motion.div>
-
-                    <div className="w-full flex flex-col items-center relative">
-                        {/* Status Card - matching NightActionFeedback style */}
-                        <div className="mb-4 p-4 bg-indigo-950/20 rounded-2xl w-full">
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="text-indigo-300 text-sm font-medium">Civilian Status</span>
-                            </div>
-                            <div className="h-px w-full bg-indigo-500/20 mb-3" />
-
-                            {/* Waiting message */}
-                            <div className="p-3 bg-indigo-900/20 rounded-lg">
-                                <div className="flex items-center gap-2">
-                                    <Moon className="w-4 h-4 text-indigo-400" />
-                                    <span className="text-indigo-300 text-sm">You have no night actions</span>
-                                </div>
-                            </div>
-
-                            {/* Info text */}
-                            <p className="text-indigo-200/40 text-xs mt-3 text-center">
-                                As a peaceful villager, wait for dawn to return.
-                            </p>
-                        </div>
-
-                        {/* Waiting indicator - Absolute positioning to match active roles */}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 whitespace-nowrap">
-                            <p className="text-white/60 text-xs tracking-[0.4em] uppercase animate-pulse">
-                                Waiting for dawn
-                            </p>
-                        </div>
-                    </div>
-                </motion.div>
+                <CinematicNightFeedback
+                    role={myRole}
+                    timeLeft={timeLeft}
+                />
             </div>
         );
     }
@@ -731,7 +692,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                     </h2>
                                     <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
                                         <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />
-                                        <span className="text-amber-400 text-[9px] uppercase tracking-widest font-bold">GM is calculating</span>
+                                        <span className="text-amber-400 text-[9px] uppercase tracking-widest font-bold">Preparing for dawn</span>
                                     </div>
                                 </div>
                             ) : (
@@ -755,23 +716,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     )}
                 </AnimatePresence>
 
-                {/* 2. Status Area - Floating Badge (Absolute container) */}
-                <div className="relative w-full h-0 pointer-events-none">
-                    <AnimatePresence>
-                        {nightState.hasRevealed && (myRole !== Role.DETECTIVE || nightState.investigationResult !== null) && (
-                            <motion.div
-                                initial={{ y: 20, opacity: 0, scale: 0.8 }}
-                                animate={{ y: 0, opacity: 1, scale: 1 }}
-                                exit={{ y: 20, opacity: 0, scale: 0.8 }}
-                                transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 flex items-center justify-center gap-2 text-green-400 py-1.5 px-6 rounded-full bg-green-500/10 border border-green-500/20 shadow-[0_0_30px_rgba(34,197,94,0.1)] backdrop-blur-sm whitespace-nowrap z-50 pointer-events-none"
-                            >
-                                <Check className="w-4 h-4" />
-                                <span className="font-bold tracking-[0.2em] uppercase text-[10px]">Action Completed!</span>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
+                {/* Status badge removed — CinematicNightFeedback now handles sealed state */}
 
                 {/* Mafia Teammates */}
                 {myRole === Role.MAFIA && nightState.teammates.length > 0 && !nightState.hasCommitted && (
@@ -815,44 +760,18 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                             </motion.div>
                         ) : nightState.hasCommitted ? (
                             <motion.div
-                                key="results"
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.5, delay: 0.3 }}
-                                className="w-full flex flex-col items-center relative"
+                                key="cinematic"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="w-full"
                             >
-                                <div className="w-full">
-                                    {/* Role Specific Results & Pending Status - Extracted to NightActionFeedback */}
-                                    <NightActionFeedback
-                                        myRole={myRole}
-                                        nightState={nightState}
-                                        gameState={gameState}
-                                        aliveMafiaCount={
-                                            myRole === Role.MAFIA
-                                                ? nightState.teammates.filter(addr => {
-                                                    const player = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
-                                                    return player?.isAlive;
-                                                }).length + (myPlayer?.isAlive ? 1 : 0) // teammates + me
-                                                : undefined
-                                        }
-                                    />
-
-                                    {/* Waiting Message - Absolute at the bottom of the content area, delayed after Action Completed */}
-                                    {/* For Detective: wait until investigationResult is available (same condition as Action Completed badge) */}
-                                    <AnimatePresence>
-                                        {nightState.hasRevealed && (myRole !== Role.DETECTIVE || nightState.investigationResult !== null) && (
-                                            <motion.div
-                                                key="waiting-for-dawn"
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                transition={{ delay: 1, duration: 0.5 }}
-                                                className="absolute top-full left-1/2 -translate-x-1/2 mt-4 whitespace-nowrap"
-                                            >
-                                                <p className="text-white/60 text-xs tracking-[0.4em] uppercase animate-pulse">Waiting for dawn</p>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
+                                <CinematicNightFeedback
+                                    role={myRole}
+                                    targetName={committedTargetName}
+                                    investigationResult={nightState.investigationResult}
+                                    timeLeft={timeLeft}
+                                />
                             </motion.div>
                         ) : null}
                     </AnimatePresence>
