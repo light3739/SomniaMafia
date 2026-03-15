@@ -297,8 +297,9 @@ export async function requestJoinPermit(params: {
     roomId: string;
     password: string;
     playerAddress: string;
+    chainId?: number;
 }): Promise<`0x${string}`> {
-    const { roomId, password, playerAddress } = params;
+    const { roomId, password, playerAddress, chainId } = params;
 
     const res = await fetch(`${GM_SERVER_URL}/request-join`, {
         method: 'POST',
@@ -307,6 +308,7 @@ export async function requestJoinPermit(params: {
             roomId,
             password,
             playerAddress,
+            chainId,
         }),
     });
 
