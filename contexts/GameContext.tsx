@@ -1331,11 +1331,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         if (isTestMode || !currentRoomId || !publicClient) return;
         refreshPlayersList(currentRoomId);
-    }, [currentRoomId, publicClient, refreshPlayersList, isTestMode]);
+    }, [currentRoomId, isTestMode]); // Removed refreshPlayersList/publicClient from deps to avoid infinite interval churn
 
-    // FIX: Removed per-block useWatchBlockNumber for refreshPlayersList.
-    // The event-driven pollEvents already triggers refreshPlayersList when state changes.
-    // A backup poll every 5s handles non-event state changes (e.g., deadline expiry).
     useEffect(() => {
         if (isTestMode || !currentRoomId || !publicClient) return;
 
@@ -1344,7 +1341,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }, 5000);
 
         return () => clearInterval(interval);
-    }, [currentRoomId, publicClient, refreshPlayersListDebounced, isTestMode]);
+    }, [currentRoomId, isTestMode]); // Removed refreshPlayersListDebounced/publicClient from deps to avoid infinite interval churn
 
 
 
@@ -1459,7 +1456,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.warn("[Lobby] Failed to parse RoomCreated log, falling back to predicted ID", e);
             }
 
-            // IMPORTANT: Update session roomId early so signRequest can use the session key for setPassword
+            // IMPORTANT: Update session roomId and registration status early 
+            // so subsequent GM calls (setPassword, etc.) recognize the session.
             if (Number(finalRoomId) !== newRoomId) {
                 const s = loadSession();
                 if (s) {
@@ -1468,6 +1466,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     addLog(`Session room synchronized to ${finalRoomId}`, "info");
                 }
             }
+            markSessionRegistered();
 
             // 6. IF PRIVATE: Set password on GM server
             if (lobbyPassword) {
@@ -1478,7 +1477,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     addLog("Setting room password on GM server...", "info");
                     // Use session key for silent password setting if possible
                     const session = loadSession();
-                    const useSessionForPassword = session && session.roomId === Number(finalRoomId);
+                    const useSessionForPassword = session && session.roomId === Number(finalRoomId) && session.registeredOnChain;
 
                     await GM.setRoomPassword({
                         roomId: finalRoomId.toString(),
@@ -1522,7 +1521,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.warn('[Deposit Debug] Could not parse deposit events:', e);
             }
 
-            // Update session if predicted ID was wrong
+            // Update session if predicted ID was wrong (redundant but safe)
             if (Number(finalRoomId) !== newRoomId) {
                 console.warn(`[Lobby] Room ID mismatch! Updating session key...`);
                 const session = loadSession();
@@ -1532,12 +1531,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
 
-            markSessionRegistered();
-
             // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере
             try {
                 const { client: activeWalletClient } = await getActiveWalletClient();
-                await GM.registerEciesPubkey(finalRoomId.toString(), address, activeWalletClient);
+                await GM.registerEciesPubkey(finalRoomId.toString(), address, activeWalletClient, runtimeChain.id);
                 console.log('[ECIES] Public key registered with GM server');
             } catch (e) {
                 console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
@@ -1597,6 +1594,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!playerName || !address || !publicClient) { alert("Enter name and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
+            // Sanitize nickname for join
+            const safeName = /^[a-zA-Z0-9_ ]+$/.test(playerName) ? playerName : `Player_${Math.floor(Math.random() * 1000)}`;
+            console.log(`[SafeName] Join - Original: "${playerName}", Used: "${safeName}"`);
+
             // 0. Check abandonment
             const abandoned = JSON.parse(localStorage.getItem('mafia_abandoned_rooms') || '[]');
             if (abandoned.includes(rId.toString())) {
@@ -1677,7 +1678,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'joinRoom',
-                    args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
+                    args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                     account: activeAccount as `0x${string}`,
                     value: txValue,
                 });
@@ -1692,7 +1693,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
-                args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
+                args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                 account: activeAccount,
                 chain: runtimeChain,
                 value: txValue,
@@ -1728,7 +1729,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере
             try {
                 const { client: activeWalletClient } = await getActiveWalletClient();
-                await GM.registerEciesPubkey(roomId.toString(), address, activeWalletClient);
+                await GM.registerEciesPubkey(roomId.toString(), address, activeWalletClient, runtimeChain.id);
                 console.log('[ECIES] Public key registered with GM server');
             } catch (e) {
                 console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);

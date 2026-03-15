@@ -44,12 +44,13 @@ export async function signRequest(params: {
         roomId !== undefined &&
         Number.isFinite(roomId) &&
         session &&
-        // For room creation, session is not registered yet, but we need to use it for initial GM setup (e.g. password)
-        // So we trust the local session if it matches the roomId and mainWallet.
-        (session.registeredOnChain || session.roomId === roomId) &&
-        Date.now() < session.expiresAt &&
         session.mainWallet.toLowerCase() === normalizedAddress &&
-        session.roomId === roomId
+        session.roomId === roomId &&
+        Date.now() < session.expiresAt &&
+        // Session must be registered on-chain to be used for authorized GM actions.
+        // Exception: if it's NOT registered yet, we only use it if specifically allowed (not implemented here yet)
+        // or just fallback to walletClient to be safe during race conditions.
+        session.registeredOnChain
     ) {
         const sessionAccount = privateKeyToAccount(session.privateKey);
         const signature = await sessionAccount.signMessage({ message });
