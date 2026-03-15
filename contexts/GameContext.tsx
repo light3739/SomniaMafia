@@ -1393,7 +1393,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
-                    args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`], 
+                    args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, 0n], 
                     account: activeAccount,
                     value: LOBBY_FUNDING_VALUE,
                 });
@@ -1413,7 +1413,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     maxPlayers,      // uint8 maxPlayers
                     safeName,       // string nickname
                     pubKeyHex as `0x${string}`, // bytes publicKey
-                    sessionAddress as `0x${string}` // address sessionAddress
+                    sessionAddress as `0x${string}`, // address sessionAddress
+                    !!lobbyPassword, // bool isPrivate
+                    0n,             // uint256 tournamentId (standalone)
                 ],
                 account: activeAccount,
                 chain: runtimeChain,
