@@ -1386,7 +1386,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 4. Оценка газа с буфером
             let gasLimit = isSomnia ? undefined : 5_000_000n;
-            const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
+            // IMPORTANT: creation should always use main wallet (not session key)
+            const activeWalletClient = walletClient; 
+            const activeAccount = address;
+            
+            if (!activeWalletClient || !activeAccount) {
+                alert("No wallet connected!");
+                setIsTxPending(false);
+                return false;
+            }
+
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: runtimeContractAddress,
@@ -1401,7 +1410,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         !!lobbyPassword,
                         0n
                     ],
-                    account: activeAccount,
+                    account: activeAccount as `0x${string}`,
                     value: LOBBY_FUNDING_VALUE,
                 });
                 gasLimit = (gasEstimate * 125n) / 100n;
@@ -1613,10 +1622,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         playerAddress: address,
                         chainId: runtimeChain.id,
                     });
+                    addLog("Join permit received ✅", "success");
                 }
             } catch (e: any) {
-                console.warn("[Join] Error checking room privacy or tournament:", e);
-                // Fallback: assume public or contract call failed
+                console.error("[Join] Error checking room privacy or tournament:", e);
+                addLog(`Join permit failed: ${e.message}`, "error");
+                
+                // CRITICAL: If it's a private room and we failed to get permit, STOP here
+                if (roomData && roomData.isPrivate) {
+                    setIsTxPending(false);
+                    alert(`Failed to get join permit: ${e.message}`);
+                    return false;
+                }
             }
 
             // 3.1. Determine if deposit is needed (Skip if it's a tournament room)
@@ -1626,14 +1643,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 3.5. Оценка газа с буфером
             let gasLimit = 14_500_000n;
-            const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
+            // IMPORTANT: joining should always use main wallet (not session key) to avoid registration mismatch
+            const activeWalletClient = walletClient; 
+            const activeAccount = address;
+            
+            if (!activeWalletClient || !activeAccount) {
+                alert("No wallet connected!");
+                setIsTxPending(false);
+                return false;
+            }
+
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), playerName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
-                    account: activeAccount,
+                    account: activeAccount as `0x${string}`,
                     value: txValue,
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
@@ -1642,7 +1668,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.warn('[Gas] joinRoom estimation failed, using fallback', e);
             }
 
-            // 4. Join room with session key + fund it
+            // 4. Join room with main wallet + fund session key
             const hash = await activeWalletClient.writeContract({
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
