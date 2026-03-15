@@ -16,7 +16,8 @@ export async function registerEciesPubkey(
     roomId: string,
     address: string,
     walletClient: any,
-    chainId?: number
+    chainId?: number,
+    forceWallet?: boolean
 ): Promise<void> {
     const { publicKey } = await loadOrCreateKeypair(roomId, address);
     const pubkeyHex = await exportPublicKeyHex(publicKey);
@@ -25,6 +26,7 @@ export async function registerEciesPubkey(
         address,
         roomId: Number(roomId),
         walletClient,
+        forceWallet,
         buildMessage: ({ nonce, timestamp }) =>
             `register-pubkey:${roomId}:${address.toLowerCase()}:${pubkeyHex}:${nonce}:${timestamp}`,
     });
@@ -259,7 +261,8 @@ export async function setRoomPassword(params: {
     walletClient: any;
     chainId?: number;
     maxPlayers?: number;
-    signerAddress?: string; // NEW
+    signerAddress?: string;
+    forceWallet?: boolean;
 }): Promise<void> {
     const { roomId, address, password, walletClient, chainId, maxPlayers, signerAddress } = params;
 
@@ -267,7 +270,8 @@ export async function setRoomPassword(params: {
         address,
         roomId: Number(roomId),
         walletClient,
-        signerAddress, // Pass through
+        signerAddress,
+        forceWallet: params.forceWallet,
         buildMessage: ({ nonce, timestamp }) =>
             `setRoomPassword:${roomId}:${address.toLowerCase()}:${nonce}:${timestamp}`,
     });
