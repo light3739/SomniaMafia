@@ -12,7 +12,7 @@ export async function POST(request: Request) {
         const roomId = BigInt(rawRoomId).toString();
         console.log(`[API/CheckWin] Checking Room #${roomId}`);
 
-        // 1. Check Win Condition on GM Server
+
         console.log(`[API/CheckWin] Calling GM Server /win-check/${roomId}`);
         const gmRes = await fetch(`${GM_SERVER_URL}/win-check/${roomId}`);
         let gmData;
