@@ -1456,17 +1456,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.warn("[Lobby] Failed to parse RoomCreated log, falling back to predicted ID", e);
             }
 
-            // IMPORTANT: Update session roomId and registration status early 
-            // so subsequent GM calls (setPassword, etc.) recognize the session.
-            if (Number(finalRoomId) !== newRoomId) {
-                const s = loadSession();
-                if (s) {
-                    s.roomId = Number(finalRoomId);
-                    localStorage.setItem('somnia_mafia_session', JSON.stringify(s));
-                    addLog(`Session room synchronized to ${finalRoomId}`, "info");
-                }
+            // Sync session roomId and registration status EARLY
+            // This ensures subsequent GM calls use the correct room context.
+            const session = loadSession();
+            if (session) {
+                session.roomId = Number(finalRoomId);
+                session.registeredOnChain = true; // Equivalent to markSessionRegistered()
+                localStorage.setItem('somnia_mafia_session', JSON.stringify(session));
+                addLog(`Session synchronized for room ${finalRoomId}`, "info");
+                console.log(`[Lobby] Session synced & registered for Room ID: ${finalRoomId}`);
+            } else {
+                // If somehow no session exists, at least try standard registration
+                markSessionRegistered();
             }
-            markSessionRegistered();
 
             // 6. IF PRIVATE: Set password on GM server
             if (lobbyPassword) {
@@ -1524,15 +1526,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.warn('[Deposit Debug] Could not parse deposit events:', e);
             }
 
-            // Update session if predicted ID was wrong (redundant but safe)
-            if (Number(finalRoomId) !== newRoomId) {
-                console.warn(`[Lobby] Room ID mismatch! Updating session key...`);
-                const session = loadSession();
-                if (session) {
-                    session.roomId = Number(finalRoomId);
-                    localStorage.setItem('somnia_mafia_session', JSON.stringify(session));
-                }
-            }
+            // Session already updated above
 
             // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере (с ретраями)
             let pubkeyRegistered = false;
