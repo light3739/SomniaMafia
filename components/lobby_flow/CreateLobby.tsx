@@ -19,6 +19,7 @@ export const CreateLobby: React.FC = () => {
         setLobbyName,
         createLobbyOnChain,
         createTournamentOnChain,
+        joinTournamentOnChain,
         isTxPending,
         lobbyPassword,
         setLobbyPassword,
@@ -71,13 +72,16 @@ export const CreateLobby: React.FC = () => {
             });
 
             if (tournamentId !== null) {
-                // After creating tournament, we could redirect to a tournament dashboard 
-                // or just to join the first room. For now, let's go to waiting room 
-                // (the context should have updated currentRoomId if it auto-joined, 
-                // but createTournament doesn't auto-join yet).
-                // Actually, our createLobbyOnChain implementation Redirects to /waiting.
-                // For tournaments, the user might need to MANUALLY join or we can auto-call join.
-                router.push('/waiting');
+                // 1. Join the tournament as the first participant (and pay buy-in)
+                const joined = await joinTournamentOnChain(tournamentId, lobbyPassword, buyIn);
+                
+                if (joined) {
+                    // 2. Create the first room for this tournament
+                    const success = await createLobbyOnChain(maxPlayers, tournamentId);
+                    if (success) {
+                        router.push('/waiting');
+                    }
+                }
             }
         } else {
             // STANDARD LOBBY FLOW
