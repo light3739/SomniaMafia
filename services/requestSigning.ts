@@ -24,9 +24,10 @@ export async function signRequest(params: {
     address: string;
     roomId?: number;
     walletClient?: SignCapableClient | null;
+    signerAddress?: string; // NEW
     buildMessage: (input: { nonce: string; timestamp: number }) => string;
 }): Promise<SignedRequestMeta> {
-    const { address, roomId, walletClient, buildMessage } = params;
+    const { address, roomId, walletClient, signerAddress, buildMessage } = params;
 
     if (!address) {
         throw new Error('Missing address for signing');

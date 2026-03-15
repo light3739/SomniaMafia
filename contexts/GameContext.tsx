@@ -1359,13 +1359,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!playerName || !address || !lobbyName || !publicClient) { alert("Enter details and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
-            // 1. Предсказываем ID комнаты (читаем nextRoomId)
             const nextId = await publicClient.readContract({
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'nextRoomId',
             }) as bigint;
-            const newRoomId = Number(nextId);
+            const newRoomId = Number(nextId) + 1; // Predict next ID
 
             // 2. Генерируем ключи
             const keyPair = await generateKeyPair();
@@ -1427,18 +1426,38 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(`Creating room "${lobbyName}"...`, "info");
             const receipt = await publicClient?.waitForTransactionReceipt({ hash });
 
+            // Detect ACTUAL roomId from events (Avoid race conditions)
+            let finalRoomId = BigInt(newRoomId);
+            try {
+                const logs = parseEventLogs({
+                    abi: MAFIA_ABI,
+                    eventName: 'RoomCreated',
+                    logs: receipt.logs
+                });
+                if (logs.length > 0) {
+                    finalRoomId = (logs[0] as any).args.roomId;
+                    console.log(`[Lobby] Created Room ID: ${finalRoomId} (Predicted: ${newRoomId})`);
+                }
+            } catch (e) {
+                console.warn("[Lobby] Failed to parse RoomCreated log, falling back to predicted ID", e);
+            }
 
             // 6. IF PRIVATE: Set password on GM server
             if (lobbyPassword) {
                 try {
                     addLog("Setting room password on GM server...", "info");
+                    // Use session key for silent password setting if possible
+                    const session = loadSession();
+                    const useSessionForPassword = session && session.roomId === Number(finalRoomId);
+
                     await GM.setRoomPassword({
-                        roomId: newRoomId.toString(),
+                        roomId: finalRoomId.toString(),
                         address: address,
                         password: lobbyPassword,
-                        walletClient: activeWalletClient,
+                        walletClient: useSessionForPassword ? getSessionWalletClient() : activeWalletClient,
+                        signerAddress: useSessionForPassword ? session.address : address,
                         chainId: runtimeChain.id,
-                        maxPlayers: maxPlayers // Pass max players to server too
+                        maxPlayers: maxPlayers
                     });
                     addLog("Room password protected ✅", "success");
                 } catch (e: any) {
@@ -1467,31 +1486,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.warn('[Deposit Debug] Could not parse deposit events:', e);
             }
 
-            // Detect ACTUAL roomId from events (Avoid race conditions)
-            let finalRoomId = BigInt(newRoomId);
-            try {
-                const logs = parseEventLogs({
-                    abi: MAFIA_ABI,
-                    eventName: 'RoomCreated',
-                    logs: receipt.logs
-                });
-                if (logs.length > 0) {
-                    finalRoomId = (logs[0] as any).args.roomId;
-                    console.log(`[Lobby] Created Room ID: ${finalRoomId} (Predicted: ${newRoomId})`);
-                }
-            } catch (e) {
-                console.warn("[Lobby] Failed to parse RoomCreated log, falling back to predicted ID", e);
-            }
-
             // Update session if predicted ID was wrong
             if (Number(finalRoomId) !== newRoomId) {
                 console.warn(`[Lobby] Room ID mismatch! Updating session key...`);
-                // We need to update the stored session to point to finalRoomId
                 const session = loadSession();
                 if (session) {
                     session.roomId = Number(finalRoomId);
-                    // Re-save session with correct roomId
-                    // We must import storeSession for this, or just hack it via localStorage if storeSession isn't exported (it is exported)
                     localStorage.setItem('somnia_mafia_session', JSON.stringify(session));
                 }
             }
@@ -1562,7 +1562,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, lobbyName, publicClient, getActiveWalletClient, addLog, refreshPlayersList, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain, lobbyPassword]);
+    }, [playerName, address, lobbyName, publicClient, getActiveWalletClient, addLog, refreshPlayersList, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain, lobbyPassword, avatarUrl, walletClient, chainId]);
 
     const joinLobbyOnChain = useCallback(async (roomId: bigint | number): Promise<boolean> => {
         const rId = BigInt(roomId);
