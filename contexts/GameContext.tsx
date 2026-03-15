@@ -1459,9 +1459,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.warn("[Lobby] Failed to parse RoomCreated log, falling back to predicted ID", e);
             }
 
+            // IMPORTANT: Update session roomId early so signRequest can use the session key for setPassword
+            if (Number(finalRoomId) !== newRoomId) {
+                const s = loadSession();
+                if (s) {
+                    s.roomId = Number(finalRoomId);
+                    localStorage.setItem('somnia_mafia_session', JSON.stringify(s));
+                    addLog(`Session room synchronized to ${finalRoomId}`, "info");
+                }
+            }
+
             // 6. IF PRIVATE: Set password on GM server
             if (lobbyPassword) {
                 try {
+                    // Give RPC a moment to sync before GM check
+                    await new Promise(r => setTimeout(r, 1000));
+
                     addLog("Setting room password on GM server...", "info");
                     // Use session key for silent password setting if possible
                     const session = loadSession();
@@ -1480,6 +1493,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 } catch (e: any) {
                     console.error("[PrivateRoom] Failed to set password on GM:", e);
                     addLog(`Error setting password: ${e.message}`, "danger");
+                    
+                    // IF it failed because of "not registered", it's likely lag.
+                    // The GM server now has retries, but we should inform the user it might be still syncing.
+                    if (e.message.includes('not registered')) {
+                        addLog("GM is still syncing session data. Password set might need manual retry if it fails for all players.", "warning");
+                    }
                 }
             }
 
