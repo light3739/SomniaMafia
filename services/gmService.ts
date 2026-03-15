@@ -255,13 +255,15 @@ export async function setRoomPassword(params: {
     walletClient: any;
     chainId?: number;
     maxPlayers?: number;
+    signerAddress?: string; // NEW
 }): Promise<void> {
-    const { roomId, address, password, walletClient, chainId, maxPlayers } = params;
+    const { roomId, address, password, walletClient, chainId, maxPlayers, signerAddress } = params;
 
     const meta = await signRequest({
         address,
         roomId: Number(roomId),
         walletClient,
+        signerAddress, // Pass through
         buildMessage: ({ nonce, timestamp }) =>
             `setRoomPassword:${roomId}:${address.toLowerCase()}:${nonce}:${timestamp}`,
     });
@@ -274,7 +276,7 @@ export async function setRoomPassword(params: {
             password,
             hostAddress: address,
             signature: meta.signature,
-            signerAddress: meta.signerAddress,
+            signerAddress: meta.signerAddress, // Uses the actual signer (session or main)
             nonce: meta.nonce,
             timestamp: meta.timestamp,
             chainId,
