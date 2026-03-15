@@ -206,7 +206,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Web3
     const { address, chainId, isConnected } = useAccount();
     const { writeContractAsync } = useWriteContract();
-    const publicClient = usePublicClient();
+    
+    // Derived from active wallet chain (default to Fuji if not connected or unknown chain)
+    const runtimeDeployment = useMemo(() => getDeploymentByChainId(chainId ?? null), [chainId]);
+    const runtimeChain = runtimeDeployment.chain;
+    const runtimeContractAddress = runtimeDeployment.contracts.MafiaDiamond as `0x${string}`;
+
+    const publicClient = usePublicClient({ chainId: runtimeChain.id });
     const { data: walletClient } = useWalletClient();
     const { wallets } = useWallets();
     const [isTxPending, setIsTxPending] = useState(false);
@@ -223,9 +229,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Vote map: stores who voted for whom (voter address -> target address)
     const [voteMap, setVoteMap] = useState<Record<string, string>>({});
 
-    const runtimeDeployment = useMemo(() => getDeploymentByChainId(chainId ?? null), [chainId]);
-    const runtimeChain = runtimeDeployment.chain;
-    const runtimeContractAddress = runtimeDeployment.contracts.MafiaDiamond as `0x${string}`;
+
 
     const getActiveWalletClient = useCallback(async () => {
         const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
@@ -1021,8 +1025,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fetchGameData = useCallback(async (roomId: bigint) => {
         if (isTestMode || !publicClient) return null;
         try {
+            console.log(`[FetchGameData] Fetching room ${roomId} from ${runtimeContractAddress} on chain ${runtimeChain.id}`);
             // SPEED: Batch all 3 reads into a single multicall — saves 2 sequential RPC roundtrips (~400-800ms)
-            const [playersResult, roomResult, mafiaResult] = await publicClient.multicall({
+            const results = await publicClient.multicall({
                 contracts: [
                     {
                         address: runtimeContractAddress,
@@ -1043,9 +1048,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         args: [roomId],
                     },
                 ],
-                allowFailure: false,
+                allowFailure: true, // Don't crash entire call if one fails
                 blockTag: 'latest',
-            }) as [any[], any, [number, number, string]];
+            });
+
+            // Extract with safety checks
+            const playersResult = results[0].status === 'success' ? results[0].result as any[] : [];
+            const roomResult = results[1].status === 'success' ? results[1].result : null;
+            const mafiaResult = results[2].status === 'success' ? results[2].result as [number, number, string] : [0, 0, '0x0000000000000000000000000000000000000000'];
+
+            if (results[0].status === 'failure') {
+                console.error(`[FetchGameData] getPlayers failed:`, results[0].error);
+            }
+            if (results[1].status === 'failure') {
+                console.error(`[FetchGameData] getRoom failed:`, results[1].error);
+                return null; // Room is essential
+            }
 
             const data = playersResult;
             const roomData = roomResult;
