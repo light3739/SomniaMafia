@@ -1626,7 +1626,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             } catch (e: any) {
                 console.error("[Join] Error checking room privacy or tournament:", e);
-                addLog(`Join permit failed: ${e.message}`, "error");
+                addLog(`Join permit failed: ${e.message}`, "danger");
                 
                 // CRITICAL: If it's a private room and we failed to get permit, STOP here
                 if (roomData && roomData.isPrivate) {
