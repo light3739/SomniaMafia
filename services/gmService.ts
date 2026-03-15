@@ -15,7 +15,8 @@ export interface GmRoleResponse {
 export async function registerEciesPubkey(
     roomId: string,
     address: string,
-    walletClient: any
+    walletClient: any,
+    chainId?: number
 ): Promise<void> {
     const { publicKey } = await loadOrCreateKeypair(roomId, address);
     const pubkeyHex = await exportPublicKeyHex(publicKey);
@@ -39,6 +40,7 @@ export async function registerEciesPubkey(
             signerAddress: meta.signerAddress,
             nonce: meta.nonce,
             timestamp: meta.timestamp,
+            chainId,
         }),
     });
 
@@ -56,8 +58,9 @@ export async function submitSraKeyToGm(params: {
     address: string;
     sraKey: string;
     walletClient: any;
+    chainId?: number;
 }): Promise<void> {
-    const { roomId, address, sraKey, walletClient } = params;
+    const { roomId, address, sraKey, walletClient, chainId } = params;
 
     const meta = await signRequest({
         address,
@@ -78,6 +81,7 @@ export async function submitSraKeyToGm(params: {
             signerAddress: meta.signerAddress,
             nonce: meta.nonce,
             timestamp: meta.timestamp,
+            chainId,
         }),
     });
 
