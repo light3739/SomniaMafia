@@ -1365,6 +1365,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'nextRoomId',
             }) as bigint;
             const newRoomId = Number(nextId) + 1; // Predict next ID
+            const isSomnia = (runtimeChain.id as number) === 5031 || (runtimeChain.id as number) === 50312;
 
             // 2. Генерируем ключи
             const keyPair = await generateKeyPair();
@@ -1385,21 +1386,29 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log(`[SafeName] Original: "${playerName}", Used: "${safeName}"`);
 
             // 4. Оценка газа с буфером
-            let gasLimit = 14_500_000n;
+            let gasLimit = isSomnia ? undefined : 5_000_000n;
             const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
-                    args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, 0n], 
+                    args: [
+                        lobbyName,
+                        maxPlayers,
+                        safeName,
+                        pubKeyHex as `0x${string}`,
+                        sessionAddress as `0x${string}`,
+                        !!lobbyPassword,
+                        0n
+                    ],
                     account: activeAccount,
                     value: LOBBY_FUNDING_VALUE,
                 });
-                gasLimit = (gasEstimate * 150n) / 200n;
-                console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
+                gasLimit = (gasEstimate * 125n) / 100n;
+                console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, using limit: ${gasLimit}`);
             } catch (e) {
-                console.warn('[Gas] createAndJoin estimation failed, using fallback', e);
+                console.warn('[Gas] createAndJoin estimation failed, using fallback 5M', e);
             }
 
             // 5. АТОМАРНАЯ ТРАНЗАКЦИЯ (Create + Join + Fund)
