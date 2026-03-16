@@ -23,7 +23,9 @@ export const CreateLobby: React.FC = () => {
         isTxPending,
         lobbyPassword,
         setLobbyPassword,
-        currencySymbol
+        currencySymbol,
+        publicClient,
+        address
     } = useGameContext();
 
     const { isConnected } = useAccount();
@@ -61,6 +63,12 @@ export const CreateLobby: React.FC = () => {
             // For now, use native token
             const paymentToken = '0x0000000000000000000000000000000000000000' as `0x${string}`;
 
+            // 0. Fetch base nonce to prevent "nonce too low" errors in rapid succession
+            const baseNonce = await publicClient?.getTransactionCount({ 
+                address: address as `0x${string}`, 
+                blockTag: 'pending' 
+            }) || 0;
+
             const tournamentId = await createTournamentOnChain({
                 name: lobbyName,
                 buyIn: buyIn || '0',
@@ -68,16 +76,17 @@ export const CreateLobby: React.FC = () => {
                 playersPerTable: maxPlayers, // This is our "Room Size"
                 password: lobbyPassword.trim(),
                 paymentToken,
-                initialPrize: initialPrize || '0'
+                initialPrize: initialPrize || '0',
+                nonce: baseNonce
             });
 
             if (tournamentId !== null) {
                 // 1. Join the tournament as the first participant (and pay buy-in)
-                const joined = await joinTournamentOnChain(tournamentId, lobbyPassword, buyIn);
+                const joined = await joinTournamentOnChain(tournamentId, lobbyPassword, buyIn, baseNonce + 1);
                 
                 if (joined) {
                     // 2. Create the first room for this tournament
-                    const success = await createLobbyOnChain(maxPlayers, tournamentId);
+                    const success = await createLobbyOnChain(maxPlayers, tournamentId, baseNonce + 2);
                     if (success) {
                         router.push('/waiting');
                     }

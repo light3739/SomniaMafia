@@ -104,10 +104,12 @@ interface GameContextType {
         password?: string;
         paymentToken: `0x${string}`;
         initialPrize: string; // token amount as string
+        nonce?: number;
     }) => Promise<bigint | null>;
-    joinTournamentOnChain: (tournamentId: bigint, password?: string, amount?: string) => Promise<boolean>;
-    distributePrizesOnChain: (roomId: bigint) => Promise<void>;
     cancelTournamentOnChain: (tournamentId: bigint) => Promise<void>;
+    publicClient: any;
+    address: `0x${string}` | undefined;
+    createLobbyOnChain: (maxPlayers?: number, tournamentId?: bigint, nonce?: number) => Promise<boolean>;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -1370,7 +1372,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // --- LOBBY ACTIONS (V3: createRoom only, then joinRoom with session) ---
 
-    const createLobbyOnChain = useCallback(async (maxPlayers: number = 10, tournamentId: bigint = 0n): Promise<boolean> => {
+    const createLobbyOnChain = useCallback(async (maxPlayers: number = 10, tournamentId: bigint = 0n, nonce?: number): Promise<boolean> => {
         if (!playerName || !address || !lobbyName || !publicClient) { alert("Enter details and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
@@ -1439,6 +1441,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'createAndJoin',
+                nonce,
                 args: [
                     lobbyName,      // string roomName
                     maxPlayers,      // uint8 maxPlayers
@@ -2908,6 +2911,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         password?: string;
         paymentToken: `0x${string}`;
         initialPrize: string;
+        nonce?: number;
     }): Promise<bigint | null> => {
         if (!isConnected) return null;
         try {
@@ -2929,6 +2933,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'createTournament',
+                nonce: params.nonce,
                 args: [
                     params.name,
                     buyInUnits,
@@ -2969,7 +2974,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const joinTournamentOnChain = async (tournamentId: bigint, password?: string, amount?: string): Promise<boolean> => {
+    const joinTournamentOnChain = async (tournamentId: bigint, password?: string, amount?: string, nonce?: number): Promise<boolean> => {
         if (!isConnected) return false;
         try {
             setIsTxPending(true);
@@ -2982,7 +2987,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'joinTournament',
                 args: [tournamentId, password || ""],
                 account,
-                value
+                value,
+                nonce
             });
 
             addLog(`Joined tournament #${tournamentId}`, 'success');
@@ -3796,7 +3802,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         createTournamentOnChain,
         joinTournamentOnChain,
         distributePrizesOnChain,
-        cancelTournamentOnChain
+        cancelTournamentOnChain,
+        publicClient,
+        address
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, isTxConfirming, currentRoomId,
         createLobbyOnChain, joinLobbyOnChain, startGameOnChain,
@@ -3821,8 +3829,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setLobbyPassword,
         createTournamentOnChain,
         joinTournamentOnChain,
-        distributePrizesOnChain,
-        cancelTournamentOnChain,
+        publicClient,
+        address
     ]);
 
     return (
