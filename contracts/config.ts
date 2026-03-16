@@ -148,6 +148,8 @@ export const FUNCTION_MAP = {
     createTournament: 'TournamentFacet',
     cancelTournament: 'TournamentFacet',
     joinTournament: 'TournamentFacet',
+    getTournament: 'TournamentFacet',
+    isTournamentParticipant: 'TournamentFacet',
     distributeMafiaPrizes: 'TournamentFacet',
     toggleTournamentWhitelist: 'TournamentFacet',
     addToTournamentWhitelist: 'TournamentFacet',
