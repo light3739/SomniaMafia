@@ -1,5 +1,5 @@
 import { defineChain } from 'viem';
-import MafiaPortalArtifact from './MafiaPortal.json';
+import MafiaPortalArtifact from './MafiaDiamondABI.json';
 
 // Self-hosted RPC proxy URL — bypasses Avalanche CORS restrictions.
 // On production: https://test.mafiaonchain.live/api/rpc/fuji
@@ -104,7 +104,7 @@ export const FACETS = {
 export const ZK_VERIFIER = ACTIVE_DEPLOYMENT.contracts.Groth16Verifier as `0x${string}`;
 
 // Use the new monolithic ABI instead of the out-of-date Diamond ABI
-export const DIAMOND_ABI = MafiaPortalArtifact.abi;
+export const DIAMOND_ABI = MafiaPortalArtifact as any;
 
 export const FUNCTION_MAP = {
     createAndJoin: 'LobbyFacet',

@@ -186,9 +186,9 @@ export default function ZKTestPage() {
                                 abi: MAFIA_ABI,
                                 data: log.data,
                                 topics: log.topics,
-                            });
+                            }) as any;
                             if (decoded.eventName === 'RoomCreated') {
-                                foundId = (decoded.args as any).roomId.toString();
+                                foundId = decoded.args.roomId.toString();
                             }
                         } catch { }
                     });
