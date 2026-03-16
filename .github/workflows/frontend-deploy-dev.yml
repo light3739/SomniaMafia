@@ -102,6 +102,7 @@ jobs:
           ssh -p ${FRONT_SSH_PORT} ${FRONT_SSH_USER}@${FRONT_SSH_HOST} "
             cd ${FRONT_REMOTE_DIR} && \
             docker compose -f ops/frontend-server/docker-compose.dev.yaml pull && \
+            docker rm -f mafia-frontend-dev mafia-gm-dev mafia-redis-dev || true && \
             docker compose -f ops/frontend-server/docker-compose.dev.yaml up -d
           "
 
