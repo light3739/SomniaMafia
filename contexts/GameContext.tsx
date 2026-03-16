@@ -1417,14 +1417,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Tournament participation check for creator
             if (tournamentId > 0n) {
                 try {
-                    const tournament = await publicClient.readContract({
+                    const tournamentResult = await publicClient.readContract({
                         address: runtimeContractAddress,
                         abi: MAFIA_ABI,
-                        functionName: 'getTournament',
+                        functionName: "getTournament",
                         args: [tournamentId],
                     }) as any;
 
-                    if (tournament && tournament.buyIn > 0n) {
+                    const buyIn = Array.isArray(tournamentResult) ? BigInt(tournamentResult[3] || 0) : BigInt(tournamentResult.buyIn || 0);
+
+                    if (tournamentResult && buyIn > 0n) 
                         const isPart = await publicClient.readContract({
                             address: runtimeContractAddress,
                             abi: MAFIA_ABI,
@@ -1432,8 +1434,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             args: [tournamentId, address as `0x${string}`],
                         }) as boolean;
                         if (!isPart) {
-                            addLog(`Joining tournament #${tournamentId} (buy-in: ${formatEther(tournament.buyIn)} ${runtimeChain.nativeCurrency.symbol}) first...`, "info");
-                            const joined = await joinTournamentOnChain(tournamentId, "", formatEther(tournament.buyIn));
+                            addLog(`Joining tournament #${tournamentId} (buy-in: ${formatEther(buyIn)} ${runtimeChain.nativeCurrency.symbol}) first...`, "info");
+                            const joined = await joinTournamentOnChain(tournamentId, "", formatEther(buyIn));
                             if (!joined) {
                                 addLog("Tournament join failed or cancelled.", "danger");
                                 setIsTxPending(false);
@@ -1699,7 +1701,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     args: [BigInt(roomId)],
                 }) as any;
 
-                if (roomData && roomData.isPrivate) {
+                const isPrivate = Array.isArray(roomData) ? Boolean(roomData[18]) : Boolean(roomData.isPrivate);
+                if (roomData && isPrivate) {
                     if (!lobbyPassword) {
                         alert("This room is private. Please enter the password.");
                         setIsTxPending(false);
@@ -1719,7 +1722,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 addLog(`Join permit failed: ${e.message}`, "danger");
                 
                 // CRITICAL: If it's a private room and we failed to get permit, STOP here
-                if (roomData && roomData.isPrivate) {
+                const isPrivate = Array.isArray(roomData) ? Boolean(roomData[18]) : Boolean(roomData.isPrivate);
+                if (roomData && isPrivate) {
                     setIsTxPending(false);
                     alert(`Failed to get join permit: ${e.message}`);
                     return false;
@@ -1727,16 +1731,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // 3.1. Determine if deposit is needed (Skip if it's a tournament room)
-            const isTournamentRoom = roomData ? (roomData.tournamentId || 0n) > 0n : false;
+            const tournamentIdFromRoom = Array.isArray(roomData) ? BigInt(roomData[19] || 0) : BigInt(roomData.tournamentId || 0);
+            const isTournamentRoom = roomData ? tournamentIdFromRoom > 0n : false;
             
             // Tournament participation check for joiner
             if (isTournamentRoom) {
                 try {
-                    const tournament = await publicClient.readContract({
+                    const tournamentResult = await publicClient.readContract({
                         address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'getTournament',
-                        args: [roomData.tournamentId],
+                        args: [tournamentIdFromRoom],
                     }) as any;
 
                     if (tournament && tournament.buyIn > 0n) {
@@ -1747,8 +1752,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             args: [roomData.tournamentId, address as `0x${string}`],
                         }) as boolean;
                         if (!isPart) {
-                            addLog(`Joining tournament #${roomData.tournamentId} (buy-in: ${formatEther(tournament.buyIn)} ${runtimeChain.nativeCurrency.symbol}) first...`, "info");
-                            const joined = await joinTournamentOnChain(roomData.tournamentId, "", formatEther(tournament.buyIn));
+                            addLog(`Joining tournament #${roomData.tournamentId} (buy-in: ${formatEther(buyIn)} ${runtimeChain.nativeCurrency.symbol}) first...`, "info");
+                            const joined = await joinTournamentOnChain(tournamentIdFromRoom, "", formatEther(buyIn));
                             if (!joined) {
                                 addLog("Tournament join failed or cancelled.", "danger");
                                 setIsTxPending(false);
