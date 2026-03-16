@@ -1426,7 +1426,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     const buyIn = Array.isArray(tournamentResult) ? BigInt(tournamentResult[3] || 0) : BigInt(tournamentResult.buyIn || 0);
 
-                    if (tournamentResult && buyIn > 0n) 
+                    if (tournamentResult && buyIn > 0n) {
                         const isPart = await publicClient.readContract({
                             address: runtimeContractAddress,
                             abi: MAFIA_ABI,
@@ -1744,15 +1744,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         args: [tournamentIdFromRoom],
                     }) as any;
 
-                    if (tournament && tournament.buyIn > 0n) {
+                    const buyIn = Array.isArray(tournamentResult) ? BigInt(tournamentResult[3] || 0) : BigInt(tournamentResult.buyIn || 0);
+                    if (tournamentResult && buyIn > 0n) {
                         const isPart = await publicClient.readContract({
                             address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'isTournamentParticipant',
-                            args: [roomData.tournamentId, address as `0x${string}`],
+                            args: [tournamentIdFromRoom, address as `0x${string}`],
                         }) as boolean;
                         if (!isPart) {
-                            addLog(`Joining tournament #${roomData.tournamentId} (buy-in: ${formatEther(buyIn)} ${runtimeChain.nativeCurrency.symbol}) first...`, "info");
+                            addLog(`Joining tournament #${tournamentIdFromRoom} (buy-in: ${formatEther(buyIn)} ${runtimeChain.nativeCurrency.symbol}) first...`, "info");
                             const joined = await joinTournamentOnChain(tournamentIdFromRoom, "", formatEther(buyIn));
                             if (!joined) {
                                 addLog("Tournament join failed or cancelled.", "danger");
