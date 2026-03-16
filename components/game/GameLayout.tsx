@@ -978,6 +978,48 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
                             Kill Random
                         </Button>
                     </div>
+                    <div className="w-full h-px bg-white/5 my-1" />
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">Visual Tests</div>
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px]"
+                            onClick={() => {
+                                playNightTransition();
+                                setShowNightAnnouncement(true);
+                            }}
+                        >
+                            Test: Night
+                        </Button>
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px]"
+                            onClick={() => {
+                                playMorningTransition();
+                                setShowMorningAnnouncement(true);
+                            }}
+                        >
+                            Test: Morning
+                        </Button>
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px]"
+                            onClick={() => {
+                                setShowRoleComposition(true);
+                            }}
+                        >
+                            Test: Roles
+                        </Button>
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px]"
+                            onClick={() => {
+                                setShowVotingAnnouncement(true);
+                            }}
+                        >
+                            Test: Judgment
+                        </Button>
+                    </div>
                 </div>
             )}
 

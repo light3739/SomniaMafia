@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sun } from 'lucide-react';
 
 interface MorningAnnouncementProps {
     show: boolean;
@@ -8,22 +7,10 @@ interface MorningAnnouncementProps {
 }
 
 export const MorningAnnouncement = React.memo(({ show, onComplete }: MorningAnnouncementProps) => {
-    // Deterministic particle values to keep render pure and stable
-    const rays = React.useMemo(() => {
-        return [...Array(8)].map((_, i) => ({
-            id: i,
-            left: `${(i * 13 + 7) % 100}%`,
-            top: `${(i * 17 + 11) % 100}%`,
-            duration: 2 + (i % 3) * 0.6,
-            delay: i * 0.25
-        }));
-    }, []);
-
     useEffect(() => {
         if (show) {
-            const timer = setTimeout(() => {
-                onComplete();
-            }, 3000); // Show for 3 seconds
+            // Держим заставку 4 секунды для максимально плавного эффекта
+            const timer = setTimeout(() => onComplete(), 4000);
             return () => clearTimeout(timer);
         }
     }, [show, onComplete]);
@@ -32,88 +19,45 @@ export const MorningAnnouncement = React.memo(({ show, onComplete }: MorningAnno
         <AnimatePresence>
             {show && (
                 <motion.div
-                    className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
+                    className="fixed inset-0 z-[110] flex items-center justify-center pointer-events-none"
+                    // Начинаем с глухого черного (подхватывая ночной экран) и ОЧЕНЬ медленно убираем фон
+                    initial={{ backgroundColor: '#050505' }}
+                    animate={{ backgroundColor: 'rgba(5, 5, 5, 0)' }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.5 }}
+                    transition={{ duration: 3, ease: "easeInOut" }} // 3 секунды на рассеивание тьмы
                 >
-                    {/* Warm Blurred Background */}
                     <motion.div
-                        initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-                        animate={{ opacity: 1, backdropFilter: "blur(4px)" }}
-                        exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-                        transition={{ duration: 1, ease: "easeOut" }}
-                        className="absolute inset-0 bg-yellow-950/40"
-                    />
-
-                    {/* Animated Content */}
-                    <motion.div
-                        initial={{ scale: 0.5, opacity: 0, y: 50 }}
-                        animate={{ scale: 1, opacity: 1, y: 0 }}
-                        exit={{ scale: 1.5, opacity: 0, filter: 'blur(10px)' }}
-                        transition={{
-                            type: "spring",
-                            stiffness: 200,
-                            damping: 20,
-                            duration: 0.8
-                        }}
-                        className="relative z-10 flex flex-col items-center"
+                        // Текст медленно выплывает из блюра и темноты
+                        initial={{ opacity: 0, filter: 'blur(10px)', scale: 0.95 }}
+                        animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
+                        exit={{ opacity: 0, scale: 1.05 }}
+                        transition={{ duration: 2, ease: "easeOut", delay: 0.5 }}
+                        className="flex flex-col items-center"
                     >
-                        {/* Sun Icon */}
-                        <motion.div
-                            animate={{
-                                scale: [1, 1.2, 1],
-                                rotate: [0, 90, 180, 270, 360],
-                                opacity: [0.8, 1, 0.8]
-                            }}
-                            transition={{
-                                scale: { duration: 3, repeat: Infinity, ease: "easeInOut" },
-                                rotate: { duration: 10, repeat: Infinity, ease: "linear" }
-                            }}
-                        >
-                            <Sun className="w-24 h-24 text-yellow-500 mb-6 drop-shadow-[0_0_40px_rgba(234,179,8,0.6)]" />
-                        </motion.div>
-
-                        <h1 className="text-6xl md:text-8xl font-['Cinzel'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-orange-400 to-amber-700 drop-shadow-[0_0_20px_rgba(234,179,8,0.4)]">
-                            DAY BREAKS
+                        <h1 className="text-5xl md:text-7xl font-['Cinzel'] font-light tracking-[0.4em] text-white/90 uppercase">
+                            Daybreak
                         </h1>
+                        
                         <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: "100%" }}
-                            transition={{ delay: 0.3, duration: 0.5 }}
-                            className="h-1 bg-yellow-500/50 mt-4 rounded-full"
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: "100px", opacity: 1 }}
+                            transition={{ delay: 1.5, duration: 1.5, ease: "easeInOut" }}
+                            className="h-[1px] bg-white/30 mt-6"
                         />
-                        <p className="mt-4 text-yellow-100/80 font-['Montserrat'] tracking-[0.5em] uppercase text-sm md:text-base">
-                            The sun has risen
-                        </p>
-
-                        {/* Rays/Glitter effect */}
-                        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                            {rays.map((ray) => (
-                                <motion.div
-                                    key={ray.id}
-                                    className="absolute w-2 h-2 bg-yellow-400 blur-[1px] rounded-full"
-                                    style={{
-                                        left: ray.left,
-                                        top: ray.top,
-                                    }}
-                                    animate={{
-                                        opacity: [0, 0.6, 0],
-                                        scale: [0, 1.5, 0],
-                                        y: [0, -40, -80]
-                                    }}
-                                    transition={{
-                                        duration: ray.duration,
-                                        repeat: Infinity,
-                                        delay: ray.delay
-                                    }}
-                                />
-                            ))}
-                        </div>
+                        
+                        <motion.p 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 2, duration: 1 }}
+                            className="mt-6 text-white/30 font-mono tracking-[0.5em] uppercase text-xs"
+                        >
+                            The town awakens
+                        </motion.p>
                     </motion.div>
                 </motion.div>
             )}
         </AnimatePresence>
     );
 });
+
+MorningAnnouncement.displayName = 'MorningAnnouncement';

@@ -9,9 +9,7 @@ interface VotingAnnouncementProps {
 export const VotingAnnouncement = React.memo(({ show, onComplete }: VotingAnnouncementProps) => {
     useEffect(() => {
         if (show) {
-            const timer = setTimeout(() => {
-                onComplete();
-            }, 3000); // Show for 3 seconds
+            const timer = setTimeout(() => onComplete(), 3000); 
             return () => clearTimeout(timer);
         }
     }, [show, onComplete]);
@@ -24,45 +22,44 @@ export const VotingAnnouncement = React.memo(({ show, onComplete }: VotingAnnoun
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.5 }}
+                    transition={{ duration: 0.5 }} // Плавный вход темноты
                 >
-                    {/* Blurred Background with explicit animation */}
-                    <motion.div
-                        initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-                        animate={{ opacity: 1, backdropFilter: "blur(4px)" }}
-                        exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-                        transition={{ duration: 1, ease: "easeOut" }}
-                        className="absolute inset-0 bg-black/60"
-                    />
+                    {/* Глухое черное затемнение */}
+                    <div className="absolute inset-0 bg-black/90" />
 
-                    {/* Animated Text */}
                     <motion.div
-                        initial={{ scale: 0.5, opacity: 0, y: 50 }}
-                        animate={{ scale: 1, opacity: 1, y: 0 }}
-                        exit={{ scale: 1.5, opacity: 0, filter: 'blur(10px)' }}
-                        transition={{
-                            type: "spring",
-                            stiffness: 200,
-                            damping: 20,
-                            duration: 0.8
-                        }}
+                        // Убрал резкий scale. Теперь слово просто тяжело и медленно проявляется
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 1, ease: "easeOut" }}
                         className="relative z-10 flex flex-col items-center"
                     >
-                        <h1 className="text-6xl md:text-8xl font-['Cinzel'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-[#916A47] to-[#5e4026] drop-shadow-[0_0_20px_rgba(145,106,71,0.5)]">
-                            VOTING
+                        <h1 className="text-5xl md:text-7xl font-['Cinzel'] font-light tracking-[0.3em] text-white uppercase">
+                            Judgment
                         </h1>
+                        
+                        {/* ФИКС ЛИНИИ: Теперь она рисуется медленно (1.5 секунды) и плавно (easeInOut) */}
                         <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: "100%" }}
-                            transition={{ delay: 0.3, duration: 0.5 }}
-                            className="h-1 bg-[#916A47]/50 mt-4 rounded-full"
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: "100%", opacity: 1 }}
+                            transition={{ delay: 0.8, duration: 1.5, ease: "easeInOut" }}
+                            className="h-[1px] bg-[#8B0000] mt-6 shadow-[0_0_15px_rgba(139,0,0,0.8)]"
                         />
-                        <p className="mt-4 text-white/80 font-['Montserrat'] tracking-[0.5em] uppercase text-sm md:text-base">
+                        
+                        <motion.p 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 1.5, duration: 1 }}
+                            className="mt-6 text-white/40 font-mono tracking-[0.5em] uppercase text-xs"
+                        >
                             Cast Your Vote
-                        </p>
+                        </motion.p>
                     </motion.div>
                 </motion.div>
             )}
         </AnimatePresence>
     );
 });
+
+VotingAnnouncement.displayName = 'VotingAnnouncement';
