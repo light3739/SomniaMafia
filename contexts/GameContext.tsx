@@ -1430,6 +1430,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     ],
                     account: activeAccount as `0x${string}`,
                     value: LOBBY_FUNDING_VALUE,
+                    nonce,
                 });
                 gasLimit = (gasEstimate * 125n) / 100n;
                 console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, using limit: ${gasLimit}`);
@@ -2930,6 +2931,33 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const initialPrizeUnits = parseEther(params.initialPrize);
             const value = isNative ? initialPrizeUnits : 0n;
 
+            // Gas Estimation
+            let gasLimit = 600000n; 
+            try {
+                if (publicClient) {
+                    gasLimit = await publicClient.estimateContractGas({
+                        address: runtimeContractAddress,
+                        abi: MAFIA_ABI,
+                        functionName: 'createTournament',
+                        args: [
+                            params.name,
+                            buyInUnits,
+                            params.maxPlayers,
+                            params.playersPerTable,
+                            passwordHash,
+                            params.paymentToken,
+                            initialPrizeUnits
+                        ],
+                        account,
+                        value,
+                        nonce: params.nonce
+                    });
+                    gasLimit = (gasLimit * 120n) / 100n;
+                }
+            } catch (e) {
+                console.warn("[CreateTournament Gas] Estimation failed, using fallback:", e);
+            }
+
             const hash = await client.writeContract({
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
@@ -2945,7 +2973,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     initialPrizeUnits
                 ],
                 account,
-                value
+                value,
+                gas: gasLimit
             });
 
             addLog(`Tournament ${params.name} created!`, 'success');
@@ -2982,6 +3011,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const { client, account } = await getActiveWalletClient();
             const value = amount ? parseEther(amount) : 0n;
 
+            // Gas Estimation
+            let gasLimit = 400000n; 
+            try {
+                if (publicClient) {
+                    gasLimit = await publicClient.estimateContractGas({
+                        address: runtimeContractAddress,
+                        abi: MAFIA_ABI,
+                        functionName: 'joinTournament',
+                        args: [tournamentId, password || ""],
+                        account,
+                        value,
+                        nonce
+                    });
+                    gasLimit = (gasLimit * 120n) / 100n;
+                }
+            } catch (e) {
+                console.warn("[JoinTournament Gas] Estimation failed, using fallback:", e);
+            }
+
             const hash = await client.writeContract({
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
@@ -2989,7 +3037,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [tournamentId, password || ""],
                 account,
                 value,
-                nonce
+                nonce,
+                gas: gasLimit
             });
 
             addLog(`Joined tournament #${tournamentId}`, 'success');
