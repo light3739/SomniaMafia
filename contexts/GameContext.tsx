@@ -1414,6 +1414,34 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 return false;
             }
 
+            // Tournament participation check for creator
+            if (tournamentId > 0n) {
+                try {
+                    const tournament = await publicClient.readContract({
+                        address: runtimeContractAddress,
+                        abi: MAFIA_ABI,
+                        functionName: 'getTournament',
+                        args: [tournamentId],
+                    }) as any;
+
+                    if (tournament && tournament.buyIn > 0n) {
+                        const isPart = await publicClient.readContract({
+                            address: runtimeContractAddress,
+                            abi: MAFIA_ABI,
+                            functionName: 'isTournamentParticipant',
+                            args: [tournamentId, address as `0x${string}`],
+                        }) as boolean;
+                        if (!isPart) {
+                            addLog("You must join the tournament first!", "danger");
+                            setIsTxPending(false);
+                            return false;
+                        }
+                    }
+                } catch (e: any) {
+                    console.error("[Create] Participation check failed:", e);
+                }
+            }
+
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: runtimeContractAddress,
@@ -1695,6 +1723,35 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 3.1. Determine if deposit is needed (Skip if it's a tournament room)
             const isTournamentRoom = roomData ? (roomData.tournamentId || 0n) > 0n : false;
+            
+            // Tournament participation check for joiner
+            if (isTournamentRoom) {
+                try {
+                    const tournament = await publicClient.readContract({
+                        address: runtimeContractAddress,
+                        abi: MAFIA_ABI,
+                        functionName: 'getTournament',
+                        args: [roomData.tournamentId],
+                    }) as any;
+
+                    if (tournament && tournament.buyIn > 0n) {
+                        const isPart = await publicClient.readContract({
+                            address: runtimeContractAddress,
+                            abi: MAFIA_ABI,
+                            functionName: 'isTournamentParticipant',
+                            args: [roomData.tournamentId, address as `0x${string}`],
+                        }) as boolean;
+                        if (!isPart) {
+                            addLog("You must join the tournament first!", "danger");
+                            setIsTxPending(false);
+                            return false;
+                        }
+                    }
+                } catch (e: any) {
+                    console.error("[Join] Participation check failed:", e);
+                }
+            }
+
             const txValue = isTournamentRoom ? 0n : LOBBY_FUNDING_VALUE;
             console.log(`[Join] Tournament status: ${isTournamentRoom}, sending value: ${txValue}`);
 
