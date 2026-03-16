@@ -1432,9 +1432,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             args: [tournamentId, address as `0x${string}`],
                         }) as boolean;
                         if (!isPart) {
-                            addLog("You must join the tournament first!", "danger");
-                            setIsTxPending(false);
-                            return false;
+                            addLog(`Joining tournament #${tournamentId} (buy-in: ${formatEther(tournament.buyIn)} ${runtimeChain.nativeCurrency.symbol}) first...`, "info");
+                            const joined = await joinTournamentOnChain(tournamentId, "", formatEther(tournament.buyIn));
+                            if (!joined) {
+                                addLog("Tournament join failed or cancelled.", "danger");
+                                setIsTxPending(false);
+                                return false;
+                            }
+                            addLog("Tournament joined! Continuing room creation...", "success");
                         }
                     }
                 } catch (e: any) {
@@ -1742,9 +1747,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             args: [roomData.tournamentId, address as `0x${string}`],
                         }) as boolean;
                         if (!isPart) {
-                            addLog("You must join the tournament first!", "danger");
-                            setIsTxPending(false);
-                            return false;
+                            addLog(`Joining tournament #${roomData.tournamentId} (buy-in: ${formatEther(tournament.buyIn)} ${runtimeChain.nativeCurrency.symbol}) first...`, "info");
+                            const joined = await joinTournamentOnChain(roomData.tournamentId, "", formatEther(tournament.buyIn));
+                            if (!joined) {
+                                addLog("Tournament join failed or cancelled.", "danger");
+                                setIsTxPending(false);
+                                return false;
+                            }
+                            addLog("Tournament joined! Continuing to join room...", "success");
                         }
                     }
                 } catch (e: any) {
