@@ -37,7 +37,6 @@ interface GameContextType {
     setShowVotingResults: (val: boolean) => void;
 
     // Lobby
-    createLobbyOnChain: (maxPlayers?: number, tournamentId?: bigint) => Promise<boolean>;
     joinLobbyOnChain: (roomId: bigint | number) => Promise<boolean>;
 
     // Shuffle (V4: commit-reveal)
@@ -104,8 +103,9 @@ interface GameContextType {
         password?: string;
         paymentToken: `0x${string}`;
         initialPrize: string; // token amount as string
-        nonce?: number;
     }) => Promise<bigint | null>;
+    joinTournamentOnChain: (tournamentId: bigint, password?: string, amount?: string, nonce?: number) => Promise<boolean>;
+    distributePrizesOnChain: (roomId: bigint) => Promise<void>;
     cancelTournamentOnChain: (tournamentId: bigint) => Promise<void>;
     publicClient: any;
     address: `0x${string}` | undefined;
@@ -3829,6 +3829,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setLobbyPassword,
         createTournamentOnChain,
         joinTournamentOnChain,
+        distributePrizesOnChain,
+        cancelTournamentOnChain,
         publicClient,
         address
     ]);
