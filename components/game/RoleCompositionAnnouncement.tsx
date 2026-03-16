@@ -16,13 +16,8 @@ interface RoleEntry {
     glowColor: string;
 }
 
-export const RoleCompositionAnnouncement = React.memo(({
-    show,
-    onComplete,
-    playerCount
-}: RoleCompositionAnnouncementProps) => {
+export const RoleCompositionAnnouncement = React.memo(({ show, onComplete, playerCount }: RoleCompositionAnnouncementProps) => {
 
-    // Calculate role distribution (matches shuffleService.ts logic)
     const roles: RoleEntry[] = useMemo(() => {
         const mafiaCount = Math.max(1, Math.floor(playerCount / 4));
         const hasDoctor = playerCount >= 4;
@@ -31,51 +26,37 @@ export const RoleCompositionAnnouncement = React.memo(({
         const civilianCount = playerCount - specialRoles;
 
         const result: RoleEntry[] = [];
-
+        // ИСПОЛЬЗУЕМ НАШИ НОВЫЕ СУРОВЫЕ ЦВЕТА И ТОНКИЕ ИКОНКИ
         result.push({
-            name: 'Mafia',
-            count: mafiaCount,
-            icon: <Skull className="w-7 h-7" />,
-            color: 'text-rose-400',
-            glowColor: 'rgba(251,113,133,0.4)'
+            name: 'Mafia', count: mafiaCount,
+            icon: <Skull strokeWidth={1} className="w-8 h-8" />,
+            color: 'text-[#8B0000]', glowColor: 'border-[#8B0000]'
         });
-
         if (hasDoctor) {
             result.push({
-                name: 'Doctor',
-                count: 1,
-                icon: <Shield className="w-7 h-7" />,
-                color: 'text-teal-400',
-                glowColor: 'rgba(45,212,191,0.4)'
+                name: 'Doctor', count: 1,
+                icon: <Shield strokeWidth={1} className="w-8 h-8" />,
+                color: 'text-[#0D9488]', glowColor: 'border-[#0D9488]'
             });
         }
-
         if (hasDetective) {
             result.push({
-                name: 'Detective',
-                count: 1,
-                icon: <Search className="w-7 h-7" />,
-                color: 'text-sky-400',
-                glowColor: 'rgba(56,189,248,0.4)'
+                name: 'Detective', count: 1,
+                icon: <Search strokeWidth={1} className="w-8 h-8" />,
+                color: 'text-[#B45309]', glowColor: 'border-[#B45309]'
             });
         }
-
         result.push({
-            name: 'Civilian',
-            count: civilianCount,
-            icon: <Users className="w-7 h-7" />,
-            color: 'text-amber-400',
-            glowColor: 'rgba(251,191,36,0.4)'
+            name: 'Civilian', count: civilianCount,
+            icon: <Users strokeWidth={1} className="w-8 h-8" />,
+            color: 'text-[#6B5A4A]', glowColor: 'border-[#6B5A4A]' // Пепельный/Бронзовый
         });
-
         return result;
     }, [playerCount]);
 
     useEffect(() => {
         if (show) {
-            const timer = setTimeout(() => {
-                onComplete();
-            }, 5000); // Show for 5 seconds (longer than other announcements — more info to read)
+            const timer = setTimeout(() => onComplete(), 5000);
             return () => clearTimeout(timer);
         }
     }, [show, onComplete]);
@@ -84,111 +65,69 @@ export const RoleCompositionAnnouncement = React.memo(({
         <AnimatePresence>
             {show && (
                 <motion.div
-                    className="fixed inset-0 z-[99] flex items-center justify-center pointer-events-none"
+                    className="fixed inset-0 z-[110] flex items-center justify-center pointer-events-none bg-[#050505]"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.5 }}
+                    transition={{ duration: 0.8 }}
                 >
-                    {/* Blurred Background */}
                     <motion.div
-                        initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-                        animate={{ opacity: 1, backdropFilter: "blur(6px)" }}
-                        exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                        className="absolute inset-0 bg-black/70"
-                    />
-
-                    {/* Content */}
-                    <motion.div
-                        initial={{ scale: 0.7, opacity: 0, y: 40 }}
-                        animate={{ scale: 1, opacity: 1, y: 0 }}
-                        exit={{ scale: 1.1, opacity: 0, filter: 'blur(8px)' }}
-                        transition={{
-                            type: "spring",
-                            stiffness: 180,
-                            damping: 22,
-                            duration: 0.8
-                        }}
-                        className="relative z-10 flex flex-col items-center max-w-md w-full px-6"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 1, ease: "easeOut" }}
+                        className="relative z-10 flex flex-col items-center max-w-md w-full px-8"
                     >
-                        {/* Title */}
-                        <motion.h2
-                            initial={{ opacity: 0, y: -20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.2 }}
-                            className="text-3xl md:text-4xl font-['Cinzel'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-white via-white/90 to-white/50 mb-2"
-                        >
-                            The Town Awakens
-                        </motion.h2>
+                        <h2 className="text-3xl md:text-4xl font-['Cinzel'] font-light tracking-[0.3em] text-white/90 uppercase mb-2">
+                            The Town
+                        </h2>
+                        <p className="text-white/30 font-mono tracking-[0.3em] uppercase text-xs mb-8">
+                            {playerCount} Players Confirmed
+                        </p>
 
-                        <motion.p
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.4 }}
-                            className="text-white/50 font-['Montserrat'] tracking-[0.3em] uppercase text-[10px] md:text-xs mb-6"
-                        >
-                            {playerCount} Players — Role Distribution
-                        </motion.p>
-
-                        {/* Divider */}
-                        <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: "60%" }}
-                            transition={{ delay: 0.3, duration: 0.6 }}
-                            className="h-[1px] bg-gradient-to-r from-transparent via-[#916A47]/60 to-transparent mb-6"
-                        />
-
-                        {/* Role Cards */}
-                        <div className="w-full space-y-2.5">
+                        {/* Строгий список ролей (Minimalist List) */}
+                        <div className="w-full flex flex-col">
                             {roles.map((role, index) => (
                                 <motion.div
                                     key={role.name}
-                                    initial={{ opacity: 0, x: -30 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{
-                                        delay: 0.5 + index * 0.15,
-                                        type: "spring",
-                                        stiffness: 200,
-                                        damping: 25
-                                    }}
-                                    className="flex items-center gap-4 px-5 py-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm"
+                                    initial={{ opacity: 0, borderBottomWidth: 0 }}
+                                    animate={{ opacity: 1, borderBottomWidth: 1 }}
+                                    transition={{ delay: 0.5 + index * 0.2, duration: 0.8 }}
+                                    // Абсолютно плоские ряды с тонкими линиями
+                                    className="flex items-center gap-6 py-4 border-b border-white/5"
                                 >
-                                    {/* Icon */}
-                                    <div className={`${role.color} shrink-0`}>
+                                    <div className={`${role.color} opacity-80`}>
                                         {role.icon}
                                     </div>
-
-                                    {/* Name */}
-                                    <span className={`${role.color} font-['Cinzel'] font-semibold text-lg flex-1`}>
+                                    <span className={`${role.color} font-['Cinzel'] font-light tracking-[0.2em] text-lg uppercase flex-1`}>
                                         {role.name}
                                     </span>
-
-                                    {/* Count */}
                                     <motion.span
-                                        initial={{ scale: 0 }}
-                                        animate={{ scale: 1 }}
-                                        transition={{
-                                            delay: 0.7 + index * 0.15,
-                                            type: "spring",
-                                            stiffness: 300
-                                        }}
-                                        className={`${role.color} text-2xl font-bold font-mono tabular-nums`}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ delay: 0.8 + index * 0.2 }}
+                                        className="text-white/50 font-mono text-xl"
                                     >
-                                        ×{role.count}
+                                        x{role.count}
                                     </motion.span>
                                 </motion.div>
                             ))}
                         </div>
 
-                        {/* Bottom hint */}
+                        <motion.div
+                            initial={{ scaleX: 0 }}
+                            animate={{ scaleX: 1 }}
+                            transition={{ delay: 2, duration: 1 }}
+                            className="w-12 h-[1px] bg-red-800 mt-12 mb-6"
+                        />
+                        
                         <motion.p
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            transition={{ delay: 1.2 }}
-                            className="mt-6 text-white/30 text-[10px] font-['Montserrat'] tracking-widest uppercase"
+                            transition={{ delay: 2.5 }}
+                            className="text-[#8B0000] text-[10px] font-mono tracking-widest uppercase"
                         >
-                            Find the Mafia among you
+                            Trust no one
                         </motion.p>
                     </motion.div>
                 </motion.div>
