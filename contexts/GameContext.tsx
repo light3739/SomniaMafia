@@ -103,6 +103,7 @@ interface GameContextType {
         password?: string;
         paymentToken: `0x${string}`;
         initialPrize: string; // token amount as string
+        nonce?: number;
     }) => Promise<bigint | null>;
     joinTournamentOnChain: (tournamentId: bigint, password?: string, amount?: string, nonce?: number) => Promise<boolean>;
     distributePrizesOnChain: (roomId: bigint) => Promise<void>;
@@ -1068,7 +1069,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             const data = playersResult;
-            const roomData = roomResult;
+            const roomData = roomResult as any;
             const [mafiaCommitted, mafiaRevealed] = mafiaResult;
 
             // Parse Room Data
