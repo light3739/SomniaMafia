@@ -111,6 +111,8 @@ interface GameContextType {
     publicClient: any;
     address: `0x${string}` | undefined;
     createLobbyOnChain: (maxPlayers?: number, tournamentId?: bigint, nonce?: number) => Promise<boolean>;
+    useEmbeddedWallet: boolean;
+    setUseEmbeddedWallet: (v: boolean) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -239,6 +241,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [playerMarks, setPlayerMarks] = useState<Record<string, 'mafia' | 'civilian' | 'question' | null>>({});
     // Vote map: stores who voted for whom (voter address -> target address)
     const [voteMap, setVoteMap] = useState<Record<string, string>>({});
+    const [useEmbeddedWallet, setUseEmbeddedWallet] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('mafia_use_embedded_wallet') !== 'false';
+        }
+        return true;
+    });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('mafia_use_embedded_wallet', String(useEmbeddedWallet));
+        }
+    }, [useEmbeddedWallet]);
 
     const runtimeChainRef = useRef(runtimeChain);
     const walletsRef = useRef(wallets);
@@ -280,7 +294,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const walletSwitchPromiseRef = useRef<Promise<void> | null>(null);
 
     const getActiveWalletClient = useCallback(async () => {
-        const embeddedWallet = walletsRef.current.find(w => w.walletClientType === 'privy');
+        const embeddedWallet = useEmbeddedWallet 
+            ? walletsRef.current.find(w => w.walletClientType === 'privy')
+            : null;
         const targetChain = runtimeChainRef.current;
 
         if (embeddedWallet) {
@@ -3999,7 +4015,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         distributePrizesOnChain,
         cancelTournamentOnChain,
         publicClient,
-        address: stableAddress
+        address: stableAddress,
+        useEmbeddedWallet,
+        setUseEmbeddedWallet
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, isTxConfirming, currentRoomId,
         createLobbyOnChain, joinLobbyOnChain, startGameOnChain,
@@ -4027,7 +4045,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         distributePrizesOnChain,
         cancelTournamentOnChain,
         publicClient,
-        stableAddress
+        stableAddress,
+        useEmbeddedWallet,
+        setUseEmbeddedWallet
     ]);
 
     return (
