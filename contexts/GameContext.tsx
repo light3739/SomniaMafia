@@ -208,17 +208,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Web3
     const { address, chainId, isConnected } = useAccount();
-    const { writeContractAsync } = useWriteContract();
+    const stableAddress = useMemo(() => address?.toLowerCase() as `0x${string}` | undefined, [address]);
+    const stableChainId = useMemo(() => chainId, [chainId]);
     
     // Derived from active wallet chain (default to Fuji if not connected or unknown chain)
     // STABILITY FIX: Use a ref to keep track of the reported chainId to avoid flickering
     const lastChainIdRef = useRef<number | null>(null);
-    if (chainId) lastChainIdRef.current = chainId;
+    if (stableChainId) lastChainIdRef.current = stableChainId;
 
     const runtimeDeployment = useMemo(() => {
         // Use the most recent non-null chainId to prevent "flickering" to default during switches
-        return getDeploymentByChainId(chainId || lastChainIdRef.current);
-    }, [chainId]);
+        return getDeploymentByChainId(stableChainId || lastChainIdRef.current);
+    }, [stableChainId]);
     const runtimeChain = runtimeDeployment.chain;
     const runtimeContractAddress = runtimeDeployment.contracts.MafiaDiamond as `0x${string}`;
 
@@ -254,8 +255,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [runtimeContractAddress]);
 
     useEffect(() => {
-        addressRef.current = address;
-    }, [address]);
+        addressRef.current = stableAddress;
+    }, [stableAddress]);
 
     useEffect(() => {
         runtimeChainRef.current = runtimeChain;
@@ -323,7 +324,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const rc = runtimeChainRef.current;
         const isSomnia = (rc.id === 50312);
         return isSomnia ? parseEther('1.0') : parseEther('0.1'); // 1 STT for Somnia, 0.1 for Fuji
-    }, []);
+    }, [stableChainId]);
 
     useEffect(() => {
         if (isTestMode && typeof window !== 'undefined') {
@@ -929,12 +930,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [gameState.phase, setShowVotingResults]);
 
     // Ищем myPlayer: если myPlayerId установлен (тестовый режим), используем его, иначе - адрес кошелька
-    const myPlayerById = gameState.myPlayerId
-        ? gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase())
-        : null;
-    const myPlayerByWallet = gameState.players.find(p => p.address.toLowerCase() === address?.toLowerCase());
-    // Приоритет: myPlayerId (тестовый режим) > адрес кошелька
-    const myPlayer = myPlayerById || myPlayerByWallet;
+    const myPlayer = useMemo(() => {
+        const myPlayerById = gameState.myPlayerId
+            ? gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase())
+            : null;
+        const myPlayerByWallet = stableAddress 
+            ? gameState.players.find(p => p.address.toLowerCase() === stableAddress.toLowerCase())
+            : null;
+        
+        return myPlayerById || myPlayerByWallet || undefined;
+    }, [gameState.players, gameState.myPlayerId, stableAddress]);
 
     // Effects
     useEffect(() => { localStorage.setItem('playerName', playerName); }, [playerName]);
@@ -1211,9 +1216,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [isTestMode]); // Removed publicClient, runtimeChain from deps
 
+    const refreshInProgressRef = useRef(false);
     const refreshPlayersList = useCallback(async (roomId: bigint) => {
-        const gameData = await fetchGameData(roomId);
-        if (!gameData) return;
+        if (refreshInProgressRef.current) return;
+        refreshInProgressRef.current = true;
+        try {
+            const gameData = await fetchGameData(roomId);
+            if (!gameData) return;
 
         const {
             rawPlayers, phase, dayCount, revealedCount,
@@ -1354,6 +1363,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             };
         });
         return gameData;
+        } finally {
+            refreshInProgressRef.current = false;
+        }
     }, [fetchGameData, checkWinCondition]); // avatarUrlRef used inside
 
     // === OPTIMISTIC UI: Background TX confirmation ===
@@ -1435,16 +1447,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!currentRoomId || isTestMode || !publicClientRef.current) return;
 
         // Initial
-        refreshPlayersList(currentRoomId);
+        refreshPlayersListDebounced(currentRoomId);
 
         // Continuous
         const interval = setInterval(() => {
-            if (!isTxPending) {
-                refreshPlayersListDebounced(currentRoomId);
-            }
+            refreshPlayersListDebounced(currentRoomId);
         }, 5000);
         return () => clearInterval(interval);
-    }, [currentRoomId, isTestMode, isTxPending, refreshPlayersList, refreshPlayersListDebounced]);
+    }, [currentRoomId, isTestMode, refreshPlayersListDebounced]);
 
 
 
@@ -3982,7 +3992,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         distributePrizesOnChain,
         cancelTournamentOnChain,
         publicClient,
-        address
+        address: stableAddress
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, isTxConfirming, currentRoomId,
         createLobbyOnChain, joinLobbyOnChain, startGameOnChain,
@@ -4010,7 +4020,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         distributePrizesOnChain,
         cancelTournamentOnChain,
         publicClient,
-        address
+        stableAddress
     ]);
 
     return (
