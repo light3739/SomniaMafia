@@ -18,40 +18,68 @@ export const VotingAnnouncement = React.memo(({ show, onComplete }: VotingAnnoun
         <AnimatePresence>
             {show && (
                 <motion.div
-                    className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none"
+                    className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.5 }} // Плавный вход темноты
+                    transition={{ duration: 1, ease: "easeInOut" }}
                 >
-                    {/* Глухое черное затемнение */}
-                    <div className="absolute inset-0 bg-black/90" />
+                    {/* Solid opaque background — unified pattern */}
+                    <div className="absolute inset-0 bg-[#050505]" />
+
+                    {/* Subtle deep red pulsing glow in center — creates pressure but let's make it lighter, as requested */}
+                    <motion.div
+                        className="absolute inset-0 pointer-events-none flex items-center justify-center"
+                        animate={{
+                            opacity: [0.08, 0.15, 0.08],
+                            scale: [0.95, 1.05, 0.95],
+                        }}
+                        transition={{
+                            duration: 5,
+                            repeat: Infinity,
+                            ease: 'easeInOut',
+                        }}
+                    >
+                        <div className="w-[100vw] h-[100vw] max-w-[800px] max-h-[800px] rounded-full bg-[#8B0000] blur-[100px]" />
+                    </motion.div>
+
+                    {/* Very subtle dark-red ambient glow at edges */}
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                        <motion.div
+                            className="absolute -top-[20%] -left-[20%] w-[50%] h-[50%] rounded-full blur-[120px] bg-[#8B0000]"
+                            animate={{ opacity: [0.05, 0.12, 0.05], x: [-10, 10, -10] }}
+                            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+                        />
+                        <motion.div
+                            className="absolute -bottom-[20%] -right-[20%] w-[50%] h-[50%] rounded-full blur-[120px] bg-[#8B0000]"
+                            animate={{ opacity: [0.04, 0.1, 0.04], x: [10, -10, 10] }}
+                            transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+                        />
+                    </div>
 
                     <motion.div
-                        // Убрал резкий scale. Теперь слово просто тяжело и медленно проявляется
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 1, ease: "easeOut" }}
                         className="relative z-10 flex flex-col items-center"
                     >
-                        <h1 className="text-5xl md:text-7xl font-['Cinzel'] font-light tracking-[0.3em] text-white uppercase">
+                        <h1 className="text-5xl md:text-7xl font-['Cinzel'] font-light tracking-[0.3em] text-white/95 uppercase mix-blend-plus-lighter">
                             Judgment
                         </h1>
                         
-                        {/* ФИКС ЛИНИИ: Теперь она рисуется медленно (1.5 секунды) и плавно (easeInOut) */}
                         <motion.div
                             initial={{ width: 0, opacity: 0 }}
-                            animate={{ width: "100%", opacity: 1 }}
+                            animate={{ width: "200px", opacity: 1 }}
                             transition={{ delay: 0.8, duration: 1.5, ease: "easeInOut" }}
-                            className="h-[1px] bg-[#8B0000] mt-6 shadow-[0_0_15px_rgba(139,0,0,0.8)]"
+                            className="h-[1px] bg-gradient-to-r from-transparent via-[#8B0000] to-transparent mt-8"
                         />
                         
                         <motion.p 
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 1.5, duration: 1 }}
-                            className="mt-6 text-white/40 font-mono tracking-[0.5em] uppercase text-xs"
+                            className="mt-8 text-white/50 font-sans tracking-[0.6em] uppercase text-[10px] md:text-xs text-center ml-[0.6em]"
                         >
                             Cast Your Vote
                         </motion.p>

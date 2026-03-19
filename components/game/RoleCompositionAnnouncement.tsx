@@ -13,7 +13,6 @@ interface RoleEntry {
     count: number;
     icon: React.ReactNode;
     color: string;
-    glowColor: string;
 }
 
 export const RoleCompositionAnnouncement = React.memo(({ show, onComplete, playerCount }: RoleCompositionAnnouncementProps) => {
@@ -30,26 +29,26 @@ export const RoleCompositionAnnouncement = React.memo(({ show, onComplete, playe
         result.push({
             name: 'Mafia', count: mafiaCount,
             icon: <Skull strokeWidth={1} className="w-8 h-8" />,
-            color: 'text-[#8B0000]', glowColor: 'border-[#8B0000]'
+            color: 'text-[#8B0000]'
         });
         if (hasDoctor) {
             result.push({
                 name: 'Doctor', count: 1,
                 icon: <Shield strokeWidth={1} className="w-8 h-8" />,
-                color: 'text-[#0D9488]', glowColor: 'border-[#0D9488]'
+                color: 'text-[#0D9488]'
             });
         }
         if (hasDetective) {
             result.push({
                 name: 'Detective', count: 1,
                 icon: <Search strokeWidth={1} className="w-8 h-8" />,
-                color: 'text-[#B45309]', glowColor: 'border-[#B45309]'
+                color: 'text-[#B45309]'
             });
         }
         result.push({
             name: 'Civilian', count: civilianCount,
             icon: <Users strokeWidth={1} className="w-8 h-8" />,
-            color: 'text-[#6B5A4A]', glowColor: 'border-[#6B5A4A]' // Пепельный/Бронзовый
+            color: 'text-[#6B5A4A]'
         });
         return result;
     }, [playerCount]);
@@ -65,7 +64,7 @@ export const RoleCompositionAnnouncement = React.memo(({ show, onComplete, playe
         <AnimatePresence>
             {show && (
                 <motion.div
-                    className="fixed inset-0 z-[110] flex items-center justify-center pointer-events-none bg-[#050505]"
+                    className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none bg-[#050505]"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -78,11 +77,11 @@ export const RoleCompositionAnnouncement = React.memo(({ show, onComplete, playe
                         transition={{ duration: 1, ease: "easeOut" }}
                         className="relative z-10 flex flex-col items-center max-w-md w-full px-8"
                     >
-                        <h2 className="text-3xl md:text-4xl font-['Cinzel'] font-light tracking-[0.3em] text-white/90 uppercase mb-2">
+                        <h2 className="text-3xl md:text-4xl font-['Cinzel'] font-light tracking-[0.3em] text-white/95 uppercase mix-blend-plus-lighter mb-2">
                             The Town
                         </h2>
-                        <p className="text-white/30 font-mono tracking-[0.3em] uppercase text-xs mb-8">
-                            {playerCount} Players Confirmed
+                        <p className="text-white/50 font-sans tracking-[0.6em] uppercase text-[10px] md:text-xs text-center ml-[0.6em] mb-8">
+                            <span className="font-mono">{playerCount}</span> Players Confirmed
                         </p>
 
                         {/* Строгий список ролей (Minimalist List) */}
@@ -90,23 +89,23 @@ export const RoleCompositionAnnouncement = React.memo(({ show, onComplete, playe
                             {roles.map((role, index) => (
                                 <motion.div
                                     key={role.name}
-                                    initial={{ opacity: 0, borderBottomWidth: 0 }}
-                                    animate={{ opacity: 1, borderBottomWidth: 1 }}
-                                    transition={{ delay: 0.5 + index * 0.2, duration: 0.8 }}
+                                    initial={{ opacity: 0, x: -10, borderBottomWidth: 0 }}
+                                    animate={{ opacity: 1, x: 0, borderBottomWidth: 1 }}
+                                    transition={{ delay: 0.5 + index * 0.2, duration: 0.8, ease: "easeOut" }}
                                     // Абсолютно плоские ряды с тонкими линиями
                                     className="flex items-center gap-6 py-4 border-b border-white/5"
                                 >
-                                    <div className={`${role.color} opacity-80`}>
+                                    <div className={`${role.color} opacity-100 `}>
                                         {role.icon}
                                     </div>
-                                    <span className={`${role.color} font-['Cinzel'] font-light tracking-[0.2em] text-lg uppercase flex-1`}>
+                                    <span className={`${role.color} font-['Montserrat'] font-bold tracking-[0.1em] uppercase text-xl flex-1 mix-blend-plus-lighter`}>
                                         {role.name}
                                     </span>
                                     <motion.span
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
                                         transition={{ delay: 0.8 + index * 0.2 }}
-                                        className="text-white/50 font-mono text-xl"
+                                        className={`${role.color} opacity-60 font-mono text-2xl`}
                                     >
                                         x{role.count}
                                     </motion.span>
@@ -115,17 +114,17 @@ export const RoleCompositionAnnouncement = React.memo(({ show, onComplete, playe
                         </div>
 
                         <motion.div
-                            initial={{ scaleX: 0 }}
-                            animate={{ scaleX: 1 }}
-                            transition={{ delay: 2, duration: 1 }}
-                            className="w-12 h-[1px] bg-red-800 mt-12 mb-6"
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: "200px", opacity: 1 }}
+                            transition={{ delay: 2, duration: 1.5, ease: "easeInOut" }}
+                            className="h-[1px] bg-gradient-to-r from-transparent via-[#8B0000] to-transparent mt-8 mb-6"
                         />
-                        
+
                         <motion.p
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 2.5 }}
-                            className="text-[#8B0000] text-[10px] font-mono tracking-widest uppercase"
+                            className="mt-4 text-white/50 font-sans tracking-[0.6em] uppercase text-[10px] md:text-xs text-center ml-[0.6em]"
                         >
                             Trust no one
                         </motion.p>

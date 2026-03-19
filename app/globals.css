@@ -73,8 +73,7 @@ button:disabled,
   background: rgba(13, 9, 7, 0.95) !important;
   backdrop-filter: blur(20px) !important;
   border: 1px solid rgba(145, 106, 71, 0.3) !important;
-  box-shadow: 0 0 60px rgba(0, 0, 0, 0.9) !important;
-  border-radius: 28px !important;
+  border-radius: 12px !important;
   font-family: var(--font-sans) !important;
 }
 
@@ -95,7 +94,7 @@ button:disabled,
 
 /* Rounding for wallet buttons */
 [data-rk] [role="dialog"] button {
-  border-radius: 16px !important;
+  border-radius: 12px !important;
 }
 
 [data-rk] [role="dialog"] div[data-testid="rk-connect-options"] button {
@@ -117,11 +116,11 @@ button:disabled,
 
 /* Rounding for wallet icons and larger elements */
 [data-rk] [role="dialog"] [style*="border-radius"] {
-  border-radius: 20px !important;
+  border-radius: 12px !important;
 }
 
 [data-rk] [role="dialog"] [class*="ConnectOptions"] button {
-  border-radius: 18px !important;
+  border-radius: 12px !important;
 }
 
 /* Ensure the address/title uses Cinzel */

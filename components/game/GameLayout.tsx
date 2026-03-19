@@ -496,7 +496,6 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
 
     // Trigger Night Announcement (Night Transition)
     // Fires AFTER PostVotingTransition ends (showVotingResults goes true→false in NIGHT phase)
-    const nightTimerRef = useRef<NodeJS.Timeout | null>(null);
     const prevShowVotingResultsRef = useRef(false);
     useEffect(() => {
         const wasShowingResults = prevShowVotingResultsRef.current;
@@ -508,12 +507,9 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
             nightAnnouncementPendingRef.current = true;
             
             lastNightDayRef.current = gameState.dayCount;
-            if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
-            nightTimerRef.current = setTimeout(() => {
-                playNightTransition();
-                setShowNightAnnouncement(true);
-                nightAnnouncementPendingRef.current = false;
-            }, 500); // Brief pause after voting results fade
+            playNightTransition();
+            setShowNightAnnouncement(true);
+            nightAnnouncementPendingRef.current = false;
         }
 
         // Fallback: If we enter NIGHT without showVotingResults (e.g. page reload during night)
@@ -523,19 +519,13 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
             if (nightAnnouncementPendingRef.current) return;
             nightAnnouncementPendingRef.current = true;
 
-            if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
-            nightTimerRef.current = setTimeout(() => {
-                // Only update if we actually show the announcement
-                lastNightDayRef.current = gameState.dayCount;
-                playNightTransition();
-                setShowNightAnnouncement(true);
-                nightAnnouncementPendingRef.current = false;
-            }, 1000);
+            // Only update if we actually show the announcement
+            lastNightDayRef.current = gameState.dayCount;
+            playNightTransition();
+            setShowNightAnnouncement(true);
+            nightAnnouncementPendingRef.current = false;
         }
 
-        return () => {
-            if (nightTimerRef.current) clearTimeout(nightTimerRef.current);
-        };
     }, [gameState.phase, gameState.dayCount, playNightTransition, showVotingResults]);
 
     // Calculate last voting result from logs for the announcement
@@ -563,11 +553,9 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
 
     const handleCloseRoleComposition = useCallback(() => {
         setShowRoleComposition(false);
-        // After Role Composition closes, show Morning Announcement ("DAY BREAKS")
-        setTimeout(() => {
-            playMorningTransition();
-            setShowMorningAnnouncement(true);
-        }, 300);
+        // After Role Composition closes, show Morning Announcement ("DAY BREAKS") IMMEDIATELY
+        playMorningTransition();
+        setShowMorningAnnouncement(true);
     }, [playMorningTransition]);
 
     const handleCloseVotingAnnouncement = useCallback(() => {
@@ -677,6 +665,15 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
 
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#000_100%)] z-10" />
             </div>
+
+            {/* Anti-flash blackout layer: Catch 1-tick React render gaps where cinematic overlays unmount/mount 
+                This specifically targets the transition out of the black NightPhase into DayPhase to prevent strobe flashes. */}
+            {(
+                (gameState.phase === GamePhase.DAY && gameState.dayCount > 0 && gameState.dayCount !== lastMorningDayRef.current) ||
+                (gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current && !showVotingResults)
+            ) && (
+                <div className="fixed inset-0 z-[10000] bg-[#050505] pointer-events-none" />
+            )}
 
             {/* Overlays in order of priority (lower in code = higher z-index) */}
             {/* 1. Environment Transitions */}

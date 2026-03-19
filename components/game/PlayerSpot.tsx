@@ -87,18 +87,18 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
         if (isNight && myRole) {
             switch (myRole) {
                 case Role.MAFIA:
-                    return 'bg-rose-500/30 border border-rose-500 ring-2 ring-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.5)]';
+                    return 'bg-[#8B0000]/40 border-2 border-[#8B0000]';
                 case Role.DOCTOR:
-                    return 'bg-teal-500/30 border border-teal-500 ring-2 ring-teal-500 shadow-[0_0_20px_rgba(20,184,166,0.5)]';
+                    return 'bg-[#0D9488]/40 border-2 border-[#0D9488]';
                 case Role.DETECTIVE:
-                    return 'bg-sky-500/30 border border-sky-500 ring-2 ring-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.5)]';
+                    return 'bg-[#B45309]/40 border-2 border-[#B45309]';
                 default:
-                    return 'bg-[#916A47]/50 border border-[#916A47] ring-2 ring-[#916A47] shadow-[0_0_20px_rgba(145,106,71,0.5)]';
+                    return 'bg-[#916A47]/40 border-2 border-[#916A47]';
             }
         }
 
         // Day/Voting phase - brown color
-        return 'bg-[#916A47]/50 border border-[#916A47] ring-2 ring-[#916A47] shadow-[0_0_20px_rgba(145,106,71,0.5)]';
+        return 'bg-[#916A47]/40 border-2 border-[#916A47]';
     };
 
     const isMafiaVisible = isNight && myRole === Role.MAFIA && player.role === Role.MAFIA;
@@ -106,9 +106,9 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
     const renderMarkIcon = (mark: string | null, size: number = 3) => {
         const className = `w-${size} h-${size}`;
         switch (mark) {
-            case 'mafia': return <Skull className={`${className} text-rose-500`} />;
-            case 'civilian': return <User className={`${className} text-teal-500`} />;
-            case 'question': return <HelpCircle className={`${className} text-amber-500`} />;
+            case 'mafia': return <Skull className={`${className} text-[#8B0000]`} />;
+            case 'civilian': return <User className={`${className} text-[#0D9488]`} />;
+            case 'question': return <HelpCircle className={`${className} text-[#B45309]`} />;
             default: return null;
         }
     };
@@ -243,7 +243,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                         data-custom-sound="true"
                                         className="absolute p-2 hover:scale-110 transition-transform z-20"
                                     >
-                                        <User className="w-6 h-6 text-teal-500 drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]" />
+                                        <User className="w-6 h-6 text-[#0D9488]" />
                                     </motion.button>
 
                                     {/* Question - Diagonal Right Up */}
@@ -262,7 +262,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                         data-custom-sound="true"
                                         className="absolute p-2 hover:scale-110 transition-transform z-20"
                                     >
-                                        <HelpCircle className="w-6 h-6 text-amber-500 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
+                                        <HelpCircle className="w-6 h-6 text-[#B45309]" />
                                     </motion.button>
 
                                     {/* Mafia - Right */}
@@ -281,7 +281,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                         data-custom-sound="true"
                                         className="absolute p-2 hover:scale-110 transition-transform z-20"
                                     >
-                                        <Skull className="w-6 h-6 text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
+                                        <Skull className="w-6 h-6 text-[#8B0000]" />
                                     </motion.button>
                                 </>
                             )}
@@ -336,7 +336,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
             {/* Text Info */}
             <div className="flex flex-col items-start min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1 w-full">
-                    <span className={`text-[17px] md:text-base font-bold truncate block max-w-[120px] ${isMafiaVisible ? 'text-rose-500' : 'text-[#916A47]'}`}>
+                    <span className={`text-[17px] md:text-base font-bold truncate block max-w-[120px] ${isMafiaVisible ? 'text-[#8B0000]' : 'text-[#916A47]'}`}>
                         {player.name}
                     </span>
 

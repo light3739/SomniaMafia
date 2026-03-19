@@ -595,7 +595,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
             <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="w-[520px] max-w-[90vw] bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl relative pointer-events-auto my-auto"
+                className="w-[520px] max-w-[90vw] bg-black/60 backdrop-blur-xl rounded-xl border border-[#916A47]/30 p-8 shadow-2xl relative pointer-events-auto my-auto"
             >
                 {/* Sync Button - positioned absolute */}
                 <div className="absolute top-3 right-3 flex items-center gap-2">
