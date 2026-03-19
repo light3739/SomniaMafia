@@ -87,13 +87,9 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
     const config = configs[role] || fallbackConfig;
     const isSunRising = timeLeft !== null && timeLeft !== undefined && timeLeft <= 0;
 
-    const [mounted, setMounted] = useState(false);
-    useEffect(() => setMounted(true), []);
-
     const content = (
-        // Используем fixed inset-0 z-[9999] чтобы гарантированно поглотить ВЕСЬ экран, 
-        // невзирая на родительские relative контейнеры в NightPhase или GameLayout.
-        // Это решит проблему "чёрного квадрата" и сделает затемнение 100% кинематографичным.
+        // Используем fixed inset-0 z-[9000] (под заставками z-10000).
+        // createPortal вытаскивает нас из контейнера GameLayout, поэтому scale не обрезает фон.
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -232,6 +228,9 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
         </motion.div>
     );
 
-    if (!mounted) return null;
-    return content;
+    // Поскольку NightPhase рендерится через next/dynamic с ssr: false,
+    // мы на клиенте гарантированно имеем доступ к document. 
+    // Возвращаем портал сразу без задержек (useState), чтобы не было белой вспышки!
+    if (typeof document === 'undefined') return content;
+    return createPortal(content, document.body);
 };
