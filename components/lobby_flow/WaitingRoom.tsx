@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
@@ -23,7 +23,7 @@ export const WaitingRoom: React.FC = () => {
         cancelTournamentOnChain
     } = useGameContext();
 
-    const { address } = useAccount();
+    const { address, chainId } = useAccount();
     const { data: walletClient } = useWalletClient();
     const roomIdNumber = currentRoomId ? Number(currentRoomId) : null;
     const {
@@ -33,15 +33,28 @@ export const WaitingRoom: React.FC = () => {
 
     const router = useRouter();
 
+    const mountedRef = useRef(false);
+    const [eciesRegistered, setEciesRegistered] = useState(false);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
+
     // Register ECIES pubkey with GM so it can encrypt our role privately
     useEffect(() => {
-        if (!currentRoomId || !address || !walletClient) return;
+        if (!currentRoomId || !address || !walletClient || !chainId) return;
         const roomId = String(currentRoomId);
 
-        GM.registerEciesPubkey(roomId, address, walletClient)
-            .then(() => console.log('[ECIES] Public key registered with GM server'))
+        GM.registerEciesPubkey(roomId, address, walletClient, chainId)
+            .then(() => {
+                if (mountedRef.current) setEciesRegistered(true);
+                console.log('[ECIES] Public key registered with GM server');
+            })
             .catch(e => console.warn('[ECIES] register-pubkey error:', e));
-    }, [currentRoomId, address, walletClient]);
+    }, [currentRoomId, address, walletClient, chainId]);
 
     // 1. Авто-переход при смене фазы в блокчейне
     useEffect(() => {
