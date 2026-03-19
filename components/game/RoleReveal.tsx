@@ -67,7 +67,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         setGameState
     } = useGameContext();
 
-    const { address } = useAccount();
+    const { address, chainId } = useAccount();
     const { data: walletClient } = useWalletClient();
 
     const [revealState, setRevealState] = useState<RevealState>({
@@ -101,7 +101,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
         registerInFlightRef.current = true;
         try {
-            await registerEciesPubkey(currentRoomId.toString(), address, walletClient);
+            await registerEciesPubkey(currentRoomId.toString(), address, walletClient, chainId);
             setRevealState(prev => ({ 
                 ...prev, 
                 eciesRegistered: true,
@@ -114,7 +114,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } finally {
             registerInFlightRef.current = false;
         }
-    }, [currentRoomId, address, walletClient, revealState.eciesRegistered]);
+    }, [currentRoomId, address, walletClient, chainId, revealState.eciesRegistered]);
 
     // Handle SRA Key submission
     const handleShareKey = useCallback(async () => {
@@ -136,7 +136,8 @@ export const RoleReveal: React.FC = React.memo(() => {
                 roomId: currentRoomId.toString(),
                 address,
                 sraKey,
-                walletClient
+                walletClient,
+                chainId
             });
 
             setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
@@ -158,7 +159,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                 submitInFlightRef.current = false;
             }
         }
-    }, [currentRoomId, address, walletClient, revealState.hasSharedKeys, addLog]);
+    }, [currentRoomId, address, walletClient, chainId, revealState.hasSharedKeys, addLog]);
 
     // Handle Role Fetching
     const handleFetchRole = useCallback(async () => {
@@ -168,7 +169,8 @@ export const RoleReveal: React.FC = React.memo(() => {
             const role = await fetchMyRoleFromGm({
                 roomId: currentRoomId.toString(),
                 address,
-                walletClient
+                walletClient,
+                chainId
             });
 
             if (role) {
@@ -197,7 +199,7 @@ export const RoleReveal: React.FC = React.memo(() => {
         } finally {
             fetchInFlightRef.current = false;
         }
-    }, [currentRoomId, address, walletClient, revealState.isRevealed, revealState.hasConfirmed, revealState.hasSharedKeys, addLog, setGameState]);
+    }, [currentRoomId, address, walletClient, chainId, revealState.isRevealed, revealState.hasConfirmed, revealState.hasSharedKeys, addLog, setGameState]);
 
     // Handle Confirmation
     const handleConfirmRole = useCallback(async () => {

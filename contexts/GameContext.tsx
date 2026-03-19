@@ -1984,6 +1984,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
+            throw e;
         }
     }, [currentRoomId, sendGameTransaction, addLog, confirmInBackground]);
 
