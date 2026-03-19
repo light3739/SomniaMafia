@@ -239,12 +239,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Vote map: stores who voted for whom (voter address -> target address)
     const [voteMap, setVoteMap] = useState<Record<string, string>>({});
 
+    const runtimeChainRef = useRef(runtimeChain);
+    const walletsRef = useRef(wallets);
+    const addressRef = useRef(address);
+    const publicClientRef = useRef(publicClient);
 
+    useEffect(() => { runtimeChainRef.current = runtimeChain; }, [runtimeChain]);
+    useEffect(() => { walletsRef.current = wallets; }, [wallets]);
+    useEffect(() => { addressRef.current = address; }, [address]);
+    useEffect(() => { publicClientRef.current = publicClient; }, [publicClient]);
 
     const walletSwitchPromiseRef = useRef<Promise<void> | null>(null);
 
     const getActiveWalletClient = useCallback(async () => {
-        const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
+        const embeddedWallet = walletsRef.current.find(w => w.walletClientType === 'privy');
+        const targetChain = runtimeChainRef.current;
+
         if (embeddedWallet) {
             const rawChainId = embeddedWallet.chainId;
             let currentChainId = 0;
@@ -255,13 +265,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 currentChainId = Number(rawChainId);
             }
                 
-            // VALIDITY CHECK: Only switch if we have a valid target and a valid current ID
-            // Avoid loops if currentChainId is NaN or 0
-            if (currentChainId > 0 && Number.isFinite(currentChainId) && currentChainId !== runtimeChain.id) {
-                // Prevent multiple concurrent switch requests
+            if (currentChainId > 0 && Number.isFinite(currentChainId) && currentChainId !== targetChain.id) {
                 if (!walletSwitchPromiseRef.current) {
-                    console.log(`[Privy] Switching embedded wallet from ${currentChainId} to ${runtimeChain.id}`);
-                    walletSwitchPromiseRef.current = embeddedWallet.switchChain(runtimeChain.id).finally(() => {
+                    console.log(`[Privy] Switching embedded wallet from ${currentChainId} to ${targetChain.id}`);
+                    walletSwitchPromiseRef.current = embeddedWallet.switchChain(targetChain.id).finally(() => {
                         walletSwitchPromiseRef.current = null;
                     });
                 }
@@ -272,22 +279,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return {
                 client: createWalletClient({
                     account: embeddedWallet.address as `0x${string}`,
-                    chain: runtimeChain,
+                    chain: targetChain,
                     transport: custom(provider)
                 }),
                 account: embeddedWallet.address as `0x${string}`
             };
         }
-        if (walletClient && address) {
-            return { client: walletClient, account: address as `0x${string}` };
+        
+        if (walletClient && addressRef.current) {
+            return { client: walletClient, account: addressRef.current as `0x${string}` };
         }
         throw new Error("No connected wallet found");
-    }, [wallets, walletClient, address, runtimeChain]);
+    }, [walletClient]);
 
     const LOBBY_FUNDING_VALUE = useMemo(() => {
-        // GAS FIX: 0.35 AVAX is safe for ~3.3M gas at 30 gwei
-        return runtimeChain.id === AVALANCHE_FUJI.id ? parseEther('0.35') : parseEther('1');
-    }, [runtimeChain.id]);
+        const rc = runtimeChainRef.current;
+        const isSomnia = (rc.id === 50312);
+        return isSomnia ? parseEther('1.0') : parseEther('0.1'); // 1 STT for Somnia, 0.1 for Fuji
+    }, []);
 
     useEffect(() => {
         if (isTestMode && typeof window !== 'undefined') {
@@ -326,7 +335,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log(`[Session Debug] Creating new cached client for ${account.address}`);
 
             // Generate list of fallback transports from all defined RPCs
-            const fallbackTransports = runtimeChain.rpcUrls.default.http.map(url => http(url, {
+            const fallbackTransports = runtimeChainRef.current.rpcUrls.default.http.map(url => http(url, {
                 // SPEED: Tighter timeout — Somnia RPCs respond in <500ms normally
                 timeout: 8_000,
                 // SPEED: Batch JSON-RPC — combine multiple calls into single HTTP request
@@ -335,7 +344,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const client = createWalletClient({
                 account,
-                chain: runtimeChain,
+                chain: runtimeChainRef.current,
                 transport: fallback(fallbackTransports, {
                     rank: {
                         // Automatically rank based on speed to use the fastest responsive RPC
@@ -350,7 +359,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error("[Session Debug] Failed to create client:", err);
             return null;
         }
-    }, [runtimeChain]);
+    }, []); // runtimeChainRef.current is stable
 
     // Helper: sync role secret with server (includes signature verification)
     // FIX #10/#11: Retry with exponential backoff instead of fire-and-forget
@@ -373,6 +382,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         syncInProgressRef.current = true;
 
         const MAX_RETRIES = 2;
+        let activeWalletClient: any = null;
         try {
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                 try {
@@ -393,7 +403,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         console.log('[SyncSecret] Signed with session key (no popup)');
                     } else {
                         try {
-                            const { client: activeWalletClient } = await getActiveWalletClient();
+                            if (!activeWalletClient) {
+                                const walletResult = await getActiveWalletClient();
+                                activeWalletClient = walletResult.client;
+                            }
                             signature = await activeWalletClient.signMessage({ message });
                             console.log('[SyncSecret] Signed with main wallet');
                         } catch (walletErr) {
@@ -443,7 +456,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             syncInProgressRef.current = false;
         }
-    }, [getActiveWalletClient]);
+    }, [getActiveWalletClient, chainId]);
 
     const roleCommitSyncInProgressRef = useRef<Set<string>>(new Set());
     const syncRoleCommitToGM = useCallback(async (
@@ -456,15 +469,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         roleCommitSyncInProgressRef.current.add(key);
 
         const MAX_RETRIES = 2;
+        let activeWalletClient: any = null;
         try {
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                 try {
                     // Sign using signRequest so message format matches GM server's
                     // buildRoleSyncMessage: sync-role-commit:${roomId}:${txHash}:${nonce}:${timestamp}
+                    if (!activeWalletClient) {
+                        const walletResult = await getActiveWalletClient();
+                        activeWalletClient = walletResult.client;
+                    }
+
                     const signed = await signRequest({
                         address: playerAddress,
                         roomId: Number(roomId),
-                        walletClient: (await getActiveWalletClient()).client,
+                        walletClient: activeWalletClient,
                         buildMessage: ({ nonce, timestamp }) => buildRoleSyncMessage({
                             roomId: roomId.toString(),
                             txHash,
@@ -500,7 +519,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             roleCommitSyncInProgressRef.current.delete(key);
         }
-    }, [getActiveWalletClient]);
+    }, [getActiveWalletClient, chainId]);
 
     // Wrapper для транзакций - использует session key если доступен
     const sendGameTransaction = useCallback(async (
@@ -535,10 +554,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // FIX: For gas-heavy functions (endGameZK), check session key balance
         // If balance is too low, fall back to main wallet to avoid "insufficient balance"
-        const currencySymbol = runtimeChain.nativeCurrency.symbol;
-        if (canUseSession && session && publicClient && ['endGameZK'].includes(functionName)) {
+        const currencySymbol = runtimeChainRef.current.nativeCurrency.symbol;
+        if (canUseSession && session && publicClientRef.current && ['endGameZK'].includes(functionName)) {
             try {
-                const sessionBalance = await publicClient.getBalance({
+                const sessionBalance = await publicClientRef.current.getBalance({
                     address: session.address as `0x${string}`
                 });
                 // SPEED: Reduced threshold to 0.01 (ZK TXs are typically ~0.005 on Somnia, slightly more on Fuji)
@@ -568,7 +587,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
         const accountToUse = (canUseSession && sessionClient) ? sessionClient.account : activeAccount;
 
-        if (!accountToUse || !publicClient) {
+        if (!accountToUse || !publicClientRef.current) {
             console.error("[Gas Estimation] Missing account or publicClient.");
             throw new Error("Cannot estimate gas: account or publicClient missing.");
         }
@@ -579,7 +598,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // SPEED FIX: Use known gas price to skip eth_gasPrice RPC call where possible
         // Somnia testnet consistently reports 6 gwei. Avalanche Fuji varies but ~25-30 is safe.
-        const CURRENT_GAS_PRICE = runtimeChain.id === 50312
+        const CURRENT_GAS_PRICE = runtimeChainRef.current.id === 50312
             ? 6_000_000_000n
             : 30_000_000_000n; // 30 gwei for Fuji/others as safe default
 
@@ -609,8 +628,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Check if session key can actually afford this known limit
             try {
                 const sessionAddr = getSessionWalletClient()?.account?.address;
-                if (sessionAddr && publicClient) {
-                    const bal = await publicClient.getBalance({ address: sessionAddr });
+                if (sessionAddr && publicClientRef.current) {
+                    const bal = await publicClientRef.current.getBalance({ address: sessionAddr });
                     const cost = knownLimit * CURRENT_GAS_PRICE;
                     if (bal >= cost) {
                         useKnownLimit = true;
@@ -635,7 +654,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const estStart = performance.now();
 
                 // 1. Спрашиваем у ноды, сколько нужно газа
-                const gasEstimate = await publicClient.estimateContractGas({
+                const gasEstimate = await publicClientRef.current.estimateContractGas({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: functionName as any,
@@ -668,9 +687,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 console.warn(`[Gas] Estimation failed for ${functionName} (network error?), using safe fallback.`, e);
                 // For session key TXs: cap fallback to what balance can afford
-                if (canUseSession && publicClient && getSessionWalletClient()?.account) {
+                if (canUseSession && publicClientRef.current && getSessionWalletClient()?.account) {
                     try {
-                        const sessionBalance = await publicClient.getBalance({
+                        const sessionBalance = await publicClientRef.current.getBalance({
                             address: getSessionWalletClient()!.account!.address
                         });
                         // Max gas = 80% of balance / gasPrice (leave 20% buffer)
@@ -702,7 +721,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         functionName: functionName as any,
                         args: args as any,
                         account: sessionClient.account!,
-                        chain: runtimeChain,
+                        chain: runtimeChainRef.current,
                         gas: calculatedGas,
                         gasPrice: CURRENT_GAS_PRICE, // SPEED: Skip eth_gasPrice RPC call
                         type: 'legacy',
@@ -739,12 +758,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: functionName as any,
                 args: args as any,
                 account: activeAccount,
-                chain: runtimeChain,
+                chain: runtimeChainRef.current,
                 gas: calculatedGas,
                 type: 'legacy',
             });
         }
-    }, [getSessionWalletClient, getActiveWalletClient, publicClient, address, isTestMode, runtimeContractAddress, runtimeChain]);
+    }, [getSessionWalletClient, getActiveWalletClient, isTestMode, runtimeContractAddress]); // Removed publicClient, address, runtimeChain from deps
 
     const [gameState, setGameState] = useState<GameState>({
         phase: GamePhase.LOBBY,
@@ -779,7 +798,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (mafiaKeyVerifyingRef.current) return null;
 
         const roomIdStr = roomId.toString();
-        const myAddr = address;
+        const myAddr = addressRef.current;
         if (!myAddr) return null;
 
         try {
@@ -849,7 +868,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             mafiaKeyVerifyingRef.current = false;
         }
-    }, [address, getActiveWalletClient]);
+    }, [getActiveWalletClient]); // Removed address from deps
 
     // Fix for "Night Action" flashing before Voting Results:
     // When detecting a transition from VOTING to NIGHT (e.g. via polling), 
@@ -964,14 +983,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // FIX: Only retry ONCE on mount, not every 15 seconds (each call triggers MetaMask popup)
     const recoveryAttemptedRef = useRef<string>(''); // Track which room we already attempted
     useEffect(() => {
-        if (!currentRoomId || !address || !walletClient) return;
+        if (!currentRoomId || !addressRef.current || !walletClient) return;
+        const myAddr = addressRef.current;
 
         // FIX: Only attempt recovery ONCE per room (not every mount/re-render)
-        const roomKey = `${currentRoomId}_${address.toLowerCase()}`;
+        const roomKey = `${currentRoomId}_${myAddr.toLowerCase()}`;
         if (recoveryAttemptedRef.current === roomKey) return;
 
         // Check if already synced
-        const syncedKey = `secret_synced_${currentRoomId}_${address.toLowerCase()}`;
+        const syncedKey = `secret_synced_${currentRoomId}_${myAddr.toLowerCase()}`;
         if (localStorage.getItem(syncedKey)) {
             recoveryAttemptedRef.current = roomKey;
             return; // Already synced, no need to retry
@@ -981,13 +1001,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         recoveryAttemptedRef.current = roomKey;
 
         const retryPendingSync = async () => {
-            const pendingKey = `pending_sync_${currentRoomId}_${address.toLowerCase()}`;
+            const pendingKey = `pending_sync_${currentRoomId}_${myAddr.toLowerCase()}`;
             const pending = localStorage.getItem(pendingKey);
             if (pending) {
                 try {
                     const { role, salt } = JSON.parse(pending);
                     console.log('[Recovery] Retrying pending server sync...');
-                    await syncSecretWithServer(currentRoomId.toString(), address, role, salt);
+                    await syncSecretWithServer(currentRoomId.toString(), myAddr, role, salt);
                     localStorage.removeItem(pendingKey);
                     console.log('[Recovery] Pending sync completed successfully.');
                 } catch (e) {
@@ -997,8 +1017,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // Also try syncing from saved role_salt if no pending entry exists
-            const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`);
-            const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${address.toLowerCase()}`);
+            const savedSalt = localStorage.getItem(`role_salt_${currentRoomId}_${myAddr.toLowerCase()}`);
+            const savedRole = localStorage.getItem(`my_role_${currentRoomId}_${myAddr.toLowerCase()}`);
             if (savedSalt && savedRole && savedRole !== 'UNKNOWN') {
                 const roleMap: Record<string, number> = { 'MAFIA': 1, 'DOCTOR': 2, 'DETECTIVE': 3, 'CIVILIAN': 4 };
                 const roleNum = roleMap[savedRole];
@@ -1007,7 +1027,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     return;
                 }
                 try {
-                    await syncSecretWithServer(currentRoomId.toString(), address, roleNum, savedSalt);
+                    await syncSecretWithServer(currentRoomId.toString(), myAddr, roleNum, savedSalt);
                     console.log('[Recovery] Role secret synced from localStorage backup.');
                 } catch (e) {
                     console.warn('[Recovery] Sync from localStorage failed:', e);
@@ -1018,7 +1038,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Retry ONCE on mount after a short delay (give time for normal flow to complete first)
         const timer = setTimeout(retryPendingSync, 10000);
         return () => clearTimeout(timer);
-    }, [currentRoomId, address, syncSecretWithServer]);
+    }, [currentRoomId, syncSecretWithServer, walletClient]); // Removed address from deps
     const FLAG_ACTIVE = 2;
 
     // Check win condition on frontend (since contract doesn't know roles)
@@ -1058,11 +1078,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Helper to fetch data without updating state (for synchronous checks)
     const fetchGameData = useCallback(async (roomId: bigint) => {
-        if (isTestMode || !publicClient) return null;
+        if (isTestMode || !publicClientRef.current) return null;
         try {
-            console.log(`[FetchGameData] Fetching room ${roomId} from ${runtimeContractAddress} on chain ${runtimeChain.id}`);
+            console.log(`[FetchGameData] Fetching room ${roomId} from ${runtimeContractAddress} on chain ${runtimeChainRef.current.id}`);
             // SPEED: Batch all 3 reads into a single multicall — saves 2 sequential RPC roundtrips (~400-800ms)
-            const results = await publicClient.multicall({
+            const results = await publicClientRef.current.multicall({
                 contracts: [
                     {
                         address: runtimeContractAddress,
@@ -1152,7 +1172,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error("[FetchGameData] Error:", e);
             return null;
         }
-    }, [publicClient, isTestMode]);
+    }, [isTestMode, runtimeContractAddress]); // Removed publicClient, runtimeChain from deps
 
     const refreshPlayersList = useCallback(async (roomId: bigint) => {
         const gameData = await fetchGameData(roomId);
@@ -1217,7 +1237,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const existingPlayer = prev.players.find(
                     ep => ep.address.toLowerCase() === p.wallet.toLowerCase()
                 );
-                const isMe = p.wallet.toLowerCase() === address?.toLowerCase();
+                const isMe = p.wallet.toLowerCase() === addressRef.current?.toLowerCase();
 
                 // Avatar priority: 1) remote server, 2) existing, 3) local (if me), 4) fallback
                 const playerAvatar =
@@ -1228,8 +1248,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 let resolvedRole = existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN;
 
-                if (isMe && resolvedRole === Role.UNKNOWN && address) {
-                    const savedRole = localStorage.getItem(`my_role_${roomId}_${address.toLowerCase()}`);
+                if (isMe && resolvedRole === Role.UNKNOWN && addressRef.current) {
+                    const savedRole = localStorage.getItem(`my_role_${roomId}_${addressRef.current.toLowerCase()}`);
                     if (savedRole && Object.values(Role).includes(savedRole as Role)) {
                         resolvedRole = savedRole as Role;
                     }
@@ -1297,7 +1317,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             };
         });
         return gameData;
-    }, [fetchGameData, checkWinCondition, address, avatarUrl]);
+    }, [fetchGameData, checkWinCondition, avatarUrl]); // Removed address from deps
 
     // === OPTIMISTIC UI: Background TX confirmation ===
     const confirmInBackground = useCallback((
@@ -1309,7 +1329,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxConfirming(true);
         (async () => {
             try {
-                const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+                const receipt = await publicClientRef.current?.waitForTransactionReceipt({ hash });
                 if (receipt?.status === 'reverted') {
                     console.error(`[Optimistic] ❌ ${functionName} REVERTED! Rolling back...`);
                     addLog(`${functionName} reverted on-chain. Reverting...`, 'danger');
@@ -1329,7 +1349,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (pendingConfirmationsRef.current.size === 0) { setIsTxConfirming(false); }
             }
         })();
-    }, [publicClient, addLog, refreshPlayersList]);
+    }, [addLog, refreshPlayersList]); // Removed publicClient from deps
 
     const applyOptimisticUpdate = useCallback((updates: Partial<{
         hasVoted: boolean;
@@ -1338,33 +1358,29 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         hasNightRevealed: boolean;
         hasConfirmedRole: boolean;
     }>) => {
-        if (!address) return;
+        if (!addressRef.current) return;
         setGameState(prev => ({
             ...prev,
             players: prev.players.map(p =>
-                p.address.toLowerCase() === address.toLowerCase()
+                p.address.toLowerCase() === addressRef.current!.toLowerCase()
                     ? { ...p, ...updates }
                     : p
             )
         }));
-    }, [address]);
+    }, []); // Removed address from deps
 
     // FIX #14: Debounced refreshPlayersList wrapper
-    // Coalesces multiple rapid calls into one, with 300ms debounce + 2s min interval
     const refreshPlayersListDebounced = useCallback((roomId: bigint) => {
-        // If a refresh is already in-flight, skip
         if (refreshPromiseRef.current) return;
-
-        // Debounce: clear existing timer, schedule new one
         if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
 
         const now = Date.now();
         const timeSinceLastRefresh = now - lastRefreshTimeRef.current;
-        const MIN_INTERVAL = 2000; // 2s min between actual RPC calls
+        const MIN_INTERVAL = 2000;
 
         const delay = timeSinceLastRefresh < MIN_INTERVAL
             ? MIN_INTERVAL - timeSinceLastRefresh
-            : 300; // 300ms debounce
+            : 300;
 
         refreshTimerRef.current = setTimeout(() => {
             refreshTimerRef.current = null;
@@ -1377,24 +1393,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }, delay);
     }, [refreshPlayersList]);
 
-    // Direct (non-debounced) refresh for critical paths (after TX confirmation)
-    // Use refreshPlayersList directly for those cases
-
-    // Initial load
+    // Initial/Continuous refresh
     useEffect(() => {
-        if (isTestMode || !currentRoomId || !publicClient) return;
+        if (!currentRoomId || isTestMode || !publicClientRef.current) return;
+
+        // Initial
         refreshPlayersList(currentRoomId);
-    }, [currentRoomId, isTestMode, publicClient]);
 
-    useEffect(() => {
-        if (isTestMode || !currentRoomId || !publicClient) return;
-
+        // Continuous
         const interval = setInterval(() => {
-            refreshPlayersListDebounced(currentRoomId);
+            if (!isTxPending) {
+                refreshPlayersListDebounced(currentRoomId);
+            }
         }, 5000);
-
         return () => clearInterval(interval);
-    }, [currentRoomId, isTestMode, publicClient, refreshPlayersListDebounced]);
+    }, [currentRoomId, isTestMode, isTxPending, refreshPlayersList, refreshPlayersListDebounced]);
 
 
 
@@ -1434,58 +1447,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const safeName = /^[a-zA-Z0-9_ ]+$/.test(playerName) ? playerName : `Player_${Math.floor(Math.random() * 1000)}`;
             console.log(`[SafeName] Original: "${playerName}", Used: "${safeName}"`);
 
+            // Get wallet once and reuse
+            const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
+
+            const pClient = publicClientRef.current;
+            const targetChain = runtimeChainRef.current;
+            const myAddr = addressRef.current;
+            if (!pClient || !targetChain || !myAddr) { alert("Public client or chain/address not ready!"); return false; }
+
             // 4. Оценка газа с буфером
             let gasLimit = isSomnia ? undefined : 5_000_000n;
-            // IMPORTANT: creation should always use main wallet (not session key)
-            let activeWalletClient;
-            let activeAccount;
             try {
-                const res = await getActiveWalletClient();
-                activeWalletClient = res.client;
-                activeAccount = res.account;
-            } catch (e) {
-                alert("No wallet connected!");
-                setIsTxPending(false);
-                return false;
-            }
-
-            // Tournament participation check for creator
-            if (tournamentId > 0n) {
-                try {
-                    const tournamentResult = await publicClient.readContract({
-                        address: runtimeContractAddress,
-                        abi: MAFIA_ABI,
-                        functionName: "getTournament",
-                        args: [tournamentId],
-                    }) as any;
-
-                    const buyIn = Array.isArray(tournamentResult) ? BigInt(tournamentResult[3] || 0) : BigInt(tournamentResult.buyIn || 0);
-
-                    if (tournamentResult && buyIn > 0n) {
-                        const isPart = await publicClient.readContract({
-                            address: runtimeContractAddress,
-                            abi: MAFIA_ABI,
-                            functionName: 'isTournamentParticipant',
-                            args: [tournamentId, address as `0x${string}`],
-                        }) as boolean;
-                        if (!isPart) {
-                            addLog(`Joining tournament #${tournamentId} (buy-in: ${formatEther(buyIn)} ${runtimeChain.nativeCurrency.symbol}) first...`, "info");
-                            const joined = await joinTournamentOnChain(tournamentId, "", formatEther(buyIn));
-                            if (!joined) {
-                                addLog("Tournament join failed or cancelled.", "danger");
-                                setIsTxPending(false);
-                                return false;
-                            }
-                            addLog("Tournament joined! Continuing room creation...", "success");
-                        }
-                    }
-                } catch (e: any) {
-                    console.error("[Create] Participation check failed:", e);
-                }
-            }
-
-            try {
-                const gasEstimate = await publicClient.estimateContractGas({
+                const gasEstimate = await pClient.estimateContractGas({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
@@ -1498,7 +1471,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         !!lobbyPassword,
                         tournamentId
                     ],
-                    account: activeAccount as `0x${string}`,
+                    account: activeAccount,
                     value: LOBBY_FUNDING_VALUE,
                     nonce,
                 });
@@ -1508,32 +1481,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.warn('[Gas] createAndJoin estimation failed, using fallback 5M', e);
             }
 
-            // 5. АТОМАРНАЯ ТРАНЗАКЦИЯ (Create + Join + Fund)
+            // 5. TX: createAndJoin (Atomic v2)
             const hash = await activeWalletClient.writeContract({
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'createAndJoin',
-                nonce,
-                args: [
-                    lobbyName,      // string roomName
-                    maxPlayers,      // uint8 maxPlayers
-                    safeName,       // string nickname
-                    pubKeyHex as `0x${string}`, // bytes publicKey
-                    sessionAddress as `0x${string}`, // address sessionAddress
-                    !!lobbyPassword, // bool isPrivate
-                    tournamentId,     // uint256 tournamentId
-                ],
+                args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, tournamentId],
                 account: activeAccount,
-                chain: runtimeChain,
+                chain: targetChain,
                 value: LOBBY_FUNDING_VALUE,
                 gas: gasLimit,
+                nonce: nonce,
                 type: 'legacy',
             });
+            const receipt = await pClient.waitForTransactionReceipt({ hash });
 
-            addLog(`Creating room "${lobbyName}"...`, "info");
-            const receipt = await publicClient?.waitForTransactionReceipt({ hash });
-
-            // Detect ACTUAL roomId from events (Avoid race conditions)
             let finalRoomId = BigInt(newRoomId);
             try {
                 const logs = parseEventLogs({
@@ -1543,121 +1505,75 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
                 if (logs.length > 0) {
                     finalRoomId = (logs[0] as any).args.roomId;
-                    console.log(`[Lobby] Created Room ID: ${finalRoomId} (Predicted: ${newRoomId})`);
                 }
             } catch (e) {
                 console.warn("[Lobby] Failed to parse RoomCreated log, falling back to predicted ID", e);
             }
 
             // Sync session roomId and registration status EARLY
-            // This ensures subsequent GM calls use the correct room context.
             const session = loadSession();
             if (session) {
                 session.roomId = Number(finalRoomId);
-                session.registeredOnChain = true; // Equivalent to markSessionRegistered()
+                session.registeredOnChain = true;
                 localStorage.setItem('somnia_mafia_session', JSON.stringify(session));
-                addLog(`Session synchronized for room ${finalRoomId}`, "info");
-                console.log(`[Lobby] Session synced & registered for Room ID: ${finalRoomId}`);
             } else {
-                // If somehow no session exists, at least try standard registration
                 markSessionRegistered();
             }
 
             // 6. IF PRIVATE: Set password on GM server
             if (lobbyPassword) {
-                addLog("Setting room password on GM server...", "info");
-                
                 let passwordSet = false;
                 for (let attempt = 1; attempt <= 6; attempt++) {
-                    const delay = 1000 + (attempt - 1) * 2000; // 1s, 3s, 5s, 7s, 9s, 11s
-                    if (attempt > 1) {
-                        addLog(`Retry setting password (attempt ${attempt}/6) in ${delay/1000}s...`, "info");
-                        await new Promise(r => setTimeout(r, delay));
-                    }
+                    const delay = 1000 + (attempt - 1) * 2000;
+                    if (attempt > 1) await new Promise(r => setTimeout(r, delay));
 
                     try {
                         await GM.setRoomPassword({
                             roomId: finalRoomId.toString(),
-                            address: address,
+                            address: myAddr,
                             password: lobbyPassword,
                             walletClient: activeWalletClient,
-                            signerAddress: address,
-                            chainId: runtimeChain.id,
+                            signerAddress: myAddr,
+                            chainId: targetChain.id,
                             maxPlayers: maxPlayers,
-                            forceWallet: true // Always use main wallet for setup
+                            forceWallet: true
                         });
-                        addLog("Room password protected ✅", "success");
                         passwordSet = true;
                         break;
                     } catch (e: any) {
                         console.warn(`[PrivateRoom] Attempt ${attempt}/6 failed:`, e.message);
-                        if (attempt === 6) {
-                            addLog(`Failed to set room password: ${e.message}`, "danger");
-                        }
                     }
                 }
             }
 
-            // DEBUG: Check deposit collection
-            try {
-                const depositLogs = parseEventLogs({
-                    abi: MAFIA_ABI,
-                    eventName: 'DepositCollected',
-                    logs: receipt.logs
-                });
-                if (depositLogs.length > 0) {
-                    const depArgs = (depositLogs[0] as any).args;
-                    console.log(`[Deposit Debug] DepositCollected event:`, {
-                        player: depArgs.player,
-                        amount: formatEther(depArgs.amount) + ' STT',
-                    });
-                } else {
-                    console.log(`[Deposit Debug] No DepositCollected event found in createAndJoin receipt — contract may not collect deposits.`);
-                }
-            } catch (e) {
-                console.warn('[Deposit Debug] Could not parse deposit events:', e);
-            }
-
-            // Session already updated above
-
             // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере (с ретраями)
             let pubkeyRegistered = false;
             for (let attempt = 1; attempt <= 4; attempt++) {
-                const delay = 500 + (attempt - 1) * 1500; // 0.5s, 2s, 3.5s, 5s
+                const delay = 500 + (attempt - 1) * 1500;
                 if (attempt > 1) await new Promise(r => setTimeout(r, delay));
 
                 try {
-                    await GM.registerEciesPubkey(
-                        finalRoomId.toString(),
-                        address,
-                        activeWalletClient,
-                        runtimeChain.id,
-                        true // forceWallet
-                    );
-                    console.log('[ECIES] Public key registered with GM server');
+                    await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id, true);
                     pubkeyRegistered = true;
                     break;
                 } catch (e: any) {
                     console.warn(`[ECIES] Attempt ${attempt}/4 failed:`, e.message);
                 }
             }
-            if (!pubkeyRegistered) {
-                addLog("Warning: Could not register encryption keys. You may need to refresh the page.", "warning");
-            }
 
             setCurrentRoomId(finalRoomId);
             await refreshPlayersList(finalRoomId);
 
-            // Upload avatar to server for other players to see
-            if (avatarUrl && address) {
+            // Upload avatar to server
+            if (avatarUrl && myAddr) {
                 try {
                     const signed = await signRequest({
-                        address,
+                        address: myAddr,
                         roomId: Number(finalRoomId),
                         walletClient: activeWalletClient,
                         buildMessage: ({ nonce, timestamp }) => buildAvatarMessage({
                             roomId: finalRoomId.toString(),
-                            address,
+                            address: myAddr,
                             nonce,
                             timestamp,
                         }),
@@ -1667,14 +1583,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            roomId: finalRoomId.toString(), // FIXED: Use finalRoomId
-                            address,
+                            roomId: finalRoomId.toString(),
+                            address: myAddr,
                             avatar: avatarUrl,
                             signature: signed.signature,
                             signerAddress: signed.signerAddress,
                             nonce: signed.nonce,
                             timestamp: signed.timestamp,
-                            chainId,
+                            chainId: targetChain.id,
                         })
                     });
                     console.log('[Avatar Sync] Avatar uploaded to server');
@@ -1692,11 +1608,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, lobbyName, publicClient, getActiveWalletClient, addLog, refreshPlayersList, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain, lobbyPassword, avatarUrl, chainId]);
+    }, [playerName, lobbyName, lobbyPassword, avatarUrl, getActiveWalletClient, addLog]);
 
     const joinLobbyOnChain = useCallback(async (roomId: bigint | number): Promise<boolean> => {
+        const pClient = publicClientRef.current;
+        const targetChain = runtimeChainRef.current;
+        const myAddr = addressRef.current;
+        if (!playerName || !myAddr || !pClient || !targetChain) { alert("Connect wallet and set name first!"); return false; }
+
         const rId = BigInt(roomId);
-        if (!playerName || !address || !publicClient) { alert("Enter name and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
             const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
@@ -1719,17 +1639,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
             // 2. Generate session key
-            const { sessionAddress } = createNewSession(address, Number(roomId));
+            const { sessionAddress } = createNewSession(myAddr, Number(roomId));
 
             // ✅ ДОБАВИТЬ: ECIES keypair для join
-            const eciesKp = await loadOrCreateKeypair(roomId.toString(), address);
+            const eciesKp = await loadOrCreateKeypair(roomId.toString(), myAddr);
             eciesPrivKeyRef.current = eciesKp.privateKey;
 
             // 3. Check if room is private & get GM signature if needed
             let roomData: any = null;
             let gmSignature: `0x${string}` = '0x';
             try {
-                roomData = await publicClient.readContract({
+                roomData = await pClient.readContract({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'getRoom',
@@ -1747,8 +1667,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     gmSignature = await GM.requestJoinPermit({
                         roomId: roomId.toString(),
                         password: lobbyPassword,
-                        playerAddress: address,
-                        chainId: runtimeChain.id,
+                        playerAddress: myAddr,
+                        chainId: targetChain.id,
                     });
                     addLog("Join permit received ✅", "success");
                 }
@@ -1772,7 +1692,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Tournament participation check for joiner
             if (isTournamentRoom) {
                 try {
-                    const tournamentResult = await publicClient.readContract({
+                    const tournamentResult = await pClient.readContract({
                         address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'getTournament',
@@ -1781,14 +1701,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     const buyIn = Array.isArray(tournamentResult) ? BigInt(tournamentResult[3] || 0) : BigInt(tournamentResult.buyIn || 0);
                     if (tournamentResult && buyIn > 0n) {
-                        const isPart = await publicClient.readContract({
+                        const isPart = await pClient.readContract({
                             address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'isTournamentParticipant',
-                            args: [tournamentIdFromRoom, address as `0x${string}`],
+                            args: [tournamentIdFromRoom, myAddr as `0x${string}`],
                         }) as boolean;
                         if (!isPart) {
-                            addLog(`Joining tournament #${tournamentIdFromRoom} (buy-in: ${formatEther(buyIn)} ${runtimeChain.nativeCurrency.symbol}) first...`, "info");
+                            addLog(`Joining tournament #${tournamentIdFromRoom} (buy-in: ${formatEther(buyIn)} ${targetChain.nativeCurrency.symbol}) first...`, "info");
                             const joined = await joinTournamentOnChain(tournamentIdFromRoom, "", formatEther(buyIn));
                             if (!joined) {
                                 addLog("Tournament join failed or cancelled.", "danger");
@@ -1809,7 +1729,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 3.5. Оценка газа с буфером
             let gasLimit = 14_500_000n;
             try {
-                const gasEstimate = await publicClient.estimateContractGas({
+                const gasEstimate = await pClient.estimateContractGas({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'joinRoom',
@@ -1830,12 +1750,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                 account: activeAccount,
-                chain: runtimeChain,
+                chain: targetChain,
                 value: txValue,
                 gas: gasLimit,
                 type: 'legacy',
             });
-            const joinReceipt = await publicClient?.waitForTransactionReceipt({ hash });
+            const joinReceipt = await pClient.waitForTransactionReceipt({ hash });
 
             // DEBUG: Check deposit collection on join
             try {
@@ -1862,7 +1782,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере
             try {
-                await GM.registerEciesPubkey(roomId.toString(), address, activeWalletClient, runtimeChain.id);
+                await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id);
                 console.log('[ECIES] Public key registered with GM server');
             } catch (e) {
                 console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
@@ -1872,15 +1792,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await refreshPlayersList(BigInt(roomId));
 
             // Upload avatar to server for other players to see
-            if (avatarUrl && address) {
+            if (avatarUrl && myAddr) {
                 try {
                     const signed = await signRequest({
-                        address,
+                        address: myAddr,
                         roomId: Number(roomId),
                         walletClient: activeWalletClient,
                         buildMessage: ({ nonce, timestamp }) => buildAvatarMessage({
                             roomId: roomId.toString(),
-                            address,
+                            address: myAddr,
                             nonce,
                             timestamp,
                         }),
@@ -1891,12 +1811,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             roomId: roomId.toString(),
-                            address,
+                            address: myAddr,
                             avatar: avatarUrl,
-                            signature: signed.signature,
                             signerAddress: signed.signerAddress,
                             nonce: signed.nonce,
                             timestamp: signed.timestamp,
+                            chainId: targetChain.id,
                         })
                     });
                     console.log('[Avatar Sync] Avatar uploaded to server');
@@ -1912,19 +1832,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, publicClient, getActiveWalletClient, addLog, refreshPlayersList, avatarUrl, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain, lobbyPassword]);
+    }, [playerName, getActiveWalletClient, addLog, refreshPlayersList, avatarUrl, lobbyPassword]);
 
     // --- SHUFFLE PHASE ---
 
     const startGameOnChain = useCallback(async () => {
-        if (!currentRoomId || !publicClient || !address) return;
+        const pClient = publicClientRef.current;
+        const targetChain = runtimeChainRef.current;
+        const myAddr = addressRef.current;
+        const roomId = currentRoomIdRef.current;
+
+        if (!roomId || !pClient || !myAddr || !targetChain) return;
         setIsTxPending(true);
         try {
             // Оценка газа с буфером
             let gasLimit = 14_500_000n;
             const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
             try {
-                const gasEstimate = await publicClient.estimateContractGas({
+                const gasEstimate = await pClient.estimateContractGas({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'startGame',
@@ -1941,9 +1866,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'startGame',
-                args: [currentRoomId],
+                args: [roomId],
                 account: activeAccount,
-                chain: runtimeChain,
+                chain: targetChain,
                 gas: gasLimit,
                 type: 'legacy',
             });
@@ -1955,11 +1880,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    }, [currentRoomId, publicClient, address, addLog, confirmInBackground, getActiveWalletClient, runtimeChain]);
+    }, [addLog, confirmInBackground, getActiveWalletClient, runtimeContractAddress]);
 
     // V4: Deck commit-reveal
     const commitDeckOnChain = useCallback(async (deckHash: string): Promise<`0x${string}` | undefined> => {
-        if (!currentRoomId) return undefined;
+        const roomId = currentRoomIdRef.current;
+        const pClient = publicClientRef.current;
+        if (!roomId || !pClient) return undefined;
         setIsTxPending(true);
         try {
             const hash = await sendGameTransaction('commitDeck', [currentRoomId, deckHash]);
@@ -1969,7 +1896,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // CRITICAL: Wait for commit to be confirmed on-chain BEFORE returning.
             // revealDeck will fail with InvalidReveal() if commit isn't mined yet.
             try {
-                const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+                const receipt = await pClient.waitForTransactionReceipt({ hash });
                 if (receipt?.status === 'reverted') {
                     console.error("[commitDeck] ❌ TX reverted on-chain!");
                     applyOptimisticUpdate({ hasDeckCommitted: false });
@@ -1990,10 +1917,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             throw e;
         }
-    }, [currentRoomId, publicClient, sendGameTransaction, addLog, applyOptimisticUpdate]);
+    }, [sendGameTransaction, addLog, applyOptimisticUpdate]);
 
     const revealDeckOnChain = useCallback(async (deck: string[], salt: string) => {
-        if (!currentRoomId) return;
+        const roomId = currentRoomIdRef.current;
+        if (!roomId) return;
         // Strip 0x prefix if present — keep consistent with new salt format
         const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
         setIsTxPending(true);
@@ -2008,12 +1936,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             throw e;
         }
-    }, [currentRoomId, sendGameTransaction, addLog, confirmInBackground]);
+    }, [sendGameTransaction, addLog, confirmInBackground]);
 
     // --- REVEAL PHASE (V3: batch share keys) ---
 
     const shareKeysToAllOnChain = useCallback(async (recipients: string[], encryptedKeys: string[]) => {
-        if (!currentRoomId) return;
+        const roomId = currentRoomIdRef.current;
+        if (!roomId) return;
         setIsTxPending(true);
         try {
             // V3: shareKeysToAll - one transaction for all keys
@@ -2038,19 +1967,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, sendGameTransaction, addLog, confirmInBackground]);
+    }, [sendGameTransaction, addLog, confirmInBackground]);
 
     // ✅ ДОБАВИТЬ: Расшифровка роли, зашифрованной GM через ECIES
     const decryptMyRoleFromGM = useCallback(async (
         encrypted: EciesEncrypted
     ): Promise<number | null> => {
+        const roomId = currentRoomIdRef.current;
+        const myAddr = addressRef.current;
         // Попытка 1: использовать privKey из памяти (текущая сессия)
         let privKey = eciesPrivKeyRef.current;
 
         // Попытка 2: восстановить из localStorage (после перезагрузки страницы)
-        if (!privKey && currentRoomId && address) {
+        if (!privKey && roomId && myAddr) {
             try {
-                const { privateKey } = await loadOrCreateKeypair(currentRoomId.toString(), address);
+                const { privateKey } = await loadOrCreateKeypair(roomId.toString(), myAddr);
                 privKey = privateKey;
                 eciesPrivKeyRef.current = privKey;
                 console.log('[ECIES] Private key restored from localStorage');
@@ -2086,10 +2017,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error('[ECIES] Decryption failed:', e);
             return null;
         }
-    }, [currentRoomId, address]);
+    }, []);
 
     const fetchMyRoleFromGM = useCallback(async () => {
-        if (!address || !currentRoomId) return;
+        const roomId = currentRoomIdRef.current;
+        const myAddr = addressRef.current;
+        const targetChain = runtimeChainRef.current;
+        if (!myAddr || !roomId) return;
         if (roleFetchedRef.current) return; // уже получили
         roleFetchedRef.current = true;
 
@@ -2097,24 +2031,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             try {
                 const { client: activeWalletClient } = await getActiveWalletClient();
                 const signed = await signRequest({
-                    address,
-                    roomId: Number(currentRoomId),
+                    address: myAddr,
+                    roomId: Number(roomId),
                     walletClient: activeWalletClient,
                     buildMessage: ({ nonce, timestamp }) =>
-                        `my-role:${currentRoomId}:${address.toLowerCase()}:${nonce}:${timestamp}`,
+                        `my-role:${roomId}:${myAddr.toLowerCase()}:${nonce}:${timestamp}`,
                 });
 
                 const params = new URLSearchParams({
-                    playerAddress: address,
+                    playerAddress: myAddr,
                     signature: signed.signature,
                     signerAddress: signed.signerAddress,
                     nonce: signed.nonce,
                     timestamp: String(signed.timestamp),
-                    chainId: String(chainId),
+                    chainId: String(targetChain.id),
                 });
 
                 const res = await fetch(
-                    `${GM_SERVER_URL}/my-role/${currentRoomId}?${params}`
+                    `${GM_SERVER_URL}/my-role/${roomId}?${params}`
                 );
 
                 if (res.status === 202) {
@@ -2145,7 +2079,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 // Сохраняем в localStorage (для совместимости с остальными функциями)
                 localStorage.setItem(
-                    `my_role_${currentRoomId}_${address.toLowerCase()}`,
+                    `my_role_${roomId}_${myAddr.toLowerCase()}`,
                     myRole
                 );
 
@@ -2153,7 +2087,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setGameState(prev => ({
                     ...prev,
                     players: prev.players.map(p =>
-                        p.address.toLowerCase() === address.toLowerCase()
+                        p.address.toLowerCase() === myAddr.toLowerCase()
                             ? { ...p, role: myRole }
                             : p
                     ),
@@ -2168,12 +2102,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
 
         await tryFetch();
-    }, [address, currentRoomId, getActiveWalletClient, chainId, decryptMyRoleFromGM, addLog]);
+    }, [getActiveWalletClient, decryptMyRoleFromGM, addLog]);
 
     const commitRoleOnChain = useCallback(async (role: number, salt: string) => {
-        if (!currentRoomId) return;
+        const roomId = currentRoomIdRef.current;
+        const myAddr = addressRef.current;
+        const pClient = publicClientRef.current;
+        if (!roomId || !pClient) return;
 
-        const existingSalt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
+        const existingSalt = myAddr ? localStorage.getItem(`role_salt_${roomId}_${myAddr.toLowerCase()}`) : null;
         let saltToUse = salt;
         let shouldCommitOnChain = !existingSalt;
 
@@ -2188,15 +2125,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     const { ShuffleService } = await import('../services/shuffleService');
                     const roleHash = await ShuffleService.createRoleCommitHashAsync(role, saltToUse);
-                    const txHash = await sendGameTransaction('commitRole', [currentRoomId, roleHash]);
+                    const txHash = await sendGameTransaction('commitRole', [roomId, roleHash]);
                     addLog("Role committed!", "success");
-                    await publicClient?.waitForTransactionReceipt({ hash: txHash });
-                    if (address) {
-                        syncRoleCommitToGM(currentRoomId, address, txHash)
+                    await pClient.waitForTransactionReceipt({ hash: txHash });
+                    if (myAddr) {
+                        syncRoleCommitToGM(roomId, myAddr, txHash)
                             .catch(err => console.warn('[commitRole] GM role-commit sync failed (non-blocking):', err));
                     }
-                    if (address) {
-                        localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, saltToUse);
+                    if (myAddr) {
+                        localStorage.setItem(`role_salt_${roomId}_${myAddr.toLowerCase()}`, saltToUse);
                     }
                 } catch (txErr: any) {
                     if (txErr.message?.includes("AlreadyCommitted") || txErr.message?.includes("AlreadyConfirmed")) {
@@ -2214,32 +2151,33 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             else if (role === 3) roleEnumStr = Role.DETECTIVE;
             else if (role === 4) roleEnumStr = Role.CIVILIAN;
 
-            if (roleEnumStr && address) {
-                console.log(`[GameContext] Persisting role ${roleEnumStr} for ${address.toLowerCase()}`);
-                localStorage.setItem(`my_role_${currentRoomId}_${address.toLowerCase()}`, roleEnumStr);
+            if (roleEnumStr && myAddr) {
+                console.log(`[GameContext] Persisting role ${roleEnumStr} for ${myAddr.toLowerCase()}`);
+                localStorage.setItem(`my_role_${roomId}_${myAddr.toLowerCase()}`, roleEnumStr);
             }
 
             // SYNC WITH SERVER-SIDE DB (for automated win-checking)
             // FIX: Non-blocking — if sign fails (user rejects MetaMask), don't break the commit flow
-            if (address) {
-                syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse)
+            if (myAddr) {
+                syncSecretWithServer(roomId.toString(), myAddr, role, saltToUse)
                     .catch(err => console.warn('[commitRole] Server sync failed (non-blocking):', err));
             }
 
-            await refreshPlayersList(currentRoomId);
+            await refreshPlayersList(roomId);
             setIsTxPending(false);
         } catch (e: any) {
             addLog(e.shortMessage || "Role commit failed", "danger");
             setIsTxPending(false);
             throw e;
         }
-    }, [currentRoomId, address, sendGameTransaction, addLog, publicClient, refreshPlayersList, syncRoleCommitToGM]);
+    }, [sendGameTransaction, addLog, refreshPlayersList, syncRoleCommitToGM]);
 
     const confirmRoleOnChain = useCallback(async () => {
-        if (!currentRoomId) return;
+        const roomId = currentRoomIdRef.current;
+        if (!roomId) return;
         setIsTxPending(true);
         try {
-            const hash = await sendGameTransaction('confirmRole', [currentRoomId]);
+            const hash = await sendGameTransaction('confirmRole', [roomId]);
             addLog("Role confirmed.", "success");
             // OPTIMISTIC: Mark confirmed immediately
             applyOptimisticUpdate({ hasConfirmedRole: true });
@@ -2251,12 +2189,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
         }
-    }, [currentRoomId, sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
+    }, [sendGameTransaction, addLog, applyOptimisticUpdate, confirmInBackground]);
 
     const commitAndConfirmRoleOnChain = useCallback(async (role: number, salt: string) => {
-        if (!currentRoomId) return;
+        const roomId = currentRoomIdRef.current;
+        const myAddr = addressRef.current;
+        const pClient = publicClientRef.current;
+        if (!roomId || !pClient) return;
 
-        const savedSalt = address ? localStorage.getItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`) : null;
+        const savedSalt = myAddr ? localStorage.getItem(`role_salt_${roomId}_${myAddr.toLowerCase()}`) : null;
         let saltToUse = salt;
 
         // Check if we are already confirmed on chain to avoid redundant txs
@@ -2273,8 +2214,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         else if (role === 3) roleEnumStr = Role.DETECTIVE;
         else if (role === 4) roleEnumStr = Role.CIVILIAN;
 
-        if (roleEnumStr && address) {
-            localStorage.setItem(`my_role_${currentRoomId}_${address.toLowerCase()}`, roleEnumStr);
+        if (roleEnumStr && myAddr) {
+            localStorage.setItem(`my_role_${roomId}_${myAddr.toLowerCase()}`, roleEnumStr);
         }
 
         setIsTxPending(true);
@@ -2288,7 +2229,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             } else if (savedSalt && !isConfirmedOnChain) {
                 console.log("Found local salt but not confirmed on-chain. Attempting `confirmRole` fallback...");
                 try {
-                    const hash = await sendGameTransaction('confirmRole', [currentRoomId]);
+                    const hash = await sendGameTransaction('confirmRole', [roomId]);
                     addLog("Role confirmed (fallback).", "success");
                     // OPTIMISTIC: confirm in background
                     confirmInBackground(hash, 'confirmRole (fallback)');
@@ -2299,10 +2240,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     try {
                         const { ShuffleService } = await import('../services/shuffleService');
                         const roleHash = await ShuffleService.createRoleCommitHashAsync(role, savedSalt);
-                        const retryHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
+                        const retryHash = await sendGameTransaction('commitAndConfirmRole', [roomId, roleHash]);
                         addLog("Role committed & confirmed (recovery).", "success");
-                        if (address) {
-                            syncRoleCommitToGM(currentRoomId, address, retryHash)
+                        if (myAddr) {
+                            syncRoleCommitToGM(roomId, myAddr, retryHash)
                                 .catch(err => console.warn('[commitAndConfirm recovery] GM role-commit sync failed (non-blocking):', err));
                         }
                         // OPTIMISTIC: confirm in background
@@ -2310,7 +2251,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     } catch (retryErr: any) {
                         console.error("Full commitAndConfirmRole retry also failed:", retryErr);
                         // Clear stale salt so next attempt goes through normal flow
-                        if (address) localStorage.removeItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`);
+                        if (myAddr) localStorage.removeItem(`role_salt_${roomId}_${myAddr.toLowerCase()}`);
                         throw retryErr;
                     }
                 }
@@ -2319,14 +2260,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     const { ShuffleService } = await import('../services/shuffleService');
                     const roleHash = await ShuffleService.createRoleCommitHashAsync(role, saltToUse);
-                    const txHash = await sendGameTransaction('commitAndConfirmRole', [currentRoomId, roleHash]);
+                    const txHash = await sendGameTransaction('commitAndConfirmRole', [roomId, roleHash]);
                     addLog("Role committed & confirmed on-chain!", "success");
-                    if (address) {
-                        syncRoleCommitToGM(currentRoomId, address, txHash)
+                    if (myAddr) {
+                        syncRoleCommitToGM(roomId, myAddr, txHash)
                             .catch(err => console.warn('[commitAndConfirm] GM role-commit sync failed (non-blocking):', err));
                     }
                     // OPTIMISTIC: confirm in background, save salt immediately
-                    if (address) localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, saltToUse);
+                    if (myAddr) localStorage.setItem(`role_salt_${roomId}_${myAddr.toLowerCase()}`, saltToUse);
                     confirmInBackground(txHash, 'commitAndConfirmRole');
                 } catch (txErr: any) {
                     const errMsg = (txErr.message || "").toLowerCase();
@@ -2339,11 +2280,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         console.warn("Role already committed. Checking confirmation status...");
 
                         // Check if we are already confirmed
-                        const flags = await publicClient?.readContract({
+                        const flags = await pClient.readContract({
                             address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'getPlayerFlags',
-                            args: [currentRoomId, address as `0x${string}`],
+                            args: [roomId, myAddr as `0x${string}`],
                         }) as unknown as any[]; // returns tuple of bools
 
                         // Tuple index 1 is hasConfirmedRole (see RoleReveal)
@@ -2354,7 +2295,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             console.log("Role committed but NOT confirmed. Calling confirmRole...");
                             addLog("Role previously committed. Confirming now...", "info");
                             // Determine gas for confirmRole
-                            const confirmHash = await sendGameTransaction('confirmRole', [currentRoomId]);
+                            const confirmHash = await sendGameTransaction('confirmRole', [roomId]);
                             // OPTIMISTIC: confirm in background
                             confirmInBackground(confirmHash, 'confirmRole (retry)');
                             addLog("Role confirmed separately!", "success");
@@ -2374,8 +2315,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // SYNC WITH SERVER-SIDE DB
             // FIX: Non-blocking — don't let MetaMask sign rejection break the entire confirm flow
             // The on-chain TX already succeeded; server sync is a backup for auto-win checking
-            if (address) {
-                syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse)
+            if (myAddr) {
+                syncSecretWithServer(roomId.toString(), myAddr, role, saltToUse)
                     .catch(err => console.warn('[commitAndConfirm] Server sync failed (non-blocking):', err));
             }
 
@@ -2388,8 +2329,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (errMsg.includes('alreadycommitted') || errMsg.includes('alreadyconfirmed') || errMsg.includes('alreadyrevealed')) {
                 console.log("[commitAndConfirmRole] Role already processed on-chain. Not re-throwing.");
                 // Non-blocking server sync attempt
-                if (address) {
-                    syncSecretWithServer(currentRoomId.toString(), address, role, saltToUse)
+                if (myAddr) {
+                    syncSecretWithServer(roomId.toString(), myAddr, role, saltToUse)
                         .catch(_ => { });
                 }
                 return; // Swallow the error — role is done
@@ -2399,7 +2340,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, address, publicClient, sendGameTransaction, addLog, confirmInBackground, myPlayer?.hasConfirmedRole, syncRoleCommitToGM]);
+    }, [sendGameTransaction, addLog, confirmInBackground, myPlayer?.hasConfirmedRole, syncRoleCommitToGM]);
 
     // --- DAY & VOTING ---
 
@@ -2457,8 +2398,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         targetAddress: string,
         explicitDayCount?: number
     ) => {
+        const roomId = currentRoomIdRef.current;
+        const myAddr = addressRef.current;
+        const targetChain = runtimeChainRef.current;
         const resolvedDayCount = explicitDayCount ?? gameState.dayCount;
-        if (!currentRoomId || !address) return;
+        if (!roomId || !myAddr || !targetChain) return;
 
         setIsTxPending(true);
         try {
@@ -2501,11 +2445,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     // FIX: Re-sign on every attempt to get a fresh nonce/timestamp
                     const signed = await signRequest({
-                        address: playerAddress,
-                        roomId: Number(currentRoomId),
+                        address: myAddr,
+                        roomId: Number(roomId),
                         walletClient: activeWalletClient,
                         buildMessage: ({ nonce, timestamp }) => buildNightActionMessage({
-                            roomId: currentRoomId.toString(),
+                            roomId: roomId.toString(),
                             actionType,
                             targetAddress,
                             dayCount: resolvedDayCount,
@@ -2520,8 +2464,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            roomId: currentRoomId.toString(),
-                            playerAddress,
+                            roomId: roomId.toString(),
+                            playerAddress: myAddr,
                             actionType,
                             targetAddress,
                             dayCount: resolvedDayCount,
@@ -2531,7 +2475,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             salt: savedSalt,
                             nonce: signed.nonce,
                             timestamp: signed.timestamp,
-                            chainId,
+                            chainId: targetChain.id,
                         }),
                         signal: controller.signal,
                     });
@@ -2577,18 +2521,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, address, getActiveWalletClient, applyOptimisticUpdate, addLog, gameState.dayCount, gameState.players, chainId]);
+    }, [getActiveWalletClient, applyOptimisticUpdate, addLog, gameState.dayCount, gameState.players]);
 
     const skipNightActionToGM = useCallback(async () => {
-        if (!currentRoomId || !address) return;
+        const roomId = currentRoomIdRef.current;
+        const myAddr = addressRef.current;
+        const targetChain = runtimeChainRef.current;
+        if (!roomId || !myAddr || !targetChain) return;
         setIsTxPending(true);
         try {
             const { client: activeWalletClient } = await getActiveWalletClient();
             await GM.skipNightActionToGM({
-                roomId: currentRoomId.toString(),
-                address,
+                roomId: roomId.toString(),
+                address: myAddr,
                 walletClient: activeWalletClient,
-                chainId,
+                chainId: targetChain.id,
                 dayCount: gameState.dayCount
             });
             // Mark as acted locally
@@ -2600,27 +2547,33 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, address, getActiveWalletClient, chainId, applyOptimisticUpdate, addLog, gameState.dayCount]);
+    }, [getActiveWalletClient, applyOptimisticUpdate, addLog, gameState.dayCount]);
 
     const fetchInvestigationProofFromGM = useCallback(async (targetAddress: string) => {
-        if (!currentRoomId || !address) return null;
+        const roomId = currentRoomIdRef.current;
+        const myAddr = addressRef.current;
+        const targetChain = runtimeChainRef.current;
+        if (!roomId || !myAddr || !targetChain) return null;
         try {
             const { client: activeWalletClient } = await getActiveWalletClient();
             return await GM.fetchInvestigationProofFromGM({
-                roomId: currentRoomId.toString(),
-                detectiveAddress: address,
+                roomId: roomId.toString(),
+                detectiveAddress: myAddr,
                 targetAddress,
                 walletClient: activeWalletClient,
-                chainId,
+                chainId: targetChain.id,
                 dayCount: gameState.dayCount
             });
         } catch (e) {
             console.error('[GM API] Failed to fetch investigation proof:', e);
             return null;
         }
-    }, [currentRoomId, address, getActiveWalletClient, chainId, gameState.dayCount]);
+    }, [getActiveWalletClient, gameState.dayCount]);
 
     const getInvestigationResultOnChain = useCallback(async (detective: string, target: string) => {
+        const roomId = currentRoomIdRef.current;
+        const myAddr = addressRef.current;
+        const targetChain = runtimeChainRef.current;
         if (isTestMode) {
             // Mock results for Testing
             if (target.toLowerCase().includes('4444')) {
@@ -2628,7 +2581,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
             return { role: Role.CIVILIAN, isMafia: false };
         }
-        if (!currentRoomId) return { role: Role.UNKNOWN, isMafia: false };
+        if (!roomId) return { role: Role.UNKNOWN, isMafia: false };
 
         try {
             const { client: activeWalletClient } = await getActiveWalletClient();
@@ -2638,10 +2591,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // signRequest automatically handles session key vs walletClient
             const signed = await signRequest({
                 address: detective,
-                roomId: Number(currentRoomId),
+                roomId: Number(roomId),
                 walletClient: activeWalletClient,
                 buildMessage: ({ nonce, timestamp }) => buildInvestigateMessage({
-                    roomId: currentRoomId.toString(),
+                    roomId: roomId.toString(),
                     dayCount: gameState.dayCount,
                     targetAddress: target,
                     nonce,
@@ -2655,7 +2608,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    roomId: currentRoomId.toString(),
+                    roomId: roomId.toString(),
                     detectiveAddress: detective,
                     targetAddress: target,
                     dayCount: gameState.dayCount,
@@ -2663,7 +2616,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     signerAddress: signed.signerAddress,
                     nonce: signed.nonce,
                     timestamp: signed.timestamp,
-                    chainId: chainId?.toString() || '',
+                    chainId: targetChain.id.toString(),
                 })
             });
 
@@ -2696,10 +2649,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(`Investigation failed: ${e.message}`, "danger");
             return { role: Role.UNKNOWN, isMafia: false };
         }
-    }, [currentRoomId, addLog, getActiveWalletClient, gameState.dayCount]);
+    }, [addLog, getActiveWalletClient, gameState.dayCount]);
 
     const forcePhaseTimeoutOnChain = useCallback(async () => {
-        if (!currentRoomId) return;
+        const roomId = currentRoomIdRef.current;
+        const myAddr = addressRef.current;
+        const targetChain = runtimeChainRef.current;
+        const pClient = publicClientRef.current;
+        if (!roomId || !pClient) return;
         setIsTxPending(true);
 
         try {
@@ -2709,17 +2666,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 let signature: `0x${string}`;
                 let callerAddress: string;
 
-                if (!address) {
+                if (!myAddr) {
                     throw new Error('No wallet for signing');
                 }
 
                 const { client: activeWalletClient } = await getActiveWalletClient();
                 const signed = await signRequest({
-                    address,
-                    roomId: Number(currentRoomId),
+                    address: myAddr,
+                    roomId: Number(roomId),
                     walletClient: activeWalletClient,
                     buildMessage: ({ nonce, timestamp }) => buildResolveNightMessage({
-                        roomId: currentRoomId.toString(),
+                        roomId: roomId.toString(),
                         nonce,
                         timestamp,
                     }),
@@ -2731,13 +2688,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        roomId: currentRoomId.toString(),
-                        playerAddress: address,
+                        roomId: roomId.toString(),
+                        playerAddress: myAddr,
                         signature,
                         callerAddress,
                         nonce: signed.nonce,
                         timestamp: signed.timestamp,
-                        chainId,
+                        chainId: targetChain.id,
                     })
                 });
 
@@ -2758,15 +2715,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         console.warn('[GM API] No actions or GM TX failed, falling back to on-chain forcePhaseTimeout');
                         addLog('GM cannot resolve night. Forcing timeout on-chain...', 'warning');
 
-                        const fallbackHash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
-                        await publicClient?.waitForTransactionReceipt({ hash: fallbackHash });
-                        await refreshPlayersList(currentRoomId);
+                        const fallbackHash = await sendGameTransaction('forcePhaseTimeout', [roomId]);
+                        await pClient.waitForTransactionReceipt({ hash: fallbackHash });
+                        await refreshPlayersList(roomId);
                         return;
                     }
 
                     // Already resolved on server side — just refresh UI state.
                     if (gmError.includes('Night already resolved')) {
-                        await refreshPlayersList(currentRoomId);
+                        await refreshPlayersList(roomId);
                         return;
                     }
 
@@ -2774,31 +2731,32 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
 
                 addLog("Night resolved by GM!", "success");
-                await refreshPlayersList(currentRoomId);
+                await refreshPlayersList(roomId);
                 return;
             }
 
             // Normal On-chain timeout for other phases
             addLog("Forcing phase timeout on-chain...", "info");
-            const hash = await sendGameTransaction('forcePhaseTimeout', [currentRoomId]);
-            await publicClient?.waitForTransactionReceipt({ hash });
+            const hash = await sendGameTransaction('forcePhaseTimeout', [roomId]);
+            await pClient.waitForTransactionReceipt({ hash });
             addLog("Phase timeout forced on-chain!", "success");
-            await refreshPlayersList(currentRoomId);
+            await refreshPlayersList(roomId);
         } catch (e: any) {
             console.error('[Force Phase Timeout Failed]', e);
             addLog(e.shortMessage || e.message, "danger");
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, address, getActiveWalletClient, gameState.phase, addLog, refreshPlayersList, chainId, publicClient, sendGameTransaction]);
+    }, [getActiveWalletClient, gameState.phase, addLog, refreshPlayersList, sendGameTransaction]);
 
     // --- MAFIA CHAT (V4) ---
 
     // Load chat messages from contract
     const fetchMafiaChat = useCallback(async (roomId: bigint) => {
-        if (!publicClient) return;
+        const pClient = publicClientRef.current;
+        if (!pClient) return;
         try {
-            const messages = await publicClient.readContract({
+            const messages = await pClient.readContract({
                 address: runtimeContractAddress,
                 abi: MAFIA_ABI,
                 functionName: 'getMafiaChat',
@@ -2814,7 +2772,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 try {
                     // Try to decrypt if we are Mafia
-                    const isMafia = playersRef.current.some(p => p.address.toLowerCase() === address?.toLowerCase() && p.role === Role.MAFIA);
+                    const myAddr = addressRef.current;
+                    const isMafia = playersRef.current.some(p => p.address.toLowerCase() === myAddr?.toLowerCase() && p.role === Role.MAFIA);
                     
                     let decryptedStr = '';
                     if (isMafia && hexContent.length > 24) { // 12 bytes IV = 24 hex chars
@@ -2883,19 +2842,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.error("Error fetching mafia chat:", e);
         }
-    }, [publicClient, setGameState]); // FIX #19: Removed gameState.players from deps — use playersRef inside
+    }, [setGameState]); // FIX #19: Removed gameState.players from deps — use playersRef inside
 
     const sendMafiaMessageOnChain = async (content: MafiaChatMessage['content']) => {
-        if (!currentRoomId) return;
+        const roomId = currentRoomIdRef.current;
+        const myAddr = addressRef.current;
+        if (!roomId) return;
 
-        const myPlayer = playersRef.current.find(p => p.address.toLowerCase() === address?.toLowerCase());
+        const myPlayer = playersRef.current.find(p => p.address.toLowerCase() === myAddr?.toLowerCase());
         const isMafia = myPlayer?.role === Role.MAFIA;
         
         // Inline stringToHex
         let hexData = '0x' as `0x${string}`;
 
         if (isMafia) {
-            const key = await getMafiaChatKey(currentRoomId);
+            const key = await getMafiaChatKey(roomId);
             if (key) {
                 try {
                     const jsonStr = JSON.stringify(content);
@@ -2929,26 +2890,26 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // ⚡ INSTANT: Broadcast to other Mafia members via LiveKit (~50ms)
         // We broadcast ONLY if it's encrypted (mafia-to-mafia) or if it's the only way
-        if (address && currentRoomId) {
+        if (myAddr && roomId) {
             emitGameSignal({
                 type: 'MAFIA_CHAT',
-                sender: address,
+                sender: myAddr,
                 encryptedData: hexData,
-                roomId: currentRoomId.toString()
+                roomId: roomId.toString()
             });
         }
 
         try {
-            const hash = await sendGameTransaction('mafiaMessage', [currentRoomId, hexData]);
+            const hash = await sendGameTransaction('mafiaMessage', [roomId, hexData]);
             // OPTIMISTIC: Add message to local state immediately
-            if (address) {
-                const myPlayer = playersRef.current.find(p => p.address.toLowerCase() === address.toLowerCase());
+            if (myAddr) {
+                const myPlayer = playersRef.current.find(p => p.address.toLowerCase() === myAddr.toLowerCase());
                 setGameState(prev => ({
                     ...prev,
                     mafiaMessages: [...prev.mafiaMessages, {
                         id: `optimistic-${Date.now()}`,
-                        sender: address,
-                        playerName: myPlayer?.name || address.slice(0, 6),
+                        sender: myAddr,
+                        playerName: myPlayer?.name || myAddr.slice(0, 6),
                         content,
                         timestamp: Date.now(),
                     }]
@@ -3001,7 +2962,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.warn('[MafiaSignaling] Failed to decrypt signal:', e);
         }
-    }, [currentRoomId, setGameState]);
+    }, [setGameState]);
 
     
     // ==================== TOURNAMENTS ====================
@@ -3016,7 +2977,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         initialPrize: string;
         nonce?: number;
     }): Promise<bigint | null> => {
-        if (!isConnected) return null;
+        const pClient = publicClientRef.current;
+        const targetChain = runtimeChainRef.current;
+        if (!pClient || !targetChain) return null;
         try {
             setIsTxPending(true);
             const { client, account } = await getActiveWalletClient();
@@ -3035,26 +2998,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Gas Estimation
             let gasLimit = 600000n; 
             try {
-                if (publicClient) {
-                    gasLimit = await publicClient.estimateContractGas({
-                        address: runtimeContractAddress,
-                        abi: MAFIA_ABI,
-                        functionName: 'createTournament',
-                        args: [
-                            params.name,
-                            buyInUnits,
-                            params.maxPlayers,
-                            params.playersPerTable,
-                            passwordHash,
-                            params.paymentToken,
-                            initialPrizeUnits
-                        ],
-                        account,
-                        value,
-                        nonce: params.nonce
-                    });
-                    gasLimit = (gasLimit * 120n) / 100n;
-                }
+                gasLimit = await pClient.estimateContractGas({
+                    address: runtimeContractAddress,
+                    abi: MAFIA_ABI,
+                    functionName: 'createTournament',
+                    args: [
+                        params.name,
+                        buyInUnits,
+                        params.maxPlayers,
+                        params.playersPerTable,
+                        passwordHash,
+                        params.paymentToken,
+                        initialPrizeUnits
+                    ],
+                    account,
+                    value,
+                    nonce: params.nonce
+                });
+                gasLimit = (gasLimit * 120n) / 100n;
             } catch (e) {
                 console.warn("[CreateTournament Gas] Estimation failed, using fallback:", e);
             }
@@ -3075,12 +3036,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 ],
                 account,
                 value,
-                gas: gasLimit
+                gas: gasLimit,
+                chain: targetChain,
             });
 
             addLog(`Tournament ${params.name} created!`, 'success');
             setIsTxConfirming(true);
-            const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+            const receipt = await pClient.waitForTransactionReceipt({ hash });
             setIsTxConfirming(false);
 
             if (receipt) {
@@ -3106,7 +3068,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const joinTournamentOnChain = async (tournamentId: bigint, password?: string, amount?: string, nonce?: number): Promise<boolean> => {
-        if (!isConnected) return false;
+        const pClient = publicClientRef.current;
+        const targetChain = runtimeChainRef.current;
+        if (!pClient || !targetChain) return false;
         try {
             setIsTxPending(true);
             const { client, account } = await getActiveWalletClient();
@@ -3115,18 +3079,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Gas Estimation
             let gasLimit = 400000n; 
             try {
-                if (publicClient) {
-                    gasLimit = await publicClient.estimateContractGas({
-                        address: runtimeContractAddress,
-                        abi: MAFIA_ABI,
-                        functionName: 'joinTournament',
-                        args: [tournamentId, password || ""],
-                        account,
-                        value,
-                        nonce
-                    });
-                    gasLimit = (gasLimit * 120n) / 100n;
-                }
+                gasLimit = await pClient.estimateContractGas({
+                    address: runtimeContractAddress,
+                    abi: MAFIA_ABI,
+                    functionName: 'joinTournament',
+                    args: [tournamentId, password || ""],
+                    account,
+                    value,
+                    nonce
+                });
+                gasLimit = (gasLimit * 120n) / 100n;
             } catch (e) {
                 console.warn("[JoinTournament Gas] Estimation failed, using fallback:", e);
             }
@@ -3139,12 +3101,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 account,
                 value,
                 nonce,
-                gas: gasLimit
+                gas: gasLimit,
+                chain: targetChain,
             });
 
             addLog(`Joined tournament #${tournamentId}`, 'success');
             setIsTxConfirming(true);
-            await publicClient?.waitForTransactionReceipt({ hash });
+            await pClient.waitForTransactionReceipt({ hash });
             setIsTxConfirming(false);
             return true;
         } catch (error) {
@@ -3158,7 +3121,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const distributePrizesOnChain = async (roomId: bigint) => {
-        if (!isConnected) return;
+        const pClient = publicClientRef.current;
+        const targetChain = runtimeChainRef.current;
+        if (!pClient || !targetChain) return;
         try {
             setIsTxPending(true);
             const { client, account } = await getActiveWalletClient();
@@ -3167,12 +3132,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'distributeMafiaPrizes',
                 args: [roomId],
-                account
+                account,
+                chain: targetChain,
             });
 
             addLog(`Prizes distributed for room #${roomId}`, 'success');
             setIsTxConfirming(true);
-            await publicClient?.waitForTransactionReceipt({ hash });
+            await pClient.waitForTransactionReceipt({ hash });
             setIsTxConfirming(false);
         } catch (error) {
             console.error('Failed to distribute prizes:', error);
@@ -3184,7 +3150,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const cancelTournamentOnChain = async (tournamentId: bigint) => {
-        if (!isConnected) return;
+        const pClient = publicClientRef.current;
+        const targetChain = runtimeChainRef.current;
+        if (!pClient || !targetChain) return;
         try {
             setIsTxPending(true);
             const { client, account } = await getActiveWalletClient();
@@ -3193,12 +3161,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 abi: MAFIA_ABI,
                 functionName: 'cancelTournament',
                 args: [tournamentId],
-                account
+                account,
+                chain: targetChain,
             });
 
             addLog(`Tournament #${tournamentId} cancelled & refunded`, 'info');
             setIsTxConfirming(true);
-            await publicClient?.waitForTransactionReceipt({ hash });
+            await pClient.waitForTransactionReceipt({ hash });
             setIsTxConfirming(false);
         } catch (error) {
             console.error('Failed to cancel tournament:', error);
@@ -3236,22 +3205,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }, CHECK_INTERVAL);
 
         return () => clearInterval(interval);
-    }, [currentRoomId, publicClient, fetchMafiaChat]);
+    }, [fetchMafiaChat]);
 
 
 
     // Finalize voting day (elimination)
     const finalizeVotingOnChain = useCallback(async () => {
-        if (!currentRoomId) return;
+        const roomId = currentRoomIdRef.current;
+        const pClient = publicClientRef.current;
+        if (!roomId || !pClient) return;
         try {
-            const hash = await sendGameTransaction('finalizeVoting', [currentRoomId]);
+            const hash = await sendGameTransaction('finalizeVoting', [roomId]);
             addLog("Voting finalized!", "success");
-            await publicClient?.waitForTransactionReceipt({ hash });
+            await pClient.waitForTransactionReceipt({ hash });
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             throw e;
         }
-    }, [currentRoomId, sendGameTransaction, addLog, publicClient]);
+    }, [sendGameTransaction, addLog]);
 
     // Helper to convert Role enum to number for contract
     const getRoleNumber = (role: Role): number => {
@@ -3269,7 +3240,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // V4: ZK End Game (Client generates proof of win)
     // V4: ZK End Game (Client generates proof of win via Server API)
     const endGameZK = useCallback(async () => {
-        if (!currentRoomId || !publicClient) return;
+        const roomId = currentRoomIdRef.current;
+        const pClient = publicClientRef.current;
+        const myAddr = addressRef.current;
+        if (!roomId || !pClient || !myAddr) return;
 
         // --- 1. COORDINATION LOGIC ("Waterfall") ---
         // Sort active players by address to have a deterministic order
@@ -3277,7 +3251,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             .filter(p => p.isAlive)
             .sort((a, b) => a.address.localeCompare(b.address));
 
-        const myIndex = activePlayers.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+        const myIndex = activePlayers.findIndex(p => p.address.toLowerCase() === myAddr.toLowerCase());
 
         // If I am not found (shouldn't happen if alive), default to 0
         const delayIndex = myIndex >= 0 ? myIndex : 0;
@@ -3292,11 +3266,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // FIX #6: Re-verify game state after delay — someone else may have ended it
             try {
-                const freshRoom = await publicClient.readContract({
+                const freshRoom = await pClient.readContract({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'getRoom',
-                    args: [currentRoomId],
+                    args: [roomId],
                 }) as any;
                 const currentPhase = Number(Array.isArray(freshRoom) ? freshRoom[3] : freshRoom.phase);
                 if (currentPhase === GamePhase.ENDED) {
@@ -3323,16 +3297,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             });
 
-            console.log("[ZK] Requesting proof for Room:", currentRoomId.toString());
+            console.log("[ZK] Requesting proof for Room:", roomId.toString());
 
             // 2. Fetch Proof
-            const zkData = await generateEndGameProof(currentRoomId, mCount, tCount);
+            const zkData = await generateEndGameProof(roomId, mCount, tCount);
 
             console.log("[ZK] Proof received. Simulating transaction...");
 
             // 3. Form args
             const args = [
-                currentRoomId,
+                roomId,
                 zkData.a,
                 zkData.b,
                 zkData.c,
@@ -3341,12 +3315,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 4. Simulate
             try {
-                await publicClient.simulateContract({
+                await pClient.simulateContract({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI,
                     functionName: 'endGameZK',
                     args: args as any,
-                    account: address,
+                    account: myAddr,
                 });
                 console.log("[ZK] Simulation SUCCESS");
             } catch (simError: any) {
@@ -3357,7 +3331,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 5. DECIDE WALLET (Session vs Main)
             let useSessionKey = false;
             const session = loadSession();
-            if (session && session.registeredOnChain && Date.now() < session.expiresAt && session.roomId === Number(currentRoomId)) {
+            if (session && session.registeredOnChain && Date.now() < session.expiresAt && session.roomId === Number(roomId)) {
                 useSessionKey = true;
                 console.log(`[ZK] Using session key for endGameZK.`);
             }
@@ -3373,7 +3347,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (isTownWin) proactiveWinner = 'TOWN';
             else if (isMafiaWin) proactiveWinner = 'MAFIA';
             
-            await publicClient.waitForTransactionReceipt({ hash });
+            await pClient.waitForTransactionReceipt({ hash });
             
             setGameState(prev => ({
                 ...prev,
@@ -3381,23 +3355,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 winner: proactiveWinner
             }));
 
-            await refreshPlayersList(currentRoomId);
+            await refreshPlayersList(roomId);
 
             // DEBUG: Check deposit status after game end
-            if (address) {
+            if (myAddr) {
                 try {
                     const [deposit, room] = await Promise.all([
-                        publicClient.readContract({
+                        pClient.readContract({
                             address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'getPlayerDeposit',
-                            args: [currentRoomId, address],
+                            args: [roomId, myAddr],
                         }) as Promise<bigint>,
-                        publicClient.readContract({
+                        pClient.readContract({
                             address: runtimeContractAddress,
                             abi: MAFIA_ABI,
                             functionName: 'getRoom',
-                            args: [currentRoomId],
+                            args: [roomId],
                         }) as Promise<any>,
                     ]);
                     const depositPool = Array.isArray(room) ? room[room.length - 2] : room.depositPool;
@@ -3420,7 +3394,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, gameState.players, sendGameTransaction, addLog, publicClient, refreshPlayersList, address, myPlayer?.address]);
+    }, [gameState.players, sendGameTransaction, addLog, refreshPlayersList]);
 
     /**
      * TRIGGER AUTO WIN: A silent background check that pings the server
@@ -3428,7 +3402,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
      */
     const triggerAutoWinCheck = useCallback(async () => {
         const roomId = currentRoomIdRef.current;
-        if (!roomId || !publicClient) return;
+        const pClient = publicClientRef.current;
+        const myAddr = addressRef.current;
+        if (!roomId || !pClient) return;
 
         // FIX #23: Guard the entire check (including server fetch) with a ref
         if (checkWinInProgressRef.current) {
@@ -3496,11 +3472,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     console.log(`[AutoWin] Using session key for endGameZK.`);
                 }
 
-                const simulationAccount = useSessionKey ? (session!.address as `0x${string}`) : address;
+                const simulationAccount = useSessionKey ? (session!.address as `0x${string}`) : myAddr;
 
                 // SIMULATE CONTRACT FIRST
                 try {
-                    await publicClient.simulateContract({
+                    await pClient.simulateContract({
                         address: runtimeContractAddress,
                         abi: MAFIA_ABI,
                         functionName: 'endGameZK',
@@ -3522,7 +3498,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     console.log(`[AutoWin] Sending endGameZK (Session: ${useSessionKey})...`);
                     const hash = await sendGameTransaction('endGameZK', args as any, useSessionKey);
 
-                    await publicClient.waitForTransactionReceipt({ hash });
+                    await pClient.waitForTransactionReceipt({ hash });
                     
                     // Proactively set winner from server result
                     const lowerRes = (data.result || '').toLowerCase();
@@ -3541,16 +3517,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     await refreshPlayersList(roomId);
 
                     // DEBUG: Check deposit status after AutoWin endGame
-                    if (address) {
+                    if (myAddr) {
                         try {
                             const [deposit, room] = await Promise.all([
-                                publicClient.readContract({
+                                pClient.readContract({
                                     address: runtimeContractAddress,
                                     abi: MAFIA_ABI,
                                     functionName: 'getPlayerDeposit',
-                                    args: [roomId, address],
+                                    args: [roomId, myAddr],
                                 }) as Promise<bigint>,
-                                publicClient.readContract({
+                                pClient.readContract({
                                     address: runtimeContractAddress,
                                     abi: MAFIA_ABI,
                                     functionName: 'getRoom',
@@ -3585,17 +3561,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             checkWinInProgressRef.current = false; // FIX #23: Always release
         }
-    }, [publicClient, sendGameTransaction, addLog, refreshPlayersList, address]);
+    }, [sendGameTransaction, addLog, refreshPlayersList]);
 
 
     // --- UTILITY ---
 
     // V4: forcePhaseTimeout - kicks stalled player and advances phase
     const kickStalledPlayerOnChain = useCallback(async () => {
-        if (!currentRoomId) return;
+        const roomId = currentRoomIdRef.current;
+        if (!roomId) return;
         // Delegate to forcePhaseTimeoutOnChain which handles GM Server interception for night phase
         await forcePhaseTimeoutOnChain();
-    }, [currentRoomId, forcePhaseTimeoutOnChain]);
+    }, [forcePhaseTimeoutOnChain]);
 
     // --- UNIFIED EVENT POLLING (REAL-TIME VIA WEBSOCKET/SMART POLLER) ---
     // [CRITICAL OPTIMIZATION] Replaced interval polling with useWatchBlockNumber.
@@ -3608,29 +3585,33 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Initial block fetch on mount
     useEffect(() => {
-        if (!publicClient || !currentRoomId || lastProcessedBlockRef.current) return;
-        publicClient.getBlockNumber().then(b => {
+        const roomId = currentRoomIdRef.current;
+        const pClient = publicClientRef.current;
+        if (!pClient || !roomId || lastProcessedBlockRef.current) return;
+        pClient.getBlockNumber().then(b => {
             // Start from slightly earlier to catch immediate events? No, start from 'now'.
             // Actually, to be safe, maybe currentBlock - 1?
             // But existing logic was "start from now".
             lastProcessedBlockRef.current = b;
-            console.log(`[Smart Poller] 🚀 Started for Room ${currentRoomId} @ Block ${b}`);
+            console.log(`[Smart Poller] 🚀 Started for Room ${roomId} @ Block ${b}`);
         });
-    }, [publicClient, currentRoomId]);
+    }, []);
 
     // The polling function - stable reference
     const pollEvents = useCallback(async () => {
-        if (!publicClient || !currentRoomId || !lastProcessedBlockRef.current) return;
+        const roomId = currentRoomIdRef.current;
+        const pClient = publicClientRef.current;
+        if (!pClient || !roomId || !lastProcessedBlockRef.current) return;
 
         try {
-            const currentBlock = await publicClient.getBlockNumber();
+            const currentBlock = await pClient.getBlockNumber();
 
             // Don't poll if no new blocks (unlikely on Somnia)
             if (currentBlock < lastProcessedBlockRef.current) return;
 
             // 1. Fetch ALL logs for this room in one request
             // We use low-level topics filtering: [topic0=null (any event), topic1=roomId]
-            const roomIdTopic = pad(toHex(currentRoomId), { size: 32 });
+            const roomIdTopic = pad(toHex(roomId), { size: 32 });
 
             const MAX_BLOCK_RANGE = 500n; // Somnia/Fuji safe limit
             let allRawLogs: any[] = [];
@@ -3641,7 +3622,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     ? currentBlock
                     : chunkFrom + MAX_BLOCK_RANGE;
 
-                const chunk = await publicClient.getLogs({
+                const chunk = await pClient.getLogs({
                     address: runtimeContractAddress,
                     // topics: [null, roomIdTopic] fallback for Somnia/Fuji nodes that might handle null poorly
                     topics: [
@@ -3817,8 +3798,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // FIX: Batch refresh — call refreshPlayersList ONCE per poll cycle, not per event
-            if (hasChanges) {
-                refreshPlayersListDebounced(currentRoomId);
+            if (hasChanges && roomId) {
+                refreshPlayersListDebounced(roomId);
             }
 
             // Advance block cursor
@@ -3827,7 +3808,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) {
             console.error("[Smart Poller] Error:", e);
         }
-    }, [publicClient, currentRoomId, addLog, refreshPlayersListDebounced]);
+    }, [currentRoomId, addLog, refreshPlayersListDebounced]); // Removed publicClient from deps, using pClientRef inside
 
     // FIX: Poll events every 2 seconds instead of on every block (Somnia: 100ms blocks = 10 calls/sec!)
     // This reduces RPC spam from ~20 calls/sec to 1 call/2sec while keeping sub-3s event latency.
@@ -3836,13 +3817,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // processes the GameEnded event (which carries winCondition). If we stop too early,
     // winner stays null and those players see infinite loading on the GameOver screen.
     useEffect(() => {
-        if (!publicClient || !currentRoomId) return;
-        // Only stop when we have BOTH phase=ENDED AND a determined winner
+        if (!publicClientRef.current || !currentRoomId) return;
+        // Only stop if we have reached the end of the game AND have a winner confirmed
         if (gameState.phase === GamePhase.ENDED && gameState.winner) return;
-        
+
         const interval = setInterval(pollEvents, 2000);
         return () => clearInterval(interval);
-    }, [pollEvents, publicClient, currentRoomId, gameState.phase, gameState.winner]);
+    }, [pollEvents, currentRoomId, gameState.phase, gameState.winner]);
 
 
 
