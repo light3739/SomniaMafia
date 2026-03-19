@@ -48,8 +48,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 embeddedWallets: {
                     createOnLogin: 'users-without-wallets',
                 } as any,
-                supportedChains: [SOMNIA_TESTNET, AVALANCHE_FUJI],
-                defaultChain: ACTIVE_DEPLOYMENT.chain,
+                // Use the same chains as defined in wagmi config
+                supportedChains: [...config.chains] as any,
             }}
         >
             <QueryClientProvider client={queryClient}>
