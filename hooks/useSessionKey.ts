@@ -14,7 +14,7 @@ import {
   getSessionInfo,
   getSessionAccount,
 } from '../services/sessionKeyService';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../contracts/config';
+import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, getDeploymentByChainId } from '../contracts/config';
 
 interface UseSessionKeyReturn {
   // State
@@ -33,7 +33,7 @@ interface UseSessionKeyReturn {
 }
 
 export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
-  const { address: mainWallet } = useAccount();
+  const { address: mainWallet, chainId } = useAccount();
   const [hasSession, setHasSession] = useState(false);
   const [sessionAddress, setSessionAddress] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
@@ -116,9 +116,13 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
     if (!mainWallet) return;
 
     try {
+      // Runtime awareness for contract address
+      const deployment = getDeploymentByChainId(chainId);
+      const runtimeContract = deployment.contracts.MafiaDiamond as `0x${string}`;
+
       // Revoke on-chain
       await writeContractAsync({
-        address: MAFIA_CONTRACT_ADDRESS,
+        address: runtimeContract,
         abi: MAFIA_ABI,
         functionName: 'revokeSessionKey',
         args: [],
@@ -133,7 +137,7 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to revoke session');
     }
-  }, [mainWallet, writeContractAsync]);
+  }, [mainWallet, chainId, writeContractAsync]);
 
   /**
    * Get the session account for signing
