@@ -53,7 +53,7 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
     }
 
     const checkSession = () => {
-      const valid = hasValidSession(roomId, mainWallet);
+      const valid = hasValidSession(roomId, mainWallet, chainId);
       setHasSession(valid);
       
       if (valid) {
@@ -96,7 +96,7 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
       return;
     }
 
-    const valid = hasValidSession(_targetRoomId, mainWallet);
+    const valid = hasValidSession(_targetRoomId, mainWallet, chainId);
     if (valid) {
       setHasSession(true);
       const info = getSessionInfo();
