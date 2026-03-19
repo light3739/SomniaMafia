@@ -211,7 +211,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { writeContractAsync } = useWriteContract();
     
     // Derived from active wallet chain (default to Fuji if not connected or unknown chain)
-    const runtimeDeployment = useMemo(() => getDeploymentByChainId(chainId ?? null), [chainId]);
+    // STABILITY FIX: Use a ref to keep track of the reported chainId to avoid flickering
+    const lastChainIdRef = useRef<number | null>(null);
+    if (chainId) lastChainIdRef.current = chainId;
+
+    const runtimeDeployment = useMemo(() => {
+        // Use the most recent non-null chainId to prevent "flickering" to default during switches
+        return getDeploymentByChainId(chainId || lastChainIdRef.current);
+    }, [chainId]);
     const runtimeChain = runtimeDeployment.chain;
     const runtimeContractAddress = runtimeDeployment.contracts.MafiaDiamond as `0x${string}`;
 
@@ -234,18 +241,31 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
 
+    const walletSwitchPromiseRef = useRef<Promise<void> | null>(null);
+
     const getActiveWalletClient = useCallback(async () => {
         const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
         if (embeddedWallet) {
-            // ✅ ROBUST FIX: Handle both "eip155:50312" and "50312" formats
             const rawChainId = embeddedWallet.chainId;
-            const currentChainId = typeof rawChainId === 'string' && rawChainId.includes(':') 
-                ? Number(rawChainId.split(':')[1]) 
-                : Number(rawChainId);
+            let currentChainId = 0;
+            
+            if (typeof rawChainId === 'string' && rawChainId.includes(':')) {
+                currentChainId = Number(rawChainId.split(':')[1]);
+            } else {
+                currentChainId = Number(rawChainId);
+            }
                 
-            if (currentChainId !== runtimeChain.id) {
-                console.log(`[Privy] Switching embedded wallet from ${currentChainId} to ${runtimeChain.id}`);
-                await embeddedWallet.switchChain(runtimeChain.id);
+            // VALIDITY CHECK: Only switch if we have a valid target and a valid current ID
+            // Avoid loops if currentChainId is NaN or 0
+            if (currentChainId > 0 && Number.isFinite(currentChainId) && currentChainId !== runtimeChain.id) {
+                // Prevent multiple concurrent switch requests
+                if (!walletSwitchPromiseRef.current) {
+                    console.log(`[Privy] Switching embedded wallet from ${currentChainId} to ${runtimeChain.id}`);
+                    walletSwitchPromiseRef.current = embeddedWallet.switchChain(runtimeChain.id).finally(() => {
+                        walletSwitchPromiseRef.current = null;
+                    });
+                }
+                await walletSwitchPromiseRef.current;
             }
 
             const provider = await embeddedWallet.getEthereumProvider();
@@ -998,7 +1018,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Retry ONCE on mount after a short delay (give time for normal flow to complete first)
         const timer = setTimeout(retryPendingSync, 10000);
         return () => clearTimeout(timer);
-    }, [currentRoomId, address, walletClient, syncSecretWithServer]);
+    }, [currentRoomId, address, syncSecretWithServer]);
     const FLAG_ACTIVE = 2;
 
     // Check win condition on frontend (since contract doesn't know roles)
@@ -1364,7 +1384,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         if (isTestMode || !currentRoomId || !publicClient) return;
         refreshPlayersList(currentRoomId);
-    }, [currentRoomId, isTestMode]); // Removed refreshPlayersList/publicClient from deps to avoid infinite interval churn
+    }, [currentRoomId, isTestMode, publicClient]);
 
     useEffect(() => {
         if (isTestMode || !currentRoomId || !publicClient) return;
@@ -1374,7 +1394,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }, 5000);
 
         return () => clearInterval(interval);
-    }, [currentRoomId, isTestMode]); // Removed refreshPlayersListDebounced/publicClient from deps to avoid infinite interval churn
+    }, [currentRoomId, isTestMode, publicClient, refreshPlayersListDebounced]);
 
 
 
@@ -1679,6 +1699,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!playerName || !address || !publicClient) { alert("Enter name and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
+            const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
+            
             // Sanitize nickname for join
             const safeName = /^[a-zA-Z0-9_ ]+$/.test(playerName) ? playerName : `Player_${Math.floor(Math.random() * 1000)}`;
             console.log(`[SafeName] Join - Original: "${playerName}", Used: "${safeName}"`);
@@ -1735,8 +1757,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 addLog(`Join permit failed: ${e.message}`, "danger");
                 
                 // CRITICAL: If it's a private room and we failed to get permit, STOP here
-                const isPrivate = Array.isArray(roomData) ? Boolean(roomData[18]) : Boolean(roomData.isPrivate);
-                if (roomData && isPrivate) {
+                const isPrivateData = Array.isArray(roomData) ? Boolean(roomData[18]) : Boolean(roomData?.isPrivate);
+                if (roomData && isPrivateData) {
                     setIsTxPending(false);
                     alert(`Failed to get join permit: ${e.message}`);
                     return false;
@@ -1744,7 +1766,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // 3.1. Determine if deposit is needed (Skip if it's a tournament room)
-            const tournamentIdFromRoom = Array.isArray(roomData) ? BigInt(roomData[19] || 0) : BigInt(roomData.tournamentId || 0);
+            const tournamentIdFromRoom = Array.isArray(roomData) ? BigInt(roomData[19] || 0) : BigInt(roomData?.tournamentId || 0);
             const isTournamentRoom = roomData ? tournamentIdFromRoom > 0n : false;
             
             // Tournament participation check for joiner
@@ -1786,19 +1808,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 3.5. Оценка газа с буфером
             let gasLimit = 14_500_000n;
-            // IMPORTANT: joining should always use main wallet (not session key) to avoid registration mismatch
-            let activeWalletClient;
-            let activeAccount;
-            try {
-                const res = await getActiveWalletClient();
-                activeWalletClient = res.client;
-                activeAccount = res.account;
-            } catch (e) {
-                alert("No wallet connected!");
-                setIsTxPending(false);
-                return false;
-            }
-
             try {
                 const gasEstimate = await publicClient.estimateContractGas({
                     address: runtimeContractAddress,
@@ -1826,7 +1835,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 gas: gasLimit,
                 type: 'legacy',
             });
-            // addLog("Joining with auto-sign...", "info");
             const joinReceipt = await publicClient?.waitForTransactionReceipt({ hash });
 
             // DEBUG: Check deposit collection on join
@@ -1897,7 +1905,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
 
-            // addLog("Joined with auto-sign enabled!", "success");
             setIsTxPending(false);
             return true;
         } catch (e: any) {
