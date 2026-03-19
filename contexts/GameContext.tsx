@@ -753,6 +753,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         chain: runtimeChainRef.current,
                         gas: calculatedGas,
                         gasPrice: CURRENT_GAS_PRICE, // SPEED: Skip eth_gasPrice RPC call
+                        type: 'legacy', 
                     });
                     const sendTime = Math.round(performance.now() - sendStart);
                     const totalTime = Math.round(performance.now() - txStartTime);
@@ -788,6 +789,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 account: activeAccount,
                 chain: runtimeChainRef.current,
                 gas: calculatedGas,
+                type: 'legacy',
             });
         }
     }, [getSessionWalletClient]); // getActiveWalletClient and isTestMode (ref) are stable // Removed publicClient, address, runtimeChain from deps
@@ -1521,7 +1523,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         tournamentId
                     ],
                     account: activeAccount,
-                    value: LOBBY_FUNDING_VALUE,
+                    value: isSomnia ? parseEther('1.0') : parseEther('0.1'),
                     nonce,
                 });
                 gasLimit = (gasEstimate * 125n) / 100n;
@@ -1538,9 +1540,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, tournamentId],
                 account: activeAccount,
                 chain: targetChain,
-                value: LOBBY_FUNDING_VALUE,
+                value: isSomnia ? parseEther('1.0') : parseEther('0.1'),
                 gas: gasLimit,
                 nonce: nonce,
+                type: 'legacy',
             });
             const receipt = await pClient.waitForTransactionReceipt({ hash });
 
@@ -1787,7 +1790,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                     account: activeAccount as `0x${string}`,
-                    value: txValue,
+                    value: isTournamentRoom ? 0n : ((targetChain.id as number) === 50312 || (targetChain.id as number) === 5031 ? parseEther('1.0') : parseEther('0.1')),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -1803,8 +1806,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                 account: activeAccount,
                 chain: targetChain,
-                value: txValue,
+                value: isTournamentRoom ? 0n : ((targetChain.id as number) === 50312 || (targetChain.id as number) === 5031 ? parseEther('1.0') : parseEther('0.1')),
                 gas: gasLimit,
+                type: 'legacy',
             });
             const joinReceipt = await pClient.waitForTransactionReceipt({ hash });
 
@@ -1921,6 +1925,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 account: activeAccount,
                 chain: targetChain,
                 gas: gasLimit,
+                type: 'legacy',
             });
             addLog("Starting game...", "phase");
             // OPTIMISTIC: Release spinner immediately, confirm receipt in background
