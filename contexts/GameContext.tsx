@@ -210,7 +210,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { address, chainId, isConnected } = useAccount();
     const stableAddress = useMemo(() => address?.toLowerCase() as `0x${string}` | undefined, [address]);
     const stableChainId = useMemo(() => chainId, [chainId]);
-    
+
     // Derived from active wallet chain (default to Fuji if not connected or unknown chain)
     // STABILITY FIX: Use a ref to keep track of the reported chainId to avoid flickering
     const lastChainIdRef = useRef<number | null>(null);
@@ -286,13 +286,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (embeddedWallet) {
             const rawChainId = embeddedWallet.chainId;
             let currentChainId = 0;
-            
+
             if (typeof rawChainId === 'string' && rawChainId.includes(':')) {
                 currentChainId = Number(rawChainId.split(':')[1]);
             } else {
                 currentChainId = Number(rawChainId);
             }
-                
+
             if (currentChainId > 0 && Number.isFinite(currentChainId) && currentChainId !== targetChain.id) {
                 if (!walletSwitchPromiseRef.current) {
                     console.log(`[Privy] Switching embedded wallet from ${currentChainId} to ${targetChain.id}`);
@@ -313,7 +313,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 account: embeddedWallet.address as `0x${string}`
             };
         }
-        
+
         if (walletClientRef.current && addressRef.current) {
             return { client: walletClientRef.current, account: addressRef.current as `0x${string}` };
         }
@@ -325,9 +325,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Casting to number for consistent comparison
         const chainId = Number(runtimeChain.id);
         const isSomnia = (chainId === 5031 || chainId === 50312);
-        // Shannon testnet currently has defaultDeposit = 0, but sending 0.1 STT 
-        // ensures the session address is funded with gas for gameplay actions.
-        return isSomnia ? parseEther('0.1') : parseEther('0.1');
         // Shannon testnet currently has defaultDeposit = 0, but sending 0.1 STT 
         // ensures the session address is funded with gas for gameplay actions.
         return isSomnia ? parseEther('0.1') : parseEther('0.1');
@@ -759,7 +756,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         chain: runtimeChainRef.current,
                         gas: calculatedGas,
                         gasPrice: CURRENT_GAS_PRICE, // SPEED: Skip eth_gasPrice RPC call
-                        type: 'legacy', 
+                        type: 0 as any, // Legacy
                     });
                     const sendTime = Math.round(performance.now() - sendStart);
                     const totalTime = Math.round(performance.now() - txStartTime);
@@ -795,7 +792,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 account: activeAccount,
                 chain: runtimeChainRef.current,
                 gas: calculatedGas,
-                type: 'legacy',
+                type: 0 as any, // Legacy
             });
         }
     }, [getSessionWalletClient]); // getActiveWalletClient and isTestMode (ref) are stable // Removed publicClient, address, runtimeChain from deps
@@ -941,10 +938,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const myPlayerById = gameState.myPlayerId
             ? gameState.players.find(p => p.address.toLowerCase() === gameState.myPlayerId?.toLowerCase())
             : null;
-        const myPlayerByWallet = stableAddress 
+        const myPlayerByWallet = stableAddress
             ? gameState.players.find(p => p.address.toLowerCase() === stableAddress.toLowerCase())
             : null;
-        
+
         return myPlayerById || myPlayerByWallet || undefined;
     }, [gameState.players, gameState.myPlayerId, stableAddress]);
 
@@ -1231,145 +1228,145 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const gameData = await fetchGameData(roomId);
             if (!gameData) return;
 
-        const {
-            rawPlayers, phase, dayCount, revealedCount,
-            mafiaCommittedCount, mafiaRevealedCount, phaseDeadline,
-            tournamentId, aliveCount, maxPlayers
-        } = gameData;
+            const {
+                rawPlayers, phase, dayCount, revealedCount,
+                mafiaCommittedCount, mafiaRevealedCount, phaseDeadline,
+                tournamentId, aliveCount, maxPlayers
+            } = gameData;
 
-        // FIX: If rawPlayers is empty (transient RPC issue), skip update to prevent role loss
-        if (!rawPlayers || rawPlayers.length === 0) {
-            console.warn('[refreshPlayersList] skipping update because rawPlayers is empty (RPC lag?)');
-            return;
-        }
+            // FIX: If rawPlayers is empty (transient RPC issue), skip update to prevent role loss
+            if (!rawPlayers || rawPlayers.length === 0) {
+                console.warn('[refreshPlayersList] skipping update because rawPlayers is empty (RPC lag?)');
+                return;
+            }
 
-        // DEBUG: Log current phase from contract (only when phase/day changes to reduce noise)
-        const phaseKey = `${phase}:${dayCount}`;
-        if (lastPhaseKeyRef.current !== phaseKey) {
-            console.log('[Phase Sync]', {
-                contractPhase: phase,
-                phaseName: GamePhase[phase],
-                dayCount
-            });
-            lastPhaseKeyRef.current = phaseKey;
-        }
+            // DEBUG: Log current phase from contract (only when phase/day changes to reduce noise)
+            const phaseKey = `${phase}:${dayCount}`;
+            if (lastPhaseKeyRef.current !== phaseKey) {
+                console.log('[Phase Sync]', {
+                    contractPhase: phase,
+                    phaseName: GamePhase[phase],
+                    dayCount
+                });
+                lastPhaseKeyRef.current = phaseKey;
+            }
 
-        // Fetch remote avatars from server (CACHE IF NOT LOBBY)
-        let remoteAvatars: Record<string, string> = {};
-        const isLobby = phaseRef.current === GamePhase.LOBBY;
-        const hasCache = Object.keys(avatarCacheRef.current).length > 0;
+            // Fetch remote avatars from server (CACHE IF NOT LOBBY)
+            let remoteAvatars: Record<string, string> = {};
+            const isLobby = phaseRef.current === GamePhase.LOBBY;
+            const hasCache = Object.keys(avatarCacheRef.current).length > 0;
 
-        if (isLobby || !hasCache) {
-            try {
-                const avatarRes = await fetch(`/api/game/avatar?roomId=${roomId.toString()}`);
-                if (avatarRes.ok) {
-                    const data = await avatarRes.json();
-                    remoteAvatars = data.avatars || {};
-                    avatarCacheRef.current = remoteAvatars;
-                } else {
+            if (isLobby || !hasCache) {
+                try {
+                    const avatarRes = await fetch(`/api/game/avatar?roomId=${roomId.toString()}`);
+                    if (avatarRes.ok) {
+                        const data = await avatarRes.json();
+                        remoteAvatars = data.avatars || {};
+                        avatarCacheRef.current = remoteAvatars;
+                    } else {
+                        remoteAvatars = avatarCacheRef.current;
+                    }
+                } catch (e) {
+                    console.warn('[Avatar Sync] Failed to fetch avatars:', e);
                     remoteAvatars = avatarCacheRef.current;
                 }
-            } catch (e) {
-                console.warn('[Avatar Sync] Failed to fetch avatars:', e);
+            } else {
                 remoteAvatars = avatarCacheRef.current;
             }
-        } else {
-            remoteAvatars = avatarCacheRef.current;
-        }
 
-        setGameState(prev => {
-            const existingRoles = new Map<string, Role>();
-            prev.players.forEach(p => {
-                if (p.role !== Role.UNKNOWN) {
-                    existingRoles.set(p.address.toLowerCase(), p.role);
+            setGameState(prev => {
+                const existingRoles = new Map<string, Role>();
+                prev.players.forEach(p => {
+                    if (p.role !== Role.UNKNOWN) {
+                        existingRoles.set(p.address.toLowerCase(), p.role);
+                    }
+                });
+
+                const formattedPlayers: Player[] = rawPlayers.map((p: any) => {
+                    const flags = Number(p.flags);
+                    const existingPlayer = prev.players.find(
+                        ep => ep.address.toLowerCase() === p.wallet.toLowerCase()
+                    );
+                    const isMe = p.wallet.toLowerCase() === addressRef.current?.toLowerCase();
+
+                    // Avatar priority: 1) remote server, 2) existing, 3) local (if me), 4) fallback
+                    const playerAvatar =
+                        remoteAvatars[p.wallet.toLowerCase()] ||
+                        existingPlayer?.avatarUrl ||
+                        (isMe && avatarUrl) ||
+                        `https://picsum.photos/seed/${p.wallet}/200`;
+
+                    let resolvedRole = existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN;
+
+                    if (isMe && resolvedRole === Role.UNKNOWN && addressRef.current) {
+                        const savedRole = localStorage.getItem(`my_role_${roomId}_${addressRef.current.toLowerCase()}`);
+                        if (savedRole && Object.values(Role).includes(savedRole as Role)) {
+                            resolvedRole = savedRole as Role;
+                        }
+                    }
+
+                    // FLAG Constants
+                    const FLAG_CONFIRMED_ROLE = 1;
+                    const FLAG_ACTIVE = 2;
+                    const FLAG_HAS_VOTED = 4;
+                    const FLAG_HAS_COMMITTED = 8;
+                    const FLAG_HAS_REVEALED = 16;
+                    const FLAG_DECK_COMMITTED = 64;
+
+                    return {
+                        id: p.wallet,
+                        name: p.nickname,
+                        address: p.wallet,
+                        role: resolvedRole,
+                        isAlive: (flags & FLAG_ACTIVE) !== 0,
+                        hasConfirmedRole: (flags & FLAG_CONFIRMED_ROLE) !== 0,
+                        hasDeckCommitted: (flags & FLAG_DECK_COMMITTED) !== 0,
+                        hasVoted: (flags & FLAG_HAS_VOTED) !== 0,
+                        hasNightCommitted: (flags & FLAG_HAS_COMMITTED) !== 0,
+                        hasNightRevealed: (flags & FLAG_HAS_REVEALED) !== 0,
+                        avatarUrl: playerAvatar,
+                        votesReceived: Number(p.votesReceived || 0),
+                        status: (flags & FLAG_ACTIVE) !== 0 ? 'connected' : 'slashed'
+                    };
+                });
+
+                const winner = checkWinCondition(formattedPlayers, phase);
+                let finalPhase = phase;
+                let resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' | null = winner;
+
+                if (winner && phase !== GamePhase.ENDED) {
+                    console.log('[Win Condition Calculated Local]', winner);
+                    finalPhase = GamePhase.ENDED;
                 }
-            });
 
-            const formattedPlayers: Player[] = rawPlayers.map((p: any) => {
-                const flags = Number(p.flags);
-                const existingPlayer = prev.players.find(
-                    ep => ep.address.toLowerCase() === p.wallet.toLowerCase()
-                );
-                const isMe = p.wallet.toLowerCase() === addressRef.current?.toLowerCase();
-
-                // Avatar priority: 1) remote server, 2) existing, 3) local (if me), 4) fallback
-                const playerAvatar =
-                    remoteAvatars[p.wallet.toLowerCase()] ||
-                    existingPlayer?.avatarUrl ||
-                    (isMe && avatarUrl) ||
-                    `https://picsum.photos/seed/${p.wallet}/200`;
-
-                let resolvedRole = existingRoles.get(p.wallet.toLowerCase()) || Role.UNKNOWN;
-
-                if (isMe && resolvedRole === Role.UNKNOWN && addressRef.current) {
-                    const savedRole = localStorage.getItem(`my_role_${roomId}_${addressRef.current.toLowerCase()}`);
-                    if (savedRole && Object.values(Role).includes(savedRole as Role)) {
-                        resolvedRole = savedRole as Role;
+                // FIX: If contract says ENDED but we can't determine winner locally
+                // (e.g. other players' roles are UNKNOWN), trust the contract phase
+                // and try to determine winner from alive counts
+                if (phase === GamePhase.ENDED && !resolvedWinner) {
+                    // Check if we already have a winner from a GameEnded event
+                    if (prev.winner) {
+                        resolvedWinner = prev.winner;
                     }
                 }
 
-                // FLAG Constants
-                const FLAG_CONFIRMED_ROLE = 1;
-                const FLAG_ACTIVE = 2;
-                const FLAG_HAS_VOTED = 4;
-                const FLAG_HAS_COMMITTED = 8;
-                const FLAG_HAS_REVEALED = 16;
-                const FLAG_DECK_COMMITTED = 64;
-
                 return {
-                    id: p.wallet,
-                    name: p.nickname,
-                    address: p.wallet,
-                    role: resolvedRole,
-                    isAlive: (flags & FLAG_ACTIVE) !== 0,
-                    hasConfirmedRole: (flags & FLAG_CONFIRMED_ROLE) !== 0,
-                    hasDeckCommitted: (flags & FLAG_DECK_COMMITTED) !== 0,
-                    hasVoted: (flags & FLAG_HAS_VOTED) !== 0,
-                    hasNightCommitted: (flags & FLAG_HAS_COMMITTED) !== 0,
-                    hasNightRevealed: (flags & FLAG_HAS_REVEALED) !== 0,
-                    avatarUrl: playerAvatar,
-                    votesReceived: Number(p.votesReceived || 0),
-                    status: (flags & FLAG_ACTIVE) !== 0 ? 'connected' : 'slashed'
+                    ...prev,
+                    players: formattedPlayers,
+                    phase: finalPhase,
+                    dayCount,
+                    revealedCount,
+                    mafiaCommittedCount,
+                    mafiaRevealedCount,
+                    phaseDeadline,
+                    aliveCount,
+                    tournamentId,
+                    isTournament: tournamentId > 0n,
+                    maxPlayers,
+                    // prev.winner has absolute priority — never overwrite established winner with null or derivation
+                    winner: prev.winner || resolvedWinner
                 };
             });
-
-            const winner = checkWinCondition(formattedPlayers, phase);
-            let finalPhase = phase;
-            let resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' | null = winner;
-
-            if (winner && phase !== GamePhase.ENDED) {
-                console.log('[Win Condition Calculated Local]', winner);
-                finalPhase = GamePhase.ENDED;
-            }
-
-            // FIX: If contract says ENDED but we can't determine winner locally
-            // (e.g. other players' roles are UNKNOWN), trust the contract phase
-            // and try to determine winner from alive counts
-            if (phase === GamePhase.ENDED && !resolvedWinner) {
-                // Check if we already have a winner from a GameEnded event
-                if (prev.winner) {
-                    resolvedWinner = prev.winner;
-                }
-            }
-
-            return {
-                ...prev,
-                players: formattedPlayers,
-                phase: finalPhase,
-                dayCount,
-                revealedCount,
-                mafiaCommittedCount,
-                mafiaRevealedCount,
-                phaseDeadline,
-                aliveCount,
-                tournamentId,
-                isTournament: tournamentId > 0n,
-                maxPlayers,
-                // prev.winner has absolute priority — never overwrite established winner with null or derivation
-                winner: prev.winner || resolvedWinner
-            };
-        });
-        return gameData;
+            return gameData;
         } finally {
             refreshInProgressRef.current = false;
         }
@@ -1529,7 +1526,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         tournamentId
                     ],
                     account: activeAccount,
-                    value: isSomnia ? parseEther('1.0') : parseEther('0.1'),
+                    value: isSomnia ? parseEther('0.1') : parseEther('0.1'),
                     nonce,
                 });
                 gasLimit = (gasEstimate * 125n) / 100n;
@@ -1546,10 +1543,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, tournamentId],
                 account: activeAccount,
                 chain: targetChain,
-                value: isSomnia ? parseEther('1.0') : parseEther('0.1'),
+                value: isSomnia ? parseEther('0.1') : parseEther('0.1'),
                 gas: gasLimit,
-                nonce: nonce,
-                type: 'legacy',
+                type: 0 as any, // Legacy (numeric to satisfy Privy schema)
             });
             const receipt = await pClient.waitForTransactionReceipt({ hash });
 
@@ -1681,7 +1677,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
-            
+
             // Sanitize nickname for join
             const safeName = /^[a-zA-Z0-9_ ]+$/.test(name) ? name : `Player_${Math.floor(Math.random() * 1000)}`;
             console.log(`[SafeName] Join - Original: "${name}", Used: "${safeName}"`);
@@ -1736,7 +1732,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             } catch (e: any) {
                 console.error("[Join] Error checking room privacy or tournament:", e);
                 addLog(`Join permit failed: ${e.message}`, "danger");
-                
+
                 // CRITICAL: If it's a private room and we failed to get permit, STOP here
                 const isPrivateData = Array.isArray(roomData) ? Boolean(roomData[18]) : Boolean(roomData?.isPrivate);
                 if (roomData && isPrivateData) {
@@ -1749,7 +1745,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 3.1. Determine if deposit is needed (Skip if it's a tournament room)
             const tournamentIdFromRoom = Array.isArray(roomData) ? BigInt(roomData[19] || 0) : BigInt(roomData?.tournamentId || 0);
             const isTournamentRoom = roomData ? tournamentIdFromRoom > 0n : false;
-            
+
             // Tournament participation check for joiner
             if (isTournamentRoom) {
                 try {
@@ -1796,7 +1792,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                     account: activeAccount as `0x${string}`,
-                    value: isTournamentRoom ? 0n : ((targetChain.id as number) === 50312 || (targetChain.id as number) === 5031 ? parseEther('1.0') : parseEther('0.1')),
+                    value: isTournamentRoom ? 0n : (Number(targetChain.id) === 50312 || Number(targetChain.id) === 5031 ? parseEther('0.1') : parseEther('0.1')),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -1812,9 +1808,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                 account: activeAccount,
                 chain: targetChain,
-                value: isTournamentRoom ? 0n : ((targetChain.id as number) === 50312 || (targetChain.id as number) === 5031 ? parseEther('1.0') : parseEther('0.1')),
+                value: isTournamentRoom ? 0n : (Number(targetChain.id) === 50312 || Number(targetChain.id) === 5031 ? parseEther('0.1') : parseEther('0.1')),
                 gas: gasLimit,
-                type: 'legacy',
+                type: 0 as any, // Legacy
             });
             const joinReceipt = await pClient.waitForTransactionReceipt({ hash });
 
@@ -1931,7 +1927,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 account: activeAccount,
                 chain: targetChain,
                 gas: gasLimit,
-                type: 'legacy',
+                type: 0 as any, // Legacy
             });
             addLog("Starting game...", "phase");
             // OPTIMISTIC: Release spinner immediately, confirm receipt in background
@@ -2434,7 +2430,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // OPTIMISTIC: Mark as voted immediately, update vote map
             applyOptimisticUpdate({ hasVoted: true });
             setVoteMap(prev => ({ ...prev, [myAddr.toLowerCase()]: targetAddress.toLowerCase() }));
-            
+
             setIsTxPending(false);
             confirmInBackground(hash, 'vote', () => {
                 // Rollback: unmark vote
@@ -2836,22 +2832,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     // Try to decrypt if we are Mafia
                     const myAddr = addressRef.current;
                     const isMafia = playersRef.current.some(p => p.address.toLowerCase() === myAddr?.toLowerCase() && p.role === Role.MAFIA);
-                    
+
                     let decryptedStr = '';
                     if (isMafia && hexContent.length > 24) { // 12 bytes IV = 24 hex chars
                         const key = await getMafiaChatKey(roomId);
                         if (key) {
                             try {
                                 const fullBytes = new Uint8Array(
-                                    hexContent.startsWith('0x') ? 
-                                    hexContent.slice(2).match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)) :
-                                    hexContent.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16))
+                                    hexContent.startsWith('0x') ?
+                                        hexContent.slice(2).match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)) :
+                                        hexContent.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16))
                                 );
-                                
+
                                 // Last 12 bytes are IV
                                 const iv = fullBytes.slice(-12);
                                 const ciphertext = fullBytes.slice(0, -12);
-                                
+
                                 const decrypted = await crypto.subtle.decrypt(
                                     { name: 'AES-GCM', iv },
                                     key,
@@ -2913,7 +2909,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const myPlayer = playersRef.current.find(p => p.address.toLowerCase() === myAddr?.toLowerCase());
         const isMafia = myPlayer?.role === Role.MAFIA;
-        
+
         // Inline stringToHex
         let hexData = '0x' as `0x${string}`;
 
@@ -2928,12 +2924,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         key,
                         new TextEncoder().encode(jsonStr)
                     );
-                    
+
                     const encryptedBytes = new Uint8Array(encrypted);
                     const fullBytes = new Uint8Array(encryptedBytes.length + iv.length);
                     fullBytes.set(encryptedBytes);
                     fullBytes.set(iv, encryptedBytes.length);
-                    
+
                     hexData = ('0x' + Array.from(fullBytes)
                         .map(b => b.toString(16).padStart(2, '0'))
                         .join('')) as `0x${string}`;
@@ -3005,8 +3001,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const senderPlayer = playersRef.current.find(p => p.address.toLowerCase() === sender.toLowerCase());
                 setGameState(prev => {
                     const signalId = `signal-${sender}-${Date.now()}`;
-                    const isDuplicate = prev.mafiaMessages.slice(-5).some(m => 
-                        m.sender.toLowerCase() === sender.toLowerCase() && 
+                    const isDuplicate = prev.mafiaMessages.slice(-5).some(m =>
+                        m.sender.toLowerCase() === sender.toLowerCase() &&
                         JSON.stringify(m.content) === JSON.stringify(content)
                     );
                     if (isDuplicate) return prev;
@@ -3027,7 +3023,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [setGameState]);
 
-    
+
     // ==================== TOURNAMENTS ====================
 
     const createTournamentOnChain = useCallback(async (params: {
@@ -3059,7 +3055,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const value = isNative ? initialPrizeUnits : 0n;
 
             // Gas Estimation
-            let gasLimit = 600000n; 
+            let gasLimit = 600000n;
             try {
                 gasLimit = await pClient.estimateContractGas({
                     address: contractAddressRef.current,
@@ -3101,6 +3097,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 value,
                 gas: gasLimit,
                 chain: targetChain,
+                type: 0 as any,
             });
 
             addLog(`Tournament ${params.name} created!`, 'success');
@@ -3140,7 +3137,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const value = amount ? parseEther(amount) : 0n;
 
             // Gas Estimation
-            let gasLimit = 400000n; 
+            let gasLimit = 400000n;
             try {
                 gasLimit = await pClient.estimateContractGas({
                     address: contractAddressRef.current,
@@ -3166,6 +3163,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 nonce,
                 gas: gasLimit,
                 chain: targetChain,
+                type: 0 as any,
             });
 
             addLog(`Joined tournament #${tournamentId}`, 'success');
@@ -3197,6 +3195,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [roomId],
                 account,
                 chain: targetChain,
+                type: 0 as any,
             });
 
             addLog(`Prizes distributed for room #${roomId}`, 'success');
@@ -3226,6 +3225,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [tournamentId],
                 account,
                 chain: targetChain,
+                type: 0 as any,
             });
 
             addLog(`Tournament #${tournamentId} cancelled & refunded`, 'info');
@@ -3405,13 +3405,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const isTownWin = Number(zkData.inputs[0]) === 1;
             const isMafiaWin = Number(zkData.inputs[1]) === 1;
-            
+
             let proactiveWinner: 'MAFIA' | 'TOWN' | 'DRAW' = 'DRAW';
             if (isTownWin) proactiveWinner = 'TOWN';
             else if (isMafiaWin) proactiveWinner = 'MAFIA';
-            
+
             await pClient.waitForTransactionReceipt({ hash });
-            
+
             setGameState(prev => ({
                 ...prev,
                 phase: GamePhase.ENDED,
@@ -3562,14 +3562,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const hash = await sendGameTransaction('endGameZK', args as any, useSessionKey);
 
                     await pClient.waitForTransactionReceipt({ hash });
-                    
+
                     // Proactively set winner from server result
                     const lowerRes = (data.result || '').toLowerCase();
-                    const resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' = 
+                    const resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
                         lowerRes.includes('town') ? 'TOWN' :
-                        lowerRes.includes('mafia') ? 'MAFIA' : 
-                        'TOWN';
-                    
+                            lowerRes.includes('mafia') ? 'MAFIA' :
+                                'TOWN';
+
                     setGameState(prev => ({
                         ...prev,
                         phase: GamePhase.ENDED,
@@ -3792,15 +3792,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     case 'GameEnded': {
                         const winCondition = args.winCondition as string || '';
                         const lower = winCondition.toLowerCase();
-                        
+
                         // ✅ ROBUST PARSING: Explicitly check for both sides.
                         // We prioritize TOWN check as fallback to match user's recommended pattern.
-                        const gameWinner: 'MAFIA' | 'TOWN' | 'DRAW' = 
-                            lower.includes('town') ? 'TOWN' : 
-                            lower.includes('mafia') ? 'MAFIA' : 
-                            lower.includes('draw') ? 'DRAW' :
-                            'TOWN'; // Final fallback
-                        
+                        const gameWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
+                            lower.includes('town') ? 'TOWN' :
+                                lower.includes('mafia') ? 'MAFIA' :
+                                    lower.includes('draw') ? 'DRAW' :
+                                        'TOWN'; // Final fallback
+
                         console.log(`[Event] GameEnded! Winner: ${gameWinner}, condition: ${winCondition}`);
                         addLog(`Game Over! ${gameWinner === 'MAFIA' ? '🔪 Mafia wins!' : '🏘️ Town wins!'}`, 'phase');
                         setGameState(prev => ({
@@ -3977,7 +3977,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         submitNightActionToGM,
         skipNightActionToGM,
         fetchInvestigationProofFromGM,
-        getInvestigationResultOnChain, syncSecretWithServer, 
+        getInvestigationResultOnChain, syncSecretWithServer,
         finalizeVotingOnChain, endGameZK, forcePhaseTimeoutOnChain,
         sendMafiaMessageOnChain, handleIncomingMafiaSignal, getMafiaChatKey,
         kickStalledPlayerOnChain, refreshPlayersList,

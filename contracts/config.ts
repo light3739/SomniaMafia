@@ -10,7 +10,7 @@ const FUJI_PROXY_RPC = `${APP_URL}/api/rpc/fuji`;
 export const SOMNIA_TESTNET = defineChain({
     id: 50312,
     name: 'Somnia Testnet',
-    nativeCurrency: { name: 'STT', symbol: 'STT', decimals: 18 },
+    nativeCurrency: { name: 'Somnia Testnet Token', symbol: 'ETH', decimals: 18 },
     rpcUrls: { default: { http: ['https://dream-rpc.somnia.network/'] } },
     blockExplorers: { default: { name: 'Explorer', url: 'https://shannon-explorer.somnia.network' } },
     testnet: true,
