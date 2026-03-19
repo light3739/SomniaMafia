@@ -247,6 +247,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const avatarUrlRef = useRef<string | null>(avatarUrl);
     const phaseRef = useRef<GamePhase>(GamePhase.LOBBY);
     const dayCountRef = useRef<number>(0);
+    const contractAddressRef = useRef<`0x${string}`>(runtimeContractAddress);
+
+    useEffect(() => {
+        contractAddressRef.current = runtimeContractAddress;
+    }, []);
 
     const playerNameRef = useRef(playerName);
     const lobbyNameRef = useRef(lobbyName);
@@ -661,7 +666,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 // 1. Спрашиваем у ноды, сколько нужно газа
                 const gasEstimate = await publicClientRef.current.estimateContractGas({
-                    address: runtimeContractAddress,
+                    address: contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: functionName as any,
                     args: args as any,
@@ -722,7 +727,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     const sendStart = performance.now();
                     const hash = await sessionClient.writeContract({
-                        address: runtimeContractAddress,
+                        address: contractAddressRef.current,
                         abi: MAFIA_ABI as any,
                         functionName: functionName as any,
                         args: args as any,
@@ -759,7 +764,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const totalTime = Math.round(performance.now() - txStartTime);
             console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas} (prep took ${totalTime}ms)`);
             return activeWalletClient.writeContract({
-                address: runtimeContractAddress,
+                address: contractAddressRef.current,
                 abi: MAFIA_ABI,
                 functionName: functionName as any,
                 args: args as any,
@@ -769,7 +774,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 type: 'legacy',
             });
         }
-    }, [getSessionWalletClient, runtimeContractAddress]); // getActiveWalletClient and isTestMode (ref) are stable // Removed publicClient, address, runtimeChain from deps
+    }, [getSessionWalletClient]); // getActiveWalletClient and isTestMode (ref) are stable // Removed publicClient, address, runtimeChain from deps
 
     const [gameState, setGameState] = useState<GameState>({
         phase: GamePhase.LOBBY,
@@ -1096,24 +1101,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fetchGameData = useCallback(async (roomId: bigint) => {
         if (isTestMode || !publicClientRef.current) return null;
         try {
-            console.log(`[FetchGameData] Fetching room ${roomId} from ${runtimeContractAddress} on chain ${runtimeChainRef.current.id}`);
+            console.log(`[FetchGameData] Fetching room ${roomId} from ${contractAddressRef.current} on chain ${runtimeChainRef.current.id}`);
             // SPEED: Batch all 3 reads into a single multicall — saves 2 sequential RPC roundtrips (~400-800ms)
             const results = await publicClientRef.current.multicall({
                 contracts: [
                     {
-                        address: runtimeContractAddress,
+                        address: contractAddressRef.current,
                         abi: MAFIA_ABI,
                         functionName: 'getPlayers',
                         args: [roomId],
                     },
                     {
-                        address: runtimeContractAddress,
+                        address: contractAddressRef.current,
                         abi: MAFIA_ABI,
                         functionName: 'getRoom',
                         args: [roomId],
                     },
                     {
-                        address: runtimeContractAddress,
+                        address: contractAddressRef.current,
                         abi: MAFIA_ABI,
                         functionName: 'getMafiaConsensus',
                         args: [roomId],
@@ -1188,7 +1193,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error("[FetchGameData] Error:", e);
             return null;
         }
-    }, [isTestMode, runtimeContractAddress]); // Removed publicClient, runtimeChain from deps
+    }, [isTestMode]); // Removed publicClient, runtimeChain from deps
 
     const refreshPlayersList = useCallback(async (roomId: bigint) => {
         const gameData = await fetchGameData(roomId);
@@ -1446,7 +1451,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsTxPending(true);
         try {
             const nextId = await pClient.readContract({
-                address: runtimeContractAddress,
+                address: contractAddressRef.current,
                 abi: MAFIA_ABI,
                 functionName: 'nextRoomId',
             }) as bigint;
@@ -1478,7 +1483,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let gasLimit = isSomnia ? undefined : 5_000_000n;
             try {
                 const gasEstimate = await pClient.estimateContractGas({
-                    address: runtimeContractAddress,
+                    address: contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
                     args: [
@@ -1502,7 +1507,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 5. TX: createAndJoin (Atomic v2)
             const hash = await activeWalletClient.writeContract({
-                address: runtimeContractAddress,
+                address: contractAddressRef.current,
                 abi: MAFIA_ABI,
                 functionName: 'createAndJoin',
                 args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, tournamentId],
@@ -1673,7 +1678,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let gmSignature: `0x${string}` = '0x';
             try {
                 roomData = await pClient.readContract({
-                    address: runtimeContractAddress,
+                    address: contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: 'getRoom',
                     args: [BigInt(roomId)],
@@ -1716,7 +1721,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (isTournamentRoom) {
                 try {
                     const tournamentResult = await pClient.readContract({
-                        address: runtimeContractAddress,
+                        address: contractAddressRef.current,
                         abi: MAFIA_ABI,
                         functionName: 'getTournament',
                         args: [tournamentIdFromRoom],
@@ -1725,7 +1730,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const buyIn = Array.isArray(tournamentResult) ? BigInt(tournamentResult[3] || 0) : BigInt(tournamentResult.buyIn || 0);
                     if (tournamentResult && buyIn > 0n) {
                         const isPart = await pClient.readContract({
-                            address: runtimeContractAddress,
+                            address: contractAddressRef.current,
                             abi: MAFIA_ABI,
                             functionName: 'isTournamentParticipant',
                             args: [tournamentIdFromRoom, myAddr as `0x${string}`],
@@ -1753,7 +1758,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let gasLimit = 14_500_000n;
             try {
                 const gasEstimate = await pClient.estimateContractGas({
-                    address: runtimeContractAddress,
+                    address: contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
@@ -1768,7 +1773,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // 4. Join room with main wallet + fund session key
             const hash = await activeWalletClient.writeContract({
-                address: runtimeContractAddress,
+                address: contractAddressRef.current,
                 abi: MAFIA_ABI,
                 functionName: 'joinRoom',
                 args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
@@ -1873,7 +1878,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
             try {
                 const gasEstimate = await pClient.estimateContractGas({
-                    address: runtimeContractAddress,
+                    address: contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: 'startGame',
                     args: [roomId],
@@ -1886,7 +1891,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             const hash = await activeWalletClient.writeContract({
-                address: runtimeContractAddress,
+                address: contractAddressRef.current,
                 abi: MAFIA_ABI,
                 functionName: 'startGame',
                 args: [roomId],
@@ -2304,7 +2309,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                         // Check if we are already confirmed
                         const flags = await pClient.readContract({
-                            address: runtimeContractAddress,
+                            address: contractAddressRef.current,
                             abi: MAFIA_ABI,
                             functionName: 'getPlayerFlags',
                             args: [roomId, myAddr as `0x${string}`],
@@ -2781,7 +2786,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!pClient) return;
         try {
             const messages = await pClient.readContract({
-                address: runtimeContractAddress,
+                address: contractAddressRef.current,
                 abi: MAFIA_ABI,
                 functionName: 'getMafiaChat',
                 args: [roomId]
@@ -3024,7 +3029,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let gasLimit = 600000n; 
             try {
                 gasLimit = await pClient.estimateContractGas({
-                    address: runtimeContractAddress,
+                    address: contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: 'createTournament',
                     args: [
@@ -3046,7 +3051,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             const hash = await client.writeContract({
-                address: runtimeContractAddress,
+                address: contractAddressRef.current,
                 abi: MAFIA_ABI,
                 functionName: 'createTournament',
                 nonce: params.nonce,
@@ -3105,7 +3110,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             let gasLimit = 400000n; 
             try {
                 gasLimit = await pClient.estimateContractGas({
-                    address: runtimeContractAddress,
+                    address: contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: 'joinTournament',
                     args: [tournamentId, password || ""],
@@ -3119,7 +3124,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             const hash = await client.writeContract({
-                address: runtimeContractAddress,
+                address: contractAddressRef.current,
                 abi: MAFIA_ABI,
                 functionName: 'joinTournament',
                 args: [tournamentId, password || ""],
@@ -3153,7 +3158,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(true);
             const { client, account } = await getActiveWalletClient();
             const hash = await client.writeContract({
-                address: runtimeContractAddress,
+                address: contractAddressRef.current,
                 abi: MAFIA_ABI,
                 functionName: 'distributeMafiaPrizes',
                 args: [roomId],
@@ -3182,7 +3187,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(true);
             const { client, account } = await getActiveWalletClient();
             const hash = await client.writeContract({
-                address: runtimeContractAddress,
+                address: contractAddressRef.current,
                 abi: MAFIA_ABI,
                 functionName: 'cancelTournament',
                 args: [tournamentId],
@@ -3292,7 +3297,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // FIX #6: Re-verify game state after delay — someone else may have ended it
             try {
                 const freshRoom = await pClient.readContract({
-                    address: runtimeContractAddress,
+                    address: contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: 'getRoom',
                     args: [roomId],
@@ -3341,7 +3346,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 4. Simulate
             try {
                 await pClient.simulateContract({
-                    address: runtimeContractAddress,
+                    address: contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: 'endGameZK',
                     args: args as any,
@@ -3387,13 +3392,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     const [deposit, room] = await Promise.all([
                         pClient.readContract({
-                            address: runtimeContractAddress,
+                            address: contractAddressRef.current,
                             abi: MAFIA_ABI,
                             functionName: 'getPlayerDeposit',
                             args: [roomId, myAddr],
                         }) as Promise<bigint>,
                         pClient.readContract({
-                            address: runtimeContractAddress,
+                            address: contractAddressRef.current,
                             abi: MAFIA_ABI,
                             functionName: 'getRoom',
                             args: [roomId],
@@ -3502,7 +3507,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // SIMULATE CONTRACT FIRST
                 try {
                     await pClient.simulateContract({
-                        address: runtimeContractAddress,
+                        address: contractAddressRef.current,
                         abi: MAFIA_ABI,
                         functionName: 'endGameZK',
                         args: args as any,
@@ -3546,13 +3551,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         try {
                             const [deposit, room] = await Promise.all([
                                 pClient.readContract({
-                                    address: runtimeContractAddress,
+                                    address: contractAddressRef.current,
                                     abi: MAFIA_ABI,
                                     functionName: 'getPlayerDeposit',
                                     args: [roomId, myAddr],
                                 }) as Promise<bigint>,
                                 pClient.readContract({
-                                    address: runtimeContractAddress,
+                                    address: contractAddressRef.current,
                                     abi: MAFIA_ABI,
                                     functionName: 'getRoom',
                                     args: [roomId],
@@ -3648,7 +3653,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     : chunkFrom + MAX_BLOCK_RANGE;
 
                 const chunk = await pClient.getLogs({
-                    address: runtimeContractAddress,
+                    address: contractAddressRef.current,
                     // topics: [null, roomIdTopic] fallback for Somnia/Fuji nodes that might handle null poorly
                     topics: [
                         null, // Keep null for now as we don't have all hashes easily here, but ensure ID is stable
