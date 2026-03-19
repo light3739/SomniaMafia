@@ -15,26 +15,26 @@ import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye, Coins } fro
 import { MicButton } from './MicButton';
 
 const RoleIcons: Record<Role, React.ReactNode> = {
-    [Role.MAFIA]: <Skull className="w-5 h-5 text-rose-500" />,
-    [Role.DOCTOR]: <Shield className="w-5 h-5 text-teal-500" />,
-    [Role.DETECTIVE]: <Search className="w-5 h-5 text-sky-500" />,
-    [Role.CIVILIAN]: <Users className="w-5 h-5 text-amber-500" />,
+    [Role.MAFIA]: <Skull className="w-5 h-5 text-[#8B0000]" />,
+    [Role.DOCTOR]: <Shield className="w-5 h-5 text-[#0D9488]" />,
+    [Role.DETECTIVE]: <Search className="w-5 h-5 text-[#B45309]" />,
+    [Role.CIVILIAN]: <Users className="w-5 h-5 text-[#6B5A4A]" />,
     [Role.UNKNOWN]: <Users className="w-5 h-5 text-gray-500" />
 };
 
 const RoleColors: Record<Role, string> = {
-    [Role.MAFIA]: 'text-rose-500',
-    [Role.DOCTOR]: 'text-teal-500',
-    [Role.DETECTIVE]: 'text-sky-500',
-    [Role.CIVILIAN]: 'text-amber-500',
+    [Role.MAFIA]: 'text-[#8B0000]',
+    [Role.DOCTOR]: 'text-[#0D9488]',
+    [Role.DETECTIVE]: 'text-[#B45309]',
+    [Role.CIVILIAN]: 'text-[#6B5A4A]',
     [Role.UNKNOWN]: 'text-gray-500'
 };
 
 const RoleBgColors: Record<Role, string> = {
-    [Role.MAFIA]: 'bg-rose-900/50',
-    [Role.DOCTOR]: 'bg-teal-900/50',
-    [Role.DETECTIVE]: 'bg-sky-900/50',
-    [Role.CIVILIAN]: 'bg-amber-900/50',
+    [Role.MAFIA]: 'bg-[#8B0000]/50',
+    [Role.DOCTOR]: 'bg-[#0D9488]/50',
+    [Role.DETECTIVE]: 'bg-[#B45309]/50',
+    [Role.CIVILIAN]: 'bg-[#6B5A4A]/50',
     [Role.UNKNOWN]: 'bg-gray-900/50'
 };
 
@@ -524,7 +524,7 @@ export const GameOver: React.FC = React.memo(() => {
                         initial={{ y: -50, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.2 }}
-                        className={`text-center p-8 rounded-3xl mb-8 bg-gradient-to-br ${config.bg} border`}
+                        className={`text-center p-8 rounded-xl mb-8 bg-gradient-to-br ${config.bg} border`}
                     >
                         <motion.div
                             initial={{ rotate: -180, scale: 0 }}
@@ -574,7 +574,7 @@ export const GameOver: React.FC = React.memo(() => {
                         initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 1.2 }}
-                        className="bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 p-6 mb-6"
+                        className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6 mb-6"
                     >
                         <div className="flex items-center justify-between gap-2 mb-4">
                             <div className="flex items-center gap-2">

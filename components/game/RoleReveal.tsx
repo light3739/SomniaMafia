@@ -18,35 +18,40 @@ interface RevealState {
     eciesRegistered: boolean;
 }
 
-const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; description: string }> = {
+const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string; description: string }> = {
     [Role.MAFIA]: {
         icon: <Skull className="w-16 h-16" />,
-        color: 'text-rose-500',
-        bgColor: 'from-rose-950/50 to-rose-900/30',
+        color: 'text-[#8B0000]',
+        bgColor: 'from-[#8B0000]/40 to-[#8B0000]/20',
+        borderColor: 'border-[#8B0000]/30',
         description: 'Eliminate all civilians to win. Vote by day, kill by night.'
     },
     [Role.DOCTOR]: {
         icon: <Shield className="w-16 h-16" />,
-        color: 'text-teal-500',
-        bgColor: 'from-teal-950/50 to-teal-900/30',
+        color: 'text-[#0D9488]',
+        bgColor: 'from-[#0D9488]/40 to-[#0D9488]/20',
+        borderColor: 'border-[#0D9488]/30',
         description: 'Save one player each night from the mafia attack.'
     },
     [Role.DETECTIVE]: {
         icon: <Search className="w-16 h-16" />,
-        color: 'text-sky-500',
-        bgColor: 'from-sky-950/50 to-sky-900/30',
+        color: 'text-[#B45309]',
+        bgColor: 'from-[#B45309]/40 to-[#B45309]/20',
+        borderColor: 'border-[#B45309]/30',
         description: 'Investigate one player each night to reveal their alignment.'
     },
     [Role.CIVILIAN]: {
         icon: <Users className="w-16 h-16" />,
-        color: 'text-amber-500',
-        bgColor: 'from-amber-950/50 to-amber-900/30',
+        color: 'text-[#6B5A4A]',
+        bgColor: 'from-[#6B5A4A]/40 to-[#6B5A4A]/20',
+        borderColor: 'border-[#6B5A4A]/30',
         description: 'Find and vote out the mafia during the day to survive.'
     },
     [Role.UNKNOWN]: {
         icon: <EyeOff className="w-16 h-16" />,
         color: 'text-gray-500',
         bgColor: 'from-gray-950/50 to-gray-900/30',
+        borderColor: 'border-gray-500/20',
         description: 'Role unknown'
     }
 };
@@ -289,7 +294,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -20 }}
-                            className="bg-black/60 backdrop-blur-xl rounded-3xl border border-[#916A47]/30 p-8 shadow-2xl"
+                            className="bg-black/60 backdrop-blur-xl rounded-xl border border-[#916A47]/30 p-8 shadow-2xl"
                         >
                             <div className="text-center mb-6">
                                 <div className="w-10 h-10 mx-auto mb-3 relative">
@@ -334,8 +339,24 @@ export const RoleReveal: React.FC = React.memo(() => {
                             initial={{ opacity: 0, rotateY: 90 }}
                             animate={{ opacity: 1, rotateY: 0 }}
                             transition={{ type: "spring", duration: 0.8 }}
-                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-3xl border border-white/20 p-12 shadow-2xl w-[400px] h-[400px] flex flex-col justify-between mx-auto`}
+                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-xl border ${roleConfig.borderColor} p-12 shadow-2xl w-full max-w-[400px] aspect-square flex flex-col justify-between mx-auto relative overflow-hidden`}
                         >
+                            {/* Role icon — watermark in top-right */}
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 0.12, scale: 1 }}
+                                transition={{ delay: 0.2, duration: 1 }}
+                                className={`absolute top-6 right-6 ${roleConfig.color}`}
+                            >
+                                {roleConfig.icon}
+                            </motion.div>
+
+                            {/* Pulsing border glow */}
+                            <motion.div
+                                className={`absolute inset-0 rounded-xl border ${roleConfig.borderColor}`}
+                                animate={{ opacity: [0.3, 0.6, 0.3] }}
+                                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                            />
                             <div className="text-center flex-1 flex flex-col justify-center">
                                 <motion.h2
                                     initial={{ opacity: 0, y: 20 }}

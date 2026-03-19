@@ -1,7 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Clock } from 'lucide-react';
 
 export const PostVotingTransition: React.FC = () => {
     const [timeLeft, setTimeLeft] = useState(10);
@@ -15,23 +14,46 @@ export const PostVotingTransition: React.FC = () => {
     }, [timeLeft]);
 
     return (
-        <div className="absolute inset-x-0 bottom-0 z-50 flex flex-col items-center justify-end pb-4 pointer-events-none">
-            <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex-shrink-0"
-            >
-                <div className="flex items-center justify-center gap-3 px-6 py-2 bg-black/60 backdrop-blur-md border border-[#916A47]/30 rounded-full text-white/50 select-none">
-                    <Clock className="w-4 h-4 text-[#916A47]/70" />
-                    <span className="text-lg font-mono font-bold text-white/80 tabular-nums">
+        <motion.div
+            className="fixed inset-0 z-[105] flex flex-col items-center justify-center pointer-events-none"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1, ease: "easeInOut" }}
+        >
+            {/* Semi-transparent dark overlay */}
+            <div className="absolute inset-0 bg-[#050505]/80" />
+
+            <div className="flex flex-col items-center relative z-10">
+                {/* Timer */}
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
+                    className="flex flex-col items-center"
+                >
+                    <span className="text-white/90 font-mono text-5xl md:text-6xl font-light tabular-nums tracking-wider">
                         00:{timeLeft.toString().padStart(2, '0')}
                     </span>
-                    <div className="w-[1px] h-4 bg-white/10 mx-1" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#916A47]">
-                        Night Starting...
-                    </span>
-                </div>
-            </motion.div>
-        </div>
+                </motion.div>
+
+                {/* Divider */}
+                <motion.div
+                    initial={{ width: 0, opacity: 0 }}
+                    animate={{ width: "120px", opacity: 1 }}
+                    transition={{ delay: 0.8, duration: 1.5, ease: "easeInOut" }}
+                    className="h-[1px] bg-gradient-to-r from-transparent via-[#8B0000] to-transparent mt-6"
+                />
+
+                {/* Label */}
+                <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 1.2, duration: 1 }}
+                    className="mt-6 text-[#916A47] font-['Cinzel'] tracking-[0.4em] uppercase text-[10px] md:text-xs text-center"
+                >
+                    Night Starting
+                </motion.p>
+            </div>
+        </motion.div>
     );
 };

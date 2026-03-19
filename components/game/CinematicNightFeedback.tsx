@@ -99,11 +99,52 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 1.5, ease: "easeOut" }} // Медленное, кинематографичное затухание
-            className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4 bg-[#050505]"
+            className="fixed inset-0 z-[9000] flex flex-col items-center justify-center p-4 bg-[#050505]"
         >
-            {/* ОЧЕНЬ тусклый, едва заметный радиальный свет только ровно за иконкой (без границ) */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.10]">
+            {/* ОЧЕНЬ тусклый, едва заметный радиальный свет — breathing pulse */}
+            <motion.div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                animate={{ scale: [1, 1.15, 1], opacity: [0.15, 0.3, 0.15] }}
+                transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            >
                 <div className={`w-[250px] h-[250px] md:w-[350px] md:h-[350px] rounded-full blur-[100px] ${config.accent.replace('bg-', 'bg-')}`} />
+            </motion.div>
+
+            {/* Ambient floating dust particles — cinematic depth */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                {[
+                    { top: '20%', left: '15%', size: 3, dx: 20, dy: -15, dur: 9, delay: 0 },
+                    { top: '70%', left: '80%', size: 2.5, dx: -15, dy: 20, dur: 11, delay: 1 },
+                    { top: '40%', left: '60%', size: 4, dx: 12, dy: -25, dur: 13, delay: 2 },
+                    { top: '55%', left: '25%', size: 2, dx: -18, dy: 15, dur: 10, delay: 3 },
+                    { top: '30%', left: '75%', size: 4.5, dx: 10, dy: -10, dur: 14, delay: 1.5 },
+                    { top: '80%', left: '40%', size: 3, dx: -8, dy: -18, dur: 12, delay: 4 },
+                    { top: '15%', left: '50%', size: 3.5, dx: -10, dy: 22, dur: 10.5, delay: 2.5 },
+                    { top: '85%', left: '15%', size: 4, dx: 15, dy: -12, dur: 12.5, delay: 0.5 },
+                ].map((p, i) => (
+                    <motion.div
+                        key={i}
+                        className="absolute rounded-full bg-white"
+                        style={{
+                            top: p.top,
+                            left: p.left,
+                            width: `${p.size}px`,
+                            height: `${p.size}px`,
+                            boxShadow: '0 0 6px 1px rgba(255, 255, 255, 0.3)',
+                        }}
+                        animate={{
+                            x: [0, p.dx, 0],
+                            y: [0, p.dy, 0],
+                            opacity: [0.1, 0.5, 0.1],
+                        }}
+                        transition={{
+                            duration: p.dur,
+                            repeat: Infinity,
+                            ease: 'easeInOut',
+                            delay: p.delay,
+                        }}
+                    />
+                ))}
             </div>
 
             <div className="flex flex-col items-center text-center relative z-10 w-full max-w-lg pb-10">
@@ -146,10 +187,10 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
                             transition={{ duration: 2, delay: 2.5 }}
                             className="flex flex-col items-center"
                         >
-                            <span className="text-white/30 text-[10px] md:text-xs font-mono uppercase tracking-[0.4em] mb-4">
+                            <span className="text-white/50 text-[10px] md:text-xs font-sans uppercase tracking-widest mb-4">
                                 Result
                             </span>
-                            <span className={`text-lg md:text-xl font-mono uppercase tracking-widest ${investigationResult === Role.MAFIA ? 'text-[#8B0000]' : 'text-[#0D9488]'}`}>
+                            <span className={`text-lg md:text-xl font-sans uppercase tracking-widest ${investigationResult === Role.MAFIA ? 'text-[#8B0000]' : 'text-[#0D9488]'}`}>
                                 {targetName} IS {investigationResult === Role.MAFIA ? 'GUILTY' : 'CLEAN'}
                             </span>
                         </motion.div>
@@ -159,7 +200,7 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 2, delay: 2.5 }}
-                            className="text-white/40 text-xs md:text-sm font-mono uppercase tracking-widest max-w-[280px] leading-relaxed"
+                            className="text-white/50 text-xs md:text-sm font-sans uppercase tracking-widest max-w-[280px] leading-relaxed"
                         >
                             {config.desc}
                         </motion.p>
@@ -175,7 +216,7 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
                 transition={{ duration: 2, delay: 3.5 }}
                 className="absolute bottom-8 md:bottom-12 flex flex-col items-center z-10"
             >
-                <p className={`text-[10px] font-mono uppercase tracking-[0.4em] ${isSunRising ? 'text-[#B45309]/80 animate-pulse' : 'text-white/20'}`}>
+                <p className={`text-[10px] font-sans uppercase tracking-widest ${isSunRising ? 'text-[#B45309]/80 animate-pulse' : 'text-white/40'}`}>
                     {isSunRising ? 'The sun is rising...' : 'Awaiting Sunrise'}
                 </p>
                 {/* Minimalist timer progress line (optional visual touch) */}
@@ -183,7 +224,7 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
                     <motion.div
                         className={`absolute top-0 bottom-0 w-1/4 ${config.accent}`}
                         animate={{ left: ["-25%", "100%"] }}
-                        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                        transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
                     />
                 </div>
             </motion.div>
@@ -192,5 +233,5 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
     );
 
     if (!mounted) return null;
-    return createPortal(content, document.body);
+    return content;
 };
