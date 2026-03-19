@@ -49,7 +49,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     createOnLogin: 'users-without-wallets',
                 } as any,
                 // Use the same chains as defined in wagmi config
-                supportedChains: [...config.chains] as any,
+                // Deduplicate chains by ID to avoid Coinbase Smart Wallet warnings
+                supportedChains: Object.values(
+                    [...config.chains].reduce((acc, chain) => {
+                        acc[chain.id] = chain;
+                        return acc;
+                    }, {} as Record<number, any>)
+                ),
+                // 2. Explicitly tell Coinbase Wallet to use only EOA (prevents unsupported chain warnings)
+                externalWallets: {
+                    coinbaseWallet: {
+                        connectionOptions: 'eoaOnly',
+                    },
+                } as any,
             }}
         >
             <QueryClientProvider client={queryClient}>
