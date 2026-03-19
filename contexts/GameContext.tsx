@@ -322,9 +322,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const LOBBY_FUNDING_VALUE = useMemo(() => {
         // Robust check for Somnia chain IDs (5031 previous, 50312 current)
-        // Casting to number to avoid lint issues with fixed chain sets
-        const isSomnia = ((runtimeChain.id as number) === 5031 || (runtimeChain.id as number) === 50312);
-        return isSomnia ? parseEther('1.0') : parseEther('0.1'); // 1 STT for Somnia, 0.1 for Fuji
+        // Casting to number for consistent comparison
+        const chainId = Number(runtimeChain.id);
+        const isSomnia = (chainId === 5031 || chainId === 50312);
+        // Shannon testnet currently has defaultDeposit = 0, but sending 0.1 STT 
+        // ensures the session address is funded with gas for gameplay actions.
+        return isSomnia ? parseEther('0.1') : parseEther('0.1');
+        // Shannon testnet currently has defaultDeposit = 0, but sending 0.1 STT 
+        // ensures the session address is funded with gas for gameplay actions.
+        return isSomnia ? parseEther('0.1') : parseEther('0.1');
     }, [runtimeChain.id]);
 
     useEffect(() => {
@@ -4036,4 +4042,4 @@ export const useGameContext = () => {
     if (!context) throw new Error("GameProvider error");
     return context;
 };
-
+
