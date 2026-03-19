@@ -12,6 +12,10 @@ interface MainPageProps {
 
 export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
 
+    const { login, authenticated, ready, user } = usePrivy();
+    const { chain } = useAccount();
+    const { switchChain } = useSwitchChain();
+
     return (
         <div className="relative w-full h-[100dvh] overflow-y-auto overflow-x-hidden font-sans flex flex-col items-center custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
@@ -100,10 +104,6 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     className="mt-32 relative z-20"
                 >
                     {(() => {
-                        const { login, authenticated, ready, user } = usePrivy();
-                        const { chain } = useAccount();
-                        const { switchChain } = useSwitchChain();
-
                         if (!ready) {
                             return <div style={{ opacity: 0 }}>Loading...</div>;
                         }

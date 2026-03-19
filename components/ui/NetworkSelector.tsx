@@ -37,6 +37,8 @@ export const NetworkSelector: React.FC<NetworkSelectorProps> = ({
     }
   };
 
+  const { login, authenticated, user, logout } = usePrivy();
+
   return (
     <div className={`flex items-center justify-center ${(compact || !showWallet) ? 'w-fit' : 'w-full max-w-[500px] mb-2'}`}>
       <div className="relative flex items-center p-1 bg-[rgba(15,10,5,0.85)] backdrop-blur-xl border border-white/10 rounded-[20px] shadow-2xl overflow-hidden">
@@ -83,37 +85,29 @@ export const NetworkSelector: React.FC<NetworkSelectorProps> = ({
             <div className="w-[1px] h-6 bg-white/10 mx-1 shrink-0" />
 
             {/* Wallet Section */}
-            {(() => {
-              const { login, authenticated, user, logout } = usePrivy();
-
-              if (!authenticated) {
-                return (
-                  <button
-                    onClick={() => login()}
-                    className="py-2.5 px-4 text-[11px] md:text-xs font-bold text-[#ffb01d] hover:text-white transition-colors flex items-center gap-2 whitespace-nowrap"
-                  >
-                    <Wallet className="w-3.5 h-3.5" />
-                    Connect
-                  </button>
-                );
-              }
-
-              return (
-                <button
-                  onClick={() => logout()}
-                  className="py-1 px-2.5 md:py-1.5 md:px-3 flex items-center gap-2 hover:bg-white/5 rounded-[14px] transition-all group"
-                  title="Click to logout"
-                >
-                  <div className="w-6 h-6 rounded-full bg-[#ffb01d]/10 border border-[#ffb01d]/30 flex items-center justify-center overflow-hidden">
-                    <User className="w-3.5 h-3.5 text-[#ffb01d]" />
-                  </div>
-                  <span className="text-[11px] md:text-xs font-bold text-white/80 group-hover:text-white transition-colors hidden sm:block">
-                    {user?.wallet?.address ? `${user.wallet.address.slice(0, 4)}...${user.wallet.address.slice(-4)}` : 'Connected'}
-                  </span>
-                  <ChevronDown className="w-3 h-3 text-white/30 group-hover:text-white/50 transition-colors" />
-                </button>
-              );
-            })()}
+            {!authenticated ? (
+              <button
+                onClick={() => login()}
+                className="py-2.5 px-4 text-[11px] md:text-xs font-bold text-[#ffb01d] hover:text-white transition-colors flex items-center gap-2 whitespace-nowrap"
+              >
+                <Wallet className="w-3.5 h-3.5" />
+                Connect
+              </button>
+            ) : (
+              <button
+                onClick={() => logout()}
+                className="py-1 px-2.5 md:py-1.5 md:px-3 flex items-center gap-2 hover:bg-white/5 rounded-[14px] transition-all group"
+                title="Click to logout"
+              >
+                <div className="w-6 h-6 rounded-full bg-[#ffb01d]/10 border border-[#ffb01d]/30 flex items-center justify-center overflow-hidden">
+                  <User className="w-3.5 h-3.5 text-[#ffb01d]" />
+                </div>
+                <span className="text-[11px] md:text-xs font-bold text-white/80 group-hover:text-white transition-colors hidden sm:block">
+                  {user?.wallet?.address ? `${user.wallet.address.slice(0, 4)}...${user.wallet.address.slice(-4)}` : 'Connected'}
+                </span>
+                <ChevronDown className="w-3 h-3 text-white/30 group-hover:text-white/50 transition-colors" />
+              </button>
+            )}
           </>
         )}
       </div>
