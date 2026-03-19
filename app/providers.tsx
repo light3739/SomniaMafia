@@ -59,9 +59,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         >
             <QueryClientProvider client={queryClient}>
                 <WagmiProvider config={config}>
-                    <WalletAutoConnector />
                     <AudioProvider>
                         <GameProvider>
+                            <WalletAutoConnector />
                             {children}
                         </GameProvider>
                     </AudioProvider>

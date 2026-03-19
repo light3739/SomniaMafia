@@ -294,13 +294,24 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const walletSwitchPromiseRef = useRef<Promise<void> | null>(null);
 
     const getActiveWalletClient = useCallback(async () => {
-        const embeddedWallet = useEmbeddedWallet 
-            ? walletsRef.current.find(w => w.walletClientType === 'privy')
-            : null;
+        const wallets = walletsRef.current;
         const targetChain = runtimeChainRef.current;
 
-        if (embeddedWallet) {
-            const rawChainId = embeddedWallet.chainId;
+        // SE-FIX: Prioritize based on useEmbeddedWallet toggle
+        let selectedWallet: any = null;
+        if (useEmbeddedWallet) {
+            selectedWallet = wallets.find(w => w.walletClientType === 'privy');
+        } else {
+            selectedWallet = wallets.find(w => w.walletClientType !== 'privy');
+        }
+
+        // Final fallback if preferred not found: use ANY available wallet
+        if (!selectedWallet && wallets.length > 0) {
+            selectedWallet = wallets[0];
+        }
+
+        if (selectedWallet) {
+            const rawChainId = selectedWallet.chainId;
             let currentChainId = 0;
 
             if (typeof rawChainId === 'string' && rawChainId.includes(':')) {
@@ -311,22 +322,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (currentChainId > 0 && Number.isFinite(currentChainId) && currentChainId !== targetChain.id) {
                 if (!walletSwitchPromiseRef.current) {
-                    console.log(`[Privy] Switching embedded wallet from ${currentChainId} to ${targetChain.id}`);
-                    walletSwitchPromiseRef.current = embeddedWallet.switchChain(targetChain.id).finally(() => {
+                    console.log(`[Wallet] Switching wallet ${selectedWallet.address} from ${currentChainId} to ${targetChain.id}`);
+                    walletSwitchPromiseRef.current = selectedWallet.switchChain(targetChain.id).finally(() => {
                         walletSwitchPromiseRef.current = null;
                     });
                 }
                 await walletSwitchPromiseRef.current;
             }
 
-            const provider = await embeddedWallet.getEthereumProvider();
+            const provider = await selectedWallet.getEthereumProvider();
             return {
                 client: createWalletClient({
-                    account: embeddedWallet.address as `0x${string}`,
+                    account: selectedWallet.address as `0x${string}`,
                     chain: targetChain,
                     transport: custom(provider)
                 }),
-                account: embeddedWallet.address as `0x${string}`
+                account: selectedWallet.address as `0x${string}`
             };
         }
 
@@ -334,7 +345,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return { client: walletClientRef.current, account: addressRef.current as `0x${string}` };
         }
         throw new Error("No connected wallet found");
-    }, []); // ABSOLUTELY STABLE
+    }, [useEmbeddedWallet]); // RE-ADDED DEPENDENCY
 
     const LOBBY_FUNDING_VALUE = useMemo(() => {
         // Robust check for Somnia chain IDs (5031 previous, 50312 current)
