@@ -112,6 +112,9 @@ export default function ElasticSlider({
         }
     }, [isDragging, updateValue]);
 
+    // Transform for handle position (0-100% to string)
+    const handleLeft = useTransform(springX, (v) => `${v}%`);
+
     // Construct initial position (only on mount)
     const mountedRef = useRef(false);
     useEffect(() => {
@@ -146,7 +149,7 @@ export default function ElasticSlider({
             <motion.div
                 className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-[#916A47] border-2 border-[#19130D] rounded-full shadow-[0_0_10px_rgba(145,106,71,0.5)] flex items-center justify-center z-10"
                 style={{
-                    left: useTransform(springX, (v) => `${v}%`),
+                    left: handleLeft,
                     x: "-50%", // Center the handle on the percentage point
                     scaleY: handleScaleY,
                     scaleX: handleScaleY, // Uniform squish
