@@ -251,7 +251,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     useEffect(() => {
         contractAddressRef.current = runtimeContractAddress;
-    }, []);
+    }, [runtimeContractAddress]);
+
+    useEffect(() => {
+        addressRef.current = address;
+    }, [address]);
+
+    useEffect(() => {
+        runtimeChainRef.current = runtimeChain;
+    }, [runtimeChain]);
+
+    useEffect(() => {
+        publicClientRef.current = publicClient;
+    }, [publicClient]);
+
+    useEffect(() => {
+        walletsRef.current = wallets;
+    }, [wallets]);
 
     const playerNameRef = useRef(playerName);
     const lobbyNameRef = useRef(lobbyName);
