@@ -37,8 +37,11 @@ export default function ElasticSlider({
     // We map 0-100% (of width) to the value range
     const x = useMotionValue(initialPercentage);
 
+    // Transform for scale calculation
+    const transformX = useTransform(x, [0, 100], [0, 1]);
+
     // Spring for the visual progress bar (smooth catchup)
-    const scaleX = useSpring(useTransform(x, [0, 100], [0, 1]), {
+    const scaleX = useSpring(transformX, {
         stiffness: 400,
         damping: 30,
     });
