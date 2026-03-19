@@ -237,8 +237,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getActiveWalletClient = useCallback(async () => {
         const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
         if (embeddedWallet) {
-            // Force Privy embedded wallet to switch to correct network before sending tx
-            await embeddedWallet.switchChain(runtimeChain.id);
+            // ✅ ROBUST FIX: Handle both "eip155:50312" and "50312" formats
+            const rawChainId = embeddedWallet.chainId;
+            const currentChainId = typeof rawChainId === 'string' && rawChainId.includes(':') 
+                ? Number(rawChainId.split(':')[1]) 
+                : Number(rawChainId);
+                
+            if (currentChainId !== runtimeChain.id) {
+                console.log(`[Privy] Switching embedded wallet from ${currentChainId} to ${runtimeChain.id}`);
+                await embeddedWallet.switchChain(runtimeChain.id);
+            }
+
             const provider = await embeddedWallet.getEthereumProvider();
             return {
                 client: createWalletClient({
@@ -362,13 +371,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         signerAddress = playerAddress; // Server verifies against main address
                         sessionKeyAddress = sessionAccount.address; // Pass session key for server to verify
                         console.log('[SyncSecret] Signed with session key (no popup)');
-                    } else if (walletClient) {
-                        // Fallback: use main wallet (MetaMask popup)
-                        signature = await walletClient.signMessage({ message });
-                        console.log('[SyncSecret] Signed with main wallet (MetaMask)');
                     } else {
-                        console.warn('[SyncSecret] No wallet available, skipping server sync');
-                        return;
+                        try {
+                            const { client: activeWalletClient } = await getActiveWalletClient();
+                            signature = await activeWalletClient.signMessage({ message });
+                            console.log('[SyncSecret] Signed with main wallet');
+                        } catch (walletErr) {
+                            console.warn('[SyncSecret] No wallet available, skipping server sync');
+                            return;
+                        }
                     }
 
                     // Compute the on-chain commitment (Poseidon of role+salt) for ZK proof
@@ -412,7 +423,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             syncInProgressRef.current = false;
         }
-    }, [walletClient]);
+    }, [getActiveWalletClient]);
 
     const roleCommitSyncInProgressRef = useRef<Set<string>>(new Set());
     const syncRoleCommitToGM = useCallback(async (
@@ -433,7 +444,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const signed = await signRequest({
                         address: playerAddress,
                         roomId: Number(roomId),
-                        walletClient,
+                        walletClient: (await getActiveWalletClient()).client,
                         buildMessage: ({ nonce, timestamp }) => buildRoleSyncMessage({
                             roomId: roomId.toString(),
                             txHash,
@@ -469,7 +480,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             roleCommitSyncInProgressRef.current.delete(key);
         }
-    }, [walletClient]);
+    }, [getActiveWalletClient]);
 
     // Wrapper для транзакций - использует session key если доступен
     const sendGameTransaction = useCallback(async (
@@ -763,10 +774,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // 2. Fetch Mafia members from GM
+            const { client: activeWalletClient } = await getActiveWalletClient();
             const meta = await signRequest({
                 address: myAddr,
                 roomId: Number(roomId),
-                walletClient: walletClient as any,
+                walletClient: activeWalletClient,
                 buildMessage: (inp) => buildMafiaMembersMessage({ roomId: roomIdStr, ...inp })
             });
 
@@ -817,7 +829,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             mafiaKeyVerifyingRef.current = false;
         }
-    }, [address, walletClient]);
+    }, [address, getActiveWalletClient]);
 
     // Fix for "Night Action" flashing before Voting Results:
     // When detecting a transition from VOTING to NIGHT (e.g. via polling), 
@@ -1405,10 +1417,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 4. Оценка газа с буфером
             let gasLimit = isSomnia ? undefined : 5_000_000n;
             // IMPORTANT: creation should always use main wallet (not session key)
-            const activeWalletClient = walletClient; 
-            const activeAccount = address;
-            
-            if (!activeWalletClient || !activeAccount) {
+            let activeWalletClient;
+            let activeAccount;
+            try {
+                const res = await getActiveWalletClient();
+                activeWalletClient = res.client;
+                activeAccount = res.account;
+            } catch (e) {
                 alert("No wallet connected!");
                 setIsTxPending(false);
                 return false;
@@ -1541,7 +1556,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
 
                     try {
-                        const { client: activeWalletClient } = await getActiveWalletClient();
                         await GM.setRoomPassword({
                             roomId: finalRoomId.toString(),
                             address: address,
@@ -1593,7 +1607,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (attempt > 1) await new Promise(r => setTimeout(r, delay));
 
                 try {
-                    const { client: activeWalletClient } = await getActiveWalletClient();
                     await GM.registerEciesPubkey(
                         finalRoomId.toString(),
                         address,
@@ -1621,7 +1634,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const signed = await signRequest({
                         address,
                         roomId: Number(finalRoomId),
-                        walletClient,
+                        walletClient: activeWalletClient,
                         buildMessage: ({ nonce, timestamp }) => buildAvatarMessage({
                             roomId: finalRoomId.toString(),
                             address,
@@ -1659,7 +1672,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, lobbyName, publicClient, getActiveWalletClient, addLog, refreshPlayersList, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain, lobbyPassword, avatarUrl, walletClient, chainId]);
+    }, [playerName, address, lobbyName, publicClient, getActiveWalletClient, addLog, refreshPlayersList, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain, lobbyPassword, avatarUrl, chainId]);
 
     const joinLobbyOnChain = useCallback(async (roomId: bigint | number): Promise<boolean> => {
         const rId = BigInt(roomId);
@@ -1774,10 +1787,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 3.5. Оценка газа с буфером
             let gasLimit = 14_500_000n;
             // IMPORTANT: joining should always use main wallet (not session key) to avoid registration mismatch
-            const activeWalletClient = walletClient; 
-            const activeAccount = address;
-            
-            if (!activeWalletClient || !activeAccount) {
+            let activeWalletClient;
+            let activeAccount;
+            try {
+                const res = await getActiveWalletClient();
+                activeWalletClient = res.client;
+                activeAccount = res.account;
+            } catch (e) {
                 alert("No wallet connected!");
                 setIsTxPending(false);
                 return false;
@@ -1838,7 +1854,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере
             try {
-                const { client: activeWalletClient } = await getActiveWalletClient();
                 await GM.registerEciesPubkey(roomId.toString(), address, activeWalletClient, runtimeChain.id);
                 console.log('[ECIES] Public key registered with GM server');
             } catch (e) {
@@ -1854,7 +1869,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const signed = await signRequest({
                         address,
                         roomId: Number(roomId),
-                        walletClient,
+                        walletClient: activeWalletClient,
                         buildMessage: ({ nonce, timestamp }) => buildAvatarMessage({
                             roomId: roomId.toString(),
                             address,
@@ -1890,7 +1905,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             return false;
         }
-    }, [playerName, address, publicClient, getActiveWalletClient, addLog, refreshPlayersList, avatarUrl, walletClient, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain, lobbyPassword]);
+    }, [playerName, address, publicClient, getActiveWalletClient, addLog, refreshPlayersList, avatarUrl, LOBBY_FUNDING_VALUE, runtimeContractAddress, runtimeChain, lobbyPassword]);
 
     // --- SHUFFLE PHASE ---
 
@@ -2067,16 +2082,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [currentRoomId, address]);
 
     const fetchMyRoleFromGM = useCallback(async () => {
-        if (!address || !currentRoomId || !walletClient) return;
+        if (!address || !currentRoomId) return;
         if (roleFetchedRef.current) return; // уже получили
         roleFetchedRef.current = true;
 
         const tryFetch = async (): Promise<void> => {
             try {
+                const { client: activeWalletClient } = await getActiveWalletClient();
                 const signed = await signRequest({
                     address,
                     roomId: Number(currentRoomId),
-                    walletClient,
+                    walletClient: activeWalletClient,
                     buildMessage: ({ nonce, timestamp }) =>
                         `my-role:${currentRoomId}:${address.toLowerCase()}:${nonce}:${timestamp}`,
                 });
@@ -2145,7 +2161,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
 
         await tryFetch();
-    }, [address, currentRoomId, walletClient, chainId, decryptMyRoleFromGM, addLog]);
+    }, [address, currentRoomId, getActiveWalletClient, chainId, decryptMyRoleFromGM, addLog]);
 
     const commitRoleOnChain = useCallback(async (role: number, salt: string) => {
         if (!currentRoomId) return;
@@ -2435,11 +2451,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         explicitDayCount?: number
     ) => {
         const resolvedDayCount = explicitDayCount ?? gameState.dayCount;
-        if (!currentRoomId) return;
-        if (!walletClient && !address) return;
+        if (!currentRoomId || !address) return;
 
         setIsTxPending(true);
         try {
+            const { client: activeWalletClient } = await getActiveWalletClient();
             const playerAddress = address!;
             console.log(`[GM API] Submitting night action: ${actionType} on ${targetAddress} by ${playerAddress}`);
 
@@ -2480,7 +2496,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const signed = await signRequest({
                         address: playerAddress,
                         roomId: Number(currentRoomId),
-                        walletClient,
+                        walletClient: activeWalletClient,
                         buildMessage: ({ nonce, timestamp }) => buildNightActionMessage({
                             roomId: currentRoomId.toString(),
                             actionType,
@@ -2554,16 +2570,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, address, walletClient, applyOptimisticUpdate, addLog, gameState.dayCount, gameState.players, chainId]);
+    }, [currentRoomId, address, getActiveWalletClient, applyOptimisticUpdate, addLog, gameState.dayCount, gameState.players, chainId]);
 
     const skipNightActionToGM = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient) return;
+        if (!currentRoomId || !address) return;
         setIsTxPending(true);
         try {
+            const { client: activeWalletClient } = await getActiveWalletClient();
             await GM.skipNightActionToGM({
                 roomId: currentRoomId.toString(),
                 address,
-                walletClient,
+                walletClient: activeWalletClient,
                 chainId,
                 dayCount: gameState.dayCount
             });
@@ -2576,16 +2593,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, address, walletClient, chainId, applyOptimisticUpdate, addLog]);
+    }, [currentRoomId, address, getActiveWalletClient, chainId, applyOptimisticUpdate, addLog, gameState.dayCount]);
 
     const fetchInvestigationProofFromGM = useCallback(async (targetAddress: string) => {
-        if (!currentRoomId || !address || !walletClient) return null;
+        if (!currentRoomId || !address) return null;
         try {
+            const { client: activeWalletClient } = await getActiveWalletClient();
             return await GM.fetchInvestigationProofFromGM({
                 roomId: currentRoomId.toString(),
                 detectiveAddress: address,
                 targetAddress,
-                walletClient,
+                walletClient: activeWalletClient,
                 chainId,
                 dayCount: gameState.dayCount
             });
@@ -2593,7 +2611,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error('[GM API] Failed to fetch investigation proof:', e);
             return null;
         }
-    }, [currentRoomId, address, walletClient, chainId]);
+    }, [currentRoomId, address, getActiveWalletClient, chainId, gameState.dayCount]);
 
     const getInvestigationResultOnChain = useCallback(async (detective: string, target: string) => {
         if (isTestMode) {
@@ -2606,6 +2624,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!currentRoomId) return { role: Role.UNKNOWN, isMafia: false };
 
         try {
+            const { client: activeWalletClient } = await getActiveWalletClient();
             console.log(`[Investigation API] Fetching result for ${detective} -> ${target}`);
 
             // Use signRequest to generate modern signature with nonce and timestamp
@@ -2613,7 +2632,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const signed = await signRequest({
                 address: detective,
                 roomId: Number(currentRoomId),
-                walletClient,
+                walletClient: activeWalletClient,
                 buildMessage: ({ nonce, timestamp }) => buildInvestigateMessage({
                     roomId: currentRoomId.toString(),
                     dayCount: gameState.dayCount,
@@ -2670,7 +2689,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             addLog(`Investigation failed: ${e.message}`, "danger");
             return { role: Role.UNKNOWN, isMafia: false };
         }
-    }, [currentRoomId, addLog, walletClient]);
+    }, [currentRoomId, addLog, getActiveWalletClient, gameState.dayCount]);
 
     const forcePhaseTimeoutOnChain = useCallback(async () => {
         if (!currentRoomId) return;
@@ -2687,10 +2706,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     throw new Error('No wallet for signing');
                 }
 
+                const { client: activeWalletClient } = await getActiveWalletClient();
                 const signed = await signRequest({
                     address,
                     roomId: Number(currentRoomId),
-                    walletClient,
+                    walletClient: activeWalletClient,
                     buildMessage: ({ nonce, timestamp }) => buildResolveNightMessage({
                         roomId: currentRoomId.toString(),
                         nonce,
@@ -2763,7 +2783,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setIsTxPending(false);
         }
-    }, [currentRoomId, address, walletClient, gameState.phase, addLog, refreshPlayersList, chainId, publicClient, sendGameTransaction]);
+    }, [currentRoomId, address, getActiveWalletClient, gameState.phase, addLog, refreshPlayersList, chainId, publicClient, sendGameTransaction]);
 
     // --- MAFIA CHAT (V4) ---
 
