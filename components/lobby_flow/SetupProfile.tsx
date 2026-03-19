@@ -82,7 +82,7 @@ const SocialCard: React.FC<SocialCardProps> = ({ icon, name, linked, username, o
 
 // --- Main Component ---
 export const SetupProfile: React.FC = () => {
-    const { playerName, setPlayerName, avatarUrl, setAvatarUrl } = useGameContext();
+    const { playerName, setPlayerName, avatarUrl, setAvatarUrl, useEmbeddedWallet, setUseEmbeddedWallet } = useGameContext();
     const { user, logout, linkGoogle, linkTwitter, linkDiscord, unlinkGoogle, unlinkTwitter, unlinkDiscord, createWallet, linkWallet } = usePrivy();
     const { wallets } = useWallets();
     const router = useRouter();
@@ -340,7 +340,11 @@ export const SetupProfile: React.FC = () => {
                             <div className="flex flex-col items-start gap-0.5 mt-1">
                                 <span className="text-white font-montserrat font-medium text-lg md:text-xl tracking-wide leading-none">In-Game Wallet</span>
                                 {hasEmbeddedWallet ? (
-                                    <span className="text-[#C19A6B] text-[11px] font-medium tracking-[0.1em] uppercase flex items-center gap-1.5"><Check className="w-3.5 h-3.5" strokeWidth={2.5} /> Active</span>
+                                    !useEmbeddedWallet ? (
+                                        <span className="text-white/30 text-[11px] font-medium tracking-[0.1em] uppercase flex items-center gap-1.5">Disabled</span>
+                                    ) : (
+                                        <span className="text-[#C19A6B] text-[11px] font-medium tracking-[0.1em] uppercase flex items-center gap-1.5"><Check className="w-3.5 h-3.5" strokeWidth={2.5} /> Active</span>
+                                    )
                                 ) : (
                                     <span className="text-white/40 text-[11px] font-medium tracking-[0.1em] uppercase">Not Created</span>
                                 )}
@@ -412,7 +416,30 @@ export const SetupProfile: React.FC = () => {
                                 </button>
                             </div>
 
-                            <div className={`flex items-center justify-between px-5 py-4 rounded-2xl border transition-all ${hasEmbeddedWallet ? 'border-[#916A47] bg-gradient-to-r from-[#916A47]/20 to-transparent' : 'border-white/10 bg-white/5'}`}>
+                            {/* Toggle Use In-Game Wallet */}
+                            <div className="flex items-center justify-between px-5 py-4 rounded-2xl border border-white/10 bg-white/5 mb-2 hover:bg-white/10 transition-colors">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-xl bg-black/50 border border-white/10 flex items-center justify-center shadow-inner">
+                                        <Wallet className={`w-5 h-5 transition-colors ${useEmbeddedWallet ? 'text-[#ffb01d]' : 'text-white/30'}`} />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-white text-base font-montserrat font-medium tracking-wide">Use In-Game Wallet</p>
+                                        <p className="text-white/40 text-[10px] uppercase font-bold tracking-widest leading-none mt-1">
+                                            {useEmbeddedWallet ? 'Privy Embedded Wallet' : 'External Wallet Mode'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setUseEmbeddedWallet(!useEmbeddedWallet)}
+                                    className={`relative w-[52px] h-[28px] rounded-full transition-all duration-300 ease-in-out cursor-pointer border shadow-inner flex items-center px-[3px] ${useEmbeddedWallet ? 'bg-[#916A47]/20 border-[#916A47]/40 shadow-[0_0_10px_rgba(145,106,71,0.2)]' : 'bg-black/50 border-white/10'}`}
+                                >
+                                    <div
+                                        className={`w-[20px] h-[20px] rounded-full shadow-md transition-all duration-300 ${useEmbeddedWallet ? 'translate-x-6 bg-gradient-to-b from-[#F0C868] to-[#D4A54A] shadow-[0_0_10px_rgba(212,165,74,0.4)]' : 'translate-x-0 bg-[#6b584a]'}`}
+                                    />
+                                </button>
+                            </div>
+
+                            <div className={`flex items-center justify-between px-5 py-4 rounded-2xl border transition-all ${hasEmbeddedWallet ? 'border-[#916A47]/30 bg-gradient-to-r from-[#916A47]/10 to-transparent' : 'border-white/10 bg-white/5'}`}>
                                 <div className="flex items-center gap-4">
                                     <div className="w-10 h-10 rounded-xl bg-black/50 border border-white/10 flex items-center justify-center shadow-inner">
                                         <Wallet className="w-5 h-5 text-white/70" />
