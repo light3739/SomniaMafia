@@ -39,7 +39,7 @@ export const SessionKeyBanner = React.memo(({
   } = useSessionKey(roomId);
   const { address: mainWalletAddress } = useAccount();
 
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: 50312 }); // Default to Somnia for balance check if not specified, but better use context if possible
   const { sendTransactionAsync, isPending: isFunding } = useSendTransaction();
 
   const [sessionBalance, setSessionBalance] = useState<bigint>(0n);

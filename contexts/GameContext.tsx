@@ -321,10 +321,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []); // ABSOLUTELY STABLE
 
     const LOBBY_FUNDING_VALUE = useMemo(() => {
-        const rc = runtimeChainRef.current;
-        const isSomnia = (rc.id === 50312);
+        // Robust check for Somnia chain IDs (5031 previous, 50312 current)
+        // Casting to number to avoid lint issues with fixed chain sets
+        const isSomnia = ((runtimeChain.id as number) === 5031 || (runtimeChain.id as number) === 50312);
         return isSomnia ? parseEther('1.0') : parseEther('0.1'); // 1 STT for Somnia, 0.1 for Fuji
-    }, [stableChainId]);
+    }, [runtimeChain.id]);
 
     useEffect(() => {
         if (isTestMode && typeof window !== 'undefined') {
@@ -752,7 +753,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         chain: runtimeChainRef.current,
                         gas: calculatedGas,
                         gasPrice: CURRENT_GAS_PRICE, // SPEED: Skip eth_gasPrice RPC call
-                        type: 'legacy',
                     });
                     const sendTime = Math.round(performance.now() - sendStart);
                     const totalTime = Math.round(performance.now() - txStartTime);
@@ -788,7 +788,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 account: activeAccount,
                 chain: runtimeChainRef.current,
                 gas: calculatedGas,
-                type: 'legacy',
             });
         }
     }, [getSessionWalletClient]); // getActiveWalletClient and isTestMode (ref) are stable // Removed publicClient, address, runtimeChain from deps
@@ -1490,7 +1489,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
             // 3. Сессия
-            const { sessionAddress } = createNewSession(myAddr, newRoomId);
+            const { sessionAddress } = createNewSession(myAddr, newRoomId, targetChain.id);
 
             // ✅ ДОБАВИТЬ: Загружаем/генерируем ECIES keypair для этого игрока
             const eciesKp = await loadOrCreateKeypair(newRoomId.toString(), myAddr);
@@ -1542,7 +1541,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 value: LOBBY_FUNDING_VALUE,
                 gas: gasLimit,
                 nonce: nonce,
-                type: 'legacy',
             });
             const receipt = await pClient.waitForTransactionReceipt({ hash });
 
@@ -1693,7 +1691,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
             // 2. Generate session key
-            const { sessionAddress } = createNewSession(myAddr, Number(roomId));
+            const { sessionAddress } = createNewSession(myAddr, Number(roomId), targetChain.id);
 
             // ✅ ДОБАВИТЬ: ECIES keypair для join
             const eciesKp = await loadOrCreateKeypair(roomId.toString(), myAddr);
@@ -1807,7 +1805,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 chain: targetChain,
                 value: txValue,
                 gas: gasLimit,
-                type: 'legacy',
             });
             const joinReceipt = await pClient.waitForTransactionReceipt({ hash });
 
@@ -1924,7 +1921,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 account: activeAccount,
                 chain: targetChain,
                 gas: gasLimit,
-                type: 'legacy',
             });
             addLog("Starting game...", "phase");
             // OPTIMISTIC: Release spinner immediately, confirm receipt in background

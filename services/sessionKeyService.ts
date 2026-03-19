@@ -15,6 +15,7 @@ interface StoredSession {
   address: `0x${string}`;
   mainWallet: `0x${string}`;
   roomId: number;
+  chainId: number;
   expiresAt: number;
   registeredOnChain: boolean;
 }
@@ -84,15 +85,18 @@ export function clearSession(): void {
 }
 
 /**
- * Check if we have a valid session for a specific room
+ * Check if we have a valid session for a specific room and chain
  */
-export function hasValidSession(roomId: number, mainWallet: string): boolean {
+export function hasValidSession(roomId: number, mainWallet: string, chainId?: number | null): boolean {
   const session = loadSession();
   if (!session) return false;
+
+  const chainMatch = !chainId || session.chainId === chainId;
 
   return (
     session.roomId === roomId &&
     session.mainWallet.toLowerCase() === mainWallet.toLowerCase() &&
+    chainMatch &&
     session.registeredOnChain &&
     Date.now() < session.expiresAt
   );
@@ -163,6 +167,7 @@ export function markSessionRegistered(): void {
 export function createNewSession(
   mainWallet: `0x${string}`,
   roomId: number,
+  chainId: number,
   durationMs: number = 4 * 60 * 60 * 1000 // 4 hours default
 ): { sessionAddress: `0x${string}`; privateKey: `0x${string}` } {
   const { privateKey, address } = generateSessionKey();
@@ -172,6 +177,7 @@ export function createNewSession(
     address,
     mainWallet,
     roomId,
+    chainId,
     expiresAt: Date.now() + durationMs,
     registeredOnChain: false,
   };
