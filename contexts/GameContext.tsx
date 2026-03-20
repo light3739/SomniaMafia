@@ -352,9 +352,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Casting to number for consistent comparison
         const chainId = Number(runtimeChain.id);
         const isSomnia = (chainId === 5031 || chainId === 50312);
-        // Shannon testnet currently has defaultDeposit = 0, but sending 0.1 STT 
+        // Shannon testnet currently has defaultDeposit = 0, but sending 1.0 STT 
         // ensures the session address is funded with gas for gameplay actions.
-        return isSomnia ? parseEther('0.1') : parseEther('0.1');
+        return isSomnia ? parseEther('1.0') : parseEther('1.0');
     }, [runtimeChain.id]);
 
     useEffect(() => {
@@ -1553,7 +1553,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         tournamentId
                     ],
                     account: activeAccount,
-                    value: isSomnia ? parseEther('0.1') : parseEther('0.1'),
+                    value: isSomnia ? parseEther('1.0') : parseEther('1.0'),
                     nonce,
                 });
                 gasLimit = (gasEstimate * 125n) / 100n;
@@ -1570,7 +1570,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, tournamentId],
                 account: activeAccount,
                 chain: targetChain,
-                value: isSomnia ? parseEther('0.1') : parseEther('0.1'),
+                value: isSomnia ? parseEther('1.0') : parseEther('1.0'),
                 gas: gasLimit,
                 type: 0 as any, // Legacy (numeric to satisfy Privy schema)
             });
@@ -1819,7 +1819,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     functionName: 'joinRoom',
                     args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                     account: activeAccount as `0x${string}`,
-                    value: isTournamentRoom ? 0n : (Number(targetChain.id) === 50312 || Number(targetChain.id) === 5031 ? parseEther('0.1') : parseEther('0.1')),
+                    value: isTournamentRoom ? 0n : (Number(targetChain.id) === 50312 || Number(targetChain.id) === 5031 ? parseEther('1.0') : parseEther('1.0')),
                 });
                 gasLimit = (gasEstimate * 150n) / 100n;
                 console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
@@ -1835,7 +1835,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                 account: activeAccount,
                 chain: targetChain,
-                value: isTournamentRoom ? 0n : (Number(targetChain.id) === 50312 || Number(targetChain.id) === 5031 ? parseEther('0.1') : parseEther('0.1')),
+                value: isTournamentRoom ? 0n : (Number(targetChain.id) === 50312 || Number(targetChain.id) === 5031 ? parseEther('1.0') : parseEther('1.0')),
                 gas: gasLimit,
                 type: 0 as any, // Legacy
             });
