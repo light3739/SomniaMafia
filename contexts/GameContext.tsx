@@ -310,23 +310,53 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const wallets = walletsRef.current;
         const targetChain = runtimeChainRef.current;
 
-        // SE-FIX: Prioritize based on useEmbeddedWallet toggle
+        // 1. Determine base selected wallet based on toggle
         let selectedWallet: any = null;
         if (useEmbeddedWallet) {
+            // Prioritize Privy Embedded Wallet
             selectedWallet = wallets.find(w => w.walletClientType === 'privy');
         } else {
+            // Priority 1: Linked external wallet in Privy
             selectedWallet = wallets.find(w => w.walletClientType !== 'privy');
+
+            // Priority 2: Unlinked external wallet in Wagmi (e.g. MetaMask via RainbowKit)
+            if (!selectedWallet && walletClientRef.current && addressRef.current) {
+                console.log('[WalletSelect] Using Wagmi-connected balance/wallet client');
+                try {
+                    // Check chain and switch if needed
+                    const currentChainId = await walletClientRef.current.getChainId();
+                    if (currentChainId !== targetChain.id) {
+                        try {
+                            await walletClientRef.current.switchChain({ id: targetChain.id });
+                        } catch (swErr) {
+                            console.warn('[WalletSelect] Wagmi switchChain failed, continuing...', swErr);
+                        }
+                    }
+                } catch (e) {
+                    console.error('[WalletSelect] Wagmi client error:', e);
+                }
+                
+                // ENSURE addressRef is in sync with this client
+                if (walletClientRef.current.account) {
+                    addressRef.current = walletClientRef.current.account.address;
+                }
+                return { client: walletClientRef.current, account: addressRef.current as `0x${string}` };
+            }
         }
 
-        // Final fallback if preferred not found: use ANY available wallet
+        // Final fallback if preferred wallet type was not found: use ANY available from Privy list
         if (!selectedWallet && wallets.length > 0) {
+            console.log('[WalletSelect] Preferred wallet not found, falling back to first available Privy wallet');
             selectedWallet = wallets[0];
         }
 
         if (selectedWallet) {
+            // SYNC addressRef with selected wallet
+            addressRef.current = selectedWallet.address as `0x${string}`;
+
+            // Handle chain switching for Privy wallets
             const rawChainId = selectedWallet.chainId;
             let currentChainId = 0;
-
             if (typeof rawChainId === 'string' && rawChainId.includes(':')) {
                 currentChainId = Number(rawChainId.split(':')[1]);
             } else {
@@ -3279,6 +3309,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             console.log(`[CreateTournamentAndRoom] Total Value: ${formatEther(value)} ${targetChain.nativeCurrency.symbol}`);
+            console.log(`[CreateTournamentAndRoom] Params:`, {
+                name: params.name,
+                buyIn: buyInUnits.toString(),
+                maxPlayers: params.maxPlayers,
+                playersPerTable: params.playersPerTable,
+                tournamentPasswordHash,
+                paymentToken: params.paymentToken,
+                initialPrize: initialPrizeUnits.toString(),
+                roomName: params.roomName,
+                nickname: params.nickname,
+                pubKeyLen: pubKeyHex.length / 2 - 1,
+                sessionAddress,
+                isPrivate: params.isPrivate,
+                joinPassword: params.joinPassword || ""
+            });
 
             const hash = await client.writeContract({
                 address: contractAddressRef.current,
@@ -3294,7 +3339,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     initialPrizeUnits,
                     params.roomName,
                     params.nickname,
-                    pubKeyHex as any, // Cast as any if viem expects bytes instead of hex string in some cases, but hex usually works
+                    pubKeyHex as any,
                     sessionAddress as `0x${string}`,
                     params.isPrivate,
                     params.joinPassword || ""
@@ -3302,6 +3347,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 account,
                 value,
                 chain: targetChain,
+                gas: 2_000_000n, // Explicit high gas limit for heavy atomic transaction
                 type: 0 as any,
             });
 
