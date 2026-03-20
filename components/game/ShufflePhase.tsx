@@ -17,6 +17,9 @@ interface ShuffleState {
     pendingDeck: string[] | null;
     pendingSalt: string | null;
     phaseDeadline: number; // For timeout handling
+    retryCount: number;
+    lastErrorTime: number;
+    isFailed: boolean;
 }
 
 export const ShufflePhase: React.FC = React.memo(() => {
@@ -41,7 +44,10 @@ export const ShufflePhase: React.FC = React.memo(() => {
         hasRevealed: false,
         pendingDeck: null,
         pendingSalt: null,
-        phaseDeadline: 0
+        phaseDeadline: 0,
+        retryCount: 0,
+        lastErrorTime: 0,
+        isFailed: false
     });
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -502,12 +508,18 @@ export const ShufflePhase: React.FC = React.memo(() => {
             // If contract reverted (InvalidReveal, PhaseDeadlinePassed, etc.),
             // clear saved state to prevent infinite recovery retry loops
             const isContractRevert = errMsg.includes('reverted') || errMsg.includes('InvalidReveal') ||
-                errMsg.includes('PhaseDeadlinePassed') || errMsg.includes('revert');
+                errMsg.includes('PhaseDeadlinePassed') || errMsg.includes('revert') || errMsg.includes('Out Of Gas');
+            
+            setShuffleState(prev => ({
+                ...prev,
+                retryCount: prev.retryCount + 1,
+                lastErrorTime: Date.now(),
+                isFailed: isContractRevert && prev.retryCount >= 2 // Stop auto-retrying after 3 attempts
+            }));
+
             if (isContractRevert) {
-                console.warn("[Shuffle] Contract revert — clearing saved state to prevent retry loop.");
-                localStorage.removeItem(SHUFFLE_COMMIT_KEY);
-                setPendingDeck(null);
-                setPendingSalt(null);
+                console.warn("[Shuffle] Contract revert detected. Local state preserved for manual retry.");
+                // We keep SHUFFLE_COMMIT_KEY so user can try again manually or after cool-down
             }
             // Non-revert errors (network issues) keep saved state for manual recovery via handleReveal
         } finally {
@@ -561,10 +573,19 @@ export const ShufflePhase: React.FC = React.memo(() => {
             !isProcessing &&
             !isTxPending &&
             !shuffleState.hasRevealed &&
+            !shuffleState.isFailed &&
             gameState.players.length > 0;
 
         if (canExecuteAuto) {
-            console.log("[Shuffle Auto] My turn detected, starting commit+reveal...");
+            // Cool-down: Wait at least 10 seconds between retries to give Somnia RPC time to sync
+            const timeSinceLastErr = Date.now() - shuffleState.lastErrorTime;
+            const COOLDOWN_MS = 10000;
+            
+            if (shuffleState.retryCount > 0 && timeSinceLastErr < COOLDOWN_MS) {
+                return; 
+            }
+
+            console.log(`[Shuffle Auto] My turn detected (attempt ${shuffleState.retryCount + 1}), starting commit+reveal...`);
             handleMyTurn();
         }
     }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, gameState.players.length, handleMyTurn]);
@@ -733,24 +754,39 @@ export const ShufflePhase: React.FC = React.memo(() => {
                     </div>
                     <div className="flex-1">
                         <div className="flex justify-between text-[10px] mb-1.5">
-                            <span className={shuffleState.hasRevealed ? 'text-green-400 uppercase' : 'text-white/40 uppercase'}>
-                                {shuffleState.hasRevealed
-                                    ? 'COMPLETE! WAITING FOR OTHERS...'
-                                    : shuffleState.isMyTurn
-                                        ? (shuffleState.hasCommitted ? 'REVEALING DECK...' : 'SHUFFLING & ENCRYPTING...')
-                                        : `WAITING FOR ${currentShuffler?.name?.toUpperCase() || 'PLAYER'}...`
+                            <span className={shuffleState.isFailed ? 'text-red-400 uppercase font-bold' : shuffleState.hasRevealed ? 'text-green-400 uppercase' : 'text-white/40 uppercase'}>
+                                {shuffleState.isFailed
+                                    ? 'SHUFFLE FAILED AFTER RETRIES'
+                                    : shuffleState.hasRevealed
+                                        ? 'COMPLETE! WAITING FOR OTHERS...'
+                                        : shuffleState.isMyTurn
+                                            ? (shuffleState.hasCommitted ? 'REVEALING DECK...' : 'SHUFFLING & ENCRYPTING...')
+                                            : `WAITING FOR ${currentShuffler?.name?.toUpperCase() || 'PLAYER'}...`
                                 }
                             </span>
                             <span className="font-mono text-[#916A47] font-bold">{Math.floor(progress)}%</span>
                         </div>
-                        <div className="h-1.5 bg-black/40 rounded-full overflow-hidden p-[1px]">
+                        <div className="h-1.5 bg-black/40 rounded-full overflow-hidden p-[1px] mb-2">
                             <motion.div
-                                className={`h-full rounded-full ${shuffleState.hasRevealed ? 'bg-green-500' : 'bg-gradient-to-r from-[#916A47] to-[#c9a227]'}`}
+                                className={`h-full rounded-full ${shuffleState.isFailed ? 'bg-red-500' : shuffleState.hasRevealed ? 'bg-green-500' : 'bg-gradient-to-r from-[#916A47] to-[#c9a227]'}`}
                                 initial={{ width: 0 }}
                                 animate={{ width: `${progress}%` }}
                                 transition={{ duration: 0.8 }}
                             />
                         </div>
+                        {shuffleState.isFailed && shuffleState.isMyTurn && (
+                            <Button 
+                                variant="ghost" 
+                                className="w-full text-xs py-1 h-7 border-red-500/50 text-red-400 hover:bg-red-500/10"
+                                onClick={() => {
+                                    setShuffleState(prev => ({ ...prev, isFailed: false, retryCount: 0 }));
+                                    handleMyTurn();
+                                }}
+                            >
+                                <RefreshCw className="w-3 h-3 mr-1" />
+                                Try Again Manually
+                            </Button>
+                        )}
                     </div>
                 </div>
             </motion.div >
