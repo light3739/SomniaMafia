@@ -722,6 +722,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             finalizeVoting: 8_000_000n,
             forcePhaseTimeout: 8_000_000n,
             mafiaMessage: 1_500_000n,
+            createTournamentAndRoom: 5_000_000n,
         };
 
         const isSomnia = Number(runtimeChainRef.current?.id) === 50312 || Number(runtimeChainRef.current?.id) === 5031;
@@ -3414,7 +3415,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 account,
                 value,
                 chain: targetChain,
-                gas: 2_000_000n, // Explicit high gas limit for heavy atomic transaction
+                gas: 4_500_000n, // High gas limit for heavy atomic transaction on Shannon
                 type: 0 as any,
             });
 
