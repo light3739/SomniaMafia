@@ -724,9 +724,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             mafiaMessage: 1_500_000n,
         };
 
+        const isSomnia = Number(runtimeChainRef.current?.id) === 50312 || Number(runtimeChainRef.current?.id) === 5031;
         const knownLimit = KNOWN_GAS_LIMITS[functionName];
         let useKnownLimit = false;
-        if (knownLimit && canUseSession) {
+        
+        // SPEED FIX: Only use hardcoded gas limits on standard chains (not Somnia)
+        // Somnia has extreme gas metering (7M+ for simple tasks) so estimation is mandatory.
+        if (knownLimit && canUseSession && !isSomnia) {
             // Check if session key can actually afford this known limit
             try {
                 const sessionAddr = getSessionWalletClient()?.account?.address;
@@ -796,15 +800,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         });
                         // Max gas = 80% of balance / gasPrice (leave 20% buffer)
                         const maxAffordable = (sessionBalance * 80n / 100n) / CURRENT_GAS_PRICE;
-                        calculatedGas = maxAffordable > 0n ? maxAffordable : 3_000_000n;
+                        // For Somnia, we need more gas. Fallback to 12M if affordable.
+                        const safeFallback = isSomnia ? 12_000_000n : 3_000_000n;
+                        calculatedGas = (maxAffordable > safeFallback) ? safeFallback : (maxAffordable > 0n ? maxAffordable : safeFallback);
                         console.log(`[Gas] Session key fallback: balance=${formatEther(sessionBalance)} ${currencySymbol}, maxAffordable gas=${calculatedGas}`);
                     } catch (_balErr) {
-                        calculatedGas = 3_000_000n; // Very conservative fallback
+                        calculatedGas = isSomnia ? 12_000_000n : 3_000_000n;
                     }
                 } else if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK', 'commitAndConfirmRole'].includes(functionName)) {
                     calculatedGas = 14_500_000n; // main wallet can afford more
                 } else {
-                    calculatedGas = 10_000_000n;
+                    calculatedGas = isSomnia ? 14_500_000n : 10_000_000n;
                 }
             }
         }
@@ -834,6 +840,33 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     return hash;
                 } catch (err: any) {
                     const errMsg = err.message || '';
+                    if (err.message?.includes('reverted') || err.message?.includes('failed') || err.code === -32000) {
+                        const errMsg = err.shortMessage || err.message || "Unknown revert";
+                        console.warn(`[Shuffle] Contract revert detected: ${errMsg} — clearing saved state to prevent retry loop.`, err);
+                        
+                        // Try to diagnose: check if session key is actually registered for this room
+                        if (canUseSession && session) {
+                            try {
+                                const pClient = publicClientRef.current;
+                                if (pClient) {
+                                    const mainBound = await pClient.readContract({
+                                        address: contractAddressRef.current,
+                                        abi: MAFIA_ABI,
+                                        functionName: 'sessionToMain',
+                                        args: [session.address as `0x${string}`],
+                                    }).catch(() => "0x0");
+                                    
+                                    console.log(`[Revert Diagnosis] sessionToMain(${session.address}) on-chain:`, mainBound);
+                                    
+                                    if (String(mainBound).toLowerCase() === "0x0000000000000000000000000000000000000000") {
+                                        console.error("[Revert Diagnosis] CRITICAL: Session key is NOT registered in contract sessionToMain mapping!");
+                                    }
+                                }
+                            } catch (diagErr) {
+                                console.warn("[Revert Diagnosis] State check failed:", diagErr);
+                            }
+                        }
+                    }
                     if (retryCount < MAX_NONCE_RETRIES && (errMsg.includes('nonce too low') || errMsg.includes('Nonce provided for the transaction is lower') || errMsg.includes('replacement transaction underpriced'))) {
                         console.warn(`[Session TX] Nonce issue for ${functionName} (attempt ${retryCount + 1}/${MAX_NONCE_RETRIES}). Retrying...`);
 
@@ -1908,11 +1941,28 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             markSessionRegistered();
 
             // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере
+            // RPC Desync workaround: Retry 6 times with increasing delay
             try {
-                await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id);
-                console.log('[ECIES] Public key registered with GM server');
+                console.log('[ECIES] Registering pubkey, starting retry loop for state sync...');
+                let registered = false;
+                for (let attempt = 1; attempt <= 6; attempt++) {
+                    const delay = 1000 + (attempt - 1) * 2000;
+                    if (attempt > 1) {
+                        console.log(`[ECIES] Retry attempt ${attempt}/6 after ${delay}ms...`);
+                        await new Promise(r => setTimeout(r, delay));
+                    }
+                    try {
+                        await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id, true);
+                        registered = true;
+                        console.log('[ECIES] Public key registered with GM server ✅');
+                        break;
+                    } catch (e: any) {
+                        if (attempt === 6) throw e;
+                        console.warn(`[ECIES] Attempt ${attempt} failed:`, e.message);
+                    }
+                }
             } catch (e) {
-                console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
+                console.warn('[ECIES] Failed to register pubkey with GM after 6 attempts (non-blocking):', e);
             }
 
             setCurrentRoomId(BigInt(roomId));
@@ -2016,7 +2066,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!roomId || !pClient) return undefined;
         setIsTxPending(true);
         try {
-            const hash = await sendGameTransaction('commitDeck', [currentRoomId, deckHash]);
+            let hash: `0x${string}`;
+            try {
+                hash = await sendGameTransaction('commitDeck', [roomId, deckHash]);
+            } catch (e: any) {
+                console.warn("[commitDeck] Session key attempt failed, retrying with main wallet...", e.shortMessage || e.message);
+                // Fallback to main wallet (3rd param false)
+                hash = await sendGameTransaction('commitDeck', [roomId, deckHash], false);
+            }
+
             addLog("Deck hash committed! Waiting for confirmation...", "success");
             applyOptimisticUpdate({ hasDeckCommitted: true });
 
@@ -2025,7 +2083,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             try {
                 const receipt = await pClient.waitForTransactionReceipt({ hash });
                 if (receipt?.status === 'reverted') {
-                    console.error("[commitDeck] ❌ TX reverted on-chain!");
+                    console.error(`[commitDeck] ❌ TX reverted on-chain! Block: ${receipt.blockNumber}, Hash: ${hash}`);
+                    // Fetch room data again to see current state for diagnosis
+                    const roomData = await pClient.readContract({
+                        address: contractAddressRef.current,
+                        abi: MAFIA_ABI,
+                        functionName: 'getRoom',
+                        args: [roomId],
+                    }) as any;
+                    console.error("[commitDeck] Current room state for diagnosis:", roomData);
+                    
                     applyOptimisticUpdate({ hasDeckCommitted: false });
                     addLog("Commit reverted on-chain!", "danger");
                     throw new Error("commitDeck reverted");
@@ -2044,7 +2111,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsTxPending(false);
             throw e;
         }
-    }, []); // ABSOLUTELY STABLE
+    }, [sendGameTransaction, applyOptimisticUpdate, addLog, confirmInBackground]); // Needs deps for sendGameTransaction and others
 
     const revealDeckOnChain = useCallback(async (deck: string[], salt: string) => {
         const roomId = currentRoomIdRef.current;
