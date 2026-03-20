@@ -3326,7 +3326,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     // Synchronize state with GM server (password and ECIES keys)
                     try {
-                        const { GM } = await import('../services/gmService');
                         const results = await Promise.allSettled([
                             params.isPrivate && params.joinPassword 
                                 ? GM.setRoomPassword({
