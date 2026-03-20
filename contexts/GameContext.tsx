@@ -106,6 +106,19 @@ interface GameContextType {
         nonce?: number;
     }) => Promise<bigint | null>;
     joinTournamentOnChain: (tournamentId: bigint, password?: string, amount?: string, nonce?: number) => Promise<boolean>;
+    createTournamentAndRoomOnChain: (params: {
+        name: string;
+        buyIn: string;
+        maxPlayers: number;
+        playersPerTable: number;
+        password?: string;
+        paymentToken: `0x${string}`;
+        initialPrize: string;
+        roomName: string;
+        nickname: string;
+        isPrivate: boolean;
+        joinPassword?: string;
+    }) => Promise<boolean>;
     distributePrizesOnChain: (roomId: bigint) => Promise<void>;
     cancelTournamentOnChain: (tournamentId: bigint) => Promise<void>;
     publicClient: any;
@@ -3208,6 +3221,122 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [addLog]); // ABSOLUTELY STABLE
 
+    const createTournamentAndRoomOnChain = useCallback(async (params: {
+        name: string;
+        buyIn: string;
+        maxPlayers: number;
+        playersPerTable: number;
+        password?: string;
+        paymentToken: `0x${string}`;
+        initialPrize: string;
+        roomName: string;
+        nickname: string;
+        isPrivate: boolean;
+        joinPassword?: string;
+    }): Promise<boolean> => {
+        const pClient = publicClientRef.current;
+        const targetChain = runtimeChainRef.current;
+        if (!pClient || !targetChain) return false;
+        try {
+            setIsTxPending(true);
+            const { client, account } = await getActiveWalletClient();
+
+            // Predict next ID
+            const nextId = await pClient.readContract({
+                address: contractAddressRef.current,
+                abi: MAFIA_ABI,
+                functionName: 'nextRoomId',
+            }) as bigint;
+            const newRoomId = Number(nextId) + 1;
+
+            // 2. Generate DH keys
+            const keyPair = await generateKeyPair();
+            setKeys(keyPair);
+            const pubKeyHex = await exportPublicKey(keyPair.publicKey);
+
+            // 3. Session Key
+            const { sessionAddress } = createNewSession(account as `0x${string}`, newRoomId, targetChain.id);
+
+            // 4. ECIES keypair
+            const eciesKp = await loadOrCreateKeypair(newRoomId.toString(), account);
+            eciesPrivKeyRef.current = eciesKp.privateKey;
+
+            // Handle password hashes
+            let tournamentPasswordHash = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
+            if (params.password) {
+                tournamentPasswordHash = keccak256(toHex(params.password));
+            }
+
+            // Value calculation
+            const isNative = params.paymentToken === '0x0000000000000000000000000000000000000000';
+            const buyInUnits = parseEther(params.buyIn);
+            const initialPrizeUnits = parseEther(params.initialPrize);
+            
+            // Total ETH Value = BuyIn + InitialPrize + Session Funding (including mandatory room deposit)
+            let value = LOBBY_FUNDING_VALUE; // Start with session funding (e.g. 1.0 STT)
+            if (isNative) {
+                value += buyInUnits + initialPrizeUnits;
+            }
+
+            console.log(`[CreateTournamentAndRoom] Total Value: ${formatEther(value)} ${targetChain.nativeCurrency.symbol}`);
+
+            const hash = await client.writeContract({
+                address: contractAddressRef.current,
+                abi: MAFIA_ABI,
+                functionName: 'createTournamentAndRoom',
+                args: [
+                    params.name,
+                    buyInUnits,
+                    params.maxPlayers,
+                    params.playersPerTable,
+                    tournamentPasswordHash,
+                    params.paymentToken,
+                    initialPrizeUnits,
+                    params.roomName,
+                    params.nickname,
+                    pubKeyHex as any, // Cast as any if viem expects bytes instead of hex string in some cases, but hex usually works
+                    sessionAddress as `0x${string}`,
+                    params.isPrivate,
+                    params.joinPassword || ""
+                ],
+                account,
+                value,
+                chain: targetChain,
+                type: 0 as any,
+            });
+
+            addLog(`Atomic creation initiated!`, 'info');
+            setIsTxConfirming(true);
+            const receipt = await pClient.waitForTransactionReceipt({ hash });
+            setIsTxConfirming(false);
+
+            if (receipt && receipt.status === 'success') {
+                markSessionRegistered();
+                const logs = parseEventLogs({
+                    abi: MAFIA_ABI,
+                    eventName: 'RoomCreated',
+                    logs: receipt.logs
+                });
+                if (logs.length > 0) {
+                    const roomId = (logs[0] as any).args.roomId;
+                    localStorage.setItem('currentRoomId', roomId.toString());
+                    sessionStorage.setItem('currentRoomId', roomId.toString());
+                    setCurrentRoomId(roomId);
+                    addLog(`Tournament and Room #${roomId} created!`, 'success');
+                    return true;
+                }
+            }
+            return false;
+        } catch (error) {
+            console.error('Failed atomic creation:', error);
+            const msg = (error as any).message || 'Unknown error';
+            addLog(`Atomic creation failed: ${msg.slice(0, 60)}...`, 'danger');
+            return false;
+        } finally {
+            setIsTxPending(false);
+        }
+    }, [addLog, LOBBY_FUNDING_VALUE, setCurrentRoomId]); // ABSOLUTELY STABLE
+
     const distributePrizesOnChain = useCallback(async (roomId: bigint) => {
         const pClient = publicClientRef.current;
         const targetChain = runtimeChainRef.current;
@@ -4023,6 +4152,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setLobbyPassword,
         createTournamentOnChain,
         joinTournamentOnChain,
+        createTournamentAndRoomOnChain,
         distributePrizesOnChain,
         cancelTournamentOnChain,
         publicClient,
@@ -4053,6 +4183,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setLobbyPassword,
         createTournamentOnChain,
         joinTournamentOnChain,
+        createTournamentAndRoomOnChain,
         distributePrizesOnChain,
         cancelTournamentOnChain,
         publicClient,

@@ -20,12 +20,14 @@ export const CreateLobby: React.FC = () => {
         createLobbyOnChain,
         createTournamentOnChain,
         joinTournamentOnChain,
+        createTournamentAndRoomOnChain,
         isTxPending,
         lobbyPassword,
         setLobbyPassword,
         currencySymbol,
         publicClient,
-        address
+        address,
+        playerName
     } = useGameContext();
 
     const { isConnected } = useAccount();
@@ -69,28 +71,22 @@ export const CreateLobby: React.FC = () => {
                 blockTag: 'pending' 
             }) || 0;
 
-            const tournamentId = await createTournamentOnChain({
+            const success = await createTournamentAndRoomOnChain({
                 name: lobbyName,
                 buyIn: buyIn || '0',
-                maxPlayers: 100, // Tournament max total players (not per table)
-                playersPerTable: maxPlayers, // This is our "Room Size"
+                maxPlayers: 100, // Tournament max total players
+                playersPerTable: maxPlayers,
                 password: lobbyPassword.trim(),
                 paymentToken,
                 initialPrize: initialPrize || '0',
-                nonce: baseNonce
+                roomName: lobbyName,
+                nickname: playerName || 'Player',
+                isPrivate: !!lobbyPassword,
+                joinPassword: lobbyPassword.trim()
             });
 
-            if (tournamentId !== null) {
-                // 1. Join the tournament as the first participant (and pay buy-in)
-                const joined = await joinTournamentOnChain(tournamentId, lobbyPassword, buyIn, baseNonce + 1);
-                
-                if (joined) {
-                    // 2. Create the first room for this tournament
-                    const success = await createLobbyOnChain(maxPlayers, tournamentId, baseNonce + 2);
-                    if (success) {
-                        router.push('/waiting');
-                    }
-                }
+            if (success) {
+                router.push('/waiting');
             }
         } else {
             // STANDARD LOBBY FLOW

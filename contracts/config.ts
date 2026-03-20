@@ -154,6 +154,7 @@ export const FUNCTION_MAP = {
     toggleTournamentWhitelist: 'TournamentFacet',
     addToTournamentWhitelist: 'TournamentFacet',
     removeFromTournamentWhitelist: 'TournamentFacet',
+    createTournamentAndRoom: 'TournamentFacet',
 } as const;
 
 // Backward-compatible exports used across existing frontend modules
