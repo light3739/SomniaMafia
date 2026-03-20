@@ -3323,6 +3323,38 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     sessionStorage.setItem('currentRoomId', roomId.toString());
                     setCurrentRoomId(roomId);
                     addLog(`Tournament and Room #${roomId} created!`, 'success');
+
+                    // Synchronize state with GM server (password and ECIES keys)
+                    try {
+                        const { GM } = await import('../services/gmService');
+                        const results = await Promise.allSettled([
+                            params.isPrivate && params.joinPassword 
+                                ? GM.setRoomPassword({
+                                    roomId: roomId.toString(),
+                                    address: account,
+                                    password: params.joinPassword,
+                                    walletClient: client,
+                                    chainId: targetChain.id,
+                                    forceWallet: true
+                                  })
+                                : Promise.resolve(),
+                            GM.registerEciesPubkey(
+                                roomId.toString(),
+                                account,
+                                client,
+                                targetChain.id,
+                                true
+                            )
+                        ]);
+                        
+                        const failed = results.filter(r => r.status === 'rejected');
+                        if (failed.length > 0) {
+                            console.warn('[AtomicSync] Some GM sync steps failed:', failed);
+                        }
+                    } catch (syncErr: any) {
+                        console.error('[AtomicSync] GM synchronization failed:', syncErr);
+                    }
+
                     return true;
                 }
             }
