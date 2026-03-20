@@ -7,7 +7,7 @@ import { privateKeyToAccount, nonceManager } from 'viem/accounts';
 import { useWallets } from '@privy-io/react-auth';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL, AVALANCHE_FUJI, getDeploymentByChainId } from '../contracts/config';
-import { generateKeyPair, exportPublicKey } from '../services/cryptoUtils';
+import { generateKeyPair, exportPublicKey, stringToHex } from '../services/cryptoUtils';
 import { loadSession, createNewSession, markSessionRegistered, getSessionAccount, createSessionWalletClient } from '../services/sessionKeyService';
 import { loadOrCreateKeypair, exportPublicKeyHex, eciesDecrypt, EciesEncrypted } from '../services/eciesService';
 import { generateEndGameProof } from '../services/zkProof';
@@ -3086,7 +3086,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Handle password hash
             let passwordHash = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
             if (params.password) {
-                passwordHash = keccak256(toHex(params.password));
+                passwordHash = keccak256(stringToHex(params.password));
             }
 
             const isNative = params.paymentToken === '0x0000000000000000000000000000000000000000';
@@ -3264,7 +3264,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Handle password hashes
             let tournamentPasswordHash = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
             if (params.password) {
-                tournamentPasswordHash = keccak256(toHex(params.password));
+                tournamentPasswordHash = keccak256(stringToHex(params.password));
             }
 
             // Value calculation
