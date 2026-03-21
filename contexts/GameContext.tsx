@@ -621,96 +621,51 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             roleCommitSyncInProgressRef.current.delete(key);
         }
-    }, []); // Zero-deps for ZK stability on Somnia
-
-    // Wrapper для транзакций - использует session key если доступен
-    const sendGameTransaction = useCallback(async (
+    }, [])    // === SMART GAS HELPER ===
+    // Unified way to get gas limit and fees (EIP-1559 where possible)
+    const getSmartGasConfig = useCallback(async (params: {
         functionName: string,
         args: any[],
-        useSessionKeyParam: boolean = true // для lobby actions ставим false
-    ): Promise<`0x${string}`> => {
-        const session = loadSession();
-        const roomId = currentRoomIdRef.current;
+        account: `0x${string}`,
+        value?: bigint,
+        nonce?: number
+    }) => {
+        const { functionName, args, account, value = 0n, nonce } = params;
+        const pClient = publicClientRef.current;
+        const targetChain = runtimeChainRef.current;
+        if (!pClient) throw new Error("PublicClient missing");
 
-        // Debug: показываем все условия
-        console.log(`[TX Debug] ${functionName}:`, {
-            useSessionKeyParam,
-            hasSession: !!session,
-            registeredOnChain: session?.registeredOnChain,
-            expired: session ? Date.now() >= session.expiresAt : 'no session',
-            expiresAt: session?.expiresAt,
-            now: Date.now(),
-            roomId: roomId !== null ? Number(roomId) : null,
-            sessionRoomId: session?.roomId,
-            sessionAddress: session?.address,
-            roomMatch: session && roomId !== null ? session.roomId === Number(roomId) : false,
-        });
+        const isSomnia = Number(targetChain.id) === 50312 || Number(targetChain.id) === 5031;
 
-        // Проверяем можно ли использовать session key
-        let canUseSession = useSessionKeyParam &&
-            session &&
-            session.registeredOnChain &&
-            Date.now() < session.expiresAt &&
-            roomId !== null &&
-            session.roomId === Number(roomId);
-
-        // FIX: For gas-heavy functions (endGameZK), check session key balance
-        // If balance is too low, fall back to main wallet to avoid "insufficient balance"
-        const currencySymbol = runtimeChainRef.current.nativeCurrency.symbol;
-        if (canUseSession && session && publicClientRef.current && ['endGameZK'].includes(functionName)) {
-            try {
-                const sessionBalance = await publicClientRef.current.getBalance({
-                    address: session.address as `0x${string}`
-                });
-                // SPEED: Reduced threshold to 0.01 (ZK TXs are typically ~0.005 on Somnia, slightly more on Fuji)
-                const MIN_BALANCE_FOR_HEAVY_TX = parseEther('0.01');
-                if (sessionBalance < MIN_BALANCE_FOR_HEAVY_TX) {
-                    console.warn(`[Session TX] Session key balance too low for ${functionName}: ${formatEther(sessionBalance)} ${currencySymbol}. Falling back to main wallet.`);
-                    canUseSession = false;
-                } else {
-                    console.log(`[Session TX] Session key balance OK for ${functionName}: ${formatEther(sessionBalance)} ${currencySymbol}`);
-                }
-            } catch (balErr) {
-                console.warn('[Session TX] Failed to check session balance, proceeding anyway:', balErr);
+        // 1. Fetch Fee Data (Priority: EIP-1559)
+        let feeConfig: any = {};
+        let currentGasPrice = isSomnia ? 6_000_000_000n : 30_000_000_000n;
+        
+        try {
+            const feeData = await pClient.estimateFeesPerGas();
+            if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+                // Buffer 1.3x on fees to ensure inclusion
+                feeConfig = {
+                    maxFeePerGas: (feeData.maxFeePerGas * 130n) / 100n,
+                    maxPriorityFeePerGas: (feeData.maxPriorityFeePerGas * 130n) / 100n,
+                    type: 2 as any
+                };
+                currentGasPrice = feeData.maxFeePerGas; 
+            } else {
+                const price = await pClient.getGasPrice();
+                if (price > 0n) currentGasPrice = price;
+                feeConfig = {
+                    gasPrice: (currentGasPrice * 130n) / 100n,
+                    type: 0 as any
+                };
             }
+        } catch (e) {
+            console.warn('[Gas] Fee fetch failed, using fallback:', e);
+            feeConfig = { gasPrice: (currentGasPrice * 130n) / 100n, type: 0 as any };
         }
 
-        console.log(`[TX Debug] Final canUseSession for ${functionName}: ${canUseSession}`);
-
-        // === TEST MODE SIMULATION ===
-        if (isTestMode && ['commitNightAction', 'revealNightAction', 'commitMafiaTarget', 'revealMafiaTarget', 'commitRole'].includes(functionName)) {
-            console.log(`[Test Mode] Simulating transaction for ${functionName}`);
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
-            return '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as `0x${string}`;
-        }
-
-        // Determine which account to use for gas estimation
-        const sessionClient = getSessionWalletClient();
-        const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
-        const accountToUse = (canUseSession && sessionClient) ? sessionClient.account : activeAccount;
-
-        if (!accountToUse || !publicClientRef.current) {
-            console.error("[Gas Estimation] Missing account or publicClient.");
-            throw new Error("Cannot estimate gas: account or publicClient missing.");
-        }
-
-        // === АВТОМАТИЧЕСКИЙ РАСЧЕТ ГАЗА ===
-        let calculatedGas = 1_000_000n; // Fallback на случай сбоя оценки
-        const txStartTime = performance.now();
-
-        // SPEED FIX: Use known gas price to skip eth_gasPrice RPC call where possible
-        // Somnia testnet consistently reports 6 gwei. Avalanche Fuji varies but ~25-30 is safe.
-        const CURRENT_GAS_PRICE = runtimeChainRef.current.id === 50312
-            ? 6_000_000_000n
-            : 30_000_000_000n; // 30 gwei for Fuji/others as safe default
-
-        // SPEED FIX: Known gas limits for heavy functions — skip estimateContractGas
-        // These are battle-tested values, estimation adds 500-2000ms latency
-        // NOTE: Block gas limit on current chain is 15M — never exceed 14.5M
-        // NOTE: revealDeck, shareKeysToAll, endGameZK are NOT listed here because their
-        // gas usage varies heavily with player count / deck size. They get dynamically estimated.
-        const MAX_BLOCK_GAS = 14_500_000n;
-        const KNOWN_GAS_LIMITS: Record<string, bigint> = {
+        // 2. Known Gas Limits (Safe Floors)
+        const KNOWN_LIMITS: Record<string, bigint> = {
             commitDeck: 1_500_000n,
             commitAndConfirmRole: 1_000_000n,
             commitNightAction: 1_000_000n,
@@ -722,106 +677,124 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             finalizeVoting: 8_000_000n,
             forcePhaseTimeout: 8_000_000n,
             mafiaMessage: 1_500_000n,
-            createTournamentAndRoom: 5_000_000n,
+            createTournamentAndRoom: 15_000_000n,
+            createTournament: 6_000_000n,
+            joinTournament: 1_500_000n,
+            distributeMafiaPrizes: 12_000_000n,
+            cancelTournament: 2_000_000n,
         };
 
-        const isSomnia = Number(runtimeChainRef.current?.id) === 50312 || Number(runtimeChainRef.current?.id) === 5031;
-        const knownLimit = KNOWN_GAS_LIMITS[functionName];
-        let useKnownLimit = false;
-        
-        // SPEED FIX: Only use hardcoded gas limits on standard chains (not Somnia)
-        // Somnia has extreme gas metering (7M+ for simple tasks) so estimation is mandatory.
-        if (knownLimit && canUseSession && !isSomnia) {
-            // Check if session key can actually afford this known limit
-            try {
-                const sessionAddr = getSessionWalletClient()?.account?.address;
-                if (sessionAddr && publicClientRef.current) {
-                    const bal = await publicClientRef.current.getBalance({ address: sessionAddr });
-                    const cost = knownLimit * CURRENT_GAS_PRICE;
-                    if (bal >= cost) {
-                        useKnownLimit = true;
-                    } else {
-                        console.log(`[Gas] Session key balance (${formatEther(bal)} ${currencySymbol}) can't cover known limit ${knownLimit} (cost=${formatEther(cost)} ${currencySymbol}), using estimation instead`);
-                    }
-                } else {
-                    useKnownLimit = false; // Missing data, safer to estimate
-                }
-            } catch {
-                useKnownLimit = false; // RPC error during balance check, safer to estimate
+        const knownLimit = KNOWN_LIMITS[functionName];
+
+        // 3. Estimate Gas
+        let calculatedGas = 1_000_000n;
+        try {
+            const gasEstimate = await pClient.estimateContractGas({
+                address: contractAddressRef.current,
+                abi: MAFIA_ABI,
+                functionName: functionName as any,
+                args: args as any,
+                account,
+                value,
+                nonce
+            });
+
+            // Buffer: 2.0x for heavy ones if on Somnia, 1.5x others
+            const heavyOps = ['createTournamentAndRoom', 'finalizeVoting', 'endGameZK', 'distributeMafiaPrizes', 'createTournament'];
+            const bufferMultiplier = isSomnia && heavyOps.includes(functionName) ? 200n : 150n;
+            calculatedGas = (gasEstimate * bufferMultiplier) / 100n;
+
+            // Floor check
+            if (knownLimit && calculatedGas < knownLimit) {
+                calculatedGas = knownLimit;
             }
+        } catch (e: any) {
+            const errMsg = e?.message || e?.toString() || '';
+            const isContractRevert = errMsg.includes('reverted') || errMsg.includes('revert') ||
+                errMsg.includes('execution reverted') || errMsg.includes('Error:');
+            
+            if (isContractRevert) {
+                console.error(`[Gas] Contract revert during estimation for ${functionName}`, e);
+                throw e; // Abort if contract says it will fail anyway
+            }
+
+            console.warn(`[Gas] Estimation failed for ${functionName}, using fallback:`, e?.message || e);
+            calculatedGas = knownLimit || (isSomnia ? 14_000_000n : 5_000_000n);
         }
 
-        if (useKnownLimit && knownLimit) {
-            // SPEED: Skip gas estimation for session key TXs with known limits
-            calculatedGas = knownLimit;
-            console.log(`[Gas] Using known limit for ${functionName}: ${calculatedGas} (skipped estimation, saved ~500ms)`);
-        } else {
-            try {
-                console.log(`[Gas] Estimating for ${functionName}...`);
-                const estStart = performance.now();
+        // 4. Safety Cap
+        const safetyCap = 14_800_000n;
+        if (calculatedGas > safetyCap) calculatedGas = safetyCap;
 
-                // 1. Спрашиваем у ноды, сколько нужно газа
-                const gasEstimate = await publicClientRef.current.estimateContractGas({
-                    address: contractAddressRef.current,
-                    abi: MAFIA_ABI,
-                    functionName: functionName as any,
-                    args: args as any,
-                    account: accountToUse,
+        return {
+            gas: calculatedGas,
+            ...feeConfig,
+        };
+    }, []);
+
+
+    // Wrapper для транзакций - использует session key если доступен
+    const sendGameTransaction = useCallback(async (
+        functionName: string,
+        args: any[],
+        useSessionKeyParam: boolean = true // для lobby actions ставим false
+    ): Promise<`0x${string}`> => {
+        const txStartTime = performance.now();
+        const session = loadSession();
+        const roomId = currentRoomIdRef.current;
+        const currencySymbol = runtimeChainRef.current.nativeCurrency.symbol;
+
+        // Проверяем можно ли использовать session key
+        let canUseSession = useSessionKeyParam &&
+            session &&
+            session.registeredOnChain &&
+            Date.now() < session.expiresAt &&
+            roomId !== null &&
+            session.roomId === Number(roomId);
+
+        // FIX: For gas-heavy functions (endGameZK), check session key balance
+        if (canUseSession && session && publicClientRef.current && ['endGameZK'].includes(functionName)) {
+            try {
+                const sessionBalance = await publicClientRef.current.getBalance({
+                    address: session.address as `0x${string}`
                 });
-
-                const estTime = Math.round(performance.now() - estStart);
-
-                // 2. Добавляем буфер безопасности +50% (x1.5)
-                calculatedGas = (gasEstimate * 150n) / 100n;
-
-                // 3. Safety cap - never exceed block gas limit (15M on current chain)
-                const safetyCap = 14_500_000n;
-                if (calculatedGas > safetyCap) {
-                    console.warn(`[Gas] Estimate too high (${calculatedGas}), capping at ${safetyCap} (block gas limit).`);
-                    calculatedGas = safetyCap;
+                const MIN_BALANCE_FOR_HEAVY_TX = parseEther('0.01');
+                if (sessionBalance < MIN_BALANCE_FOR_HEAVY_TX) {
+                    console.warn(`[Session TX] Session key balance low: ${formatEther(sessionBalance)}. Falling back to main wallet.`);
+                    canUseSession = false;
                 }
-
-                console.log(`[Gas] Estimated for ${functionName}: ${gasEstimate}, With Buffer: ${calculatedGas} (took ${estTime}ms)`);
-            } catch (e: any) {
-                const errMsg = e?.message || e?.toString() || '';
-                // If estimation failed because contract REVERTED, don't waste gas — TX will also revert
-                const isContractRevert = errMsg.includes('reverted') || errMsg.includes('revert') ||
-                    errMsg.includes('execution reverted') || errMsg.includes('Error:');
-                if (isContractRevert) {
-                    console.error(`[Gas] Contract revert during estimation for ${functionName} — aborting TX.`, e);
-                    throw e; // Don't proceed, TX will definitely fail
-                }
-
-                console.warn(`[Gas] Estimation failed for ${functionName} (network error?), using safe fallback.`, e);
-                // For session key TXs: cap fallback to what balance can afford
-                if (canUseSession && publicClientRef.current && getSessionWalletClient()?.account) {
-                    try {
-                        const sessionBalance = await publicClientRef.current.getBalance({
-                            address: getSessionWalletClient()!.account!.address
-                        });
-                        // Max gas = 80% of balance / gasPrice (leave 20% buffer)
-                        const maxAffordable = (sessionBalance * 80n / 100n) / CURRENT_GAS_PRICE;
-                        // For Somnia, we need more gas. Fallback to 12M if affordable.
-                        const safeFallback = isSomnia ? 12_000_000n : 3_000_000n;
-                        calculatedGas = (maxAffordable > safeFallback) ? safeFallback : (maxAffordable > 0n ? maxAffordable : safeFallback);
-                        console.log(`[Gas] Session key fallback: balance=${formatEther(sessionBalance)} ${currencySymbol}, maxAffordable gas=${calculatedGas}`);
-                    } catch (_balErr) {
-                        calculatedGas = isSomnia ? 12_000_000n : 3_000_000n;
-                    }
-                } else if (['revealDeck', 'commitDeck', 'shareKeysToAll', 'createAndJoin', 'joinRoom', 'endGameZK', 'commitAndConfirmRole'].includes(functionName)) {
-                    calculatedGas = 14_500_000n; // main wallet can afford more
-                } else {
-                    calculatedGas = isSomnia ? 14_500_000n : 10_000_000n;
-                }
+            } catch (balErr) {
+                console.warn('[Session TX] Failed to check balance:', balErr);
             }
         }
+
+        // === TEST MODE SIMULATION ===
+        if (isTestMode && ['commitNightAction', 'revealNightAction', 'commitMafiaTarget', 'revealMafiaTarget', 'commitRole'].includes(functionName)) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as `0x${string}`;
+        }
+
+        const sessionClient = getSessionWalletClient();
+        const { client: activeWalletClient, account: activeAccount } = await getActiveWalletClient();
+        const accountToUse = (canUseSession && sessionClient) ? sessionClient.account!.address : activeAccount;
+
+        // Get smart gas config
+        const gasConfig = await getSmartGasConfig({
+            functionName,
+            args,
+            account: accountToUse,
+        });
+
+        const calculatedGas = gasConfig.gas;
+
 
         // === ОТПРАВКА ТРАНЗАКЦИИ ===
         if (canUseSession && sessionClient) {
             console.log(`[Session TX] Sending ${functionName} with gas ${calculatedGas}...`);
 
             const attemptSend = async (retryCount: number = 0): Promise<`0x${string}`> => {
-                const MAX_NONCE_RETRIES = 3; // FIX #7: Multi-attempt nonce retry
+                const MAX_NONCE_RETRIES = 3;
+                const txStartTime = performance.now();
                 try {
                     const sendStart = performance.now();
                     const hash = await sessionClient.writeContract({
@@ -831,9 +804,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         args: args as any,
                         account: sessionClient.account!,
                         chain: runtimeChainRef.current,
-                        gas: calculatedGas,
-                        gasPrice: CURRENT_GAS_PRICE, // SPEED: Skip eth_gasPrice RPC call
-                        type: 0 as any, // Legacy
+                        ...gasConfig
                     });
                     const sendTime = Math.round(performance.now() - sendStart);
                     const totalTime = Math.round(performance.now() - txStartTime);
@@ -842,10 +813,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 } catch (err: any) {
                     const errMsg = err.message || '';
                     if (err.message?.includes('reverted') || err.message?.includes('failed') || err.code === -32000) {
-                        const errMsg = err.shortMessage || err.message || "Unknown revert";
-                        console.warn(`[Shuffle] Contract revert detected: ${errMsg} — clearing saved state to prevent retry loop.`, err);
+                        const revertMsg = err.shortMessage || err.message || "Unknown revert";
+                        console.warn(`[Session TX] Contract revert: ${revertMsg}`, err);
                         
-                        // Try to diagnose: check if session key is actually registered for this room
                         if (canUseSession && session) {
                             try {
                                 const pClient = publicClientRef.current;
@@ -857,10 +827,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                                         args: [session.address as `0x${string}`],
                                     }).catch(() => "0x0");
                                     
-                                    console.log(`[Revert Diagnosis] sessionToMain(${session.address}) on-chain:`, mainBound);
-                                    
                                     if (String(mainBound).toLowerCase() === "0x0000000000000000000000000000000000000000") {
-                                        console.error("[Revert Diagnosis] CRITICAL: Session key is NOT registered in contract sessionToMain mapping!");
+                                        console.error("[Revert Diagnosis] CRITICAL: Session key is NOT registered!");
                                     }
                                 }
                             } catch (diagErr) {
@@ -868,19 +836,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             }
                         }
                     }
-                    if (retryCount < MAX_NONCE_RETRIES && (errMsg.includes('nonce too low') || errMsg.includes('Nonce provided for the transaction is lower') || errMsg.includes('replacement transaction underpriced'))) {
-                        console.warn(`[Session TX] Nonce issue for ${functionName} (attempt ${retryCount + 1}/${MAX_NONCE_RETRIES}). Retrying...`);
-
-                        // Wait with exponential backoff
+                    if (retryCount < MAX_NONCE_RETRIES && (errMsg.includes('nonce too low') || errMsg.includes('Nonce provided') || errMsg.includes('underpriced'))) {
+                        console.warn(`[Session TX] Nonce issue for ${functionName}. Retrying ${retryCount + 1}...`);
                         await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-
-                        // Retry - viem will re-fetch nonce from getTransactionCount
                         return attemptSend(retryCount + 1);
                     }
                     console.error('[Session TX] Failed:', err.message || err);
                     throw err;
                 }
             };
+
 
             // FIX #8/#9: Enqueue session key TXs to prevent nonce collisions
             return enqueueTx(() => attemptSend(0));
@@ -895,10 +860,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: args as any,
                 account: activeAccount,
                 chain: runtimeChainRef.current,
-                gas: calculatedGas,
-                type: 0 as any, // Legacy
+                ...gasConfig
             });
         }
+
     }, [getSessionWalletClient]); // getActiveWalletClient and isTestMode (ref) are stable // Removed publicClient, address, runtimeChain from deps
 
     const [gameState, setGameState] = useState<GameState>({
@@ -1613,31 +1578,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (!pClient || !targetChain || !myAddr) { alert("Public client or chain/address not ready!"); return false; }
 
-            // 4. Оценка газа с буфером
-            let gasLimit = isSomnia ? undefined : 5_000_000n;
-            try {
-                const gasEstimate = await pClient.estimateContractGas({
-                    address: contractAddressRef.current,
-                    abi: MAFIA_ABI,
-                    functionName: 'createAndJoin',
-                    args: [
-                        lobbyName,
-                        maxPlayers,
-                        safeName,
-                        pubKeyHex as `0x${string}`,
-                        sessionAddress as `0x${string}`,
-                        !!lobbyPassword,
-                        tournamentId
-                    ],
-                    account: activeAccount,
-                    value: isSomnia ? parseEther('1.0') : parseEther('1.0'),
-                    nonce,
-                });
-                gasLimit = (gasEstimate * 125n) / 100n;
-                console.log(`[Gas] createAndJoin estimated: ${gasEstimate}, using limit: ${gasLimit}`);
-            } catch (e) {
-                console.warn('[Gas] createAndJoin estimation failed, using fallback 5M', e);
-            }
+            // 4. Get Smart Gas Config
+            const txValue = isSomnia ? parseEther('1.0') : parseEther('1.0');
+            const gasConfig = await getSmartGasConfig({
+                functionName: 'createAndJoin',
+                args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, tournamentId],
+                account: activeAccount,
+                value: txValue,
+                nonce,
+            });
 
             // 5. TX: createAndJoin (Atomic v2)
             const hash = await activeWalletClient.writeContract({
@@ -1647,10 +1596,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, tournamentId],
                 account: activeAccount,
                 chain: targetChain,
-                value: isSomnia ? parseEther('1.0') : parseEther('1.0'),
-                gas: gasLimit,
-                type: 0 as any, // Legacy (numeric to satisfy Privy schema)
+                value: txValue,
+                ...gasConfig
             });
+
             const receipt = await pClient.waitForTransactionReceipt({ hash });
 
             let finalRoomId = BigInt(newRoomId);
@@ -1887,22 +1836,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const txValue = isTournamentRoom ? 0n : LOBBY_FUNDING_VALUE;
             console.log(`[Join] Tournament status: ${isTournamentRoom}, sending value: ${txValue}`);
 
-            // 3.5. Оценка газа с буфером
-            let gasLimit = 14_500_000n;
-            try {
-                const gasEstimate = await pClient.estimateContractGas({
-                    address: contractAddressRef.current,
-                    abi: MAFIA_ABI,
-                    functionName: 'joinRoom',
-                    args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
-                    account: activeAccount as `0x${string}`,
-                    value: isTournamentRoom ? 0n : (Number(targetChain.id) === 50312 || Number(targetChain.id) === 5031 ? parseEther('1.0') : parseEther('1.0')),
-                });
-                gasLimit = (gasEstimate * 150n) / 100n;
-                console.log(`[Gas] joinRoom estimated: ${gasEstimate}, with buffer: ${gasLimit}`);
-            } catch (e) {
-                console.warn('[Gas] joinRoom estimation failed, using fallback', e);
-            }
+            // 3.5. Get smart gas config
+            const gasConfig = await getSmartGasConfig({
+                functionName: 'joinRoom',
+                args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
+                account: activeAccount as `0x${string}`,
+                value: txValue,
+            });
 
             // 4. Join room with main wallet + fund session key
             const hash = await activeWalletClient.writeContract({
@@ -1912,10 +1852,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
                 account: activeAccount,
                 chain: targetChain,
-                value: isTournamentRoom ? 0n : (Number(targetChain.id) === 50312 || Number(targetChain.id) === 5031 ? parseEther('1.0') : parseEther('1.0')),
-                gas: gasLimit,
-                type: 0 as any, // Legacy
+                value: txValue,
+                ...gasConfig
             });
+
             const joinReceipt = await pClient.waitForTransactionReceipt({ hash });
 
             // DEBUG: Check deposit collection on join
@@ -3393,6 +3333,27 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 joinPassword: params.joinPassword || ""
             });
 
+            const gasConfig = await getSmartGasConfig({
+                functionName: 'createTournamentAndRoom',
+                args: [
+                    params.name,
+                    buyInUnits,
+                    params.maxPlayers,
+                    params.playersPerTable,
+                    tournamentPasswordHash,
+                    params.paymentToken,
+                    initialPrizeUnits,
+                    params.roomName,
+                    params.nickname,
+                    pubKeyHex as any,
+                    sessionAddress as `0x${string}`,
+                    params.isPrivate,
+                    params.joinPassword || ""
+                ],
+                account,
+                value,
+            });
+
             const hash = await client.writeContract({
                 address: contractAddressRef.current,
                 abi: MAFIA_ABI,
@@ -3415,9 +3376,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 account,
                 value,
                 chain: targetChain,
-                gas: 4_500_000n, // High gas limit for heavy atomic transaction on Shannon
-                type: 0 as any,
+                ...gasConfig
             });
+
 
             addLog(`Atomic creation initiated!`, 'info');
             setIsTxConfirming(true);
@@ -3489,6 +3450,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             setIsTxPending(true);
             const { client, account } = await getActiveWalletClient();
+            const gasConfig = await getSmartGasConfig({
+                functionName: 'distributeMafiaPrizes',
+                args: [roomId],
+                account,
+            });
+
             const hash = await client.writeContract({
                 address: contractAddressRef.current,
                 abi: MAFIA_ABI,
@@ -3496,8 +3463,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [roomId],
                 account,
                 chain: targetChain,
-                type: 0 as any,
+                ...gasConfig
             });
+
 
             addLog(`Prizes distributed for room #${roomId}`, 'success');
             setIsTxConfirming(true);
@@ -3519,6 +3487,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             setIsTxPending(true);
             const { client, account } = await getActiveWalletClient();
+            const gasConfig = await getSmartGasConfig({
+                functionName: 'cancelTournament',
+                args: [tournamentId],
+                account,
+            });
+
             const hash = await client.writeContract({
                 address: contractAddressRef.current,
                 abi: MAFIA_ABI,
@@ -3526,8 +3500,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [tournamentId],
                 account,
                 chain: targetChain,
-                type: 0 as any,
+                ...gasConfig
             });
+
 
             addLog(`Tournament #${tournamentId} cancelled & refunded`, 'info');
             setIsTxConfirming(true);
