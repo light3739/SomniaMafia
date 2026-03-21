@@ -680,7 +680,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                 </motion.div>
 
                 {/* Event Feed — fixed height, fully isolated from buttons below */}
-                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-md overflow-hidden bg-[#161616] border border-white/5 border-t-white/15 border-b-black shadow-[0_20px_50px_rgba(0,0,0,0.95)]">
+                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-md overflow-hidden border-t border-t-white/10 border-x border-x-white/5 border-b-black bg-[#161616] shadow-[0_20px_50px_rgba(0,0,0,0.95)]">
                     <GameLog
                         liveDiscussion={{
                             active: discussionState?.active,
@@ -707,8 +707,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                 {discussionState?.active || isTestMode ? (
                                     <>
                                         {/* Timer Display with Mic Button */}
-                                        {/* Timer Display with Mic Button */}
-                                        <div className="relative w-full py-2 text-center bg-[#161616] rounded-md border border-white/5 border-t-white/15 border-b-black shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
+                                        <div className="relative w-full py-2 text-center bg-[#161616] rounded-md border border-white/5 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
                                             {discussionState?.phase === 'initial_delay' ? (
                                                 <div className="flex items-center justify-center gap-2">
                                                     <Clock className="w-4 h-4 text-[#916A47]" />
@@ -771,13 +770,13 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                         )}
                                     </>
                                 ) : discussionState?.finished ? (
-                                    <div className="w-full py-3 text-center bg-[#161616] rounded-md border border-white/5 border-t-white/15 border-b-black shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
+                                    <div className="w-full py-3 text-center bg-[#161616] rounded-md border border-white/5 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
                                         <p className="text-[#916A47] font-bold text-base animate-pulse">
                                             Starting Vote...
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="w-full py-6 text-center bg-[#161616] rounded-md border border-white/5 border-t-white/15 border-b-black shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
+                                    <div className="w-full py-6 text-center bg-[#161616] rounded-md border border-white/5 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
                                         <p className="text-[#916A47] font-medium text-lg animate-pulse">
                                             Waiting for discussion to start...
                                         </p>
@@ -964,10 +963,10 @@ const VotingTimer: React.FC = React.memo(() => {
     const isHardWait = timerMode === 'hard';
 
     return (
-        <div className={`w-full py-2 text-center rounded-md transition-colors duration-500 shadow-[0_5px_15px_rgba(0,0,0,0.8)]
-            ${isUrgent ? 'bg-[#1A0505] border border-[#8B0000]/50' :
-                isHardWait ? 'bg-[#1A0A02] border border-[#B45309]/50' :
-                    'bg-[#161616] border border-white/5 border-t-white/15 border-b-black'}`}>
+        <div className={`w-full py-2 text-center rounded-md border transition-colors duration-500 shadow-[0_5px_15px_rgba(0,0,0,0.8)]
+            ${isUrgent ? 'bg-[#1A0505] border-[#8B0000]/50' :
+                isHardWait ? 'bg-[#1A0A02] border-[#B45309]/50' :
+                    'bg-[#161616] border-white/5'}`}>
 
             <div className="flex items-center justify-center gap-2">
                 <Clock className={`w-4 h-4 ${isUrgent ? 'text-rose-400' : isHardWait ? 'text-orange-400' : 'text-[#916A47]'}`} />
