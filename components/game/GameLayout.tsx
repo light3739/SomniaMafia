@@ -802,11 +802,11 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
                                 animate={{ opacity: 1, y: 0 }}
                                 className="mb-3 text-center pointer-events-none"
                             >
-                                <span className="inline-block px-3 py-1 rounded-md bg-black/40 border border-[#916A47]/20 text-[#916A47] text-[10px] font-bold tracking-widest uppercase backdrop-blur-sm">
+                                <span className="inline-block px-3 py-1 rounded-md bg-[#0D0B08] border border-[#916A47]/20 text-[#916A47] text-[10px] font-bold tracking-widest uppercase">
                                     Live Feed
                                 </span>
                             </motion.div>
-                            <div className="w-full h-full rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden border border-white/5 relative bg-[#050505]/60 backdrop-blur-sm">
+                            <div className="w-full h-full rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden border border-[#916A47]/10 relative bg-[#0D0B08]">
                                 <GameLog />
                             </div>
                         </div>
@@ -857,7 +857,7 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
 
             {/* Test Controls - Bottom Right */}
             {isTestMode && (
-                <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 p-4 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 text-white pointer-events-auto">
+                <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 p-4 bg-[#0D0B08] rounded-2xl border border-[#916A47]/15 text-white pointer-events-auto">
                     <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">Dev Tools</div>
                     <div className="flex gap-2">
                         <Button

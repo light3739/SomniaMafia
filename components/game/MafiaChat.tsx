@@ -145,13 +145,13 @@ export const MafiaChat = memo<MafiaChatProps>(function MafiaChat({
         <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-4 bg-rose-950/20 border border-rose-500/20 rounded-2xl overflow-hidden relative"
+            className="mb-4 bg-[#0D0B08] border border-[#8B0000]/25 rounded-2xl overflow-hidden relative"
         >
             {/* Header with action buttons */}
-            <div className="flex items-center justify-between p-3 border-b border-rose-500/20 bg-rose-950/30">
+            <div className="flex items-center justify-between p-3 border-b border-[#8B0000]/20 bg-[#0A0808]">
                 <div className="flex items-center gap-2">
-                    <MessageCircle className="w-4 h-4 text-rose-400" />
-                    <span className="text-rose-400 text-sm font-medium">Mafia Chat</span>
+                    <MessageCircle className="w-4 h-4 text-[#8B0000]/70" />
+                    <span className="text-[#8B0000]/70 text-xs font-['Cinzel'] tracking-widest uppercase">Mafia Chat</span>
                     {isSending && <span className="text-xs text-white/30 animate-pulse">Sending...</span>}
                 </div>
 

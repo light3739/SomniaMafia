@@ -497,7 +497,7 @@ export const GameOver: React.FC = React.memo(() => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1 }}
-            className="fixed inset-0 z-[100] flex flex-col items-center p-8 bg-black/80 backdrop-blur-xl pointer-events-auto overflow-y-auto overflow-x-hidden custom-scrollbar h-[100dvh] w-screen"
+            className="fixed inset-0 z-[100] flex flex-col items-center p-8 bg-[#050505] pointer-events-auto overflow-y-auto overflow-x-hidden custom-scrollbar h-[100dvh] w-screen"
         >
             {/* Post-game Global Voice Chat */}
             {currentRoomId && myPlayer && (
@@ -524,7 +524,7 @@ export const GameOver: React.FC = React.memo(() => {
                         initial={{ y: -50, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.2 }}
-                        className={`text-center p-8 rounded-xl mb-8 bg-gradient-to-br ${config.bg} border`}
+                        className={`text-center p-8 rounded-md mb-8 bg-[#0A0A0A] shadow-[0_20px_50px_rgba(0,0,0,0.9)] border border-white/5`}
                     >
                         <motion.div
                             initial={{ rotate: -180, scale: 0 }}
@@ -574,7 +574,7 @@ export const GameOver: React.FC = React.memo(() => {
                         initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 1.2 }}
-                        className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6 mb-6"
+                        className="bg-[#0A0A0A] rounded-md border border-white/5 shadow-[0_20px_50px_rgba(0,0,0,0.9)] p-6 mb-6"
                     >
                         <div className="flex items-center justify-between gap-2 mb-4">
                             <div className="flex items-center gap-2">
@@ -700,7 +700,7 @@ export const GameOver: React.FC = React.memo(() => {
                                     }
                                 }}
                                 isLoading={isTxPending}
-                                className="w-full h-[60px] text-lg bg-gradient-to-r from-[#D4A54A] to-[#F0C868] text-[#281608]"
+                                className="w-full h-[60px] text-lg bg-[#916A47] hover:bg-[#A87B51] text-[#050505] font-bold border border-[#C5A059]/30 transition-colors shadow-[0_10px_20px_rgba(0,0,0,0.5)]"
                             >
                                 <Trophy className="w-5 h-5 mr-2" />
                                 Distribute Prize Pool

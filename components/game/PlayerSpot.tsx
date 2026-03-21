@@ -71,34 +71,32 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
 
     // Determine selection color based on role during night
     const getSelectionClasses = () => {
+        // Базовый нуарный стиль (плотный черный фон, еле заметная рамка, плотная маленькая тень)
+        const baseNoir = 'bg-[#1A1612] border border-white/5 shadow-[0_4px_10px_rgba(0,0,0,0.8)]';
+
         if (!isSelected) {
-            // Default styling
-            let base = 'bg-[#916A47]/20 border border-[#916A47]/80';
-
-            // Highlight "Me" card generally
-            if (isMe) {
-                base = 'bg-[#916A47]/40 border border-[#916A47] shadow-[0_0_15px_rgba(145,106,71,0.3)]';
-            }
-
-            return base;
+            // Если это Я, делаем рамку чуть заметнее (бронза)
+            if (isMe) return 'bg-[#1A1612] border border-[#916A47]/40 shadow-[0_4px_10px_rgba(0,0,0,0.8)]';
+            return baseNoir;
         }
 
-        // Night phase - use role-specific colors
+        // Night phase - Строгие заливки без свечения (Solid Noir)
         if (isNight && myRole) {
             switch (myRole) {
                 case Role.MAFIA:
-                    return 'bg-[#8B0000]/40 border-2 border-[#8B0000]';
+                    // Кроваво-черный фон, жесткая красная рамка
+                    return 'bg-[#1A0505] border border-[#8B0000] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
                 case Role.DOCTOR:
-                    return 'bg-[#0D9488]/40 border-2 border-[#0D9488]';
+                    return 'bg-[#021A18] border border-[#0D9488] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
                 case Role.DETECTIVE:
-                    return 'bg-[#B45309]/40 border-2 border-[#B45309]';
+                    return 'bg-[#1A0A02] border border-[#B45309] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
                 default:
-                    return 'bg-[#916A47]/40 border-2 border-[#916A47]';
+                    return 'bg-[#1A130A] border border-[#916A47] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
             }
         }
 
-        // Day/Voting phase - brown color
-        return 'bg-[#916A47]/40 border-2 border-[#916A47]';
+        // Day/Voting phase - Бронзовая рамка
+        return 'bg-[#1A130A] border border-[#916A47] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
     };
 
     const isMafiaVisible = isNight && myRole === Role.MAFIA && player.role === Role.MAFIA;
@@ -125,7 +123,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                 }
             }}
             className={`
-                relative flex flex-row items-center gap-4 p-4 rounded-xl transition-all duration-300
+                relative flex flex-row items-center gap-4 p-4 rounded-md transition-all duration-300
                 w-[250px] h-[130px]
                 ${canAct && player.isAlive ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}
                 ${getSelectionClasses()}
@@ -195,7 +193,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                 e.stopPropagation();
                                 setPlayerMark(player.address, null);
                             }}
-                            className="w-7 h-7 rounded-full border border-white/20 bg-black/60 backdrop-blur-sm flex items-center justify-center transition-all duration-300 hover:scale-110 hover:border-white/40 z-30 shadow-lg"
+                            className="w-7 h-7 rounded-full border border-white/10 bg-[#050505] flex items-center justify-center transition-all duration-300 hover:scale-110 hover:border-[#916A47] z-30 shadow-[0_4px_10px_rgba(0,0,0,0.8)]"
                         >
                             <AnimatePresence mode="wait">
                                 {isHoveringMarks ? (
@@ -329,7 +327,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                 {/* Online/Offline Status Dot - Green for Alive/Connected, Red for Dead/Kicked */}
                 <div className={`
                     absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-[#19130D]
-                    ${player.status === 'connected' && player.isAlive ? 'bg-green-500' : 'bg-red-500'}
+                    ${player.status === 'connected' && player.isAlive ? 'bg-[#3D5A3E]' : 'bg-[#8B0000]/60'}
                 `}></div>
             </div>
 
@@ -374,7 +372,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                             className="absolute bottom-full right-0 mb-2 z-50 origin-bottom-right"
                                             onClick={(e) => e.stopPropagation()}
                                         >
-                                            <div className="bg-black/70 backdrop-blur-md rounded-xl p-3 flex items-center gap-3 w-[140px] border border-[#916A47]/30 shadow-xl">
+                                            <div className="bg-[#050505] rounded-md p-3 flex items-center gap-3 w-[140px] border border-white/5 shadow-[0_15px_40px_rgba(0,0,0,0.9)]">
                                                 <button
                                                     onClick={() => handleVolumeChange(volume === 0 ? 1 : 0)}
                                                     className="text-[#916A47]/70 hover:text-[#916A47] transition-colors shrink-0"

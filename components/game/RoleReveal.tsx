@@ -4,13 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { useAccount, useWalletClient } from 'wagmi';
 import { Role, GamePhase } from '../../types';
-import { Button } from '../ui/Button';
+
 import { Check, Users, Skull, Shield, Search, Loader2, EyeOff } from 'lucide-react';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { registerEciesPubkey, submitSraKeyToGm, fetchMyRoleFromGm } from '../../services/gmService';
 import { loadOrCreateKeypair } from '../../services/eciesService';
-import { useSoundEffects } from '../ui/SoundEffects';
-import { CinematicOverlay } from './CinematicOverlay';
 
 interface RevealState {
     myRole: Role | null;
@@ -20,13 +18,12 @@ interface RevealState {
     eciesRegistered: boolean;
 }
 
-const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string; description: string; accentColor: string }> = {
+const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string; description: string }> = {
     [Role.MAFIA]: {
         icon: <Skull className="w-16 h-16" />,
         color: 'text-[#8B0000]',
         bgColor: 'from-[#8B0000]/40 to-[#8B0000]/20',
         borderColor: 'border-[#8B0000]/30',
-        accentColor: '#8B0000',
         description: 'Eliminate all civilians to win. Vote by day, kill by night.'
     },
     [Role.DOCTOR]: {
@@ -34,7 +31,6 @@ const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: 
         color: 'text-[#0D9488]',
         bgColor: 'from-[#0D9488]/40 to-[#0D9488]/20',
         borderColor: 'border-[#0D9488]/30',
-        accentColor: '#0D9488',
         description: 'Save one player each night from the mafia attack.'
     },
     [Role.DETECTIVE]: {
@@ -42,7 +38,6 @@ const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: 
         color: 'text-[#B45309]',
         bgColor: 'from-[#B45309]/40 to-[#B45309]/20',
         borderColor: 'border-[#B45309]/30',
-        accentColor: '#B45309',
         description: 'Investigate one player each night to reveal their alignment.'
     },
     [Role.CIVILIAN]: {
@@ -50,7 +45,6 @@ const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: 
         color: 'text-[#6B5A4A]',
         bgColor: 'from-[#6B5A4A]/40 to-[#6B5A4A]/20',
         borderColor: 'border-[#6B5A4A]/30',
-        accentColor: '#6B5A4A',
         description: 'Find and vote out the mafia during the day to survive.'
     },
     [Role.UNKNOWN]: {
@@ -58,7 +52,6 @@ const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: 
         color: 'text-gray-500',
         bgColor: 'from-gray-950/50 to-gray-900/30',
         borderColor: 'border-gray-500/20',
-        accentColor: '#333333',
         description: 'Role unknown'
     }
 };
@@ -76,7 +69,6 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     const { address, chainId } = useAccount();
     const { data: walletClient } = useWalletClient();
-    const { playApproveSound } = useSoundEffects();
 
     const [revealState, setRevealState] = useState<RevealState>({
         myRole: null,
@@ -113,8 +105,10 @@ export const RoleReveal: React.FC = React.memo(() => {
             setRevealState(prev => ({ 
                 ...prev, 
                 eciesRegistered: true,
+                // If it's a new key, reset the flow to re-share keys with the new pubkey
                 ...(isNew && { hasSharedKeys: false, isRevealed: false, myRole: null })
             }));
+            console.log("[RoleReveal] ECIES registered successfully");
         } catch (e) {
             console.error("[RoleReveal] ECIES registration failed:", e);
         } finally {
@@ -147,15 +141,20 @@ export const RoleReveal: React.FC = React.memo(() => {
             });
 
             setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
+            console.log("[RoleReveal] SRA key submitted to GM");
         } catch (e: any) {
             console.error("[RoleReveal] SRA submission failed:", e);
             addLog(e.message || "Failed to submit SRA key", "danger");
+            
+            // Retry after 3 seconds by allowing the effect to trigger this again
             setTimeout(() => {
                 submitInFlightRef.current = false;
             }, 3000);
-            return; 
+            return; // Don't reset flag immediately in finally
         } finally {
             setIsProcessing(false);
+            // Only reset if it didn't fail (in success case) or if we don't want retry
+            // But here we want the timeout to handle the reset on failure
             if (revealState.hasSharedKeys) {
                 submitInFlightRef.current = false;
             }
@@ -175,6 +174,7 @@ export const RoleReveal: React.FC = React.memo(() => {
             });
 
             if (role) {
+                // Save to localStorage
                 localStorage.setItem(`my_role_${currentRoomId}_${address.toLowerCase()}`, role);
 
                 setRevealState(prev => ({
@@ -182,8 +182,6 @@ export const RoleReveal: React.FC = React.memo(() => {
                     myRole: role,
                     isRevealed: true
                 }));
-
-                playApproveSound();
 
                 setGameState(prev => ({
                     ...prev,
@@ -226,6 +224,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
             await commitAndConfirmRoleOnChain(roleNum, salt);
 
+            // Save salt for future reference if needed
             if (currentRoomId && address) {
                 localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, salt);
             }
@@ -248,17 +247,19 @@ export const RoleReveal: React.FC = React.memo(() => {
     useEffect(() => {
         if (gameState.phase !== GamePhase.REVEAL) return;
 
+        // Sequence: Register ECIES -> Submit SRA -> Fetch Role -> Auto-Confirm
         if (!revealState.eciesRegistered) {
             handleRegisterEcies();
         } else if (!revealState.hasSharedKeys) {
             handleShareKey();
         } else if (!revealState.isRevealed && !revealState.hasConfirmed) {
-            const interval = setInterval(handleFetchRole, 2000); 
+            const interval = setInterval(handleFetchRole, 2000); // Poll every 2s
             return () => clearInterval(interval);
         } else if (!revealState.hasConfirmed && !isProcessing && !isTxPending) {
+            // Auto-confirm role after a 4 second delay so the user can read it
             const timeout = setTimeout(() => {
                 handleConfirmRole();
-            }, 10000); // Give user enough time to see the beautiful cinematic card
+            }, 4000);
             return () => clearTimeout(timeout);
         }
     }, [
@@ -272,66 +273,21 @@ export const RoleReveal: React.FC = React.memo(() => {
         handleRegisterEcies, 
         handleShareKey, 
         handleFetchRole,
-        handleConfirmRole
+        handleConfirmRole,
+        walletClient
     ]);
 
     // UI
     const roleConfig = revealState.myRole ? RoleConfig[revealState.myRole] : RoleConfig[Role.UNKNOWN];
-
-    const backgroundElements = (
-        <React.Fragment>
-            {revealState.isRevealed && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden"
-                >
-                    <motion.div 
-                        animate={{ 
-                            scale: [1, 1.2, 1],
-                            opacity: [0.1, 0.2, 0.1]
-                        }}
-                        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-                        className="w-[120vw] h-[120vw] rounded-full blur-[150px]"
-                        style={{ backgroundColor: roleConfig.accentColor }}
-                    />
-                </motion.div>
-            )}
-            <div className="absolute inset-0 opacity-20">
-                {/* Dust particles */}
-                {[...Array(15)].map((_, i) => (
-                    <motion.div
-                        key={i}
-                        className="absolute w-1 h-1 bg-white rounded-full"
-                        style={{
-                            left: `${Math.random() * 100}%`,
-                            top: `${Math.random() * 100}%`,
-                        }}
-                        animate={{
-                            y: [0, -100, 0],
-                            x: [0, Math.random() * 50 - 25, 0],
-                            opacity: [0, 0.5, 0]
-                        }}
-                        transition={{
-                            duration: 5 + Math.random() * 10,
-                            repeat: Infinity,
-                            delay: Math.random() * 5
-                        }}
-                    />
-                ))}
-            </div>
-        </React.Fragment>
-    );
+    const keysCollected = gameState.players.filter(p => p.hasConfirmedRole).length;
+    const keysNeeded = gameState.players.length;
 
     return (
-        <CinematicOverlay 
-            show={true} // Always show while in REVEAL phase
-            backgroundElements={backgroundElements}
-        >
+        <div className="w-full h-[100dvh] flex flex-col items-center overflow-y-auto overflow-x-hidden p-8 custom-scrollbar">
             <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
+                initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="max-w-lg w-full flex flex-col items-center"
+                className="max-w-lg w-full my-auto"
             >
                 <AnimatePresence mode="wait">
                     {!revealState.isRevealed ? (
@@ -340,7 +296,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -20 }}
-                            className="bg-black/60 backdrop-blur-xl rounded-xl border border-[#916A47]/30 p-8 shadow-2xl w-full"
+                            className="bg-[#050505] rounded-md border border-white/5 p-8 shadow-[0_30px_60px_rgba(0,0,0,0.95)]"
                         >
                             <div className="text-center mb-6">
                                 <div className="w-10 h-10 mx-auto mb-3 relative">
@@ -384,78 +340,72 @@ export const RoleReveal: React.FC = React.memo(() => {
                             key="revealed"
                             initial={{ opacity: 0, rotateY: 90 }}
                             animate={{ opacity: 1, rotateY: 0 }}
-                            transition={{ type: "spring", stiffness: 100, damping: 20, duration: 0.8 }}
-                            className={`bg-gradient-to-br ${roleConfig.bgColor} backdrop-blur-xl rounded-2xl border ${roleConfig.borderColor} p-12 shadow-[0_0_50px_rgba(0,0,0,0.5)] w-full max-w-[400px] aspect-[4/5] flex flex-col justify-between mx-auto relative overflow-hidden`}
+                            transition={{ type: "spring", duration: 0.8 }}
+                            className={`bg-gradient-to-br ${roleConfig.bgColor} bg-[#0A0A0A] rounded-md border border-white/10 p-8 md:p-12 shadow-[0_30px_60px_rgba(0,0,0,0.95)] w-full max-w-[360px] md:max-w-[400px] aspect-square flex flex-col justify-between mx-auto relative overflow-hidden`}
                         >
                             {/* Role icon — watermark in top-right */}
                             <motion.div
                                 initial={{ opacity: 0, scale: 0.8 }}
                                 animate={{ opacity: 0.12, scale: 1 }}
-                                transition={{ delay: 0.5, duration: 1.5 }}
-                                className={`absolute top-8 right-8 ${roleConfig.color}`}
+                                transition={{ delay: 0.2, duration: 1 }}
+                                className={`absolute top-6 right-6 ${roleConfig.color}`}
                             >
                                 {roleConfig.icon}
                             </motion.div>
 
                             {/* Pulsing border glow */}
                             <motion.div
-                                className={`absolute inset-0 rounded-2xl border ${roleConfig.borderColor}`}
-                                animate={{ opacity: [0.2, 0.5, 0.2] }}
+                                className={`absolute inset-0 rounded-xl border ${roleConfig.borderColor}`}
+                                animate={{ opacity: [0.3, 0.6, 0.3] }}
                                 transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
                             />
-
                             <div className="text-center flex-1 flex flex-col justify-center">
                                 <motion.h2
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.6 }}
-                                    className={`text-5xl font-['Cinzel'] mb-8 ${roleConfig.color} tracking-widest uppercase mix-blend-plus-lighter`}
+                                    transition={{ delay: 0.3 }}
+                                    className={`text-4xl font-['Cinzel'] mb-6 ${roleConfig.color}`}
                                 >
                                     {revealState.myRole}
                                 </motion.h2>
                                 <motion.p
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
-                                    transition={{ delay: 1 }}
-                                    className="text-white/70 text-sm font-sans tracking-wide leading-relaxed max-w-xs mx-auto"
+                                    transition={{ delay: 0.5 }}
+                                    className="text-white/60 text-sm max-w-xs mx-auto"
                                 >
                                     {roleConfig.description}
                                 </motion.p>
                             </div>
 
-                            <div className="space-y-3 mt-8">
+                            <div className="space-y-3 mt-4 md:mt-6">
                                 {!revealState.hasConfirmed ? (
-                                    <Button
+                                    <motion.button
                                         onClick={handleConfirmRole}
-                                        isLoading={isProcessing || isTxPending}
                                         disabled={isProcessing || isTxPending}
-                                        className="w-full font-['Cinzel'] tracking-widest uppercase"
-                                        style={{ 
-                                            backgroundColor: `${roleConfig.accentColor}44`, 
-                                            borderColor: `${roleConfig.accentColor}88`,
-                                            color: 'white'
-                                        }}
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        className={`w-full py-3 px-6 rounded-lg border font-['Cinzel'] text-xs tracking-[0.2em] uppercase transition-all duration-300
+                                            ${roleConfig.borderColor} ${roleConfig.color}
+                                            bg-transparent hover:bg-white/5
+                                            disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
                                     >
-                                        I Understand My Role
-                                    </Button>
+                                        {(isProcessing || isTxPending)
+                                            ? <><Loader2 className="w-3 h-3 animate-spin" /> Confirming...</>
+                                            : 'I Understand My Role'}
+                                    </motion.button>
                                 ) : (
-                                    <motion.div 
-                                        initial={{ opacity: 0, scale: 0.9 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        className="flex items-center justify-center gap-3 py-4 text-white/90"
-                                    >
-                                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center border border-white/20">
-                                            <Check className="w-5 h-5" />
-                                        </div>
-                                        <span className="font-['Cinzel'] tracking-widest uppercase text-sm">Role Confirmed</span>
-                                    </motion.div>
+                                    <div className={`flex items-center justify-center gap-2 ${roleConfig.color} py-4`}>
+                                        <Check className="w-5 h-5" />
+                                        <span className="font-['Cinzel'] text-xs tracking-[0.2em] uppercase">Role Confirmed</span>
+                                    </div>
                                 )}
                             </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
             </motion.div>
-        </CinematicOverlay>
+        </div>
     );
 });
 

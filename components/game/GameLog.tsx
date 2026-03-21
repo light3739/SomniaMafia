@@ -270,9 +270,9 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     const PLAYER_NAME = "text-white"; // Solid white for player names
 
     return (
-        <div className="flex flex-col h-full bg-[#0a0a0a]/80 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+        <div className="flex flex-col h-full bg-[#050505] border border-white/5 rounded-md overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.9)]">
             {/* ── DAY TITLE ────────────────────────────────── */}
-            <div className="flex-shrink-0 flex items-center justify-center py-4 border-b border-white/5 bg-white/[0.02]">
+            <div className="flex-shrink-0 flex items-center justify-center py-4 border-b border-[#916A47]/10 bg-[#0D0B08]">
                 <motion.div
                     key={`day-${dayCount}`}
                     initial={{ opacity: 0, scale: 0.9 }}
@@ -406,7 +406,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                                 exit="exit"
                                 transition={{ duration: 0.6, delay: 0.5 }}
                             >
-                                <span className={`${FONT} text-[15px] font-[900] uppercase tracking-[0.15em] text-[#3b82f6] drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]`}>
+                                <span className={`${FONT} text-[15px] font-[900] uppercase tracking-[0.15em] text-[#916A47] drop-shadow-[0_0_8px_rgba(145,106,71,0.4)]`}>
                                     NIGHT FALLS
                                 </span>
                             </motion.div>

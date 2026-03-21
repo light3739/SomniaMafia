@@ -126,7 +126,7 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
                         }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className="pointer-events-auto mb-2 p-5 bg-black/80 backdrop-blur-2xl border border-[#916A47]/30 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-64"
+                        className="pointer-events-auto mb-2 p-5 bg-[#0A0A0A] border border-white/5 rounded-md shadow-2xl w-64"
                     >
                         <h3 className="text-[#916A47] text-xs font-bold uppercase tracking-widest mb-5 flex items-center gap-2">
                             <Settings className="w-3 h-3" />
@@ -161,7 +161,7 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
             {/* Horizontal row: Sound controls (left) + Chat button (right) */}
             <div className="flex items-center gap-3">
                 {/* Main Control Bar - Sound controls only */}
-                <div className="pointer-events-auto flex items-center gap-2 p-1.5 bg-black/60 backdrop-blur-xl border-2 border-white/20 rounded-full shadow-2xl group transition-all hover:bg-black/80 hover:border-[#916A47]/60">
+                <div className="pointer-events-auto flex items-center gap-2 p-1.5 bg-[#0A0A0A] border border-white/5 rounded-md shadow-xl group transition-all hover:border-[#916A47]/40">
 
                     {/* Main Music Control (only if on music route) */}
                     {isMusicRoute && (
@@ -169,7 +169,7 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
                             {isPlaying ? (
                                 <button
                                     onClick={handleStop}
-                                    className="w-10 h-10 flex items-center justify-center rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all active:scale-95"
+                                    className="w-10 h-10 flex items-center justify-center rounded-sm bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all active:scale-95"
                                     title="Stop Background Music"
                                 >
                                     <Square size={14} fill="currentColor" />
@@ -177,7 +177,7 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
                             ) : (
                                 <button
                                     onClick={handlePlay}
-                                    className="w-10 h-10 flex items-center justify-center rounded-full bg-[#916A47]/20 text-[#916A47] hover:bg-[#916A47]/40 transition-all active:scale-95"
+                                    className="w-10 h-10 flex items-center justify-center rounded-sm bg-[#916A47]/20 text-[#916A47] hover:bg-[#916A47]/40 transition-all active:scale-95"
                                     title="Play Background Music"
                                 >
                                     <Play size={16} fill="currentColor" className="ml-0.5" />
@@ -191,8 +191,8 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
                     <button
                         onClick={() => setShowSettings(!showSettings)}
                         className={`
-                            w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-90
-                            ${showSettings ? 'bg-[#916A47] text-white' : 'text-white/60 hover:text-white hover:bg-white/5'}
+                            w-10 h-10 flex items-center justify-center rounded-sm transition-all active:scale-90
+                            ${showSettings ? 'bg-[#916A47] text-[#050505]' : 'text-white/60 hover:text-white hover:bg-white/5'}
                         `}
                         title="Audio Settings"
                     >
