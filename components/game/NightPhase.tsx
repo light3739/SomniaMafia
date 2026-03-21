@@ -723,16 +723,16 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="mb-4 p-4 bg-rose-950/30 rounded-2xl"
+                        className="mb-4 p-4 bg-[#8B0000]/10 rounded-2xl border border-[#8B0000]/20"
                     >
                         <div className="flex items-center gap-2 mb-2">
-                            <span className="text-rose-400 text-sm font-medium">Your Fellow Mafia</span>
+                            <span className="text-[#8B0000]/70 text-sm font-['Cinzel'] tracking-wider uppercase text-xs">Your Fellow Mafia</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {nightState.teammates.map(addr => {
                                 const teammate = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
                                 return (
-                                    <span key={addr} className={`px-3 py-1 rounded-full text-sm ${teammate?.isAlive ? 'bg-rose-900/50 text-rose-300' : 'bg-gray-900/50 text-gray-500 line-through'}`}>
+                                    <span key={addr} className={`px-3 py-1 rounded-full text-sm border ${teammate?.isAlive ? 'bg-[#8B0000]/15 text-[#8B0000]/70 border-[#8B0000]/30' : 'bg-white/5 text-white/20 border-white/10 line-through'}`}>
                                         {teammate?.name || addr.slice(0, 8)}
                                     </span>
                                 );
@@ -788,18 +788,19 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                 <motion.div
                                     initial={{ scale: 0.95, opacity: 0 }}
                                     animate={{ scale: 1, opacity: 1 }}
-                                    className={`p-3 rounded-xl border mb-4 w-full ${myRole === Role.MAFIA ? 'bg-rose-900/15 border-rose-500/40' :
-                                        myRole === Role.DOCTOR ? 'bg-teal-900/15 border-teal-500/40' :
-                                            'bg-sky-900/15 border-sky-500/40'
-                                        }`}
+                                    className={`p-3 rounded-xl border mb-4 w-full ${
+                                        myRole === Role.MAFIA ? 'bg-[#8B0000]/10 border-[#8B0000]/30' :
+                                        myRole === Role.DOCTOR ? 'bg-[#0D9488]/10 border-[#0D9488]/30' :
+                                        'bg-[#B45309]/10 border-[#B45309]/30'
+                                    }`}
                                 >
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
-                                            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-gray-800">
+                                            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-[#19130D]">
                                                 {selectedPlayer.avatarUrl ? (
                                                     <Image src={selectedPlayer.avatarUrl} alt={selectedPlayer.name} fill sizes="40px" className="object-cover" />
                                                 ) : (
-                                                    <div className="w-full h-full flex items-center justify-center bg-indigo-950/50">
+                                                    <div className="w-full h-full flex items-center justify-center bg-[#19130D]">
                                                         <User className="w-5 h-5 text-white/20" />
                                                     </div>
                                                 )}
@@ -809,7 +810,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                                 <p className="text-white/40 text-[10px] font-mono">{selectedPlayer.address.slice(0, 6)}...{selectedPlayer.address.slice(-4)}</p>
                                             </div>
                                         </div>
-                                        <span className={`${roleConfig.color} font-bold uppercase tracking-wider text-[10px]`}>{roleConfig.label}</span>
+                                        <span className={`${roleConfig.color} font-bold uppercase tracking-wider text-[10px] font-['Cinzel']`}>{roleConfig.label}</span>
                                     </div>
                                 </motion.div>
                             )}
@@ -817,7 +818,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                 onClick={handleCommit}
                                 isLoading={isProcessing || isTxPending}
                                 disabled={!selectedTarget || isProcessing || isTxPending}
-                                className="w-full h-[46px] text-sm"
+                                variant={myRole === Role.MAFIA ? 'noir-danger' : 'noir'}
+                                className="w-full h-[46px]"
                                 data-custom-sound
                             >
                                 {selectedTarget ? `${roleConfig.label} ${selectedPlayer?.name}` : 'Select target'}
@@ -826,7 +828,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                             <button
                                 onClick={handleSkip}
                                 disabled={isProcessing || isTxPending}
-                                className="mt-4 text-white/20 hover:text-white/50 text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center gap-1.5 group"
+                                className="mt-4 text-white/20 hover:text-[#916A47]/70 text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center gap-1.5 group"
                             >
                                 <RefreshCw className={`w-2.5 h-2.5 transition-transform group-hover:rotate-180 duration-500 ${isProcessing ? 'animate-spin' : ''}`} />
                                 Skip my turn
@@ -872,7 +874,7 @@ export const NightPhaseTimer: React.FC<{ isTxPending?: boolean }> = React.memo((
         <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/40 border border-white/10 backdrop-blur-sm shadow-lg"
+            className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#0D0B08] border border-[#916A47]/20 shadow-lg"
         >
             <Clock className={`w-3.5 h-3.5 ${timeLeft < 20 ? 'text-red-400 animate-pulse' : 'text-white/40'}`} />
             <span className={`font-mono text-xs tracking-wider ${timeLeft < 20 ? 'text-red-400' : 'text-white/70'}`}>

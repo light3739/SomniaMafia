@@ -342,17 +342,17 @@ export const ChatToggleButton: React.FC<{
                             opacity: { duration: 0.15 }
                         }}
                         style={{ originY: 1, transformOrigin: 'bottom' }}
-                        className="absolute bottom-14 right-0 w-80 mb-2 bg-black/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col z-[99]"
+                        className="absolute bottom-14 right-0 w-80 mb-2 bg-[#050505] border border-white/5 rounded-md shadow-[0_20px_50px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col z-[99]"
                     >
                         {/* Header */}
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-black/40">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-[#916A47]/15 bg-[#0A0908]">
                             <div className="flex items-center gap-2">
                                 <span className="text-white font-medium text-sm">Discussion Chat</span>
                                 {isConnecting && (
                                     <Loader2 className="w-3 h-3 text-[#916A47] animate-spin" />
                                 )}
                                 {isConnected && (
-                                    <span className="w-2 h-2 bg-green-500 rounded-full" title="Connected" />
+                                    <span className="w-2 h-2 bg-[#3D5A3E] rounded-full" title="Connected" />
                                 )}
                             </div>
                             <button
@@ -381,9 +381,9 @@ export const ChatToggleButton: React.FC<{
                                                 {msg.sender}
                                             </span>
                                             <div
-                                                className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${isMe
-                                                    ? 'bg-[#916A47] text-white rounded-br-md'
-                                                    : 'bg-white/10 text-white/90 rounded-bl-md'
+                                                className={`max-w-[80%] px-3 py-2 rounded-sm text-sm border ${isMe
+                                                    ? 'bg-[#1A130A] border-[#916A47]/50 text-white/90'
+                                                    : 'bg-[#0A0A0A] border-white/10 text-white/70'
                                                     }`}
                                             >
                                                 {msg.content}
@@ -396,7 +396,7 @@ export const ChatToggleButton: React.FC<{
                         </div>
 
                         {/* Input Area */}
-                        <div className="p-3 border-t border-white/10 bg-black/40">
+                        <div className="p-3 border-t border-[#916A47]/15 bg-[#0A0908]">
                             {canWrite ? (
                                 <div className="flex items-center gap-2">
                                     <input
@@ -432,14 +432,14 @@ export const ChatToggleButton: React.FC<{
             {/* Toggle Button Container - matches Sound Panel style */}
             <div className={`
                 pointer-events-auto flex items-center justify-center p-1.5 
-                bg-black/60 backdrop-blur-xl border-2 rounded-full shadow-2xl 
-                transition-all hover:bg-black/80
-                ${isExpanded ? 'border-[#916A47]' : internalUnreadCount > 0 ? 'border-[#916A47]/60 shadow-[0_0_12px_rgba(145,106,71,0.3)]' : 'border-white/20 hover:border-[#916A47]/60'}
+                bg-[#0A0A0A] border rounded-md shadow-xl
+                transition-all hover:bg-[#1A130A]
+                ${isExpanded ? 'border-[#916A47]' : internalUnreadCount > 0 ? 'border-[#916A47]/60 shadow-[0_0_12px_rgba(145,106,71,0.3)]' : 'border-white/5 hover:border-[#916A47]/40'}
             `}>
                 <button
                     onClick={onToggle}
                     className={`
-                        w-10 h-10 flex items-center justify-center rounded-full transition-all relative
+                        w-10 h-10 flex items-center justify-center rounded-sm transition-all relative
                         ${isExpanded
                             ? 'bg-[#916A47] text-white'
                             : 'text-white/60 hover:text-white hover:bg-white/5'

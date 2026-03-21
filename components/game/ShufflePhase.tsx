@@ -616,7 +616,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
             <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="w-[520px] max-w-[90vw] bg-black/60 backdrop-blur-xl rounded-xl border border-[#916A47]/30 p-8 shadow-2xl relative pointer-events-auto my-auto"
+                className="w-[520px] max-w-[90vw] bg-[#0D0B08] rounded-xl border border-[#916A47]/25 p-8 shadow-2xl relative pointer-events-auto my-auto"
             >
                 {/* Sync Button - positioned absolute */}
                 <div className="absolute top-3 right-3 flex items-center gap-2">
@@ -747,7 +747,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center gap-4">
                     <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[#916A47]/10">
                         {shuffleState.hasRevealed ? (
-                            <Check className="w-4 h-4 text-green-400" />
+                            <Check className="w-4 h-4 text-[#916A47]" />
                         ) : (
                             <Loader2 className="w-4 h-4 text-[#916A47] animate-spin" />
                         )}
@@ -768,7 +768,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                         </div>
                         <div className="h-1.5 bg-black/40 rounded-full overflow-hidden p-[1px] mb-2">
                             <motion.div
-                                className={`h-full rounded-full ${shuffleState.isFailed ? 'bg-red-500' : shuffleState.hasRevealed ? 'bg-green-500' : 'bg-gradient-to-r from-[#916A47] to-[#c9a227]'}`}
+                                className={`h-full rounded-full ${shuffleState.isFailed ? 'bg-[#8B0000]' : shuffleState.hasRevealed ? 'bg-[#916A47]' : 'bg-gradient-to-r from-[#916A47] to-[#c9a227]'}`}
                                 initial={{ width: 0 }}
                                 animate={{ width: `${progress}%` }}
                                 transition={{ duration: 0.8 }}

@@ -244,8 +244,10 @@ export class ServerStore {
             const data = await redis.get(key);
             if (!data) return null;
             return JSON.parse(data);
-        } catch (e) {
-            console.error("[ServerStore] Redis error (getDiscussion), falling back to memory:", e);
+        } catch (e: any) {
+            if (!e.message?.includes('Connection is closed')) {
+                console.error("[ServerStore] Redis error (getDiscussion), falling back to memory:", e);
+            }
             return fallback();
         }
     }

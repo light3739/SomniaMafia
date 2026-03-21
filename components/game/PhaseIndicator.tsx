@@ -14,19 +14,19 @@ export const PhaseIndicator = React.memo(({ phase, dayCount }: PhaseIndicatorPro
     const getConfig = () => {
         switch (phase) {
             case GamePhase.NIGHT:
-                return { icon: <Moon className="w-5 h-5" />, label: "Night Phase", color: "bg-indigo-950/50 text-indigo-300 border-indigo-500/30" };
+                return { icon: <Moon className="w-5 h-5" />, label: "Night Phase", color: "text-[#8B0000] border-[#8B0000]/40" }; // Кровавый
             case GamePhase.DAY:
-                return { icon: <Sun className="w-5 h-5" />, label: "Day Phase", color: "bg-amber-950/50 text-amber-300 border-amber-500/30" };
+                return { icon: <Sun className="w-5 h-5" />, label: "Day Phase", color: "text-[#916A47] border-[#916A47]/40" }; // Бронза
             case GamePhase.VOTING:
-                return { icon: <Sun className="w-5 h-5" />, label: "Voting Session", color: "bg-amber-950/50 text-amber-300 border-amber-500/30" };
+                return { icon: <Vote className="w-5 h-5" />, label: "Voting Session", color: "text-[#916A47] border-[#916A47]/40" };
             case GamePhase.ENDED:
-                return { icon: <Skull className="w-5 h-5" />, label: "Game Over", color: "bg-gray-900 text-gray-300 border-gray-700" };
+                return { icon: <Skull className="w-5 h-5" />, label: "Game Over", color: "text-white/30 border-white/10" }; // Пепел
             case GamePhase.SHUFFLING:
-                return { icon: <div className="w-5 h-5 rounded-full border-2 border-current border-dashed animate-spin" />, label: "Shuffling Deck", color: "bg-purple-950/50 text-purple-300 border-purple-500/30" };
+                return { icon: <div className="w-5 h-5 rounded-full border-2 border-current border-dashed animate-spin" />, label: "Shuffling Deck", color: "text-white/40 border-white/10" };
             case GamePhase.REVEAL:
-                return { icon: <div className="w-5 h-5 rounded-full border-2 border-current" />, label: "Revealing Roles", color: "bg-teal-950/50 text-teal-300 border-teal-500/30" };
+                return { icon: <div className="w-5 h-5 rounded-full border-2 border-current" />, label: "Revealing Roles", color: "text-[#B45309] border-[#B45309]/40" }; // Ржавый янтарь
             default:
-                return { icon: <div className="w-5 h-5 rounded-full border-2 border-current border-dashed animate-spin" />, label: "Syncing...", color: "bg-gray-900 text-gray-400 border-gray-800" };
+                return { icon: <div className="w-5 h-5 rounded-full border-2 border-current border-dashed animate-spin" />, label: "Syncing...", color: "text-white/30 border-white/10" };
         }
     };
 
@@ -34,10 +34,10 @@ export const PhaseIndicator = React.memo(({ phase, dayCount }: PhaseIndicatorPro
 
     return (
         <div className="flex items-center gap-3">
-            {/* Icon separate and outside */}
+            {/* Иконка (отдельный жесткий квадрат) */}
             <div className={`
-                p-2 rounded-full backdrop-blur-sm transition-all duration-500 ease-in-out
-                ${config.color.split(' ')[1]}
+                p-2 rounded-md bg-[#0A0A0A] border shadow-2xl transition-colors duration-500 ease-in-out
+                ${config.color}
             `}>
                 <motion.div
                     key={phase} // Animate icon switch
@@ -45,16 +45,16 @@ export const PhaseIndicator = React.memo(({ phase, dayCount }: PhaseIndicatorPro
                     animate={{ opacity: 1, scale: 1, rotate: 0 }}
                     transition={{ duration: 0.5 }}
                 >
-                    {React.cloneElement(config.icon as React.ReactElement<any>, { className: "w-8 h-8 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" })}
+                    {React.cloneElement(config.icon as React.ReactElement<any>, { className: "w-6 h-6" })}
                 </motion.div>
             </div>
 
-            {/* Text badge with border */}
+            {/* Текстовая панель (строгая форма) */}
             <div className={`
-                px-6 py-2 rounded-full border backdrop-blur-md shadow-lg transition-all duration-500 ease-in-out
+                px-6 py-2 rounded-md bg-[#0A0A0A] border shadow-2xl transition-colors duration-500 ease-in-out
                 ${config.color}
             `}>
-                <span className="text-lg font-bold font-['Montserrat'] uppercase tracking-widest">
+                <span className="text-lg font-bold font-['Cinzel'] uppercase tracking-widest">
                     {phase === GamePhase.DAY ? `Day ${dayCount}` :
                         phase === GamePhase.NIGHT ? `Day ${dayCount}` :
                             phase === GamePhase.VOTING ? `Day ${dayCount}` :

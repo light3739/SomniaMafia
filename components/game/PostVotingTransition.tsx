@@ -1,17 +1,13 @@
+
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CinematicOverlay } from './CinematicOverlay';
 
-/**
- * PostVotingTransition: Full-screen countdown between Day/Voting and Night.
- * 
- * IMPROVEMENTS:
- * 1. Unified CinematicOverlay (No Flashes)
- * 2. Noir Typography (Cinzel instead of Mono)
- * 3. Dust particles for atmosphere.
- */
-export const PostVotingTransition: React.FC = () => {
-    const [timeLeft, setTimeLeft] = useState(10);
+interface PostVotingTransitionProps {
+    initialSeconds?: number;
+}
+
+export const PostVotingTransition: React.FC<PostVotingTransitionProps> = ({ initialSeconds = 10 }) => {
+    const [timeLeft, setTimeLeft] = useState(initialSeconds);
 
     useEffect(() => {
         if (timeLeft <= 0) return;
@@ -21,71 +17,35 @@ export const PostVotingTransition: React.FC = () => {
         return () => clearInterval(timer);
     }, [timeLeft]);
 
-    const particles = (
-        <React.Fragment>
-            {[...Array(12)].map((_, i) => (
-                <motion.div
-                    key={i}
-                    className="absolute bg-white rounded-full"
-                    style={{
-                        left: `${Math.random() * 100}%`,
-                        top: '-5%',
-                        width: '3px',
-                        height: '3px',
-                        boxShadow: '0 0 4px 1px rgba(255, 255, 255, 0.2)',
-                    }}
-                    animate={{
-                        y: ['-5vh', '105vh'],
-                        opacity: [0, 0.4, 0],
-                        x: [0, Math.random() * 20 - 10, 0]
-                    }}
-                    transition={{
-                        duration: 8 + Math.random() * 4,
-                        repeat: Infinity,
-                        ease: 'linear',
-                        delay: Math.random() * 5
-                    }}
-                />
-            ))}
-        </React.Fragment>
-    );
-
     return (
-        <CinematicOverlay 
-            show={timeLeft > 0} 
-            backgroundElements={particles}
+        <motion.div
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[50] pointer-events-none"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
         >
-            <div className="flex flex-col items-center">
-                {/* Timer */}
+            <div className="flex items-center gap-3 px-5 py-2.5 rounded-full border border-[#8B0000]/30 bg-[#050505]/90 backdrop-blur-md">
+                {/* Pulsing dot */}
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
-                    className="flex flex-col items-center"
-                >
-                    <span className="text-white/95 font-['Cinzel'] text-6xl md:text-8xl font-light tabular-nums tracking-[0.2em] mix-blend-plus-lighter">
-                        {timeLeft.toString().padStart(2, '0')}
-                    </span>
-                </motion.div>
-
-                {/* Divider */}
-                <motion.div
-                    initial={{ width: 0, opacity: 0 }}
-                    animate={{ width: "240px", opacity: 1 }}
-                    transition={{ delay: 0.8, duration: 2, ease: "easeInOut" }}
-                    className="h-[1px] bg-gradient-to-r from-transparent via-[#8B0000] to-transparent mt-8"
+                    className="w-1.5 h-1.5 rounded-full bg-[#8B0000]"
+                    animate={{ opacity: [1, 0.3, 1] }}
+                    transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
                 />
 
                 {/* Label */}
-                <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 1.5, duration: 1.5 }}
-                    className="mt-8 text-[#916A47] font-['Cinzel'] tracking-[0.6em] uppercase text-xs md:text-sm text-center ml-[0.6em]"
-                >
+                <span className="font-['Cinzel'] text-[10px] tracking-[0.3em] uppercase text-white/50">
                     Night Starting
-                </motion.p>
+                </span>
+
+                {/* Divider */}
+                <div className="w-[1px] h-3 bg-[#8B0000]/40" />
+
+                {/* Timer */}
+                <span className="font-['Cinzel'] text-[11px] tracking-[0.15em] text-[#8B0000]/80 tabular-nums">
+                    00:{timeLeft.toString().padStart(2, '0')}
+                </span>
             </div>
-        </CinematicOverlay>
+        </motion.div>
     );
 };

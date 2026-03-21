@@ -680,7 +680,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                 </motion.div>
 
                 {/* Event Feed — fixed height, fully isolated from buttons below */}
-                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-2xl overflow-hidden border border-[#916A47]/20 bg-black/40 backdrop-blur-sm">
+                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-md overflow-hidden border-t border-t-white/10 border-x border-x-white/5 border-b-black bg-[#161616] shadow-[0_20px_50px_rgba(0,0,0,0.95)]">
                     <GameLog
                         liveDiscussion={{
                             active: discussionState?.active,
@@ -704,10 +704,10 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                 exit={{ opacity: 0 }}
                                 className="w-full space-y-3"
                             >
-                                {discussionState?.active ? (
+                                {discussionState?.active || isTestMode ? (
                                     <>
                                         {/* Timer Display with Mic Button */}
-                                        <div className="relative w-full py-2 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                        <div className="relative w-full py-2 text-center bg-[#111111] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
                                             {discussionState?.phase === 'initial_delay' ? (
                                                 <div className="flex items-center justify-center gap-2">
                                                     <Clock className="w-4 h-4 text-[#916A47]" />
@@ -725,7 +725,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                                         {Math.floor(smoothTimeRemaining / 60)}:{String(smoothTimeRemaining % 60).padStart(2, '0')}
                                                     </span>
                                                     <span className="text-[#916A47]/50 text-[10px] uppercase font-bold tracking-widest ml-2">
-                                                        {discussionState?.isMyTurn ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
+                                                        {discussionState?.isMyTurn || isTestMode ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
                                                     </span>
                                                 </div>
                                             )}
@@ -741,8 +741,8 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                             )}
                                         </div>
 
-                                        {/* Skip button (only for current speaker) */}
-                                        {discussionState?.isMyTurn && (
+                                        {/* Skip button (only for current speaker, active in test mode) */}
+                                        {(discussionState?.isMyTurn || isTestMode) && (
                                             <Button
                                                 onClick={skipSpeech}
                                                 disabled={isProcessing}
@@ -755,14 +755,14 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                             </Button>
                                         )}
 
-                                        {/* Host Force Skip (if not speaker) */}
-                                        {!discussionState?.isMyTurn && gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase() && (
+                                        {/* Host Force Skip (if not speaker, active in test mode) */}
+                                        {(!discussionState?.isMyTurn || isTestMode) && (
                                             <Button
                                                 onClick={skipSpeech}
                                                 disabled={isProcessing}
                                                 isLoading={isProcessing}
                                                 variant="secondary"
-                                                className="w-full h-[44px] mt-2 bg-amber-900/30 hover:bg-amber-900/50 border-amber-500/30 text-amber-200"
+                                                className="w-full h-[44px] mt-2 bg-[#1A0A02] hover:bg-[#3D1A04] border border-[#B45309]/30 hover:border-[#B45309]/60 text-[#B45309] hover:text-[#D97706] rounded-md shadow-[0_5px_15px_rgba(0,0,0,0.8)] transition-all"
                                             >
                                                 <ChevronRight className="w-5 h-5 mr-2" />
                                                 Force Skip (Host)
@@ -770,13 +770,13 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                         )}
                                     </>
                                 ) : discussionState?.finished ? (
-                                    <div className="w-full py-3 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                    <div className="w-full py-3 text-center bg-[#111111] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
                                         <p className="text-[#916A47] font-bold text-base animate-pulse">
                                             Starting Vote...
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="w-full py-6 text-center bg-[#916A47]/5 rounded-xl border border-[#916A47]/20">
+                                    <div className="w-full py-6 text-center bg-[#111111] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
                                         <p className="text-[#916A47] font-medium text-lg animate-pulse">
                                             Waiting for discussion to start...
                                         </p>
@@ -842,8 +842,8 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                             data-custom-sound
                                             isLoading={isProcessing || isTxPending}
                                             disabled={!selectedTarget || isProcessing || isTxPending || voteState.hasVoted}
-                                            variant={selectedTarget ? 'primary' : 'outline-gold'}
-                                            className="w-full h-[50px] text-lg"
+                                            variant="noir"
+                                            className="w-full h-[50px] text-base"
                                         >
                                             {selectedTarget ? (
                                                 <>
@@ -963,10 +963,10 @@ const VotingTimer: React.FC = React.memo(() => {
     const isHardWait = timerMode === 'hard';
 
     return (
-        <div className={`w-full py-2 text-center rounded-xl border transition-colors duration-500
-            ${isUrgent ? 'bg-rose-950/30 border-rose-500/50' :
-                isHardWait ? 'bg-orange-950/20 border-orange-500/30' :
-                    'bg-[#916A47]/10 border-[#916A47]/30'}`}>
+        <div className={`w-full py-2 text-center rounded-md border transition-colors duration-500 shadow-[0_5px_15px_rgba(0,0,0,0.8)]
+            ${isUrgent ? 'bg-[#1A0505] border-[#8B0000]/50' :
+                isHardWait ? 'bg-[#1A0A02] border-[#B45309]/50' :
+                    'bg-[#111111] border-[#916A47]/30'}`}>
 
             <div className="flex items-center justify-center gap-2">
                 <Clock className={`w-4 h-4 ${isUrgent ? 'text-rose-400' : isHardWait ? 'text-orange-400' : 'text-[#916A47]'}`} />
