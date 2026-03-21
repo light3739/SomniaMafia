@@ -53,6 +53,8 @@ export const PhaseIndicator = React.memo(({ phase, dayCount }: PhaseIndicatorPro
             <div className={`
                 px-6 py-2 rounded-md bg-[#0A0A0A] border shadow-2xl transition-colors duration-500 ease-in-out
                 ${config.color}
+                ${phase === GamePhase.NIGHT ? 'border-b-[#8B0000]/60' : phase === GamePhase.ENDED ? 'border-b-white/20' : 'border-b-[#916A47]/60'}
+                border-t-black
             `}>
                 <span className="text-lg font-bold font-['Cinzel'] uppercase tracking-widest">
                     {phase === GamePhase.DAY ? `Day ${dayCount}` :

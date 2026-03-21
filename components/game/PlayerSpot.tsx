@@ -123,7 +123,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                 }
             }}
             className={`
-                relative flex flex-row items-center gap-4 p-4 rounded-md transition-all duration-300
+                group relative flex flex-row items-center gap-4 p-4 rounded-md transition-all duration-300
                 w-[250px] h-[130px]
                 ${canAct && player.isAlive ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}
                 ${getSelectionClasses()}
@@ -298,10 +298,9 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
             {/* Avatar Container */}
             <div className="relative shrink-0">
                 <div className={`
-                    w-16 h-16 rounded-full overflow-hidden border-2 
-                    ${isMe ? 'border-[#916A47] shadow-[0_0_15px_rgba(145,106,71,0.3)]' : 'border-[#916A47]'}
-                    ${!player.isAlive ? 'grayscale opacity-50' : ''}
-                    bg-[#D9D9D9] relative
+                    w-16 h-16 rounded-md overflow-hidden border transition-colors duration-300
+                    ${isMe ? 'border-[#916A47] shadow-[0_0_15px_rgba(145,106,71,0.3)]' : (player.isAlive ? 'border-white/10' : 'border-[#8B0000]/50')}
+                    bg-[#19130D] relative
                 `}>
                     {player.avatarUrl ? (
                         <Image
@@ -309,7 +308,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                             alt={player.name}
                             fill
                             sizes="64px"
-                            className="object-cover"
+                            className={`object-cover transition-all duration-500 ${player.isAlive ? 'grayscale-[0.8] contrast-125 sepia-[0.2] brightness-90 group-hover:grayscale-[0.3]' : 'grayscale contrast-150 brightness-50 sepia-[0.5] hue-rotate-[-30deg]'}`}
                         />
                     ) : (
                         <div className="w-full h-full bg-[#19130D]" />

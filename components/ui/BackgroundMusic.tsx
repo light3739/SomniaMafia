@@ -126,7 +126,7 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
                         }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className="pointer-events-auto mb-2 p-5 bg-[#0A0A0A] border border-white/5 rounded-md shadow-2xl w-64"
+                        className="pointer-events-auto mb-2 p-5 bg-[#0A0A0A] border border-white/5 border-t-white/20 border-b-black/80 rounded-md shadow-2xl w-64"
                     >
                         <h3 className="text-[#916A47] text-xs font-bold uppercase tracking-widest mb-5 flex items-center gap-2">
                             <Settings className="w-3 h-3" />
@@ -161,7 +161,7 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
             {/* Horizontal row: Sound controls (left) + Chat button (right) */}
             <div className="flex items-center gap-3">
                 {/* Main Control Bar - Sound controls only */}
-                <div className="pointer-events-auto flex items-center gap-2 p-1.5 bg-[#0A0A0A] border border-white/5 rounded-md shadow-xl group transition-all hover:border-[#916A47]/40">
+                <div className="pointer-events-auto flex items-center gap-2 p-1.5 bg-[#0A0A0A] border border-white/5 border-t-white/20 border-b-black/80 rounded-md shadow-xl group transition-all hover:border-[#916A47]/40">
 
                     {/* Main Music Control (only if on music route) */}
                     {isMusicRoute && (
