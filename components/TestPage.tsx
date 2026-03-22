@@ -2500,6 +2500,320 @@ const ActivePhaseSessionTestWrapper: React.FC = () => {
     );
 };
 
+// ═══════════════════════════════════════════════════════════
+// BUTTON SHOWCASE — три концепта дизайна кнопок для сравнения
+// ═══════════════════════════════════════════════════════════
+
+const BUTTON_CONTEXTS = [
+    {
+        label: 'Discussion phase',
+        buttons: [
+            { label: '> Finish Speech Early', type: 'primary-action' },
+            { label: '> FORCE SKIP (HOST)', type: 'danger-action' },
+        ],
+    },
+    {
+        label: 'Voting phase',
+        buttons: [
+            { label: 'VOTE FOR DIANA', type: 'vote-action' },
+        ],
+    },
+];
+
+type BtnConceptVariant = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
+
+const ButtonConcept: React.FC<{ variant: BtnConceptVariant; type: string; label: string }> = ({ variant, type, label }) => {
+    const [hovered, setHovered] = useState(false);
+
+    // ── Variant A: текущий (для сравнения) ──────────────────────────────────
+    const variantA: Record<string, string> = {
+        'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-medium text-sm transition-all duration-300 cursor-pointer bg-[#0A0A0A] border border-[#916A47]/50 text-[#916A47] hover:bg-[#916A47] hover:text-[#050505] shadow-sm',
+        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase transition-all duration-300 cursor-pointer bg-[#0A0A0A] border border-[#8B0000]/50 text-[#8B0000] hover:bg-[#3D0000] hover:text-[#FF6B6B] shadow-sm',
+        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase transition-all duration-300 cursor-pointer bg-[#0A0A0A] border border-[#916A47]/30 text-[#916A47] hover:bg-[#111111] hover:border-[#916A47]/80 shadow-sm',
+    };
+
+    // ── Variant B: Glow / без заливки ───────────────────────────────────────
+    const variantB: Record<string, string> = {
+        'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-medium text-sm cursor-pointer transition-all duration-300 bg-transparent border border-[#C5A059]/60 text-[#C5A059] hover:border-[#C5A059] hover:text-white hover:shadow-[0_0_20px_rgba(197,160,89,0.35),inset_0_0_15px_rgba(197,160,89,0.06)]',
+        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 bg-transparent border border-[#8B0000]/50 text-[#cc3333] hover:border-[#cc3333]/80 hover:text-[#ff6666] hover:shadow-[0_0_18px_rgba(200,0,0,0.30),inset_0_0_12px_rgba(200,0,0,0.05)]',
+        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 bg-transparent border border-[#C5A059]/40 text-[#C5A059] hover:border-[#C5A059] hover:text-white hover:shadow-[0_0_24px_rgba(197,160,89,0.4),inset_0_0_18px_rgba(197,160,89,0.08)]',
+    };
+
+    // ── Variant C: Solid Premium ─────────────────────────────────────────────
+    const variantC: Record<string, string> = {
+        'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-lg font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-200 bg-gradient-to-b from-[#A07850] to-[#7A5630] text-[#0A0A0A] border border-[#C5A059]/40 hover:from-[#B5895C] hover:to-[#8A6640] hover:shadow-[0_4px_20px_rgba(145,106,71,0.50)] active:scale-[0.98]',
+        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-lg font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-gradient-to-b from-[#5a0000] to-[#3D0000] text-[#FF8080] border border-[#8B0000]/60 hover:from-[#6d0000] hover:to-[#4D0000] hover:shadow-[0_4px_20px_rgba(139,0,0,0.45)] active:scale-[0.98]',
+        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-lg font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-gradient-to-b from-[#1a1208] to-[#0D0A04] text-[#C5A059] border border-[#C5A059]/50 hover:from-[#2a1e0e] hover:to-[#1a1208] hover:text-[#E0BE80] hover:shadow-[0_4px_24px_rgba(197,160,89,0.35)] active:scale-[0.98]',
+    };
+
+    // ── Variant D: Minimal Ghost ─────────────────────────────────────────────
+    const variantD: Record<string, string> = {
+        'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full font-[Montserrat] font-medium text-sm cursor-pointer transition-all duration-200 text-[#C5A059]/80 hover:text-[#C5A059] border-b border-[#916A47]/30 hover:border-[#916A47] rounded-none bg-transparent hover:bg-[#916A47]/05',
+        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 text-[#8B0000]/80 hover:text-[#cc4444] border-b border-[#8B0000]/30 hover:border-[#cc4444] rounded-none bg-transparent',
+        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 text-[#C5A059] border border-[#C5A059]/40 hover:border-[#C5A059] rounded-sm bg-[#C5A059]/05 hover:bg-[#C5A059]/10',
+    };
+
+    // ── Variant E: Dark Glass (Frosted backdrop) ────────────────────────────
+    // Стекло поверх тёмного фона — backdrop-blur создаёт глубину
+    const variantE: Record<string, string> = {
+        'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-medium text-sm cursor-pointer transition-all duration-300 backdrop-blur-md bg-[#916A47]/10 border border-[#C5A059]/30 text-[#C5A059] hover:bg-[#916A47]/20 hover:border-[#C5A059]/60 hover:text-white hover:shadow-[0_0_30px_rgba(197,160,89,0.20)] active:scale-[0.98]',
+        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 backdrop-blur-md bg-[#8B0000]/12 border border-[#8B0000]/35 text-[#cc4444] hover:bg-[#8B0000]/25 hover:border-[#cc3333]/60 hover:text-[#ff7777] hover:shadow-[0_0_25px_rgba(139,0,0,0.20)] active:scale-[0.98]',
+        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 backdrop-blur-md bg-[#C5A059]/08 border border-[#C5A059]/40 text-[#C5A059] hover:bg-[#C5A059]/18 hover:border-[#C5A059]/70 hover:text-white hover:shadow-[0_0_35px_rgba(197,160,89,0.25)] active:scale-[0.98]',
+    };
+
+    // ── Variant F: Noir Pulse (анимированная рамка) ──────────────────────────
+    // Рамка «дышит» — живая кнопка которая зовёт нажать
+    const variantF: Record<string, string> = {
+        'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-sm font-[Montserrat] font-medium text-sm cursor-pointer transition-all duration-200 bg-[#0D0D0D] border border-[#C5A059]/40 text-[#C5A059]/80 hover:border-[#C5A059] hover:text-[#E8C878] hover:bg-[#0D0D0D] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.3),0_0_20px_rgba(197,160,89,0.18),inset_0_0_20px_rgba(197,160,89,0.04)] active:scale-[0.97]',
+        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-sm font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-[#0D0D0D] border border-[#7a0000]/50 text-[#aa2222]/80 hover:border-[#cc2222] hover:text-[#ff5555] hover:bg-[#0D0D0D] hover:shadow-[0_0_0_1px_rgba(180,0,0,0.25),0_0_18px_rgba(180,0,0,0.15),inset_0_0_16px_rgba(180,0,0,0.04)] active:scale-[0.97]',
+        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-sm font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-[#0D0D0D] border border-[#C5A059]/35 text-[#C5A059] hover:border-[#E8C878] hover:text-[#F0D080] hover:bg-[#0D0D0D] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.3),0_0_28px_rgba(197,160,89,0.22),inset_0_0_22px_rgba(197,160,89,0.05)] active:scale-[0.97]',
+    };
+
+    // ── Variant G: Hybrid — Gradient fill + glow hover ───────────────────────
+    // Лучшее из C и B: градиент всегда (читаемость), glow на hover (атмосфера)
+    const variantG: Record<string, string> = {
+        'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1C1208] to-[#0D0A04] border border-[#C5A059]/35 text-[#C5A059] hover:from-[#261A0B] hover:to-[#160E06] hover:border-[#C5A059]/70 hover:text-[#E8C878] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.15),0_4px_24px_rgba(197,160,89,0.30),inset_0_1px_0_rgba(197,160,89,0.08)] active:scale-[0.98]',
+        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1A0000] to-[#0D0000] border border-[#8B0000]/40 text-[#cc3333] hover:from-[#240000] hover:to-[#140000] hover:border-[#cc2222]/65 hover:text-[#ff5555] hover:shadow-[0_0_0_1px_rgba(180,0,0,0.15),0_4px_20px_rgba(180,0,0,0.28),inset_0_1px_0_rgba(180,0,0,0.08)] active:scale-[0.98]',
+        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1C1208] to-[#0D0A04] border border-[#C5A059]/40 text-[#C5A059] hover:from-[#261A0B] hover:to-[#160E06] hover:border-[#E8C878]/60 hover:text-[#F0D888] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.12),0_4px_28px_rgba(197,160,89,0.35),inset_0_1px_0_rgba(197,160,89,0.10)] active:scale-[0.98]',
+    };
+
+    const classMap: Record<BtnConceptVariant, Record<string, string>> = {
+        A: variantA,
+        B: variantB,
+        C: variantC,
+        D: variantD,
+        E: variantE,
+        F: variantF,
+        G: variantG,
+    };
+
+    return (
+        <button
+            className={classMap[variant][type] || ''}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+        >
+            {label}
+        </button>
+    );
+};
+
+const ButtonShowcaseTest: React.FC = () => {
+    const concepts: { id: BtnConceptVariant; title: string; desc: string; tag?: string }[] = [
+        { id: 'A', title: 'Current (Reference)', desc: 'Текущий — fill on hover для primary, outline для danger' },
+        { id: 'B', title: 'Glow / No Fill', desc: 'Без заливки, только свечение на hover — cinematic terminal' },
+        { id: 'C', title: 'Solid Premium', desc: 'Gradient fill всегда — premium, без инверсии' },
+        { id: 'D', title: 'Minimal Ghost', desc: 'Нижняя линия для action, outline для vote' },
+        { id: 'E', title: 'Dark Glass', desc: 'Frosted backdrop-blur + тёплый tint — эффект стекла поверх нуар-фона', tag: '⭐ Noir' },
+        { id: 'F', title: 'Noir Pulse', desc: 'Double glow-ring на hover — живая, «дышащая» кнопка', tag: '⭐ Noir' },
+        { id: 'G', title: 'Hybrid (B+C)', desc: 'Тёмный gradient всегда + glow на hover — лучшее из обоих', tag: '⭐ Рекомендую' },
+    ];
+
+    return (
+        <div className="w-full min-h-full bg-[#080808] p-8 overflow-auto">
+            {/* Background matching the game */}
+            <div
+                className="fixed inset-0 opacity-30 pointer-events-none"
+                style={{ backgroundImage: 'url(/assets/game_background.png)', backgroundSize: 'cover' }}
+            />
+
+            <div className="relative z-10">
+                <h2 className="text-[#C5A059] font-['Cinzel'] text-2xl tracking-widest mb-1 text-center">BUTTON STYLE CONCEPTS</h2>
+                <p className="text-white/30 text-xs text-center mb-6">Hover каждую кнопку чтобы увидеть состояние · ⭐ = специально для нуар-стиля</p>
+
+                {/* Recommendation banner */}
+                <div className="mb-8 p-4 rounded-md border border-[#C5A059]/20 bg-[#C5A059]/05 backdrop-blur-sm">
+                    <p className="text-[#C5A059]/80 text-xs leading-relaxed">
+                        <span className="font-semibold text-[#C5A059]">🎬 Для вашего нуара рекомендую:</span>{' '}
+                        <span className="text-white/50">Варианты <strong className="text-white/70">E</strong>, <strong className="text-white/70">F</strong>, и <strong className="text-white/70">G</strong> разработаны специально под тёмный раин-нуар фон.
+                        G (Hybrid) даёт лучший баланс — кнопка всегда видна даже без hover, но не конкурирует с фоном.
+                        E (Dark Glass) самый атмосферный — blurred стекло исчезает в фоне.
+                        F (Noir Pulse) самый живой — double-ring glow выглядит как неоновый знак.</span>
+                    </p>
+                </div>
+
+                {/* Grid of concepts */}
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
+                    {concepts.map(concept => (
+                        <div
+                            key={concept.id}
+                            className={`flex flex-col gap-3 rounded-md p-3 ${
+                                concept.tag?.includes('Рекомендую')
+                                    ? 'ring-1 ring-[#C5A059]/30 bg-[#C5A059]/04'
+                                    : concept.tag?.includes('Noir')
+                                    ? 'ring-1 ring-white/08'
+                                    : ''
+                            }`}
+                        >
+                            {/* Header */}
+                            <div className="border-b border-white/10 pb-2">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="w-6 h-6 rounded bg-[#916A47]/20 border border-[#916A47]/40 text-[#C5A059] text-xs font-bold font-['Cinzel'] flex items-center justify-center">
+                                        {concept.id}
+                                    </span>
+                                    <span className="text-white/80 text-sm font-semibold">{concept.title}</span>
+                                    {concept.tag && (
+                                        <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-[#C5A059]/15 text-[#C5A059]/80 border border-[#C5A059]/20 whitespace-nowrap">
+                                            {concept.tag}
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-white/35 text-[10px] leading-tight">{concept.desc}</p>
+                            </div>
+
+                            {/* Buttons in context */}
+                            {BUTTON_CONTEXTS.map(ctx => (
+                                <div key={ctx.label} className="flex flex-col gap-2">
+                                    <span className="text-white/20 text-[10px] uppercase tracking-widest">{ctx.label}</span>
+                                    {ctx.buttons.map(btn => (
+                                        <ButtonConcept
+                                            key={btn.type}
+                                            variant={concept.id}
+                                            type={btn.type}
+                                            label={btn.label}
+                                        />
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Notes */}
+                <div className="mt-10 border-t border-white/10 pt-6">
+                    <h3 className="text-white/40 text-xs uppercase tracking-widest mb-3">Краткий разбор</h3>
+                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 text-[10px] text-white/30 leading-relaxed">
+                        <div><span className="text-white/50 font-semibold">A — текущий:</span><br />Заливка на hover — «кожаная сумка». Danger слишком агрессивен.</div>
+                        <div><span className="text-white/50 font-semibold">B — glow:</span><br />Чисто cinematic. Нет резких скачков. Но без hover кнопка выглядит почти невидимо.</div>
+                        <div><span className="text-white/50 font-semibold">C — solid:</span><br />Самый читаемый. Но может быть тяжеловат для нуар-атмосферы.</div>
+                        <div><span className="text-white/50 font-semibold">D — ghost:</span><br />Для secondary OK. Vote-кнопка теряется как primary action.</div>
+                        <div><span className="text-[#C5A059]/60 font-semibold">E — dark glass:</span><br />Frosted tint — кнопки «растворяются» в фоне. Очень атмосферно, особенно поверх туманного фона.</div>
+                        <div><span className="text-[#C5A059]/60 font-semibold">F — noir pulse:</span><br />Double-ring glow — эффект неонового знака ночного города. Живая, отзывчивая.</div>
+                        <div><span className="text-[#C5A059]/60 font-semibold">G — hybrid (⭐):</span><br />Тёмный gradient + glow hover. Всегда видна, не конкурирует с фоном, атмосферна.</div>
+                        <div className="text-white/20 italic">Для данного нуар-стиля E/F/G явно превосходят A/B/C/D.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ═══════════════════════════════════════════════════════════
+// HYBRID G — ЦВЕТОВЫЕ ВАРИАНТЫ
+// ═══════════════════════════════════════════════════════════
+
+type GColorPalette = 'G1' | 'G2' | 'G3' | 'G4';
+
+const GColorButton: React.FC<{ palette: GColorPalette; type: string; label: string }> = ({ palette, type, label }) => {
+    // G1 — Warm Gold (текущий G)
+    const g1: Record<string, string> = {
+        'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1C1208] to-[#0D0A04] border border-[#C5A059]/35 text-[#C5A059] hover:from-[#261A0B] hover:to-[#160E06] hover:border-[#C5A059]/70 hover:text-[#E8C878] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.15),0_4px_24px_rgba(197,160,89,0.30),inset_0_1px_0_rgba(197,160,89,0.08)] active:scale-[0.98]',
+        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1A0000] to-[#0D0000] border border-[#8B0000]/40 text-[#cc3333] hover:from-[#240000] hover:to-[#140000] hover:border-[#cc2222]/65 hover:text-[#ff5555] hover:shadow-[0_0_0_1px_rgba(180,0,0,0.15),0_4px_20px_rgba(180,0,0,0.28)] active:scale-[0.98]',
+        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1C1208] to-[#0D0A04] border border-[#C5A059]/40 text-[#C5A059] hover:from-[#261A0B] hover:to-[#160E06] hover:border-[#E8C878]/60 hover:text-[#F0D888] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.12),0_4px_28px_rgba(197,160,89,0.35)] active:scale-[0.98]',
+    };
+
+    // G2 — Dusty Gold (пыльное, состаренное)
+    // Тот же gradient, но accent — тусклый бронзо-оливковый
+    const g2: Record<string, string> = {
+        'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#181410] to-[#0C0A08] border border-[#A08850]/30 text-[#A08850] hover:from-[#221C14] hover:to-[#14100A] hover:border-[#B89A60]/60 hover:text-[#C8AA70] hover:shadow-[0_0_0_1px_rgba(160,136,80,0.15),0_4px_24px_rgba(160,136,80,0.25)] active:scale-[0.98]',
+        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#160A0A] to-[#0A0404] border border-[#7A3030]/35 text-[#9A4040] hover:from-[#200C0C] hover:to-[#0E0606] hover:border-[#AA4444]/55 hover:text-[#CC5555] hover:shadow-[0_0_0_1px_rgba(150,50,50,0.15),0_4px_20px_rgba(150,50,50,0.22)] active:scale-[0.98]',
+        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#181410] to-[#0C0A08] border border-[#A08850]/35 text-[#A08850] hover:from-[#221C14] hover:to-[#14100A] hover:border-[#C8AA70]/55 hover:text-[#D4B878] hover:shadow-[0_0_0_1px_rgba(160,136,80,0.12),0_4px_28px_rgba(160,136,80,0.28)] active:scale-[0.98]',
+    };
+
+    // G3 — Slate Silver (холодный нуар, как LA Noire / Disco Elysium)
+    const g3: Record<string, string> = {
+        'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#10121A] to-[#08090F] border border-[#8090B0]/30 text-[#8090B0] hover:from-[#161822] hover:to-[#0C0D14] hover:border-[#A0B0CC]/60 hover:text-[#C0CCDD] hover:shadow-[0_0_0_1px_rgba(128,144,176,0.15),0_4px_24px_rgba(120,140,180,0.28)] active:scale-[0.98]',
+        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#180C12] to-[#0C0608] border border-[#8B3050]/35 text-[#AA4060] hover:from-[#220E18] hover:to-[#10070A] hover:border-[#CC4466]/60 hover:text-[#EE5577] hover:shadow-[0_0_0_1px_rgba(180,50,80,0.15),0_4px_20px_rgba(160,40,60,0.28)] active:scale-[0.98]',
+        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#10121A] to-[#08090F] border border-[#9090B8]/35 text-[#9090B8] hover:from-[#161822] hover:to-[#0C0D14] hover:border-[#B0B0D8]/60 hover:text-[#D0D0EE] hover:shadow-[0_0_0_1px_rgba(144,144,184,0.15),0_4px_28px_rgba(140,140,200,0.30)] active:scale-[0.98]',
+    };
+
+    // G4 — Frost Gold (мой фаворит: холодный фон + тёплый текст)
+    // Холодный тёмный подтон в gradient, но text — яркое warm gold
+    const g4: Record<string, string> = {
+        'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#131318] to-[#09090C] border border-[#C5A059]/30 text-[#D4BE80] hover:from-[#1A1A22] hover:to-[#0E0E14] hover:border-[#D4BE80]/65 hover:text-[#EEDC98] hover:shadow-[0_0_0_1px_rgba(212,190,128,0.18),0_4px_24px_rgba(197,160,89,0.32),inset_0_1px_0_rgba(212,190,128,0.06)] active:scale-[0.98]',
+        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#130D0D] to-[#090606] border border-[#9B2020]/35 text-[#CC4444] hover:from-[#1A1010] hover:to-[#0E0808] hover:border-[#DD3333]/60 hover:text-[#FF6666] hover:shadow-[0_0_0_1px_rgba(180,40,40,0.18),0_4px_20px_rgba(200,50,50,0.28),inset_0_1px_0_rgba(200,60,60,0.05)] active:scale-[0.98]',
+        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#131318] to-[#09090C] border border-[#C5A059]/32 text-[#D4BE80] hover:from-[#1A1A22] hover:to-[#0E0E14] hover:border-[#EED898]/58 hover:text-[#F4E4A8] hover:shadow-[0_0_0_1px_rgba(212,190,128,0.16),0_4px_30px_rgba(197,160,89,0.38),inset_0_1px_0_rgba(212,190,128,0.07)] active:scale-[0.98]',
+    };
+
+    const map: Record<GColorPalette, Record<string, string>> = { G1: g1, G2: g2, G3: g3, G4: g4 };
+    return <button className={map[palette][type] || ''}>{label}</button>;
+};
+
+const ButtonColorShowcaseTest: React.FC = () => {
+    const palettes: { id: GColorPalette; title: string; sub: string; rec?: boolean }[] = [
+        { id: 'G1', title: 'Warm Gold', sub: 'Текущий Hybrid — тёплый amber/gold' },
+        { id: 'G2', title: 'Dusty Gold', sub: 'Пыльный, состаренный бронзо-оливковый' },
+        { id: 'G3', title: 'Slate Silver', sub: 'Холодный LA Noire — синевато-серебристый' },
+        { id: 'G4', title: 'Frost Gold', sub: 'Холодный фон + тёплый текст — лучший баланс', rec: true },
+    ];
+
+    return (
+        <div className="w-full min-h-full bg-[#080808] p-8 overflow-auto">
+            <div
+                className="fixed inset-0 opacity-40 pointer-events-none"
+                style={{ backgroundImage: 'url(/assets/game_background.png)', backgroundSize: 'cover' }}
+            />
+            <div className="relative z-10">
+                <h2 className="text-[#C5A059] font-['Cinzel'] text-2xl tracking-widest mb-1 text-center">HYBRID G — COLOUR VARIANTS</h2>
+                <p className="text-white/30 text-xs text-center mb-8">Один и тот же стиль G, четыре разные палитры · Hover чтобы увидеть акцент</p>
+
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
+                    {palettes.map(p => (
+                        <div
+                            key={p.id}
+                            className={`flex flex-col gap-3 rounded-md p-4 ${
+                                p.rec ? 'ring-1 ring-[#C5A059]/40 bg-[#C5A059]/05' : 'bg-black/20'
+                            }`}
+                        >
+                            <div className="border-b border-white/10 pb-3">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-white/80 font-semibold text-sm">{p.title}</span>
+                                    {p.rec && (
+                                        <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-[#C5A059]/20 text-[#C5A059] border border-[#C5A059]/30">
+                                            ⭐ Рекомендую
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-white/35 text-[10px] leading-tight">{p.sub}</p>
+                            </div>
+
+                            <span className="text-white/20 text-[10px] uppercase tracking-widest">Discussion phase</span>
+                            <GColorButton palette={p.id} type="primary-action" label="> Finish Speech Early" />
+                            <GColorButton palette={p.id} type="danger-action" label="> FORCE SKIP (HOST)" />
+
+                            <span className="text-white/20 text-[10px] uppercase tracking-widest mt-1">Voting phase</span>
+                            <GColorButton palette={p.id} type="vote-action" label="VOTE FOR DIANA" />
+                        </div>
+                    ))}
+                </div>
+
+                {/* Contrast analysis */}
+                <div className="mt-10 p-5 rounded-md border border-white/10 bg-black/30 backdrop-blur-sm">
+                    <h3 className="text-white/50 text-xs uppercase tracking-widest mb-4">Разбор по контрасту с нуар-фоном</h3>
+                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 text-[10px] leading-relaxed">
+                        <div>
+                            <span className="text-[#C5A059] font-semibold">G1 Warm Gold:</span>
+                            <span className="text-white/40"> Тёплый amber конкурирует с общим warm-tone фона. Похоже на деревяшку в туманном городе.</span>
+                        </div>
+                        <div>
+                            <span className="text-[#A08850] font-semibold">G2 Dusty Gold:</span>
+                            <span className="text-white/40"> Состаренная бронза — более нейтральна. Опасность: может быть слишком тихой, потеряется.</span>
+                        </div>
+                        <div>
+                            <span className="text-[#8090B0] font-semibold">G3 Slate Silver:</span>
+                            <span className="text-white/40"> Холодный, перекликается с туманом. Но danger-кнопка теряет crimson-характер. Риск: слишком нейтральный.</span>
+                        </div>
+                        <div>
+                            <span className="text-[#D4BE80] font-semibold">G4 Frost Gold ⭐:</span>
+                            <span className="text-white/40"> Холодный фон (перекликается с туманом) + тёплый gold текст (контраст). Лучший баланс для нуара.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const TestPage: React.FC = () => {
     const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
@@ -2512,6 +2826,8 @@ const TestPage: React.FC = () => {
 
     const components: ComponentEntry[] = [
         // UI
+        { name: '🎨 Button Concepts', group: 'UI', component: <ButtonShowcaseTest /> },
+        { name: '🖌️ G Color Variants', group: 'UI', component: <ButtonColorShowcaseTest /> },
         { name: 'Button', group: 'UI', component: <Button onClick={() => alert('Clicked')}>Test Button</Button> },
         { name: 'Input', group: 'UI', component: <Input placeholder="Test Input" onChange={(e) => console.log(e.target.value)} /> },
         { name: 'BackButton', group: 'UI', component: <BackButton /> },

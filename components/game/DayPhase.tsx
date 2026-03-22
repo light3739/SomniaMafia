@@ -750,8 +750,9 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                                 variant="outline-gold"
                                                 className="w-full h-[50px]"
                                             >
-                                                <ChevronRight className="w-5 h-5 mr-2" />
-                                                Finish Speech Early
+                                                <ChevronRight className="w-5 h-5 mr-2" /><span className='uppercase'>
+                                                    Finish Speech Early
+                                                </span>
                                             </Button>
                                         )}
 
@@ -761,8 +762,8 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                                 onClick={skipSpeech}
                                                 disabled={isProcessing}
                                                 isLoading={isProcessing}
-                                                variant="secondary"
-                                                className="w-full h-[44px] mt-2 bg-[#1A0A02] hover:bg-[#3D1A04] border border-[#B45309]/30 hover:border-[#B45309]/60 text-[#B45309] hover:text-[#D97706] rounded-md shadow-[0_5px_15px_rgba(0,0,0,0.8)] transition-all"
+                                                variant="noir-danger"
+                                                className="w-full h-[44px] mt-2"
                                             >
                                                 <ChevronRight className="w-5 h-5 mr-2" />
                                                 Force Skip (Host)
@@ -842,8 +843,13 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                             data-custom-sound
                                             isLoading={isProcessing || isTxPending}
                                             disabled={!selectedTarget || isProcessing || isTxPending || voteState.hasVoted}
-                                            variant="noir"
-                                            className="w-full h-[50px] text-base"
+                                            variant="outline-gold"
+                                            className={`w-full h-[50px] text-base tracking-[0.08em] uppercase font-['Cinzel'] text-[13px] disabled:!opacity-100 disabled:!brightness-100 ${voteState.hasVoted
+                                                ? '!bg-[#0A0A0A] !border-[#916A47]/20 !text-[#916A47]/40'
+                                                : selectedTarget
+                                                    ? ''
+                                                    : '!bg-[#0A0A0A] !border-[#916A47]/30 !text-[#916A47]/60'
+                                                }`}
                                         >
                                             {selectedTarget ? (
                                                 <>
@@ -851,7 +857,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                                 </>
                                             ) : voteState.hasVoted ? (
                                                 <>
-                                                    Vote Committed
+                                                    ✓ Vote Committed
                                                 </>
                                             ) : (
                                                 'Select a target on the board'
