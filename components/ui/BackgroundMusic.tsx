@@ -161,7 +161,7 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
             {/* Horizontal row: Sound controls (left) + Chat button (right) */}
             <div className="flex items-center gap-3">
                 {/* Main Control Bar - Sound controls only */}
-                <div className="pointer-events-auto flex items-center gap-2 p-1.5 bg-[#0A0A0A] border border-white/5 rounded-md shadow-xl group transition-all hover:border-[#916A47]/40">
+                <div className="pointer-events-auto flex items-center gap-2 p-1.5 bg-[#0A0A0A] border border-[#916A47]/30 rounded-md shadow-xl group transition-all hover:border-[#916A47]/60">
 
                     {/* Main Music Control (only if on music route) */}
                     {isMusicRoute && (
@@ -177,7 +177,7 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
                             ) : (
                                 <button
                                     onClick={handlePlay}
-                                    className="w-10 h-10 flex items-center justify-center rounded-sm bg-[#916A47]/20 text-[#916A47] hover:bg-[#916A47]/40 transition-all active:scale-95"
+                                    className="w-10 h-10 flex items-center justify-center rounded-sm bg-[#916A47]/30 text-[#916A47] hover:bg-[#916A47]/50 transition-all active:scale-95"
                                     title="Play Background Music"
                                 >
                                     <Play size={16} fill="currentColor" className="ml-0.5" />

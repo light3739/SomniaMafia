@@ -434,7 +434,7 @@ export const ChatToggleButton: React.FC<{
                 pointer-events-auto flex items-center justify-center p-1.5 
                 bg-[#0A0A0A] border rounded-md shadow-xl
                 transition-all hover:bg-[#1A130A]
-                ${isExpanded ? 'border-[#916A47]' : internalUnreadCount > 0 ? 'border-[#916A47]/60 shadow-[0_0_12px_rgba(145,106,71,0.3)]' : 'border-white/5 hover:border-[#916A47]/40'}
+                ${isExpanded ? 'border-[#916A47]' : internalUnreadCount > 0 ? 'border-[#916A47]/60 shadow-[0_0_12px_rgba(145,106,71,0.3)]' : 'border-[#916A47]/30 hover:border-[#916A47]/60'}
             `}>
                 <button
                     onClick={onToggle}

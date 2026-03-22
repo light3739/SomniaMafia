@@ -362,12 +362,10 @@ export const CreateLobby: React.FC = () => {
                         }
                         handleCreate();
                     }}
+                    variant="outline-gold"
                     isLoading={isTxPending}
                     disabled={(!lobbyName.trim()) || isTxPending}
-                    className={`w-full h-[54px] md:h-[60px] text-lg md:text-xl transition-all duration-300 mt-2 ${isTournament && lobbyName.trim()
-                        ? '!bg-gradient-to-r !from-[#D4A54A] !to-[#F0C868] !text-[#281608] !border-[#D4A54A]/30 !shadow-[0_0_20px_rgba(212,165,74,0.3)]'
-                        : ''
-                        }`}
+                    className="w-full h-[54px] md:h-[60px] text-lg md:text-xl tracking-[0.2em] font-['Cinzel'] mt-2"
                 >
                     {!isConnected
                         ? "Connect Wallet"

@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePrivy } from '@privy-io/react-auth';
 import { useGameContext } from '../../contexts/GameContext';
+import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { usePublicClient, useAccount, useChainId } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
@@ -299,17 +300,23 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                 <p className="text-white/60 text-sm">You have been invited to join <span className="text-[#D4A54A] font-semibold">{initialRoomData.name || 'this session'}</span>.</p>
 
                                 {(!isConnected || !authenticated) ? (
-                                    <button onClick={() => login()} className="w-full bg-gradient-to-r from-[#D4A54A] to-[#F0C868] text-[#281608] py-3.5 px-6 rounded-xl font-bold transition-transform hover:scale-[1.02] shadow-lg">
-                                        Connect Wallet to Join
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={() => handleJoin(initialRoomData)}
-                                        disabled={isTxPending}
-                                        className="w-full bg-gradient-to-r from-[#D4A54A] to-[#F0C868] text-[#281608] py-3.5 px-6 rounded-xl font-bold transition-transform hover:scale-[1.02] shadow-lg disabled:opacity-50 disabled:hover:scale-100"
+                                    <Button
+                                        onClick={() => login()}
+                                        variant="outline-gold"
+                                        className="w-full py-4 text-sm md:text-base tracking-[0.2em] font-['Cinzel']"
                                     >
-                                        {isTxPending ? 'Joining...' : 'Accept Invite & Join'}
-                                    </button>
+                                        Connect Wallet to Join
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        onClick={() => handleJoin(initialRoomData)}
+                                        variant="outline-gold"
+                                        isLoading={isTxPending}
+                                        disabled={isTxPending}
+                                        className="w-full py-4 text-sm md:text-base tracking-[0.2em] font-['Cinzel']"
+                                    >
+                                        Accept Invite & Join
+                                    </Button>
                                 )}
                             </div>
                         ) : (

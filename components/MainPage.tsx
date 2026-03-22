@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { usePrivy } from '@privy-io/react-auth';
 import { useAccount, useSwitchChain } from 'wagmi';
+import { Button } from './ui/Button';
 const somniaLogo = "/assets/somniayeal.png";
 const avalancheLogo = "/assets/avalanche-avax-logo.png";
 
@@ -108,57 +109,43 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                             return <div style={{ opacity: 0 }}>Loading...</div>;
                         }
 
-                        // Not logged in → show login button
                         if (!authenticated) {
                             return (
-                                <button
+                                <Button
                                     onClick={() => login()}
-                                    className="px-8 py-3 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-105 transition-all text-sm md:text-base tracking-wider relative overflow-hidden ring-1 ring-white/10"
-                                    style={{
-                                        background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
-                                    }}
+                                    variant="outline-gold"
+                                    className="px-12 py-4 text-base md:text-lg tracking-[0.2em] font-['Cinzel']"
                                 >
-                                    <span className="relative z-10">LOGIN / CONNECT</span>
-                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
-                                </button>
+                                    LOGIN / CONNECT
+                                </Button>
                             );
                         }
-
-                        // Logged in via Privy. At this point user has either:
-                        // a) an embedded wallet (user.wallet.address) — created automatically for social/email logins
-                        // b) or a connected external wallet (MetaMask, etc.)
-                        // In both cases we can proceed. We don't block on wagmi's isConnected here
-                        // because setActiveWallet() is async and may lag a few renders.
 
                         const preferredNetwork = typeof window !== 'undefined'
                             ? localStorage.getItem('mafia_selected_network')
                             : null;
                         const preferredChainId = preferredNetwork === 'somnia_testnet' ? 50312 : 43113;
 
-                        // Only check chain if wagmi is already connected (external wallet).
-                        // Embedded wallet users won't have chain info yet → skip to ENTER CITY.
                         if (chain && chain.id !== preferredChainId) {
                             return (
-                                <button
+                                <Button
                                     onClick={() => switchChain({ chainId: preferredChainId })}
-                                    className="px-8 py-3 rounded-xl font-mono font-bold text-white bg-orange-600 shadow-lg hover:scale-105 transition-all text-sm md:text-base tracking-wider ring-1 ring-orange-300/50"
+                                    variant="noir-danger"
+                                    className="px-12 py-4 text-base md:text-lg tracking-[0.2em] font-['Cinzel']"
                                 >
                                     SWITCH NETWORK
-                                </button>
+                                </Button>
                             );
                         }
 
                         return (
-                            <button
+                            <Button
                                 onClick={onStart}
-                                className="px-8 py-3 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-105 transition-all text-sm md:text-base tracking-wider relative overflow-hidden ring-1 ring-white/10"
-                                style={{
-                                    background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
-                                }}
+                                variant="outline-gold"
+                                className="px-12 py-4 text-base md:text-lg tracking-[0.2em] font-['Cinzel']"
                             >
-                                <span className="relative z-10">ENTER CITY</span>
-                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
-                            </button>
+                                ENTER CITY
+                            </Button>
                         );
                     })()}
                 </motion.div>
