@@ -1833,8 +1833,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
 
+            // 🆕 In tournament rooms, session funding is already paid during joinTournament
+            // The contract will pull it from tournamentGasReserves.
+            // For non-tournament rooms, we still send LOBBY_FUNDING_VALUE.
             const txValue = isTournamentRoom ? 0n : LOBBY_FUNDING_VALUE;
-            console.log(`[Join] Tournament status: ${isTournamentRoom}, sending value: ${txValue}`);
+
+            console.log(`[Join] Tournament status: ${isTournamentRoom}, sending extra value: ${txValue}`);
+
 
             // 3.5. Get smart gas config
             const gasConfig = await getSmartGasConfig({
@@ -3130,38 +3135,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const isNative = params.paymentToken === '0x0000000000000000000000000000000000000000';
             const buyInUnits = parseEther(params.buyIn);
             const initialPrizeUnits = parseEther(params.initialPrize);
+            const sessionFeeUnits = LOBBY_FUNDING_VALUE; // Standard session gas fee
             const value = isNative ? initialPrizeUnits : 0n;
 
-            // Gas Estimation
-            let gasLimit = 600000n;
-            try {
-                gasLimit = await pClient.estimateContractGas({
-                    address: contractAddressRef.current,
-                    abi: MAFIA_ABI,
-                    functionName: 'createTournament',
-                    args: [
-                        params.name,
-                        buyInUnits,
-                        params.maxPlayers,
-                        params.playersPerTable,
-                        passwordHash,
-                        params.paymentToken,
-                        initialPrizeUnits
-                    ],
-                    account,
-                    value,
-                    nonce: params.nonce
-                });
-                gasLimit = (gasLimit * 120n) / 100n;
-            } catch (e) {
-                console.warn("[CreateTournament Gas] Estimation failed, using fallback:", e);
-            }
-
-            const hash = await client.writeContract({
-                address: contractAddressRef.current,
-                abi: MAFIA_ABI,
+            const gasConfig = await getSmartGasConfig({
                 functionName: 'createTournament',
-                nonce: params.nonce,
                 args: [
                     params.name,
                     buyInUnits,
@@ -3169,14 +3147,35 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     params.playersPerTable,
                     passwordHash,
                     params.paymentToken,
-                    initialPrizeUnits
+                    initialPrizeUnits,
+                    sessionFeeUnits
                 ],
                 account,
                 value,
-                gas: gasLimit,
-                chain: targetChain,
-                type: 0 as any,
+                nonce: params.nonce
             });
+
+            const hash = await client.writeContract({
+                address: contractAddressRef.current,
+                abi: MAFIA_ABI,
+                functionName: 'createTournament',
+                args: [
+                    params.name,
+                    buyInUnits,
+                    params.maxPlayers,
+                    params.playersPerTable,
+                    passwordHash,
+                    params.paymentToken,
+                    initialPrizeUnits,
+                    sessionFeeUnits
+                ],
+                account,
+                value,
+                chain: targetChain,
+                ...gasConfig
+            });
+
+
 
             addLog(`Tournament ${params.name} created!`, 'success');
             setIsTxConfirming(true);
@@ -3212,24 +3211,31 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             setIsTxPending(true);
             const { client, account } = await getActiveWalletClient();
-            const value = amount ? parseEther(amount) : 0n;
 
-            // Gas Estimation
-            let gasLimit = 400000n;
-            try {
-                gasLimit = await pClient.estimateContractGas({
-                    address: contractAddressRef.current,
-                    abi: MAFIA_ABI,
-                    functionName: 'joinTournament',
-                    args: [tournamentId, password || ""],
-                    account,
-                    value,
-                    nonce
-                });
-                gasLimit = (gasLimit * 120n) / 100n;
-            } catch (e) {
-                console.warn("[JoinTournament Gas] Estimation failed, using fallback:", e);
-            }
+            // 🆕 Fetch tournament data to get buyIn and sessionFee
+            const tournamentData = await pClient.readContract({
+                address: contractAddressRef.current,
+                abi: MAFIA_ABI,
+                functionName: 'getTournament',
+                args: [tournamentId],
+            }) as any;
+
+            const buyIn = BigInt(tournamentData.buyIn || 0);
+            const sessionFee = BigInt(tournamentData.sessionFee || 0);
+            const isNative = tournamentData.paymentToken === '0x0000000000000000000000000000000000000000';
+
+            // Total STT value = sessionFee + (isNative ? buyIn : 0)
+            const value = sessionFee + (isNative ? buyIn : 0n);
+
+            console.log(`[JoinTournament] ID:${tournamentId} Value:${formatEther(value)} (BuyIn:${formatEther(buyIn)} Fee:${formatEther(sessionFee)})`);
+
+            const gasConfig = await getSmartGasConfig({
+                functionName: 'joinTournament',
+                args: [tournamentId, password || ""],
+                account,
+                value,
+                nonce
+            });
 
             const hash = await client.writeContract({
                 address: contractAddressRef.current,
@@ -3238,11 +3244,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 args: [tournamentId, password || ""],
                 account,
                 value,
-                nonce,
-                gas: gasLimit,
                 chain: targetChain,
-                type: 0 as any,
+                ...gasConfig
             });
+
+
 
             addLog(`Joined tournament #${tournamentId}`, 'success');
             setIsTxConfirming(true);
@@ -3305,7 +3311,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 tournamentPasswordHash = keccak256(stringToHex(params.password));
             }
 
-            // Value calculation
             const isNative = params.paymentToken === '0x0000000000000000000000000000000000000000';
             const buyInUnits = parseEther(params.buyIn);
             const initialPrizeUnits = parseEther(params.initialPrize);
