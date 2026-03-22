@@ -2053,6 +2053,11 @@
         "internalType": "uint128",
         "name": "initialPrize",
         "type": "uint128"
+      },
+      {
+        "internalType": "uint128",
+        "name": "sessionFee",
+        "type": "uint128"
       }
     ],
     "name": "createTournament",
@@ -2095,6 +2100,11 @@
       {
         "internalType": "uint128",
         "name": "initialPrize",
+        "type": "uint128"
+      },
+      {
+        "internalType": "uint128",
+        "name": "sessionFee",
         "type": "uint128"
       },
       {
@@ -2181,6 +2191,11 @@
           {
             "internalType": "uint128",
             "name": "prizePool",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "sessionFee",
             "type": "uint128"
           },
           {
