@@ -212,7 +212,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     // --- НУАРНЫЕ КЛАССЫ ПРОТОКОЛА ---
     const LABEL = "text-white/30 font-mono text-[11px] tracking-widest uppercase w-[120px] shrink-0 pt-0.5 select-none";
     const VAL_BASE = "text-white/80 font-mono text-[13px] leading-relaxed";
-    const PLAYER_NAME = "text-white/90 font-bold font-sans"; // Имена выделяем обычным читаемым шрифтом
+    const PLAYER_NAME = "text-white/90 font-bold"; // Имена выделяем обычным читаемым шрифтом
     const DANGER = "text-[#8B0000] font-bold";
     const GOLD = "text-[#916A47] font-bold";
 
@@ -257,7 +257,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                                     {dayEvents.discussionFinished ? (
                                         <span>Discussion concluded. All players have spoken.</span>
                                     ) : dayEvents.currentSpeaker ? (
-                                        <>Active speaker: <span className={GOLD}>{dayEvents.currentSpeaker}</span></>
+                                        <>Active speaker: <span className={PLAYER_NAME}>{dayEvents.currentSpeaker}</span></>
                                     ) : (
                                         <span className="animate-pulse">Waiting for discussion to start...</span>
                                     )}

@@ -18,21 +18,21 @@ export const Button: React.FC<ButtonProps> = ({
     const baseStyles = "relative flex items-center justify-center font-[Montserrat] font-medium transition-all active:scale-[0.98] cursor-pointer disabled:opacity-90 disabled:brightness-50 disabled:cursor-not-allowed disabled:active:scale-100";
 
     const variants = {
-        // Главная: Тяжелая бронза
+        // Главная
         primary: "bg-[#916A47] text-[#050505] hover:brightness-110 font-bold border border-[#C5A059]/30 shadow-md rounded-md",
-        
-        // Вторичные: Глубокий черный фон
+
+        // Вторичные
         secondary: "bg-[#0A0A0A] hover:bg-[#111111] text-white/80 border border-white/5 shadow-sm rounded-md",
-        
-        // Золотой контур: Инверсия при наведении (текст и фон меняются местами)
-        'outline-gold': "bg-[#0A0A0A] border border-[#916A47]/60 text-[#916A47] hover:bg-[#916A47] hover:text-[#050505] shadow-sm rounded-md transition-all",
-        
+
+        // OUTLINE-GOLD — инверсия при наведении, но приглушённая
+        'outline-gold': "bg-[#0A0A0A] border border-[#916A47] text-[#916A47] hover:bg-[#6B5038] hover:border-[#6B5038] hover:text-[#F0E6D8] shadow-sm rounded-md transition-all",
+
         ghost: "bg-transparent text-white/60 hover:text-white",
-        
-        // Спец-кнопки: Инверсия при наведении
-        noir: "bg-[#0A0A0A] border border-[#916A47]/30 hover:bg-[#916A47] hover:text-[#050505] shadow-sm rounded-md tracking-[0.08em] uppercase font-['Cinzel'] text-[13px]",
-        
-        'noir-danger': "bg-[#1A0505] border border-[#8B0000]/30 hover:bg-[#8B0000] hover:text-white shadow-sm rounded-md tracking-[0.08em] uppercase font-['Cinzel'] text-[13px]",
+
+        // Спец-кнопки
+        noir: "bg-[#0A0A0A] border border-[#916A47]/30 hover:bg-[#111111] hover:border-[#916A47]/80 text-[#916A47] shadow-sm rounded-md tracking-[0.08em] uppercase font-['Cinzel'] text-[13px]",
+
+        'noir-danger': "bg-[#0A0A0A] border-2 border-[#8B0000]/80 text-[#8B0000] hover:bg-[#5A0000] hover:border-[#5A0000] hover:text-[#FFCCCC] shadow-sm rounded-md tracking-[0.08em] uppercase font-['Cinzel'] text-[13px] transition-all",
     };
 
     return (
