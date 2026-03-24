@@ -680,7 +680,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                 </motion.div>
 
                 {/* Event Feed — fixed height, fully isolated from buttons below */}
-                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-md overflow-hidden border-t border-t-white/10 border-x border-x-white/5 border-b-black bg-[#0A0A0A] shadow-[0_20px_50px_rgba(0,0,0,0.95)]">
+                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-md overflow-hidden border-t border-t-white/10 border-x border-x-white/5 border-b-black bg-[#0A0A0A] shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
                     <GameLog
                         liveDiscussion={{
                             active: discussionState?.active,
@@ -707,7 +707,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                 {discussionState?.active || isTestMode ? (
                                     <>
                                         {/* Timer Display with Mic Button */}
-                                        <div className="relative w-full py-2 text-center bg-[#0A0A0A] rounded-md border border-white/5 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
+                                        <div className="relative w-full py-2 text-center bg-[#0A0A0A] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
                                             {discussionState?.phase === 'initial_delay' ? (
                                                 <div className="flex items-center justify-center gap-2">
                                                     <Clock className="w-4 h-4 text-[#916A47]" />
@@ -748,11 +748,10 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                                 disabled={isProcessing}
                                                 isLoading={isProcessing}
                                                 variant="outline-gold"
-                                                className="w-full h-[50px]"
+                                                className="w-full h-[50px] font-['Cinzel'] tracking-[0.08em] text-[13px] uppercase"
                                             >
-                                                <ChevronRight className="w-5 h-5 mr-2" /><span className='uppercase'>
-                                                    Finish Speech Early
-                                                </span>
+                                                <ChevronRight className="w-5 h-5 mr-2" />
+                                                Finish Speech Early
                                             </Button>
                                         )}
 
@@ -771,13 +770,13 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                         )}
                                     </>
                                 ) : discussionState?.finished ? (
-                                    <div className="w-full py-3 text-center bg-[#0A0A0A] rounded-md border border-white/5 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
+                                    <div className="w-full py-3 text-center bg-[#0A0A0A] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
                                         <p className="text-[#916A47] font-bold text-base animate-pulse">
                                             Starting Vote...
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="w-full py-6 text-center bg-[#0A0A0A] rounded-md border border-white/5 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
+                                    <div className="w-full py-6 text-center bg-[#0A0A0A] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
                                         <p className="text-[#916A47] font-medium text-lg animate-pulse">
                                             Waiting for discussion to start...
                                         </p>
@@ -802,21 +801,21 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                         key="transition-timer"
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className="w-full py-4 text-center"
+                                        className="w-full py-2 text-center bg-[#0A0A0A] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)] mt-2"
                                     >
-                                        <div className="flex flex-col items-center justify-center gap-2">
-                                            <div className="flex items-center gap-2">
-                                                <Clock className="w-5 h-5 text-orange-400 animate-pulse" />
-                                                <span className="text-2xl font-bold text-orange-400 tabular-nums">
+                                        <div className="flex flex-col items-center justify-center">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <Clock className="w-4 h-4 text-[#916A47]" />
+                                                <span className="text-2xl font-bold text-white tabular-nums">
                                                     {delaySeconds}s
                                                 </span>
+                                                <span className="text-[#916A47] text-[10px] uppercase font-bold tracking-widest ml-2">
+                                                    Voting Results
+                                                </span>
                                             </div>
-                                            <p className="text-orange-400/70 text-sm uppercase font-bold tracking-widest">
-                                                Voting Results
-                                            </p>
-                                            <p className="text-white/50 text-xs mt-1">
-                                                Review the logs above
-                                            </p>
+                                            <div className="text-[10px] text-white/30 font-mono mt-1 pt-1 border-t border-[#916A47]/30 animate-pulse uppercase tracking-widest px-4">
+                                                Review the logs above...
+                                            </div>
                                         </div>
                                     </motion.div>
                                 ) : (
@@ -844,20 +843,20 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                             isLoading={isProcessing || isTxPending}
                                             disabled={!selectedTarget || isProcessing || isTxPending || voteState.hasVoted}
                                             variant="outline-gold"
-                                            className={`w-full h-[50px] text-base tracking-[0.08em] uppercase font-['Cinzel'] text-[13px] disabled:!opacity-100 disabled:!brightness-100 ${voteState.hasVoted
-                                                ? '!bg-[#0A0A0A] !border-[#916A47]/20 !text-[#916A47]/40'
+                                            className={`w-full h-[50px] text-base tracking-[0.08em] uppercase font-['Cinzel'] text-[13px] disabled:!brightness-100 ${voteState.hasVoted
+                                                ? 'disabled:!opacity-100 !bg-[#1A1510] !border-[#916A47]/30 !text-[#B88A5E] cursor-default'
                                                 : selectedTarget
                                                     ? ''
-                                                    : '!bg-[#0A0A0A] !border-[#916A47]/30 !text-[#916A47]/60'
+                                                    : 'disabled:!opacity-100 disabled:!brightness-[0.9] !bg-[#1A1612] !border-[#916A47]/30 !text-[#916A47]/40'
                                                 }`}
                                         >
-                                            {selectedTarget ? (
-                                                <>
-                                                    Vote for {gameState.players.find(p => p.address.toLowerCase() === selectedTarget.toLowerCase())?.name}
-                                                </>
-                                            ) : voteState.hasVoted ? (
+                                            {voteState.hasVoted ? (
                                                 <>
                                                     ✓ Vote Committed
+                                                </>
+                                            ) : selectedTarget ? (
+                                                <>
+                                                    Vote for {gameState.players.find(p => p.address.toLowerCase() === selectedTarget.toLowerCase())?.name}
                                                 </>
                                             ) : (
                                                 'Select a target on the board'
@@ -970,26 +969,25 @@ const VotingTimer: React.FC = React.memo(() => {
 
     return (
         <div className={`w-full py-2 text-center rounded-md border transition-colors duration-500 shadow-[0_5px_15px_rgba(0,0,0,0.8)]
-            ${isUrgent ? 'bg-[#1A0505] border-[#8B0000]/50' :
-                isHardWait ? 'bg-[#1A0A02] border-[#B45309]/50' :
-                    'bg-[#0A0A0A] border-white/5'}`}>
+            ${isUrgent ? 'bg-[#0A0A0A] border-[#916A47]/40 ring-1 ring-[#916A47]/20 relative overflow-hidden' :
+                isHardWait ? 'bg-[#0A0A0A] border-[#916A47]/30' :
+                    'bg-[#0A0A0A] border-[#916A47]/30'}`}>
 
             <div className="flex items-center justify-center gap-2">
-                <Clock className={`w-4 h-4 ${isUrgent ? 'text-rose-400' : isHardWait ? 'text-orange-400' : 'text-[#916A47]'}`} />
+                <Clock className={`w-4 h-4 text-[#916A47] ${isUrgent ? 'animate-pulse' : ''}`} />
                 <span className={`text-2xl font-bold tabular-nums 
-                    ${isUrgent ? 'text-rose-400 animate-pulse' : isHardWait ? 'text-orange-400' : 'text-white'}`}>
+                    ${isUrgent ? 'text-[#916A47] animate-pulse drop-shadow-[0_0_8px_rgba(145,106,71,0.5)]' : isHardWait ? 'text-white/70 animate-pulse' : 'text-white'}`}>
                     {minutes}:{String(seconds).padStart(2, '0')}
                 </span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ml-2 
-                    ${isUrgent ? 'text-rose-400/70' : isHardWait ? 'text-orange-400/70' : 'text-[#916A47]'}`}>
+                <span className={`text-[10px] uppercase font-bold tracking-widest ml-2 text-[#916A47]`}>
                     {timerMode === 'soft' ? 'Voting Time' :
                         timerMode === 'transition' ? 'Auto-Voting...' : 'Waiting for AFK'}
                 </span>
             </div>
 
             {timerMode === 'hard' && (
-                <div className="text-[10px] text-orange-300/50 mt-1 animate-pulse">
-                    Some players are AFK. Waiting full timeout...
+                <div className="text-[10px] text-white/30 font-mono mt-1 pt-1 border-t border-white/5 animate-pulse uppercase tracking-widest mx-4">
+                    Some players are AFK...
                 </div>
             )}
         </div>

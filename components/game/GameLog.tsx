@@ -3,6 +3,44 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { GamePhase } from '../../types';
 
+// ── TypewriterText ────────────────────────────────────────────────────────
+// Безопасно работает внутри AnimatePresence:
+//  • useEffect убирает interval при unmount — нет утечек
+//  • при смене `text` эффект перезапускается с чистого листа
+//  • курсор ▌ исчезает когда печать завершена
+const TypewriterText: React.FC<{ text: string; speed?: number; className?: string }> = ({
+    text,
+    speed = 28,
+    className,
+}) => {
+    const [displayed, setDisplayed] = useState('');
+    const [done, setDone] = useState(false);
+
+    useEffect(() => {
+        setDisplayed('');
+        setDone(false);
+        let i = 0;
+        const interval = setInterval(() => {
+            i++;
+            setDisplayed(text.slice(0, i));
+            if (i >= text.length) {
+                clearInterval(interval);
+                setDone(true);
+            }
+        }, speed);
+        return () => clearInterval(interval);
+    }, [text, speed]);
+
+    return (
+        <span className={className}>
+            {displayed}
+            {!done && (
+                <span className="animate-pulse text-[#916A47] opacity-70 ml-[1px]">▌</span>
+            )}
+        </span>
+    );
+};
+
 interface GameLogProps {
     liveDiscussion?: {
         active?: boolean;
@@ -239,7 +277,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         {/* 1. Ночной результат */}
                         {dayEvents.nightResult && (
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
-                                <span className={LABEL}>&gt; NIGHT_RESULT</span>
+                                <TypewriterText text="> NIGHT_RESULT" className={LABEL} />
                                 <span className={VAL_BASE}>
                                     {dayEvents.nightResult.type === 'safe'
                                         ? <>No one was eliminated.</>
@@ -252,7 +290,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         {/* 2. Фаза обсуждения */}
                         {dayEvents.discussionStarted && (
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
-                                <span className={LABEL}>&gt; DISCUSSION</span>
+                                <TypewriterText text="> DISCUSSION" className={LABEL} />
                                 <span className={VAL_BASE}>
                                     {dayEvents.discussionFinished ? (
                                         <span>Discussion concluded. All players have spoken.</span>
@@ -268,7 +306,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         {/* 3. Старт голосования и Кворум */}
                         {dayEvents.votingStarted && (
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
-                                <span className={LABEL}>&gt; VOTING</span>
+                                <TypewriterText text="> VOTING" className={LABEL} />
                                 <span className={`${VAL_BASE} flex items-center gap-2 flex-wrap`}>
                                     <span>Voting phase has started.</span>
                                     <span>Quorum —</span>
@@ -282,7 +320,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         {/* 4. Результат голосования */}
                         {dayEvents.votingResult && (
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
-                                <span className={LABEL}>&gt; VOTING_RESULT</span>
+                                <TypewriterText text="> VOTING_RESULT" className={LABEL} />
                                 <span className={VAL_BASE}>
                                     {dayEvents.votingResult.type === 'eliminated'
                                         ? <><span className={PLAYER_NAME}>{dayEvents.votingResult.playerName || 'A player'}</span> was <span className={DANGER}>eliminated</span> by vote.</>
@@ -295,7 +333,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         {/* 5. Наступление ночи */}
                         {(dayEvents.nightFallen || showNightFalls) && (
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 pt-2">
-                                <span className={LABEL}>&gt; SYSTEM</span>
+                                <TypewriterText text="> SYSTEM" className={LABEL} />
                                 <span className="font-mono text-[13px] font-bold uppercase tracking-[0.1em] text-[#916A47] drop-shadow-[0_0_8px_rgba(145,106,71,0.4)]">
                                     NIGHT HAS FALLEN
                                 </span>

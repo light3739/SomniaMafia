@@ -72,31 +72,40 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
     // Determine selection color based on role during night
     const getSelectionClasses = () => {
         // Базовый нуарный стиль (плотный черный фон, еле заметная рамка, плотная маленькая тень)
-        const baseNoir = 'bg-[#1A1612] border border-white/5 shadow-[0_4px_10px_rgba(0,0,0,0.8)]';
+        const baseNoir = 'bg-[#1A1612] border border-[#916A47]/50 shadow-[0_4px_10px_rgba(0,0,0,0.8)]';
+
+        // Dead player — «закрытое дело»: базовый фон, неяркая белая рамка для видимости
+        if (!player.isAlive) {
+            return 'bg-[#1A1612] border border-white/20 shadow-[0_4px_10px_rgba(0,0,0,0.95)]';
+        }
 
         if (!isSelected) {
-            // Если это Я, делаем рамку чуть заметнее (бронза)
-            if (isMe) return 'bg-[#1A1612] border border-[#916A47]/40 shadow-[0_4px_10px_rgba(0,0,0,0.8)]';
             return baseNoir;
         }
 
-        // Night phase - Строгие заливки без свечения (Solid Noir)
+        // Night phase - Clean bright borders for selection (no glow, no shift)
         if (isNight && myRole) {
             switch (myRole) {
                 case Role.MAFIA:
-                    // Кроваво-черный фон, жесткая красная рамка
+                    // Глубокий бордовый (вместо почти черного)
                     return 'bg-[#1A0505] border border-[#8B0000] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
+
                 case Role.DOCTOR:
-                    return 'bg-[#021A18] border border-[#0D9488] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
+                    // Темно-хвойный/медицинский бирюзовый
+                    return 'bg-[#031A18] border border-[#0D9488] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
+
                 case Role.DETECTIVE:
-                    return 'bg-[#1A0A02] border border-[#B45309] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
+                    // Фон: глубокий темный с оранжевым подтоном. Рамка: благородная матовая медь.
+                    return 'bg-[#1A0C06] border border-[#A85832] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
+
                 default:
-                    return 'bg-[#1A130A] border border-[#916A47] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
+                    // Классический темный нуар (чуть теплее оригинала)
+                    return 'bg-[#1F170D] border border-[#D4A77C] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
             }
         }
 
-        // Day/Voting phase - Бронзовая рамка
-        return 'bg-[#1A130A] border border-[#916A47] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
+        // Day/Voting phase - Bright Solid Bronze
+        return 'bg-[#2C2112] border border-[#FFC894] shadow-[0_4px_10px_rgba(0,0,0,0.9)]';
     };
 
     const isMafiaVisible = isNight && myRole === Role.MAFIA && player.role === Role.MAFIA;
@@ -115,7 +124,21 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
         <motion.div
             layout
             initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: player.isAlive ? 1 : 0.5, scale: 1 }}
+            animate={{
+                opacity: 1, // Always opaque to prevent blending with background
+                scale: 1,
+                filter: !player.isAlive
+                    ? 'grayscale(100%) contrast(110%) brightness(100%)'
+                    : (isNight && !isMe && !isSelected && !isMafiaVisible
+                        ? 'grayscale(85%) contrast(100%) brightness(60%)'
+                        : 'grayscale(0%) contrast(100%) brightness(100%)')
+            }}
+            whileHover={player.isAlive && isNight && !isMe && !isSelected && !isMafiaVisible ? {
+                opacity: 1,
+                scale: 1,
+                filter: 'grayscale(0%) contrast(100%) brightness(100%)'
+            } : {}}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
             onClick={() => {
                 if (player.isAlive && canAct && onAction && !isHoveringMarks) {
                     playClickSound();
@@ -127,35 +150,35 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                 w-[250px] h-[130px]
                 ${canAct && player.isAlive ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}
                 ${getSelectionClasses()}
-                ${isMe && !isSelected ? 'ring-1 ring-[#916A47]/50' : ''}
+                ${!player.isAlive ? 'player-dead' : ''}
             `}
         >
-            {/* Speech Time Indicator - Shows when player is speaking */}
-            {/* Glow effect - shows entire speech time */}
-            {isSpeaking && speechTimeRemaining > 0 && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{
-                        opacity: [0.4, 1, 0.4],
-                    }}
-                    transition={{
-                        duration: 0.8,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                    }}
-                    className="absolute inset-0 rounded-xl pointer-events-none"
-                    style={{
-                        // Soft glow effect
-                        boxShadow: `
-                            inset 0 0 8px rgba(255, 250, 235, 0.4),
-                            0 0 8px rgba(255, 250, 235, 0.6),
-                            0 0 16px rgba(255, 250, 235, 0.5),
-                            0 0 28px rgba(255, 250, 235, 0.4),
-                            0 0 45px rgba(255, 250, 235, 0.25)
-                        `,
-                    }}
-                />
-            )}
+            {/* Soft Glowing Frame Aura (Framer Motion) */}
+            <AnimatePresence>
+                {isSpeaking && speechTimeRemaining > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 rounded-md pointer-events-none z-0"
+                        animate={{
+                            opacity: 1,
+                            boxShadow: [
+                                '0 0 20px 0px rgba(145, 106, 71, 0.4), inset 0 0 10px 0px rgba(145, 106, 71, 0.2)',
+                                '0 0 50px 8px rgba(145, 106, 71, 0.95), inset 0 0 25px 0px rgba(145, 106, 71, 0.45)'
+                            ]
+                        }}
+                        transition={{
+                            opacity: { duration: 0.5 },
+                            boxShadow: {
+                                duration: 1.25,
+                                repeat: Infinity,
+                                repeatType: "reverse",
+                                ease: "easeInOut"
+                            }
+                        }}
+                    />
+                )}
+            </AnimatePresence>
 
             {/* Centered Timer Overlay - only shows at ≤10 seconds */}
             {isSpeaking && speechTimeRemaining <= 10 && speechTimeRemaining > 0 && (
@@ -299,35 +322,27 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
             <div className="relative shrink-0">
                 <div className={`
                     w-16 h-16 rounded-md overflow-hidden border transition-colors duration-300
-                    ${isMe ? 'border-[#916A47] shadow-[0_0_15px_rgba(145,106,71,0.3)]' : (player.isAlive ? 'border-white/10' : 'border-[#8B0000]/50')}
+                    ${player.isAlive ? 'border-white/10' : 'border-[#8B0000]/50'}
                     bg-[#19130D] relative
                 `}>
-                    {player.avatarUrl ? (
-                        <Image
-                            src={player.avatarUrl}
-                            alt={player.name}
-                            fill
-                            sizes="64px"
-                            className={`object-cover transition-all duration-500 ${player.isAlive ? 'grayscale-[0.8] contrast-125 sepia-[0.2] brightness-90 group-hover:grayscale-[0.3]' : 'grayscale contrast-150 brightness-50 sepia-[0.5] hue-rotate-[-30deg]'}`}
-                        />
-                    ) : (
-                        <div className="w-full h-full bg-[#19130D]" />
-                    )}
-
-                    {/* Dead Overlay in Avatar */}
-                    {!player.isAlive && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-                            <Skull className="w-8 h-8 text-white/80" />
-                        </div>
-                    )}
+                    {/* Blurred Avatar Wrapper (only image is blurred) */}
+                    <div
+                        className="w-full h-full relative"
+                        style={{ filter: !player.isAlive ? 'brightness(1.0) blur(1.5px)' : 'none' }}
+                    >
+                        {player.avatarUrl ? (
+                            <Image
+                                src={player.avatarUrl}
+                                alt={player.name}
+                                fill
+                                sizes="64px"
+                                className={`object-cover transition-all duration-500 ${player.isAlive ? 'grayscale-[0.8] contrast-125 sepia-[0.2] brightness-90 group-hover:grayscale-[0.3]' : 'grayscale contrast-150 brightness-100 sepia-[0.5] hue-rotate-[-30deg]'}`}
+                            />
+                        ) : (
+                            <div className="w-full h-full bg-[#19130D]" />
+                        )}
+                    </div>
                 </div>
-
-                {/* Online/Offline Status Dot */}
-                {/* Online/Offline Status Dot - Green for Alive/Connected, Red for Dead/Kicked */}
-                <div className={`
-                    absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-[#19130D]
-                    ${player.status === 'connected' && player.isAlive ? 'bg-[#3D5A3E]' : 'bg-[#8B0000]/60'}
-                `}></div>
             </div>
 
             {/* Text Info */}
@@ -441,7 +456,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                             alt={voter.name}
                                             fill
                                             sizes="24px"
-                                            className="object-cover"
+                                            className="object-cover grayscale contrast-125 brightness-75"
                                         />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center bg-[#916A47]/30">
@@ -464,6 +479,13 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                     )}
                 </AnimatePresence>
             </div>
+
+            {/* DEAD Badge */}
+            {!player.isAlive && (
+                <div className="absolute top-2 right-2 px-2 py-0.5 bg-white/80 text-black text-[8px] font-bold uppercase tracking-wider rounded-full z-10 shadow-lg border border-white/10">
+                    DEAD
+                </div>
+            )}
 
         </motion.div >
     );
