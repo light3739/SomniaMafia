@@ -317,11 +317,11 @@ export function getPlayerPositions(count: number): { id: string; x: number; y: n
 }
 
 export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; initialDiscussionState?: Partial<DiscussionState> }> = ({ initialNightState, initialDiscussionState }) => {
-    const { 
-        gameState, setGameState, handlePlayerAction, canActOnPlayer, 
-        getActionLabel, myPlayer, currentRoomId, selectedTarget, 
-        endGameZK, isTxPending, addLog, playerMarks, setPlayerMark, 
-        showVotingResults, voteMap, isTestMode 
+    const {
+        gameState, setGameState, handlePlayerAction, canActOnPlayer,
+        getActionLabel, myPlayer, currentRoomId, selectedTarget,
+        endGameZK, isTxPending, addLog, playerMarks, setPlayerMark,
+        showVotingResults, voteMap, isTestMode
     } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const { activeHint, showHint, dismissHint } = useGameHints(currentRoomId?.toString());
@@ -419,7 +419,7 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
             if (gameState.phase === GamePhase.DAY && currentRoomId) {
                 fetchDiscussionState();
             }
-        }, 1000); 
+        }, 1000);
 
         return () => clearInterval(interval);
     }, [gameState.phase, currentRoomId, fetchDiscussionState]);
@@ -505,7 +505,7 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
         if (wasShowingResults && !showVotingResults && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current) {
             if (nightAnnouncementPendingRef.current) return;
             nightAnnouncementPendingRef.current = true;
-            
+
             lastNightDayRef.current = gameState.dayCount;
             playNightTransition();
             setShowNightAnnouncement(true);
@@ -647,7 +647,7 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
                         fill
                         priority
                         className="object-cover"
-                        style={{ filter: 'grayscale(30%) brightness(40%)' }}
+                        style={{ filter: 'grayscale(30%) brightness(55%)' }}
                     />
                 </div>
 
@@ -659,17 +659,14 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
                         fill
                         priority
                         className="object-cover"
-                        style={{ filter: 'grayscale(0%) brightness(25%) contrast(100%)' }}
+                        style={{ filter: 'brightness(50%) sepia(20%) contrast(105%)' }}
                     />
                 </div>
 
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#000_100%)] z-10" />
-                
-                {/* НОВОЕ: Пленочное Зерно (Film Grain) */}
-                <div 
-                    className="absolute inset-0 z-20 opacity-[0.03] mix-blend-overlay"
-                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
-                />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_45%,#000_100%)] z-10" />
+
+                {/* Глубокая Нуар-Виньетка вместо шума */}
+                <div className="absolute inset-0 z-20 pointer-events-none shadow-[inset_0_0_100px_rgba(0,0,0,0.5)]" />
             </div>
 
             {/* Anti-flash blackout layer: Catch 1-tick React render gaps where cinematic overlays unmount/mount 
@@ -678,8 +675,8 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
                 (gameState.phase === GamePhase.DAY && gameState.dayCount > 0 && gameState.dayCount !== lastMorningDayRef.current) ||
                 (gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current && !showVotingResults)
             ) && (
-                <div className="fixed inset-0 z-[10000] bg-[#050505] pointer-events-none" />
-            )}
+                    <div className="fixed inset-0 z-[10000] bg-[#050505] pointer-events-none" />
+                )}
 
             {/* Overlays in order of priority (lower in code = higher z-index) */}
             {/* 1. Environment Transitions */}
@@ -780,10 +777,10 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
                     {/* Day/Voting Phase Content — stays mounted during showVotingResults to avoid GameLog re-mount */}
                     {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING || showVotingResults) && (
                         <div className="w-full h-full">
-                            <DayPhase 
-                                initialDiscussionState={initialDiscussionState} 
-                                hideActions={showVotingResults} 
-                                disablePolling={showVotingResults && gameState.phase === GamePhase.NIGHT} 
+                            <DayPhase
+                                initialDiscussionState={initialDiscussionState}
+                                hideActions={showVotingResults}
+                                disablePolling={showVotingResults && gameState.phase === GamePhase.NIGHT}
                             />
                         </div>
                     )}
@@ -812,7 +809,7 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
                                     Live Feed
                                 </span>
                             </motion.div>
-                            <div className="w-full h-full rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden border border-[#916A47]/10 relative bg-[#0D0B08]">
+                            <div className="w-full h-full rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.5)] overflow-hidden border border-[#916A47]/10 relative bg-[#0D0B08]">
                                 <GameLog />
                             </div>
                         </div>
@@ -850,7 +847,7 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
                         </div>
                     )}
 
-                    {!isOverlayPhase && <PhaseIndicator phase={gameState.phase} dayCount={gameState.dayCount} />}
+                    {!isOverlayPhase}
                 </div>
             </div>
 

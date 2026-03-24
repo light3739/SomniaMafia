@@ -2814,6 +2814,92 @@ const ButtonColorShowcaseTest: React.FC = () => {
     );
 };
 
+// Test standalone timers from DayPhase
+const TimersShowcaseTest: React.FC = () => {
+    return (
+        <div className="w-[500px] flex flex-col gap-6 bg-[#050505] p-8 rounded-xl border border-white/5 relative shadow-2xl">
+            {/* Background texture to simulate game view */}
+            <div className="absolute inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'url(/assets/noise.png)', backgroundRepeat: 'repeat' }} />
+            
+            <h2 className="text-xl font-['Cinzel'] text-[#916A47] text-center mb-2 z-10">Neo-Noir Timer States</h2>
+            
+            <div className="z-10 flex flex-col gap-6">
+                {/* Discussion Timer (Normal) */}
+                <div>
+                    <h3 className="text-white/50 text-[10px] uppercase font-bold tracking-widest mb-2">1. Discussion / Standard Mode</h3>
+                    <div className="w-full py-2 text-center bg-[#0A0A0A] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
+                        <div className="flex items-center justify-center gap-2">
+                            <Clock className="w-4 h-4 text-[#916A47]" />
+                            <span className="text-2xl font-bold text-white tabular-nums">
+                                0:45
+                            </span>
+                            <span className="text-[#916A47] text-[10px] uppercase font-bold tracking-widest ml-2">
+                                Player Speaking
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Urgent Timer (<10s) */}
+                <div>
+                    <h3 className="text-white/50 text-[10px] uppercase font-bold tracking-widest mb-2">2. Last 10 Seconds (Urgent Mode)</h3>
+                    <div className="w-full py-2 text-center rounded-md border transition-colors duration-500 shadow-[0_5px_15px_rgba(0,0,0,0.8)] bg-[#0A0A0A] border-[#916A47]/40 ring-1 ring-[#916A47]/20 relative overflow-hidden">
+                        <div className="flex items-center justify-center gap-2">
+                            <Clock className="w-4 h-4 text-[#916A47] animate-pulse" />
+                            <span className="text-2xl font-bold tabular-nums text-[#916A47] animate-pulse drop-shadow-[0_0_8px_rgba(145,106,71,0.5)]">
+                                0:05
+                            </span>
+                            <span className="text-[10px] uppercase font-bold tracking-widest ml-2 text-[#916A47]">
+                                Voting Time
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Hard Wait (AFK Wait) */}
+                <div>
+                    <h3 className="text-white/50 text-[10px] uppercase font-bold tracking-widest mb-2">3. Waiting for AFK (Hard Wait)</h3>
+                    <div className="w-full py-2 text-center rounded-md border transition-colors duration-500 shadow-[0_5px_15px_rgba(0,0,0,0.8)] bg-[#0A0A0A] border-[#916A47]/30">
+                        <div className="flex items-center justify-center gap-2">
+                            <Clock className="w-4 h-4 text-[#916A47]" />
+                            <span className="text-2xl font-bold tabular-nums text-white/70 animate-pulse">
+                                1:20
+                            </span>
+                            <span className="text-[10px] uppercase font-bold tracking-widest ml-2 text-[#916A47]">
+                                Waiting for AFK
+                            </span>
+                        </div>
+                        <div className="text-[10px] text-white/30 font-mono mt-1 pt-1 border-t border-white/5 animate-pulse uppercase tracking-widest mx-4">
+                            Some players are AFK...
+                        </div>
+                    </div>
+                </div>
+
+                {/* Night Transition */}
+                <div>
+                    <h3 className="text-white/50 text-[10px] uppercase font-bold tracking-widest mb-2">4. Night Transition (Results Delay)</h3>
+                    <div className="w-full py-2 text-center bg-[#0A0A0A] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
+                        <div className="flex flex-col items-center justify-center">
+                            <div className="flex items-center justify-center gap-2">
+                                <Clock className="w-4 h-4 text-[#916A47]" />
+                                <span className="text-2xl font-bold text-white tabular-nums">
+                                    5s
+                                </span>
+                                <span className="text-[#916A47] text-[10px] uppercase font-bold tracking-widest ml-2">
+                                    Voting Results
+                                </span>
+                            </div>
+                            <div className="text-[10px] text-white/30 font-mono mt-1 pt-1 border-t border-[#916A47]/30 animate-pulse uppercase tracking-widest px-4">
+                                Review the logs above...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const TestPage: React.FC = () => {
     const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
@@ -2828,6 +2914,7 @@ const TestPage: React.FC = () => {
         // UI
         { name: '🎨 Button Concepts', group: 'UI', component: <ButtonShowcaseTest /> },
         { name: '🖌️ G Color Variants', group: 'UI', component: <ButtonColorShowcaseTest /> },
+        { name: '⏱️ Timer States', group: 'UI', component: <TimersShowcaseTest /> },
         { name: 'Button', group: 'UI', component: <Button onClick={() => alert('Clicked')}>Test Button</Button> },
         { name: 'Input', group: 'UI', component: <Input placeholder="Test Input" onChange={(e) => console.log(e.target.value)} /> },
         { name: 'BackButton', group: 'UI', component: <BackButton /> },

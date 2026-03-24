@@ -25,14 +25,13 @@ export const Button: React.FC<ButtonProps> = ({
         secondary: "bg-[#0A0A0A] hover:bg-[#111111] text-white/80 border border-white/5 shadow-sm rounded-md",
 
         // OUTLINE-GOLD — инверсия при наведении, но приглушённая
-        'outline-gold': "bg-[#0A0A0A] border border-[#916A47] text-[#916A47] hover:bg-[#6B5038] hover:border-[#6B5038] hover:text-[#F0E6D8] shadow-sm rounded-md transition-all",
-
+        'outline-gold': "bg-[#1A1510] border border-[#B88A5E] text-[#B88A5E] hover:bg-[#6B5038] hover:border-[#6B5038] hover:text-[#F0E6D8] shadow-sm rounded-md transition-all",
         ghost: "bg-transparent text-white/60 hover:text-white",
 
         // Спец-кнопки
-        noir: "bg-[#0A0A0A] border border-[#916A47]/30 hover:bg-[#111111] hover:border-[#916A47]/80 text-[#916A47] shadow-sm rounded-md tracking-[0.08em] uppercase font-['Cinzel'] text-[13px]",
+        noir: "bg-[#0A0A0A] border border-[#916A47]/30 text-[#916A47]/60 hover:bg-[#111111] hover:border-white/50 hover:text-white hover:shadow-[0_0_15px_rgba(255,255,255,0.15)] shadow-sm rounded-md tracking-[0.08em] uppercase font-['Cinzel'] text-[13px] transition-all",
 
-        'noir-danger': "bg-[#0A0A0A] border-2 border-[#8B0000]/80 text-[#8B0000] hover:bg-[#5A0000] hover:border-[#5A0000] hover:text-[#FFCCCC] shadow-sm rounded-md tracking-[0.08em] uppercase font-['Cinzel'] text-[13px] transition-all",
+        'noir-danger': "bg-[#050505] border border-[#1a1a1a] text-[#8B0000]/40 hover:bg-[#1A0505] hover:border-[#8B0000] hover:text-[#8B0000] hover:shadow-[0_0_15px_rgba(139,0,0,0.2)] shadow-sm rounded-md tracking-[0.08em] uppercase font-['Cinzel'] text-[13px] transition-all",
     };
 
     return (

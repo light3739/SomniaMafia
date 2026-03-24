@@ -44,19 +44,19 @@ const RoleActions: Record<Role, { action: NightActionType; label: string; icon: 
         action: NightActionType.KILL,
         label: 'Kill',
         icon: <Skull className="w-5 h-5" />,
-        color: 'text-red-700'
+        color: 'text-[#8B0000]',
     },
     [Role.DOCTOR]: {
         action: NightActionType.HEAL,
         label: 'Protect',
         icon: <Shield className="w-5 h-5" />,
-        color: 'text-teal-500'
+        color: 'text-[#0D9488]',
     },
     [Role.DETECTIVE]: {
         action: NightActionType.CHECK,
         label: 'Investigate',
         icon: <Search className="w-5 h-5" />,
-        color: 'text-amber-600'
+        color: 'text-[#A85832]',
     },
     [Role.CIVILIAN]: {
         action: NightActionType.NONE,
@@ -126,7 +126,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             setTimeLeft(null);
             return;
         }
-        
+
         const tick = () => {
             const now = Math.floor(Date.now() / 1000);
             const remaining = Math.max(0, gameState.phaseDeadline - now);
@@ -329,7 +329,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     setNightState(prev => ({ ...prev, investigationResult: proof.role }));
                     return;
                 }
-                
+
                 // 2. Fallback: On-chain check
                 const result = await getInvestigationResultOnChain(address || '', nightState.committedTarget as string);
                 if (result && result.role !== Role.UNKNOWN) {
@@ -685,33 +685,16 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                             exit={{ opacity: 0, scale: 0.95 }}
                             className="text-center mb-2"
                         >
-                            {timeLeft === 0 ? (
-                                <div className="flex flex-col items-center justify-center space-y-2">
-                                    <h2 className="text-2xl font-['Cinzel'] text-amber-400/80 animate-pulse transition-all duration-1000">
-                                        The sun is rising...
-                                    </h2>
-                                    <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
-                                        <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />
-                                        <span className="text-amber-400 text-[9px] uppercase tracking-widest font-bold">Preparing for dawn</span>
-                                    </div>
-                                </div>
-                            ) : (
-                                <>
-                                    <h2 className="text-2xl font-['Cinzel'] text-white mb-1">
-                                        {myRole === Role.MAFIA && 'Choose your victim'}
-                                        {myRole === Role.DOCTOR && 'Choose who to protect'}
-                                        {myRole === Role.DETECTIVE && 'Choose who to investigate'}
-                                    </h2>
-                                    <p className="text-white/40 text-[10px] tracking-wide">
-                                        {myRole === Role.MAFIA ? 'Target to eliminate' : (myRole === Role.DOCTOR ? 'Player to protect' : 'Player to investigate')}
-                                    </p>
-                                    {timeLeft !== null && timeLeft <= 10 && (
-                                        <p className="text-rose-500 text-[10px] font-bold tracking-widest mt-2 uppercase animate-pulse">
-                                            {timeLeft}s remaining
-                                        </p>
-                                    )}
-                                </>
-                            )}
+                            <>
+                                <h2 className="text-2xl font-['Cinzel'] text-white mb-1">
+                                    {myRole === Role.MAFIA && 'Choose your victim'}
+                                    {myRole === Role.DOCTOR && 'Choose who to protect'}
+                                    {myRole === Role.DETECTIVE && 'Choose who to investigate'}
+                                </h2>
+                                <p className="text-white/40 text-[10px] tracking-wide">
+                                    {myRole === Role.MAFIA ? 'Target to eliminate' : (myRole === Role.DOCTOR ? 'Player to protect' : 'Player to investigate')}
+                                </p>
+                            </>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -784,55 +767,70 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                             exit={{ opacity: 0, y: 10 }}
                             className="mt-2 flex flex-col items-center w-full"
                         >
-                            {selectedPlayer && (
-                                <motion.div
-                                    initial={{ scale: 0.95, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    className={`p-3 rounded-xl border mb-4 w-full ${
-                                        myRole === Role.MAFIA ? 'bg-[#8B0000]/10 border-[#8B0000]/30' :
-                                        myRole === Role.DOCTOR ? 'bg-[#0D9488]/10 border-[#0D9488]/30' :
-                                        'bg-[#B45309]/10 border-[#B45309]/30'
-                                    }`}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-[#19130D]">
-                                                {selectedPlayer.avatarUrl ? (
-                                                    <Image src={selectedPlayer.avatarUrl} alt={selectedPlayer.name} fill sizes="40px" className="object-cover" />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center bg-[#19130D]">
-                                                        <User className="w-5 h-5 text-white/20" />
+                            {/* Reserved space for target selection card */}
+                            <div className="w-full min-h-[66px] mb-4 relative">
+                                <AnimatePresence>
+                                    {selectedPlayer ? (
+                                        <motion.div
+                                            key="selected-target"
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            transition={{ duration: 0.3 }}
+                                            className={`p-3 rounded-md border w-full h-full shadow-[0_5px_15px_rgba(0,0,0,0.8)] z-10 relative ${
+                                                myRole === Role.MAFIA ? 'bg-[#1A0505] border-[#8B0000]' :
+                                                myRole === Role.DOCTOR ? 'bg-[#031A18] border-[#0D9488]' :
+                                                myRole === Role.DETECTIVE ? 'bg-[#1A0C06] border-[#A85832]' : 
+                                                'bg-[#0A0A0A] border-[#916A47]/30'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-[#19130D]">
+                                                        {selectedPlayer.avatarUrl ? (
+                                                            <Image src={selectedPlayer.avatarUrl} alt={selectedPlayer.name} fill sizes="40px" className="object-cover" />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center bg-[#19130D]">
+                                                                <User className="w-5 h-5 text-white/20" />
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                )}
+                                                    <div className="overflow-hidden">
+                                                        <p className="font-bold text-white text-base leading-tight truncate">{selectedPlayer.name}</p>
+                                                        <p className="text-white/40 text-[10px] font-mono">{selectedPlayer.address.slice(0, 6)}...{selectedPlayer.address.slice(-4)}</p>
+                                                    </div>
+                                                </div>
+                                                <span className={`${roleConfig.color} font-bold uppercase tracking-wider text-[10px] font-['Cinzel'] shrink-0 ml-2`}>{roleConfig.label}</span>
                                             </div>
-                                            <div>
-                                                <p className="font-bold text-white text-base leading-tight">{selectedPlayer.name}</p>
-                                                <p className="text-white/40 text-[10px] font-mono">{selectedPlayer.address.slice(0, 6)}...{selectedPlayer.address.slice(-4)}</p>
-                                            </div>
-                                        </div>
-                                        <span className={`${roleConfig.color} font-bold uppercase tracking-wider text-[10px] font-['Cinzel']`}>{roleConfig.label}</span>
-                                    </div>
-                                </motion.div>
-                            )}
+                                        </motion.div>
+                                    ) : (
+                                        <motion.div
+                                            key="no-target"
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            transition={{ duration: 0.3 }}
+                                            className="absolute inset-0 p-3 rounded-md border border-[#916A47]/30 bg-[#0A0A0A]/0 shadow-[0_5px_15px_rgba(0,0,0,0.8)]"
+                                        />
+                                    )}
+                                </AnimatePresence>
+                            </div>
                             <Button
                                 onClick={handleCommit}
                                 isLoading={isProcessing || isTxPending}
                                 disabled={!selectedTarget || isProcessing || isTxPending}
-                                variant={myRole === Role.MAFIA ? 'noir-danger' : 'noir'}
-                                className="w-full h-[46px]"
+                                variant="outline-gold"
+                                className={`w-full h-[50px] font-['Cinzel'] tracking-[0.08em] text-[13px] uppercase transition-all duration-300 disabled:!brightness-100 ${!selectedTarget
+                                    ? 'disabled:!opacity-100 disabled:!brightness-[0.9] !bg-[#1A1612] !border-[#916A47]/30 !text-[#916A47]/40'
+                                    : (myRole === Role.MAFIA ? '!text-[#8B0000] !border-[#8B0000] hover:!bg-[#5A0000] hover:!border-[#5A0000] hover:!text-white' :
+                                       myRole === Role.DOCTOR ? '!text-[#0D9488] !border-[#0D9488] hover:!bg-[#065F56] hover:!border-[#065F56] hover:!text-white' :
+                                       myRole === Role.DETECTIVE ? '!text-[#A85832] !border-[#A85832] hover:!bg-[#7D4225] hover:!border-[#7D4225] hover:!text-white' : '')
+                                    }`}
                                 data-custom-sound
                             >
                                 {selectedTarget ? `${roleConfig.label} ${selectedPlayer?.name}` : 'Select target'}
                             </Button>
 
-                            <button
-                                onClick={handleSkip}
-                                disabled={isProcessing || isTxPending}
-                                className="mt-4 text-white/20 hover:text-[#916A47]/70 text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center gap-1.5 group"
-                            >
-                                <RefreshCw className={`w-2.5 h-2.5 transition-transform group-hover:rotate-180 duration-500 ${isProcessing ? 'animate-spin' : ''}`} />
-                                Skip my turn
-                            </button>
                         </motion.div>
                     )}
                 </AnimatePresence>

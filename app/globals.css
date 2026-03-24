@@ -128,3 +128,14 @@ button:disabled,
 [data-rk] [role="dialog"] [id*="rk-account-address"] {
   font-family: 'Cinzel', serif !important;
 }
+
+/* Состояние выбывшего игрока */
+.player-dead {
+  filter: grayscale(100%) brightness(1.0);
+  transition: all 0.8s ease-in-out;
+}
+
+/* Мягкое свечение для говорящего (Нуар-стайл) */
+.speaking-glow {
+  border-color: rgba(145, 106, 71, 0.8) !important;
+}
