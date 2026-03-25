@@ -2065,7 +2065,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
         setIsTxPending(true);
         try {
-            const hash = await sendGameTransaction('revealDeck', [currentRoomId, deck, cleanSalt]);
+            const hash = await sendGameTransaction('revealDeck', [roomId, deck, cleanSalt]);
             addLog("Deck revealed!", "success");
             // OPTIMISTIC: Release spinner immediately, confirm in background
             setIsTxPending(false);
@@ -2086,7 +2086,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             // V3: shareKeysToAll - one transaction for all keys
             const hash = await sendGameTransaction('shareKeysToAll', [
-                currentRoomId,
+                roomId,
                 recipients,
                 encryptedKeys.map(k => k as `0x${string}`) // Convert to bytes
             ]);
