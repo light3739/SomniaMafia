@@ -208,17 +208,33 @@ export const RoleReveal: React.FC = React.memo(() => {
                 }
             }
             const sraKey = shuffleService.getDecryptionKey();
+            
+            let submitted = false;
+            let lastError: any = null;
 
-            await submitSraKeyToGm({
-                roomId: currentRoomId.toString(),
-                address,
-                sraKey,
-                walletClient,
-                chainId
-            });
+            for (let i = 0; i < 6; i++) {
+                try {
+                    console.log(`[RoleReveal] SRA key submission attempt ${i+1}/6`);
+                    await submitSraKeyToGm({
+                        roomId: currentRoomId.toString(),
+                        address,
+                        sraKey,
+                        walletClient,
+                        chainId
+                    });
+                    submitted = true;
+                    break;
+                } catch (err: any) {
+                    lastError = err;
+                    console.warn(`[RoleReveal] SRA submission attempt ${i+1} failed:`, err.message);
+                    if (i < 5) await new Promise(r => setTimeout(r, 2000));
+                }
+            }
+
+            if (!submitted) throw lastError;
 
             setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
-            console.log("[RoleReveal] SRA key submitted to GM");
+            console.log("[RoleReveal] SRA key submitted to GM ✅");
         } catch (e: any) {
             console.error("[RoleReveal] SRA submission failed:", e);
             addLog(e.message || "Failed to submit SRA key", "danger");
