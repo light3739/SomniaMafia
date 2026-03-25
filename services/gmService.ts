@@ -54,26 +54,28 @@ export async function registerEciesPubkey(
 
 /**
  * Register session key mapping on GM server (local cache, bypasses on-chain RPC lag).
- * Must be signed by the MAIN WALLET (forceWallet=true).
+ * Signed by the SESSION KEY itself (no MetaMask popup needed).
+ * The session private key proves ownership — only the generator knows it.
  */
 export async function registerSessionOnGm(params: {
     roomId: string;
     mainWallet: string;
     sessionAddress: string;
-    walletClient: any;
+    sessionPrivateKey: `0x${string}`;
     chainId?: number;
 }): Promise<void> {
-    const { roomId, mainWallet, sessionAddress, walletClient, chainId } = params;
+    const { roomId, mainWallet, sessionAddress, sessionPrivateKey, chainId } = params;
     const normalizedMain = mainWallet.toLowerCase();
     const normalizedSession = sessionAddress.toLowerCase();
 
-    const meta = await signRequest({
-        address: mainWallet,
-        walletClient,
-        forceWallet: true, // MUST use main wallet, not session key
-        buildMessage: ({ nonce, timestamp }) =>
-            `register-session:${roomId}:${normalizedMain}:${normalizedSession}:${nonce}:${timestamp}`,
-    });
+    const timestamp = Date.now();
+    const nonce = Math.random().toString(36).slice(2) + timestamp.toString(36);
+    const message = `register-session:${roomId}:${normalizedMain}:${normalizedSession}:${nonce}:${timestamp}`;
+
+    // Sign with session key directly (no popup)
+    const { privateKeyToAccount } = await import('viem/accounts');
+    const sessionAccount = privateKeyToAccount(sessionPrivateKey);
+    const signature = await sessionAccount.signMessage({ message });
 
     const res = await fetch(`${GM_SERVER_URL}/register-session`, {
         method: 'POST',
@@ -82,9 +84,10 @@ export async function registerSessionOnGm(params: {
             mainWallet: normalizedMain,
             sessionAddress: normalizedSession,
             roomId,
-            signature: meta.signature,
-            nonce: meta.nonce,
-            timestamp: meta.timestamp,
+            signature,
+            signerAddress: normalizedSession,
+            nonce,
+            timestamp,
             chainId,
         }),
     });

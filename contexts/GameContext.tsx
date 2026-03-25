@@ -1563,7 +1563,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
             // 3. Сессия
-            const { sessionAddress } = createNewSession(myAddr, newRoomId, targetChain.id);
+            const { sessionAddress, privateKey: sessionPrivKey } = createNewSession(myAddr, newRoomId, targetChain.id);
 
             // ✅ ДОБАВИТЬ: Загружаем/генерируем ECIES keypair для этого игрока
             const eciesKp = await loadOrCreateKeypair(newRoomId.toString(), myAddr);
@@ -1627,13 +1627,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 markSessionRegistered();
             }
 
-            // 🆕 Register session key on GM server (bypasses RPC lag)
+            // 🆕 Register session key on GM server (bypasses RPC lag, no popup)
             try {
                 await GM.registerSessionOnGm({
                     roomId: finalRoomId.toString(),
                     mainWallet: myAddr,
                     sessionAddress,
-                    walletClient: activeWalletClient,
+                    sessionPrivateKey: sessionPrivKey,
                     chainId: targetChain.id,
                 });
             } catch (e) {
@@ -1755,7 +1755,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
             // 2. Generate session key
-            const { sessionAddress } = createNewSession(myAddr, Number(roomId), targetChain.id);
+            const { sessionAddress, privateKey: sessionPrivKey } = createNewSession(myAddr, Number(roomId), targetChain.id);
 
             // ✅ ДОБАВИТЬ: ECIES keypair для join
             const eciesKp = await loadOrCreateKeypair(roomId.toString(), myAddr);
@@ -1901,13 +1901,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 5. Mark session as registered
             markSessionRegistered();
 
-            // 🆕 Register session key on GM server (bypasses RPC lag)
+            // 🆕 Register session key on GM server (bypasses RPC lag, no popup)
             try {
                 await GM.registerSessionOnGm({
                     roomId: roomId.toString(),
                     mainWallet: myAddr,
                     sessionAddress,
-                    walletClient: activeWalletClient,
+                    sessionPrivateKey: sessionPrivKey,
                     chainId: targetChain.id,
                 });
             } catch (e) {
