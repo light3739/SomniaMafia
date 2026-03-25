@@ -1658,8 +1658,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (attempt > 1) await new Promise(r => setTimeout(r, delay));
 
                 try {
-                    await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id);
+                    const forceWallet = attempt > 2;
+                    await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id, forceWallet);
                     pubkeyRegistered = true;
+                    console.log(`[ECIES] Pubkey registered successfully (attempt=${attempt}, fallback=${forceWallet})`);
                     break;
                 } catch (e: any) {
                     console.warn(`[ECIES] Attempt ${attempt}/4 failed:`, e.message);
@@ -1905,9 +1907,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         await new Promise(r => setTimeout(r, delay));
                     }
                     try {
-                        await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id);
+                        // FIX: If we failed 3 times, try bypassing session key (forcing main wallet signature)
+                        // This handles cases where the GM's RPC node is lagging behind or contract addresses are out of sync.
+                        const forceWalletFallback = attempt > 3;
+                        await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id, forceWalletFallback);
                         registered = true;
-                        console.log('[ECIES] Public key registered with GM server ✅');
+                        console.log(`[ECIES] Public key registered with GM server ✅ (attempt=${attempt}, fallback=${forceWalletFallback})`);
                         break;
                     } catch (e: any) {
                         if (attempt === 6) throw e;
