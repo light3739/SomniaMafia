@@ -53,6 +53,50 @@ export async function registerEciesPubkey(
 }
 
 /**
+ * Register session key mapping on GM server (local cache, bypasses on-chain RPC lag).
+ * Must be signed by the MAIN WALLET (forceWallet=true).
+ */
+export async function registerSessionOnGm(params: {
+    roomId: string;
+    mainWallet: string;
+    sessionAddress: string;
+    walletClient: any;
+    chainId?: number;
+}): Promise<void> {
+    const { roomId, mainWallet, sessionAddress, walletClient, chainId } = params;
+    const normalizedMain = mainWallet.toLowerCase();
+    const normalizedSession = sessionAddress.toLowerCase();
+
+    const meta = await signRequest({
+        address: mainWallet,
+        walletClient,
+        forceWallet: true, // MUST use main wallet, not session key
+        buildMessage: ({ nonce, timestamp }) =>
+            `register-session:${roomId}:${normalizedMain}:${normalizedSession}:${nonce}:${timestamp}`,
+    });
+
+    const res = await fetch(`${GM_SERVER_URL}/register-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            mainWallet: normalizedMain,
+            sessionAddress: normalizedSession,
+            roomId,
+            signature: meta.signature,
+            nonce: meta.nonce,
+            timestamp: meta.timestamp,
+            chainId,
+        }),
+    });
+
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(`Failed to register session on GM: ${error.error || res.statusText}`);
+    }
+    console.log('[GM] Session key registered on GM server ✅');
+}
+
+/**
  * Submit SRA decryption key to GM server (off-chain, signed).
  */
 export async function submitSraKeyToGm(params: {
