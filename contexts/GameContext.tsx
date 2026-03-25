@@ -1641,8 +1641,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             walletClient: activeWalletClient,
                             signerAddress: myAddr,
                             chainId: targetChain.id,
-                            maxPlayers: maxPlayers,
-                            forceWallet: true
+                            maxPlayers: maxPlayers
                         });
                         passwordSet = true;
                         break;
@@ -1659,7 +1658,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (attempt > 1) await new Promise(r => setTimeout(r, delay));
 
                 try {
-                    await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id, true);
+                    await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id);
                     pubkeyRegistered = true;
                     break;
                 } catch (e: any) {
@@ -1898,7 +1897,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         await new Promise(r => setTimeout(r, delay));
                     }
                     try {
-                        await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id, true);
+                        await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id);
                         registered = true;
                         console.log('[ECIES] Public key registered with GM server ✅');
                         break;
@@ -3416,16 +3415,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                                     address: account,
                                     password: params.joinPassword,
                                     walletClient: client,
-                                    chainId: targetChain.id,
-                                    forceWallet: true
+                                    chainId: targetChain.id
                                   })
                                 : Promise.resolve(),
                             GM.registerEciesPubkey(
                                 roomId.toString(),
                                 account,
                                 client,
-                                targetChain.id,
-                                true
+                                targetChain.id
                             )
                         ]);
                         
