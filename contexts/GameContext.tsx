@@ -1601,6 +1601,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
 
             const receipt = await pClient.waitForTransactionReceipt({ hash });
+            if (receipt.status === 'reverted') throw new Error("Transaction reverted on-chain");
 
             let finalRoomId = BigInt(newRoomId);
             try {
@@ -1871,6 +1872,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
 
             const joinReceipt = await pClient.waitForTransactionReceipt({ hash });
+            if (joinReceipt.status === 'reverted') throw new Error("Transaction reverted on-chain");
 
             // DEBUG: Check deposit collection on join
             try {
