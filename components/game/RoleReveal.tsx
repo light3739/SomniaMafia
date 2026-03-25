@@ -160,7 +160,22 @@ export const RoleReveal: React.FC = React.memo(() => {
 
         registerInFlightRef.current = true;
         try {
-            await registerEciesPubkey(currentRoomId.toString(), address, walletClient, chainId);
+            let registered = false;
+            let lastError: any = null;
+            
+            for (let i = 0; i < 6; i++) {
+                try {
+                    await registerEciesPubkey(currentRoomId.toString(), address, walletClient, chainId);
+                    registered = true;
+                    break;
+                } catch (err) {
+                    lastError = err;
+                    if (i < 5) await new Promise(r => setTimeout(r, 2000));
+                }
+            }
+            
+            if (!registered) throw lastError;
+
             setRevealState(prev => ({
                 ...prev,
                 eciesRegistered: true,
