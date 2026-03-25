@@ -582,10 +582,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
     // ─── VISUAL RETURN ────────────────────────────────────────────────────────
     return useMemo(() => (
         <div className="w-full h-[100dvh] flex flex-col items-center justify-center overflow-hidden p-4 pointer-events-auto">
-            <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35 }}
+            <div
                 className="w-full max-w-[740px] bg-[#060403] rounded-sm border border-[#916A47]/20 shadow-[0_40px_80px_rgba(0,0,0,0.97)] flex flex-col overflow-hidden"
             >
                 {/* ── HEADER ─────────────────────────────────────────── */}
@@ -743,7 +740,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                         // SOMNIA NETWORK //
                     </span>
                 </div>
-            </motion.div>
+            </div>
         </div>
     ), [shuffleState, gameState.players, myPlayer, isProcessing, isTxPending, isSyncing, forceSync, handleMyTurn, handleReveal, handleTimeoutKick, currentShuffler?.name, progress, currentRoomId]);
 });

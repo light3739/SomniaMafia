@@ -3,7 +3,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount } from 'wagmi';
 import { useGameContext } from '../../contexts/GameContext';
 import { GameLog } from './GameLog';
@@ -820,9 +820,21 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
                 <GameHintsOverlay activeHint={activeHint} onDismiss={dismissHint} />
             </div>
             {/* OVERLAYS (Shuffle, Reveal, GameOver) - Outside scalable container for full screen coverage */}
+            {/* Single persistent wrapper — prevents container pop/resize on phase change */}
             {isOverlayPhase && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-                    {renderPhaseContent()}
+                    <AnimatePresence mode="wait" initial={false}>
+                        <motion.div
+                            key={gameState.phase}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.25, ease: 'easeInOut' }}
+                            className="w-full h-full flex items-center justify-center"
+                        >
+                            {renderPhaseContent()}
+                        </motion.div>
+                    </AnimatePresence>
                 </div>
             )}
 
@@ -1018,6 +1030,75 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
                             }}
                         >
                             Test: Judgment
+                        </Button>
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px]"
+                            onClick={() => {
+                                setGameState(prev => ({ ...prev, phase: GamePhase.SHUFFLING }));
+                            }}
+                        >
+                            Test: Shuffle
+                        </Button>
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px]"
+                            onClick={() => {
+                                setGameState(prev => ({ ...prev, phase: GamePhase.REVEAL }));
+                            }}
+                        >
+                            Test: Reveal
+                        </Button>
+                        <Button
+                            variant="outline-gold"
+                            className="h-8 px-3 text-[10px] bg-[#916A47]/20 border-[#916A47]"
+                            onClick={() => {
+                                // Сброс стейтов для шафла
+                                setGameState(prev => ({
+                                    ...prev,
+                                    phase: GamePhase.SHUFFLING,
+                                    players: prev.players.map(p => ({ ...p, hasDeckCommitted: false, hasConfirmedRole: false }))
+                                }));
+
+                                // Симуляция прохождения шафла
+                                let step = 0;
+                                const shuffleInterval = setInterval(() => {
+                                    setGameState(prev => {
+                                        const total = prev.players.length;
+                                        if (step >= total) {
+                                            clearInterval(shuffleInterval);
+                                            // Сразу после шафла переходим в REVEAL
+                                            setTimeout(() => {
+                                                setGameState(g => ({ ...g, phase: GamePhase.REVEAL }));
+                                                
+                                                // Симуляция подтверждения ролей
+                                                let revealStep = 0;
+                                                const revealInterval = setInterval(() => {
+                                                    setGameState(g2 => {
+                                                        if (revealStep >= total) {
+                                                            clearInterval(revealInterval);
+                                                            return g2;
+                                                        }
+                                                        const updatedPlayers = [...g2.players];
+                                                        updatedPlayers[revealStep] = { ...updatedPlayers[revealStep], hasConfirmedRole: true };
+                                                        revealStep++;
+                                                        return { ...g2, players: updatedPlayers };
+                                                    });
+                                                }, 600);
+                                                
+                                            }, 1000);
+                                            return prev;
+                                        }
+
+                                        const updatedPlayers = [...prev.players];
+                                        updatedPlayers[step] = { ...updatedPlayers[step], hasDeckCommitted: true };
+                                        step++;
+                                        return { ...prev, players: updatedPlayers };
+                                    });
+                                }, 300); // Быстрый пробег: 300мс на игрока
+                            }}
+                        >
+                            Sim: Full Flow (Shuffle -&gt; Reveal)
                         </Button>
                     </div>
                 </div>
