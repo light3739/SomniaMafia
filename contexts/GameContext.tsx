@@ -1627,6 +1627,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 markSessionRegistered();
             }
 
+            // 🆕 Register session key on GM server (bypasses RPC lag)
+            try {
+                await GM.registerSessionOnGm({
+                    roomId: finalRoomId.toString(),
+                    mainWallet: myAddr,
+                    sessionAddress,
+                    walletClient: activeWalletClient,
+                    chainId: targetChain.id,
+                });
+            } catch (e) {
+                console.warn('[GM] Failed to register session on GM (non-blocking):', e);
+            }
+
             // 6. IF PRIVATE: Set password on GM server
             if (lobbyPassword) {
                 let passwordSet = false;
@@ -1652,21 +1665,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
 
-            // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере (с ретраями)
-            let pubkeyRegistered = false;
-            for (let attempt = 1; attempt <= 4; attempt++) {
-                const delay = 500 + (attempt - 1) * 1500;
-                if (attempt > 1) await new Promise(r => setTimeout(r, delay));
-
-                try {
-                    const forceWallet = attempt > 2;
-                    await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id, forceWallet);
-                    pubkeyRegistered = true;
-                    console.log(`[ECIES] Pubkey registered successfully (attempt=${attempt}, fallback=${forceWallet})`);
-                    break;
-                } catch (e: any) {
-                    console.warn(`[ECIES] Attempt ${attempt}/4 failed:`, e.message);
-                }
+            // Register ECIES pubkey on GM server (session already cached above)
+            try {
+                await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id);
+                console.log('[ECIES] Pubkey registered successfully');
+            } catch (e) {
+                console.warn('[ECIES] Failed to register pubkey (non-blocking):', e);
             }
 
             setCurrentRoomId(finalRoomId);
@@ -1897,32 +1901,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 5. Mark session as registered
             markSessionRegistered();
 
-            // ✅ ДОБАВИТЬ: Регистрируем ECIES pubkey на GM сервере
-            // RPC Desync workaround: Retry 6 times with increasing delay
+            // 🆕 Register session key on GM server (bypasses RPC lag)
             try {
-                console.log('[ECIES] Registering pubkey, starting retry loop for state sync...');
-                let registered = false;
-                for (let attempt = 1; attempt <= 6; attempt++) {
-                    const delay = 1000 + (attempt - 1) * 2000;
-                    if (attempt > 1) {
-                        console.log(`[ECIES] Retry attempt ${attempt}/6 after ${delay}ms...`);
-                        await new Promise(r => setTimeout(r, delay));
-                    }
-                    try {
-                        // FIX: If we failed 3 times, try bypassing session key (forcing main wallet signature)
-                        // This handles cases where the GM's RPC node is lagging behind or contract addresses are out of sync.
-                        const forceWalletFallback = attempt > 3;
-                        await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id, forceWalletFallback);
-                        registered = true;
-                        console.log(`[ECIES] Public key registered with GM server ✅ (attempt=${attempt}, fallback=${forceWalletFallback})`);
-                        break;
-                    } catch (e: any) {
-                        if (attempt === 6) throw e;
-                        console.warn(`[ECIES] Attempt ${attempt} failed:`, e.message);
-                    }
-                }
+                await GM.registerSessionOnGm({
+                    roomId: roomId.toString(),
+                    mainWallet: myAddr,
+                    sessionAddress,
+                    walletClient: activeWalletClient,
+                    chainId: targetChain.id,
+                });
             } catch (e) {
-                console.warn('[ECIES] Failed to register pubkey with GM after 6 attempts (non-blocking):', e);
+                console.warn('[GM] Failed to register session on GM (non-blocking):', e);
+            }
+
+            // Register ECIES pubkey on GM server
+            try {
+                await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id);
+                console.log('[ECIES] Public key registered with GM server ✅');
+            } catch (e) {
+                console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
             }
 
             setCurrentRoomId(BigInt(roomId));
