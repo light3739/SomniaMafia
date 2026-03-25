@@ -761,8 +761,8 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                                 onClick={skipSpeech}
                                                 disabled={isProcessing}
                                                 isLoading={isProcessing}
-                                                variant="noir-danger"
-                                                className="w-full h-[44px] mt-2"
+                                                variant="outline-gold"
+                                                className="w-full h-[50px] font-['Cinzel'] tracking-[0.08em] text-[13px] uppercase mt-2 !bg-[#121212] !border-[#6B6B6B]/60 !text-[#6B6B6B] hover:!bg-[#3D3D3D] hover:!border-[#3D3D3D] hover:!text-white"
                                             >
                                                 <ChevronRight className="w-5 h-5 mr-2" />
                                                 Force Skip (Host)

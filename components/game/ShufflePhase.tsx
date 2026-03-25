@@ -1,11 +1,11 @@
 // components/game/ShufflePhase.tsx
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { usePublicClient, useWriteContract } from 'wagmi';
 import { MAFIA_ABI } from '../../contracts/config';
-import { Loader2, Check, Clock, Shuffle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Check, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 interface ShuffleState {
@@ -16,11 +16,26 @@ interface ShuffleState {
     hasRevealed: boolean;
     pendingDeck: string[] | null;
     pendingSalt: string | null;
-    phaseDeadline: number; // For timeout handling
+    phaseDeadline: number;
     retryCount: number;
     lastErrorTime: number;
     isFailed: boolean;
 }
+interface AsciiSpinnerProps {
+    className?: string;
+}
+
+const AsciiSpinner: React.FC<AsciiSpinnerProps> = ({ className = '' }) => {
+    const [frame, setFrame] = useState(0);
+    const frames = ['|', '/', '-', '\\'];
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setFrame(prev => (prev + 1) % frames.length);
+        }, 120);
+        return () => clearInterval(interval);
+    }, []);
+    return <span className={`font-mono font-bold inline-block ${className}`}>{frames[frame]}</span>;
+};
 
 export const ShufflePhase: React.FC = React.memo(() => {
     const {
@@ -32,7 +47,8 @@ export const ShufflePhase: React.FC = React.memo(() => {
         addLog,
         isTxPending,
         refreshPlayersList,
-        runtimeContractAddress
+        runtimeContractAddress,
+        isTestMode
     } = useGameContext();
 
     const publicClient = usePublicClient();
@@ -52,21 +68,16 @@ export const ShufflePhase: React.FC = React.memo(() => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
 
-    // REF GUARD: Prevents double-launch of handleMyTurn due to React batching delays.
-    // React's setState is async, so isProcessing may still be false when the auto-trigger
-    // effect re-fires. This synchronous ref is checked immediately.
     const processingRef = useRef(false);
     const autoKickMarkerRef = useRef<string>('');
-    // Track last logged deck length to avoid spamming "Loaded deck with N cards" every 1.5s
     const lastLoggedDeckRef = useRef<{ length: number; index: number }>({ length: 0, index: -1 });
 
-    // Состояние для pending deck и salt (для reveal фазы)
     const [pendingDeck, setPendingDeck] = useState<string[] | null>(null);
     const [pendingSalt, setPendingSalt] = useState<string | null>(null);
 
     const SHUFFLE_COMMIT_KEY = `mafia_shuffle_commit_${currentRoomId}_${myPlayer?.address?.toLowerCase() || ''}`;
 
-    // Restore state from local storage on mount — cross-check with chain flags
+    // Restore state from local storage on mount
     useEffect(() => {
         const saved = localStorage.getItem(SHUFFLE_COMMIT_KEY);
         if (saved) {
@@ -78,7 +89,6 @@ export const ShufflePhase: React.FC = React.memo(() => {
                     if (hasCommitted) {
                         setShuffleState(prev => ({ ...prev, hasCommitted: true, isMyTurn: true }));
                     } else {
-                        // FIX: Cross-check with chain — maybe TX succeeded but localStorage wasn't updated
                         if (publicClient && currentRoomId && myPlayer?.address) {
                             publicClient.readContract({
                                 address: runtimeContractAddress,
@@ -86,7 +96,6 @@ export const ShufflePhase: React.FC = React.memo(() => {
                                 functionName: 'getPlayerFlags',
                                 args: [currentRoomId, myPlayer.address as `0x${string}`],
                             }).then((flags: any) => {
-                                // flags[3] = hasCommitted (FLAG_HAS_COMMITTED)
                                 const chainCommitted = flags?.[3];
                                 if (chainCommitted) {
                                     console.log("[Shuffle Recovery] Chain confirms commit. Promoting to hasCommitted=true.");
@@ -97,7 +106,6 @@ export const ShufflePhase: React.FC = React.memo(() => {
                                     setShuffleState(prev => ({ ...prev, isMyTurn: true }));
                                 }
                             }).catch(() => {
-                                // If chain check fails, fall back to retry mode
                                 setShuffleState(prev => ({ ...prev, isMyTurn: true }));
                                 console.log("Restored pending shuffle state (chain check failed)");
                             });
@@ -112,7 +120,6 @@ export const ShufflePhase: React.FC = React.memo(() => {
             }
         }
 
-        // V4 Fix: Restore keys if they exist
         if (currentRoomId && myPlayer) {
             const shuffleService = getShuffleService();
             if (!shuffleService.hasKeys()) {
@@ -121,18 +128,26 @@ export const ShufflePhase: React.FC = React.memo(() => {
         }
     }, [SHUFFLE_COMMIT_KEY]);
 
-
-
     // Fetch data from contract
     const fetchShuffleData = useCallback(async () => {
-        if (!publicClient || !currentRoomId) return;
+        if (isTestMode) {
+            const shufflerIdx = gameState.players.findIndex(p => !p.hasDeckCommitted);
+            const safeIndex = shufflerIdx === -1 ? gameState.players.length : shufflerIdx;
+            if (shuffleState.currentShufflerIndex !== safeIndex) {
+                setShuffleState(prev => ({
+                    ...prev,
+                    currentShufflerIndex: safeIndex,
+                    isMyTurn: false,
+                    hasCommitted: false,
+                }));
+            }
+            return;
+        }
 
-        // Skip heavy contract reads while we're mid-commit+reveal. The polling would
-        // read stale data (deck not yet updated) and spam logs. Let handleMyTurn finish first.
+        if (!publicClient || !currentRoomId) return;
         if (processingRef.current) return;
 
         try {
-            // 1 & 2 ATOMIC READ: Prevent RPC load balancing caching issues
             const results = await publicClient.multicall({
                 contracts: [
                     {
@@ -157,7 +172,6 @@ export const ShufflePhase: React.FC = React.memo(() => {
             const roomData = roomDataResult.status === 'success' ? (roomDataResult.result as any) : null;
             let deck = deckDataResult.status === 'success' ? (deckDataResult.result as string[]) : [];
 
-            // Парсим индексы
             let currentIndex = 0;
             let revealedCount = 0;
             let deadline = 0;
@@ -175,16 +189,13 @@ export const ShufflePhase: React.FC = React.memo(() => {
             if (isNaN(currentIndex)) currentIndex = 0;
 
             if (currentIndex > 0 || revealedCount > 0) {
-                // PRIMARY: Multicall result (most reliable - always returns current deck atomically with room data)
                 if (deck.length > 0) {
-                    // Only log when deck state actually changes to avoid spamming
                     if (lastLoggedDeckRef.current.length !== deck.length || lastLoggedDeckRef.current.index !== currentIndex) {
                         console.log(`[Direct Sync] Loaded deck with ${deck.length} cards (idx=${currentIndex})`);
                         lastLoggedDeckRef.current = { length: deck.length, index: currentIndex };
                     }
                 }
 
-                // FALLBACK: Read from DeckRevealed events (10000 blocks ≈ 16 min on Somnia)
                 if (deck.length === 0) {
                     try {
                         const currentBlock = await publicClient.getBlockNumber();
@@ -210,34 +221,28 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 }
             }
 
-            // Логика определения хода
             const currentShuffler = gameState.players[currentIndex];
             let isMyTurnFromContract = false;
             if (currentShuffler && myPlayer) {
                 isMyTurnFromContract = currentShuffler.address.toLowerCase() === myPlayer.address.toLowerCase();
             }
 
-            // Debug: Log shuffle sync state
             if (isMyTurnFromContract || deck.length === 0) {
                 console.log(`[Shuffle Sync] idx=${currentIndex}, deck=${deck.length} cards, isMyTurn=${isMyTurnFromContract}, shuffler=${currentShuffler?.name || '?'}`);
             }
 
-            // Если я не первый игрок, но колоды нет — блокируем ход
             if (isMyTurnFromContract && currentIndex > 0 && deck.length === 0) {
                 console.warn("[Shuffle Sync] ⚠️ My turn but deck is EMPTY! Blocking until deck syncs.");
                 isMyTurnFromContract = false;
             }
 
             setShuffleState(prev => {
-                // STICKY MAX: Never allow index to go backwards
                 const safeIndex = Math.max(prev.currentShufflerIndex, currentIndex);
 
-                // If we already revealed locally, don't let RPC overwrite it
                 if (prev.hasRevealed) {
                     return { ...prev, currentShufflerIndex: safeIndex, deck: deck.length > 0 ? deck : prev.deck };
                 }
 
-                // If we're mid-commit+reveal, don't overwrite local state
                 if (prev.hasCommitted) {
                     return { ...prev, currentShufflerIndex: safeIndex, deck: deck.length > 0 ? deck : prev.deck };
                 }
@@ -267,7 +272,6 @@ export const ShufflePhase: React.FC = React.memo(() => {
         }
     }, [currentRoomId, fetchShuffleData, refreshPlayersList]);
 
-    // Handle Timeout Kick
     const { writeContractAsync } = useWriteContract();
 
     const handleTimeoutKick = useCallback(async () => {
@@ -289,8 +293,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
         }
     }, [currentRoomId, writeContractAsync, addLog]);
 
-    // AUTO-UNSTICK: after deadline, one deterministic alive player triggers timeout kick.
-    // This keeps shuffle from stalling during demos without spamming duplicate txs.
+    // AUTO-UNSTICK
     useEffect(() => {
         if (!currentRoomId || !myPlayer || !shuffleState.phaseDeadline) return;
 
@@ -337,14 +340,19 @@ export const ShufflePhase: React.FC = React.memo(() => {
         addLog,
     ]);
 
-    // Polling
+    // Polling interval
     useEffect(() => {
+        if (isTestMode) {
+            fetchShuffleData();
+            return;
+        }
+
         fetchShuffleData();
         const interval = setInterval(fetchShuffleData, 1500);
         return () => clearInterval(interval);
-    }, [fetchShuffleData]);
+    }, [fetchShuffleData, isTestMode]);
 
-    // MUST-HAVE: resync when user returns to tab or regains connection.
+    // Resync on visibility/online
     useEffect(() => {
         const handleVisibility = () => {
             if (!document.hidden) {
@@ -368,7 +376,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
         };
     }, [fetchShuffleData, refreshPlayersList, currentRoomId, addLog]);
 
-    // MUST-HAVE: warn before closing tab during own shuffle turn.
+    // Warn before closing tab
     useEffect(() => {
         const shouldWarn =
             shuffleState.isMyTurn &&
@@ -387,39 +395,23 @@ export const ShufflePhase: React.FC = React.memo(() => {
         return () => window.removeEventListener('beforeunload', onBeforeUnload);
     }, [shuffleState.isMyTurn, shuffleState.hasRevealed, gameState.players, myPlayer?.address]);
 
-
-
     const handleMyTurn = useCallback(async () => {
-        // Double-launch guard: check BOTH React state AND synchronous ref.
-        // The ref is needed because React batches setState, so isProcessing may still be
-        // false when the auto-trigger effect re-fires milliseconds after the first call.
         if (!currentRoomId || !myPlayer || isProcessing || processingRef.current) return;
 
         processingRef.current = true;
         setIsProcessing(true);
         try {
             const shuffleService = getShuffleService();
-            // CRITICAL: Only generate keys if we don't have them yet.
-            // If generateKeys() is called again (e.g., due to a re-render or race condition),
-            // it overwrites the keys that were already used to encrypt the deck on-chain.
-            // This causes all subsequent role decryptions to fail (wrong decryption key → wrong roles).
-            // V4 Fix: Identify Active Slots (Alive players)
             const activeIndices = gameState.players
                 .map((p, i) => p.isAlive ? i : -1)
                 .filter(i => i !== -1);
 
-            // Generate all possible card values for verification
             const roomIdStr = currentRoomId?.toString() || '0';
             const verifyDeck = ShuffleService.generateInitialDeck(
                 gameState.players.length, roomIdStr, activeIndices.length
             );
-            // Deduplicate card values for verification
             const uniqueCardValues = [...new Set(verifyDeck)];
 
-            // CRITICAL: Only generate keys if we don't have them yet.
-            // If generateKeys() is called again (e.g., due to a re-render or race condition),
-            // it overwrites the keys that were already used to encrypt the deck on-chain.
-            // This causes all subsequent role decryptions to fail (wrong decryption key → wrong roles).
             if (!shuffleService.hasKeys()) {
                 shuffleService.generateVerifiedKeys(uniqueCardValues);
                 console.log("[Shuffle] Generated fresh verified SRA keys");
@@ -430,12 +422,6 @@ export const ShufflePhase: React.FC = React.memo(() => {
             let newDeck: string[];
 
             if (shuffleState.currentShufflerIndex === 0) {
-                // I am the host (first player) - Generate fresh deck
-                // generateDistributedDeck already does Fisher-Yates internally — roles are
-                // randomly assigned to player slots. Do NOT reshuffle positions here:
-                // subsequent players read deck[myIndex] to find their card, so positions
-                // must remain stable across all shuffle rounds. Security comes from SRA
-                // encryption (random keys per player), not from position permutation.
                 if (shuffleState.deck.length > 0) {
                     console.warn("Host sees existing deck, resetting...");
                 }
@@ -445,9 +431,6 @@ export const ShufflePhase: React.FC = React.memo(() => {
                 );
                 newDeck = shuffleService.encryptDeck(initialDeck);
             } else {
-                // Subsequent player - encrypt only, do NOT reshuffle positions.
-                // Shuffling positions with Math.random() breaks the deck[playerIndex]
-                // mapping that findMyCardIndex() relies on to find each player's role.
                 if (shuffleState.deck.length === 0) {
                     throw new Error("Deck is empty! Sync error.");
                 }
@@ -457,17 +440,14 @@ export const ShufflePhase: React.FC = React.memo(() => {
             const salt = ShuffleService.generateSalt();
             const deckHash = ShuffleService.createDeckCommitHash(newDeck, salt);
 
-            // Save state BEFORE transaction to prevent data loss
             localStorage.setItem(SHUFFLE_COMMIT_KEY, JSON.stringify({
                 deck: newDeck, salt: salt, hasCommitted: false
             }));
             shuffleService.saveKeys(currentRoomId.toString(), myPlayer.address);
 
-            // === STEP 1: COMMIT ===
             console.log("[Shuffle] Step 1/2: Committing deck hash...");
             await commitDeckOnChain(deckHash);
 
-            // Update localStorage
             localStorage.setItem(SHUFFLE_COMMIT_KEY, JSON.stringify({
                 deck: newDeck, salt: salt, hasCommitted: true
             }));
@@ -479,12 +459,9 @@ export const ShufflePhase: React.FC = React.memo(() => {
             }));
 
             console.log("[Shuffle] Commit success! Waiting 500ms before reveal...");
-
-            // === STEP 2: REVEAL (atomic, no separate effect needed) ===
             await new Promise(resolve => setTimeout(resolve, 500));
 
             console.log("[Shuffle] Step 2/2: Revealing deck...");
-            // Strip 0x prefix if present — keep consistent with new salt format
             await revealDeckOnChain(newDeck, salt);
 
             localStorage.removeItem(SHUFFLE_COMMIT_KEY);
@@ -498,37 +475,33 @@ export const ShufflePhase: React.FC = React.memo(() => {
             }));
 
             console.log("[Shuffle] ✅ Commit+Reveal complete!");
-            setTimeout(fetchShuffleData, 200); // Quick re-fetch after reveal
+            setTimeout(fetchShuffleData, 200);
 
         } catch (e: any) {
             console.error("[Shuffle] Failed:", e);
             const errMsg = e?.message || e?.toString() || '';
             addLog(errMsg.substring(0, 120) || "Shuffle failed", "danger");
 
-            // If contract reverted (InvalidReveal, PhaseDeadlinePassed, etc.),
-            // clear saved state to prevent infinite recovery retry loops
             const isContractRevert = errMsg.includes('reverted') || errMsg.includes('InvalidReveal') ||
                 errMsg.includes('PhaseDeadlinePassed') || errMsg.includes('revert') || errMsg.includes('Out Of Gas');
-            
+
             setShuffleState(prev => ({
                 ...prev,
                 retryCount: prev.retryCount + 1,
                 lastErrorTime: Date.now(),
-                isFailed: isContractRevert && prev.retryCount >= 2 // Stop auto-retrying after 3 attempts
+                isFailed: isContractRevert && prev.retryCount >= 2
             }));
 
             if (isContractRevert) {
                 console.warn("[Shuffle] Contract revert detected. Local state preserved for manual retry.");
-                // We keep SHUFFLE_COMMIT_KEY so user can try again manually or after cool-down
             }
-            // Non-revert errors (network issues) keep saved state for manual recovery via handleReveal
         } finally {
             processingRef.current = false;
             setIsProcessing(false);
         }
     }, [currentRoomId, myPlayer, isProcessing, shuffleState.currentShufflerIndex, shuffleState.deck, gameState.players.length, SHUFFLE_COMMIT_KEY, commitDeckOnChain, revealDeckOnChain, addLog, fetchShuffleData]);
 
-    // Manual reveal — for recovery only (e.g., localStorage restore after page refresh mid-commit)
+    // Manual reveal recovery
     const handleReveal = useCallback(async () => {
         if (!currentRoomId || !pendingDeck || !pendingSalt || isProcessing) return;
 
@@ -560,11 +533,8 @@ export const ShufflePhase: React.FC = React.memo(() => {
     const totalPlayers = gameState.players.length;
     const progress = Math.min((shuffleState.currentShufflerIndex / totalPlayers) * 100, 100);
 
-    // AUTOMATION: Trigger handleMyTurn automatically if it's my turn
-    // handleMyTurn now does BOTH commit + reveal atomically
+    // Auto-trigger my turn
     useEffect(() => {
-        // Check the synchronous ref FIRST to avoid re-triggering while the previous
-        // handleMyTurn is still running (setState hasn't flushed isProcessing yet)
         if (processingRef.current) return;
 
         const canExecuteAuto =
@@ -577,12 +547,11 @@ export const ShufflePhase: React.FC = React.memo(() => {
             gameState.players.length > 0;
 
         if (canExecuteAuto) {
-            // Cool-down: Wait at least 10 seconds between retries to give Somnia RPC time to sync
             const timeSinceLastErr = Date.now() - shuffleState.lastErrorTime;
             const COOLDOWN_MS = 10000;
-            
+
             if (shuffleState.retryCount > 0 && timeSinceLastErr < COOLDOWN_MS) {
-                return; 
+                return;
             }
 
             console.log(`[Shuffle Auto] My turn detected (attempt ${shuffleState.retryCount + 1}), starting commit+reveal...`);
@@ -590,8 +559,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
         }
     }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, gameState.players.length, handleMyTurn]);
 
-    // RECOVERY: Auto-reveal if we have pending commit from localStorage restore
-    // (e.g., page was refreshed between commit and reveal)
+    // Auto-recovery reveal
     useEffect(() => {
         const needsRecoveryReveal =
             shuffleState.isMyTurn &&
@@ -611,187 +579,173 @@ export const ShufflePhase: React.FC = React.memo(() => {
         }
     }, [shuffleState.isMyTurn, shuffleState.hasCommitted, shuffleState.hasRevealed, isProcessing, isTxPending, pendingDeck, pendingSalt, handleReveal]);
 
+    // ─── VISUAL RETURN ────────────────────────────────────────────────────────
     return useMemo(() => (
-        <div className="w-full h-[100dvh] flex flex-col items-center overflow-y-auto overflow-x-hidden p-8 custom-scrollbar">
+        <div className="w-full h-[100dvh] flex flex-col items-center justify-center overflow-hidden p-4 pointer-events-auto">
             <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="w-[520px] max-w-[90vw] bg-[#0D0B08] rounded-xl border border-[#916A47]/25 p-8 shadow-2xl relative pointer-events-auto my-auto"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+                className="w-full max-w-[740px] bg-[#060403] rounded-sm border border-[#916A47]/20 shadow-[0_40px_80px_rgba(0,0,0,0.97)] flex flex-col overflow-hidden"
             >
-                {/* Sync Button - positioned absolute */}
-                <div className="absolute top-3 right-3 flex items-center gap-2">
-                    {/* Timeout Kick Button */}
-                    {Date.now() / 1000 > shuffleState.phaseDeadline && shuffleState.phaseDeadline > 0 && (
-                        <Button
-                            variant="secondary"
-                            onClick={handleTimeoutKick}
-                            disabled={isProcessing}
-                            className="animate-pulse text-xs px-2 py-1"
-                        >
-                            <Clock className="w-3 h-3 mr-1" />
-                            Kick
-                        </Button>
-                    )}
-
-                    <Button variant="ghost" onClick={forceSync} disabled={isSyncing} className="p-1">
-                        <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                    </Button>
-                </div>
-
-                <div className="text-center mb-6">
-                    {/* Animated Shuffle Icon */}
-                    <div className="w-10 h-10 mx-auto mb-3 relative overflow-hidden">
-                        {/* Arrow 1 - top */}
-                        <motion.div
-                            className="absolute top-1 left-0 right-0 flex items-center justify-center"
-                            animate={{
-                                x: [0, 20, -20, 0],
-                                opacity: [1, 0, 0, 1]
-                            }}
-                            transition={{
-                                duration: 1.5,
-                                repeat: Infinity,
-                                ease: "easeInOut",
-                                times: [0, 0.4, 0.5, 1]
-                            }}
-                        >
-                            <svg width="24" height="12" viewBox="0 0 24 12" fill="none" className="text-[#916A47]">
-                                <path d="M2 6h16M14 2l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </motion.div>
-                        {/* Arrow 2 - bottom */}
-                        <motion.div
-                            className="absolute bottom-1 left-0 right-0 flex items-center justify-center rotate-180"
-                            animate={{
-                                x: [0, 20, -20, 0],
-                                opacity: [1, 0, 0, 1]
-                            }}
-                            transition={{
-                                duration: 1.5,
-                                repeat: Infinity,
-                                ease: "easeInOut",
-                                times: [0, 0.4, 0.5, 1],
-                                delay: 0.75
-                            }}
-                        >
-                            <svg width="24" height="12" viewBox="0 0 24 12" fill="none" className="text-[#916A47]">
-                                <path d="M2 6h16M14 2l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </motion.div>
+                {/* ── HEADER ─────────────────────────────────────────── */}
+                <div className="flex items-center justify-between px-5 py-2.5 border-b border-[#916A47]/15 bg-black/50">
+                    <div className="flex items-center gap-2.5">
+                        <span className="font-mono text-[12px] tracking-[0.3em] text-[#916A47] uppercase">CASE FILE</span>
+                        <span className="text-[#916A47]/50">//</span>
+                        <span className="font-mono text-[12px] tracking-[0.2em] text-white/55 uppercase">
+                            ROOM_{currentRoomId?.toString() || '???'}
+                        </span>
                     </div>
-                    <h2 className="text-2xl font-['Cinzel'] text-white mb-1">
-                        Shuffling Deck
-                    </h2>
-                    <p className="text-white/40 text-[13px]">
-                        {shuffleState.deck.length} cards in deck • Player {shuffleState.currentShufflerIndex + 1} of {gameState.players.length}
-                    </p>
+                    <div className="flex items-center gap-3">
+                        <span className="font-mono text-[11px] tracking-[0.25em] text-white/45 uppercase">SHUFFLE PHASE</span>
+                        {Date.now() / 1000 > shuffleState.phaseDeadline && shuffleState.phaseDeadline > 0 && (
+                            <button
+                                onClick={handleTimeoutKick}
+                                disabled={isProcessing}
+                                className="font-mono text-[8px] tracking-widest text-[#8B0000]/60 hover:text-[#8B0000] uppercase animate-pulse transition-colors"
+                            >
+                                KICK
+                            </button>
+                        )}
+                        <button
+                            onClick={forceSync}
+                            disabled={isSyncing}
+                            className="text-white/15 hover:text-[#916A47]/50 transition-colors"
+                        >
+                            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                        </button>
+                    </div>
                 </div>
 
-                <div className="space-y-1.5 mb-4 max-h-[240px] overflow-y-auto custom-scrollbar pr-2">
-                    {gameState.players.map((player, index) => {
-                        const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
-                        let isDone = index < shuffleState.currentShufflerIndex;
-                        if (isMe && shuffleState.hasRevealed) isDone = true;
-                        const isCurrentTurn = index === shuffleState.currentShufflerIndex && !isDone;
+                {/* ── BODY ───────────────────────────────────────────── */}
+                <div className="flex min-h-[340px]">
 
-                        return (
-                            <motion.div
-                                key={player.address}
-                                layout
-                                className={`
-                                    flex items-center justify-between p-3 rounded-xl border transition-all h-12 relative overflow-hidden
-                                    ${isCurrentTurn
-                                        ? 'bg-[#916A47]/20 border-[#916A47]/40 shadow-[0_0_15px_rgba(145,106,71,0.1)]'
-                                        : isDone
-                                            ? 'bg-[#916A47]/10 border-[#916A47]/30'
-                                            : 'bg-white/5 border-white/10'
-                                    }
-                                `}
-                            >
-                                {isCurrentTurn && isProcessing && (
+                    {/* LEFT — Suspects roster */}
+                    <div className="w-[210px] shrink-0 border-r border-[#916A47]/10 flex flex-col">
+                        <div className="px-4 py-3 border-b border-[#916A47]/8">
+                            <span className="font-mono text-[11px] tracking-[0.3em] text-white/55 uppercase">SUSPECTS</span>
+                        </div>
+                        <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
+                            {gameState.players.map((player, index) => {
+                                const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
+                                let isDone = index < shuffleState.currentShufflerIndex;
+                                if (isMe && shuffleState.hasRevealed) isDone = true;
+                                const isCurrentTurn = index === shuffleState.currentShufflerIndex && !isDone;
+                                return (
                                     <motion.div
-                                        className="absolute inset-0 bg-gradient-to-r from-transparent via-[#916A47]/10 to-transparent"
-                                        animate={{ x: ['-100%', '100%'] }}
-                                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                                        key={player.address}
+                                        layout
+                                        className={`flex items-center justify-between px-4 py-2.5 border-b border-white/[0.03] transition-all ${isCurrentTurn ? 'bg-[#916A47]/8' : ''}`}
+                                    >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className={`text-[11px] shrink-0 transition-colors ${isDone ? 'text-[#916A47]' :
+                                                isCurrentTurn ? 'text-[#916A47] animate-pulse' :
+                                                    'text-white/35'
+                                                }`}>●</span>
+                                            <span className={`font-mono text-[13px] truncate ${isMe ? 'text-[#916A47]' : 'text-white/70'}`}>
+                                                {player.name}{isMe ? '_YOU' : ''}
+                                            </span>
+                                        </div>
+                                        <span className={`font-mono text-[10px] tracking-wider shrink-0 ml-1 ${isDone ? 'text-[#916A47]' :
+                                            isCurrentTurn ? 'text-[#916A47]' :
+                                                'text-white/30'
+                                            }`}>
+                                            {isDone ? 'DONE' :
+                                                isCurrentTurn ? (isProcessing ? '●●●' : 'ACTIVE') :
+                                                    'WAIT_'}
+                                        </span>
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* RIGHT — Shuffle status */}
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 gap-7">
+                        {/* Shuffle ASCII Spinner */}
+                        <div className="w-10 h-10 flex items-center justify-center opacity-80">
+                            {shuffleState.hasRevealed ? (
+                                <span className="font-mono text-[#916A47] text-2xl">✓</span>
+                            ) : shuffleState.isFailed ? (
+                                <span className="font-mono text-[#8B0000] text-2xl">✗</span>
+                            ) : (
+                                <AsciiSpinner className="text-[#916A47] text-3xl" />
+                            )}
+                        </div>
+
+                        {/* Status */}
+                        <div className="text-center">
+                            <p className="font-mono text-[10px] tracking-[0.35em] text-white/50 uppercase mb-2">&gt; STATUS</p>
+                            <p className={`font-mono text-[16px] tracking-wide uppercase ${shuffleState.isFailed ? 'text-[#8B0000]' :
+                                shuffleState.hasRevealed ? 'text-[#916A47]' :
+                                    'text-white/80'
+                                }`}>
+                                {shuffleState.isFailed
+                                    ? '!! CONNECTION_LOST'
+                                    : shuffleState.hasRevealed
+                                        ? 'STANDBY // AWAITING_OPERATIVES'
+                                        : shuffleState.isMyTurn
+                                            ? (shuffleState.hasCommitted ? 'STEP_2 // SEALING_DOSSIER...' : 'STEP_1 // SCRAMBLING_DATA...')
+                                            : `STANDBY // ${currentShuffler?.name?.toUpperCase() || 'PLAYER'}`
+                                }
+                                {!shuffleState.hasRevealed && !shuffleState.isFailed && (
+                                    <span className="animate-pulse ml-1 text-[#916A47]">▌</span>
+                                )}
+                            </p>
+                        </div>
+
+                        {/* Fuse progress bar */}
+                        <div className="w-full max-w-[280px]">
+                            <div className="flex justify-between font-mono text-[10px] tracking-wide mb-2">
+                                <span className="text-white/50 uppercase">PROGRESS</span>
+                                <span className="text-[#916A47]">{Math.floor(progress)}%</span>
+                            </div>
+                            <div className="h-[2px] bg-black/70 rounded-full overflow-hidden relative">
+                                <motion.div
+                                    className={`h-full rounded-full ${shuffleState.isFailed ? 'bg-[#8B0000]' : 'bg-[#916A47]'}`}
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${progress}%` }}
+                                    transition={{ duration: 0.8, ease: 'easeOut' }}
+                                />
+                                {!shuffleState.isFailed && !shuffleState.hasRevealed && progress > 0 && (
+                                    <motion.div
+                                        className="absolute top-0 h-full w-4 bg-white/20 blur-[2px] rounded-full"
+                                        animate={{ left: `${Math.max(progress - 2, 0)}%` }}
+                                        transition={{ duration: 0.8, ease: 'easeOut' }}
                                     />
                                 )}
-                                <div className="flex items-center gap-3 relative z-10">
-                                    <div className={`
-                                        w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold
-                                        ${isCurrentTurn ? 'bg-[#916A47] text-black' : isDone ? 'bg-[#916A47] text-white' : 'bg-white/10 text-white/40'}
-                                    `}>
-                                        {isDone ? <Check className="w-3 h-3" /> : index + 1}
-                                    </div>
-                                    <span className={`text-sm font-medium ${isMe ? 'text-[#916A47]' : 'text-white'}`}>
-                                        {player.name} {isMe && '(You)'}
-                                    </span>
-                                </div>
-                                <div className="text-[10px] relative z-10">
-                                    {isDone && <span className="text-[#916A47] font-medium">Done</span>}
-                                    {isCurrentTurn && (
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[#916A47] font-bold">
-                                                {isProcessing ? 'Shuffling...' : 'Your Turn'}
-                                            </span>
-                                            {isProcessing && <RefreshCw className="w-3 h-3 animate-spin text-[#916A47]" />}
-                                        </div>
-                                    )}
-                                    {!isDone && !isCurrentTurn && <span className="text-white/20">Waiting</span>}
-                                </div>
-                            </motion.div>
-                        );
-                    })}
-                </div>
+                            </div>
+                            <div className="font-mono text-[10px] tracking-wide mt-2 text-white/45 uppercase">
+                                PLAYER {shuffleState.currentShufflerIndex + 1} / {gameState.players.length} &bull; {shuffleState.deck.length} CARDS
+                            </div>
+                        </div>
 
-                {/* Progress Bar with integrated status */}
-                <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center gap-4">
-                    <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[#916A47]/10">
-                        {shuffleState.hasRevealed ? (
-                            <Check className="w-4 h-4 text-[#916A47]" />
-                        ) : (
-                            <Loader2 className="w-4 h-4 text-[#916A47] animate-spin" />
-                        )}
-                    </div>
-                    <div className="flex-1">
-                        <div className="flex justify-between text-[10px] mb-1.5">
-                            <span className={shuffleState.isFailed ? 'text-red-400 uppercase font-bold' : shuffleState.hasRevealed ? 'text-green-400 uppercase' : 'text-white/40 uppercase'}>
-                                {shuffleState.isFailed
-                                    ? 'SHUFFLE FAILED AFTER RETRIES'
-                                    : shuffleState.hasRevealed
-                                        ? 'COMPLETE! WAITING FOR OTHERS...'
-                                        : shuffleState.isMyTurn
-                                            ? (shuffleState.hasCommitted ? 'REVEALING DECK...' : 'SHUFFLING & ENCRYPTING...')
-                                            : `WAITING FOR ${currentShuffler?.name?.toUpperCase() || 'PLAYER'}...`
-                                }
-                            </span>
-                            <span className="font-mono text-[#916A47] font-bold">{Math.floor(progress)}%</span>
-                        </div>
-                        <div className="h-1.5 bg-black/40 rounded-full overflow-hidden p-[1px] mb-2">
-                            <motion.div
-                                className={`h-full rounded-full ${shuffleState.isFailed ? 'bg-[#8B0000]' : shuffleState.hasRevealed ? 'bg-[#916A47]' : 'bg-gradient-to-r from-[#916A47] to-[#c9a227]'}`}
-                                initial={{ width: 0 }}
-                                animate={{ width: `${progress}%` }}
-                                transition={{ duration: 0.8 }}
-                            />
-                        </div>
                         {shuffleState.isFailed && shuffleState.isMyTurn && (
-                            <Button 
-                                variant="ghost" 
-                                className="w-full text-xs py-1 h-7 border-red-500/50 text-red-400 hover:bg-red-500/10"
+                            <Button
+                                variant="ghost"
+                                className="text-[10px] font-mono tracking-widest py-1 h-7 border-[#8B0000]/40 text-[#8B0000]/70 hover:bg-[#8B0000]/10 uppercase"
                                 onClick={() => {
                                     setShuffleState(prev => ({ ...prev, isFailed: false, retryCount: 0 }));
                                     handleMyTurn();
                                 }}
                             >
                                 <RefreshCw className="w-3 h-3 mr-1" />
-                                Try Again Manually
+                                RETRY
                             </Button>
                         )}
                     </div>
                 </div>
-            </motion.div >
-        </div >
-    ), [shuffleState, gameState.players, myPlayer, isProcessing, isTxPending, isSyncing, forceSync, handleMyTurn, handleReveal, handleTimeoutKick, currentShuffler?.name, progress]);
+
+                {/* ── FOOTER ─────────────────────────────────────────── */}
+                <div className="px-5 py-2 border-t border-[#916A47]/8 bg-black/30">
+                    <span className="font-mono text-[7px] tracking-[0.3em] text-white/30 uppercase flex justify-center">
+                        // SOMNIA NETWORK //
+                    </span>
+                </div>
+            </motion.div>
+        </div>
+    ), [shuffleState, gameState.players, myPlayer, isProcessing, isTxPending, isSyncing, forceSync, handleMyTurn, handleReveal, handleTimeoutKick, currentShuffler?.name, progress, currentRoomId]);
 });
 
 ShufflePhase.displayName = 'ShufflePhase';
