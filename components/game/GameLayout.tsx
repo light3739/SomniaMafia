@@ -22,11 +22,7 @@ import { useSoundEffects } from '../ui/SoundEffects';
 import { GamePhase, Role, Player } from '../../types';
 
 // Dynamic imports for heavy components (code splitting)
-const ShufflePhase = dynamic(() => import('./ShufflePhase').then(m => m.ShufflePhase), {
-    loading: () => null,
-    ssr: false
-});
-const RoleReveal = dynamic(() => import('./RoleReveal').then(m => m.RoleReveal), {
+const ShuffleAndReveal = dynamic(() => import('./ShuffleAndReveal').then(m => m.ShuffleAndReveal), {
     loading: () => null,
     ssr: false
 });
@@ -599,9 +595,8 @@ export const GameLayout: React.FC<{ initialNightState?: Partial<NightState>; ini
     const renderPhaseContent = () => {
         switch (gameState.phase) {
             case GamePhase.SHUFFLING:
-                return <ShufflePhase />;
             case GamePhase.REVEAL:
-                return <RoleReveal />;
+                return <ShuffleAndReveal />;
             case GamePhase.DAY:
             case GamePhase.VOTING:
                 return <DayPhase />;
