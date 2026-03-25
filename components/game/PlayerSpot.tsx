@@ -146,338 +146,341 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                 }
             }}
             className={`
-                group relative flex flex-row items-center gap-4 p-4 rounded-md transition-all duration-300
+                group relative rounded-md transition-all duration-300
                 w-[250px] h-[130px]
                 ${canAct && player.isAlive ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}
                 ${getSelectionClasses()}
                 ${!player.isAlive ? 'player-dead' : ''}
             `}
         >
-            {/* Soft Glowing Frame Aura (Framer Motion) */}
-            <AnimatePresence>
-                {isSpeaking && speechTimeRemaining > 0 && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0 rounded-md pointer-events-none z-0"
-                        animate={{
-                            opacity: 1,
-                            boxShadow: [
-                                '0 0 20px 0px rgba(145, 106, 71, 0.4), inset 0 0 10px 0px rgba(145, 106, 71, 0.2)',
-                                '0 0 50px 8px rgba(145, 106, 71, 0.95), inset 0 0 25px 0px rgba(145, 106, 71, 0.45)'
-                            ]
-                        }}
-                        transition={{
-                            opacity: { duration: 0.5 },
-                            boxShadow: {
-                                duration: 1.25,
-                                repeat: Infinity,
-                                repeatType: "reverse",
-                                ease: "easeInOut"
-                            }
-                        }}
-                    />
-                )}
-            </AnimatePresence>
-
-            {/* Centered Timer Overlay - only shows at ≤10 seconds */}
-            {isSpeaking && speechTimeRemaining <= 10 && speechTimeRemaining > 0 && (
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none"
-                >
-                    <div
-                        className="flex items-center justify-center rounded-lg"
-                        style={{
-                            width: 56,
-                            height: 40,
-                            backgroundColor: 'rgba(0, 0, 0, 0.3)'
-                        }}
-                    >
-                        <span className="text-2xl font-bold text-white font-['Montserrat'] tabular-nums">
-                            {speechTimeRemaining}
-                        </span>
-                    </div>
-                </motion.div>
-            )}
-
-            {/* Suspicion Marks (Only for others and ONLY for Town roles: Civilian, Doctor, Detective) */}
-            {!isMe && player.isAlive && myRole !== Role.MAFIA && myRole !== Role.UNKNOWN && (
-                <div
-                    className="absolute top-0 right-0 p-3 z-30"
-                    onMouseEnter={() => setIsHoveringMarks(true)}
-                    onMouseLeave={() => setIsHoveringMarks(false)}
-                >
-                    <div className="relative w-8 h-8 flex items-center justify-center">
-                        {/* The Trigger Circle */}
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setPlayerMark(player.address, null);
+            {/* Blurred Content Overlay for Dead Players */}
+            <div
+                className="relative w-full h-full flex flex-row items-center gap-4 p-4"
+                style={{ filter: !player.isAlive ? 'blur(1.5px)' : 'none' }}
+            >
+                {/* Soft Glowing Frame Aura (Framer Motion) */}
+                <AnimatePresence>
+                    {isSpeaking && speechTimeRemaining > 0 && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 rounded-md pointer-events-none z-0"
+                            animate={{
+                                opacity: 1,
+                                boxShadow: [
+                                    '0 0 20px 0px rgba(145, 106, 71, 0.4), inset 0 0 10px 0px rgba(145, 106, 71, 0.2)',
+                                    '0 0 50px 8px rgba(145, 106, 71, 0.95), inset 0 0 25px 0px rgba(145, 106, 71, 0.45)'
+                                ]
                             }}
-                            className="w-7 h-7 rounded-full border border-white/10 bg-[#050505] flex items-center justify-center transition-all duration-300 hover:scale-110 hover:border-[#916A47] z-30 shadow-[0_4px_10px_rgba(0,0,0,0.8)]"
-                        >
-                            <AnimatePresence mode="wait">
-                                {isHoveringMarks ? (
-                                    <motion.div
-                                        key="clear"
-                                        initial={{ opacity: 0, scale: 0.5 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.5 }}
-                                        transition={{ duration: 0.1 }}
-                                    >
-                                        <X className="w-4 h-4 text-white/80" />
-                                    </motion.div>
-                                ) : (
-                                    <motion.div
-                                        key="mark"
-                                        initial={{ opacity: 0, scale: 0 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0 }}
-                                        transition={{ duration: 0.1 }}
-                                        className="flex items-center justify-center"
-                                    >
-                                        {currentMark ? renderMarkIcon(currentMark, 4) : <div className="w-1 h-1 rounded-full bg-white/40" />}
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </button>
+                            transition={{
+                                opacity: { duration: 0.5 },
+                                boxShadow: {
+                                    duration: 1.25,
+                                    repeat: Infinity,
+                                    repeatType: "reverse",
+                                    ease: "easeInOut"
+                                }
+                            }}
+                        />
+                    )}
+                </AnimatePresence>
 
-                        {/* Fly-out symbols (No background) - Uniform & Linear */}
-                        <AnimatePresence>
-                            {isHoveringMarks && (
-                                <>
-                                    {/* Civilian - Up */}
-                                    <motion.button
-                                        key="mark-civ"
-                                        initial={{ opacity: 0, x: 0, y: 0 }}
-                                        animate={{ opacity: 1, x: 0, y: -45 }}
-                                        exit={{ opacity: 0, x: 0, y: 0 }}
-                                        transition={{ duration: 0.15, ease: "linear" }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            playMarkSound();
-                                            setPlayerMark(player.address, 'civilian');
-                                            setIsHoveringMarks(false);
-                                        }}
-                                        data-custom-sound="true"
-                                        className="absolute p-2 hover:scale-110 transition-transform z-20"
-                                    >
-                                        <User className="w-6 h-6 text-[#0D9488]" />
-                                    </motion.button>
-
-                                    {/* Question - Diagonal Right Up */}
-                                    <motion.button
-                                        key="mark-ques"
-                                        initial={{ opacity: 0, x: 0, y: 0 }}
-                                        animate={{ opacity: 1, x: 40, y: -40 }}
-                                        exit={{ opacity: 0, x: 0, y: 0 }}
-                                        transition={{ duration: 0.15, ease: "linear" }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            playMarkSound();
-                                            setPlayerMark(player.address, 'question');
-                                            setIsHoveringMarks(false);
-                                        }}
-                                        data-custom-sound="true"
-                                        className="absolute p-2 hover:scale-110 transition-transform z-20"
-                                    >
-                                        <HelpCircle className="w-6 h-6 text-[#B45309]" />
-                                    </motion.button>
-
-                                    {/* Mafia - Right */}
-                                    <motion.button
-                                        key="mark-maf"
-                                        initial={{ opacity: 0, x: 0, y: 0 }}
-                                        animate={{ opacity: 1, x: 50, y: 0 }}
-                                        exit={{ opacity: 0, x: 0, y: 0 }}
-                                        transition={{ duration: 0.15, ease: "linear" }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            playMarkSound();
-                                            setPlayerMark(player.address, 'mafia');
-                                            setIsHoveringMarks(false);
-                                        }}
-                                        data-custom-sound="true"
-                                        className="absolute p-2 hover:scale-110 transition-transform z-20"
-                                    >
-                                        <Skull className="w-6 h-6 text-[#8B0000]" />
-                                    </motion.button>
-                                </>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                </div>
-            )}
-
-            {/* YOU Badge */}
-            {isMe && (
-                <div className="absolute top-2 right-2 px-2 py-0.5 bg-[#916A47] text-black text-[8px] font-bold uppercase tracking-wider rounded-full z-10">
-                    YOU
-                </div>
-            )}
-
-            {/* Avatar Container */}
-            <div className="relative shrink-0">
-                <div className={`
-                    w-16 h-16 rounded-md overflow-hidden border transition-colors duration-300
-                    ${player.isAlive ? 'border-white/10' : 'border-[#8B0000]/50'}
-                    bg-[#19130D] relative
-                `}>
-                    {/* Blurred Avatar Wrapper (only image is blurred) */}
-                    <div
-                        className="w-full h-full relative"
-                        style={{ filter: !player.isAlive ? 'brightness(1.0) blur(1.5px)' : 'none' }}
+                {/* Centered Timer Overlay - only shows at ≤10 seconds */}
+                {isSpeaking && speechTimeRemaining <= 10 && speechTimeRemaining > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none"
                     >
-                        {player.avatarUrl ? (
-                            <Image
-                                src={player.avatarUrl}
-                                alt={player.name}
-                                fill
-                                sizes="64px"
-                                className={`object-cover transition-all duration-500 ${player.isAlive ? 'grayscale-[0.8] contrast-125 sepia-[0.2] brightness-90 group-hover:grayscale-[0.3]' : 'grayscale contrast-150 brightness-100 sepia-[0.5] hue-rotate-[-30deg]'}`}
-                            />
-                        ) : (
-                            <div className="w-full h-full bg-[#19130D]" />
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Text Info */}
-            <div className="flex flex-col items-start min-w-0 flex-1">
-                <div className="flex items-center gap-2 mb-1 w-full">
-                    <span className={`text-[17px] md:text-base font-bold truncate block max-w-[120px] ${isMafiaVisible ? 'text-[#8B0000]' : 'text-[#916A47]'}`}>
-                        {player.name}
-                    </span>
-
-                    {/* Volume Mixer Control (Only if not me and alive) */}
-                    {!isMe && player.isAlive && (
                         <div
-                            ref={volumeWrapperRef}
-                            className="relative"
+                            className="flex items-center justify-center rounded-lg"
+                            style={{
+                                width: 56,
+                                height: 40,
+                                backgroundColor: 'rgba(0, 0, 0, 0.3)'
+                            }}
                         >
+                            <span className="text-2xl font-bold text-white font-['Montserrat'] tabular-nums">
+                                {speechTimeRemaining}
+                            </span>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* Suspicion Marks (Only for others and ONLY for Town roles: Civilian, Doctor, Detective) */}
+                {!isMe && player.isAlive && myRole !== Role.MAFIA && myRole !== Role.UNKNOWN && (
+                    <div
+                        className="absolute top-0 right-0 p-3 z-30"
+                        onMouseEnter={() => setIsHoveringMarks(true)}
+                        onMouseLeave={() => setIsHoveringMarks(false)}
+                    >
+                        <div className="relative w-8 h-8 flex items-center justify-center">
+                            {/* The Trigger Circle */}
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    setIsVolumeOpen(!isVolumeOpen);
+                                    setPlayerMark(player.address, null);
                                 }}
-                                className={`
-                                    p-1 rounded-md transition-all duration-200 mt-0.5
-                                    ${isVolumeOpen ? 'text-[#916A47] bg-[#916A47]/10' : 'text-[#916A47] hover:bg-[#916A47]/10'}
-                                `}
-                                title="Voice Volume"
+                                className="w-7 h-7 rounded-full border border-white/10 bg-[#050505] flex items-center justify-center transition-all duration-300 hover:scale-110 hover:border-[#916A47] z-30 shadow-[0_4px_10px_rgba(0,0,0,0.8)]"
                             >
-                                <Volume2 className="w-4 h-4" />
+                                <AnimatePresence mode="wait">
+                                    {isHoveringMarks ? (
+                                        <motion.div
+                                            key="clear"
+                                            initial={{ opacity: 0, scale: 0.5 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.5 }}
+                                            transition={{ duration: 0.1 }}
+                                        >
+                                            <X className="w-4 h-4 text-white/80" />
+                                        </motion.div>
+                                    ) : (
+                                        <motion.div
+                                            key="mark"
+                                            initial={{ opacity: 0, scale: 0 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0 }}
+                                            transition={{ duration: 0.1 }}
+                                            className="flex items-center justify-center"
+                                        >
+                                            {currentMark ? renderMarkIcon(currentMark, 4) : <div className="w-1 h-1 rounded-full bg-white/40" />}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </button>
 
-                            {/* Volume Slider Flyout */}
+                            {/* Fly-out symbols (No background) - Uniform & Linear */}
                             <AnimatePresence>
-                                {isVolumeOpen && (
+                                {isHoveringMarks && (
                                     <>
-                                        {/* Click Outside Overlay removed to allow onMouseLeave to work properly */}
-
-                                        <motion.div
-                                            initial={{ opacity: 0, scale: 0, y: 10 }}
-                                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                                            exit={{ opacity: 0, scale: 0, y: 10 }}
-                                            transition={{ duration: 0.15, ease: "easeOut" }}
-                                            className="absolute bottom-full right-0 mb-2 z-50 origin-bottom-right"
-                                            onClick={(e) => e.stopPropagation()}
+                                        {/* Civilian - Up */}
+                                        <motion.button
+                                            key="mark-civ"
+                                            initial={{ opacity: 0, x: 0, y: 0 }}
+                                            animate={{ opacity: 1, x: 0, y: -45 }}
+                                            exit={{ opacity: 0, x: 0, y: 0 }}
+                                            transition={{ duration: 0.15, ease: "linear" }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                playMarkSound();
+                                                setPlayerMark(player.address, 'civilian');
+                                                setIsHoveringMarks(false);
+                                            }}
+                                            data-custom-sound="true"
+                                            className="absolute p-2 hover:scale-110 transition-transform z-20"
                                         >
-                                            <div className="bg-[#050505] rounded-md p-3 flex items-center gap-3 w-[140px] border border-white/5 shadow-[0_15px_40px_rgba(0,0,0,0.9)]">
-                                                <button
-                                                    onClick={() => handleVolumeChange(volume === 0 ? 1 : 0)}
-                                                    className="text-[#916A47]/70 hover:text-[#916A47] transition-colors shrink-0"
-                                                >
-                                                    {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                                                </button>
+                                            <User className="w-6 h-6 text-[#0D9488]" />
+                                        </motion.button>
 
-                                                <div className="flex-1 w-full">
-                                                    <ElasticSlider
-                                                        defaultValue={1}
-                                                        onChange={handleVolumeChange}
-                                                        min={0}
-                                                        max={1}
-                                                        step={0.05}
-                                                    />
-                                                </div>
-                                            </div>
-                                            {/* Triangle pointer */}
-                                            <div
-                                                className="absolute right-2 -bottom-2"
-                                                style={{
-                                                    width: 0,
-                                                    height: 0,
-                                                    borderLeft: '8px solid transparent',
-                                                    borderRight: '8px solid transparent',
-                                                    borderTop: '8px solid rgba(0, 0, 0, 0.7)',
-                                                }}
-                                            />
+                                        {/* Question - Diagonal Right Up */}
+                                        <motion.button
+                                            key="mark-ques"
+                                            initial={{ opacity: 0, x: 0, y: 0 }}
+                                            animate={{ opacity: 1, x: 40, y: -40 }}
+                                            exit={{ opacity: 0, x: 0, y: 0 }}
+                                            transition={{ duration: 0.15, ease: "linear" }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                playMarkSound();
+                                                setPlayerMark(player.address, 'question');
+                                                setIsHoveringMarks(false);
+                                            }}
+                                            data-custom-sound="true"
+                                            className="absolute p-2 hover:scale-110 transition-transform z-20"
+                                        >
+                                            <HelpCircle className="w-6 h-6 text-[#B45309]" />
+                                        </motion.button>
 
-
-                                            {/* Invisible bridge to prevent closing when moving over the gap */}
-                                            <div className="absolute top-full left-0 w-full h-4 bg-transparent" />
-                                        </motion.div>
+                                        {/* Mafia - Right */}
+                                        <motion.button
+                                            key="mark-maf"
+                                            initial={{ opacity: 0, x: 0, y: 0 }}
+                                            animate={{ opacity: 1, x: 50, y: 0 }}
+                                            exit={{ opacity: 0, x: 0, y: 0 }}
+                                            transition={{ duration: 0.15, ease: "linear" }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                playMarkSound();
+                                                setPlayerMark(player.address, 'mafia');
+                                                setIsHoveringMarks(false);
+                                            }}
+                                            data-custom-sound="true"
+                                            className="absolute p-2 hover:scale-110 transition-transform z-20"
+                                        >
+                                            <Skull className="w-6 h-6 text-[#8B0000]" />
+                                        </motion.button>
                                     </>
                                 )}
                             </AnimatePresence>
                         </div>
-                    )}
-                </div>
-                <div className="text-[12px] md:text-[10px] text-white/30 font-mono">
-                    {player.address ? `${player.address.slice(0, 4)}...${player.address.slice(-4)}` : '0x...'}
+                    </div>
+                )}
+
+                {/* YOU Badge */}
+                {isMe && (
+                    <div className="absolute top-2 right-2 px-2 py-0.5 bg-[#916A47] text-black text-[8px] font-bold uppercase tracking-wider rounded-full z-10">
+                        YOU
+                    </div>
+                )}
+
+                {/* Avatar Container */}
+                <div className="relative shrink-0">
+                    <div className={`
+                    w-16 h-16 rounded-md overflow-hidden border transition-colors duration-300
+                    ${player.isAlive ? 'border-white/10' : 'border-[#8B0000]/50'}
+                    bg-[#19130D] relative
+                `}>
+                        {/* Blurred Avatar Wrapper (only image is blurred) */}
+                        <div className="w-full h-full relative">
+                            {player.avatarUrl ? (
+                                <Image
+                                    src={player.avatarUrl}
+                                    alt={player.name}
+                                    fill
+                                    sizes="64px"
+                                    className={`object-cover transition-all duration-500 ${player.isAlive ? 'grayscale-[0.8] contrast-125 sepia-[0.2] brightness-90 group-hover:grayscale-[0.3]' : 'grayscale contrast-150 brightness-100 sepia-[0.5] hue-rotate-[-30deg]'}`}
+                                />
+                            ) : (
+                                <div className="w-full h-full bg-[#19130D]" />
+                            )}
+                        </div>
+                    </div>
                 </div>
 
-                {/* Voter Avatars - shows who voted for this player */}
-                <AnimatePresence>
-                    {voters.length > 0 && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 5 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 5 }}
-                            className="flex -space-x-2 mt-2"
-                        >
-                            {voters.slice(0, 5).map((voter, index) => (
-                                <motion.div
-                                    key={voter.address}
-                                    initial={{ opacity: 0, scale: 0 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0, scale: 0 }}
-                                    transition={{ delay: index * 0.1, type: "spring", stiffness: 500, damping: 25 }}
-                                    className="relative w-6 h-6 rounded-full border-2 border-[#916A47] overflow-hidden bg-[#19130D] shadow-lg"
-                                    title={voter.name}
-                                    style={{ zIndex: voters.length - index }}
+                {/* Text Info */}
+                <div className="flex flex-col items-start min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1 w-full">
+                        <span className={`text-[17px] md:text-base font-bold truncate block max-w-[120px] ${isMafiaVisible ? 'text-[#8B0000]' : 'text-[#916A47]'}`}>
+                            {player.name}
+                        </span>
+
+                        {/* Volume Mixer Control (Only if not me and alive) */}
+                        {!isMe && player.isAlive && (
+                            <div
+                                ref={volumeWrapperRef}
+                                className="relative"
+                            >
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsVolumeOpen(!isVolumeOpen);
+                                    }}
+                                    className={`
+                                    p-1 rounded-md transition-all duration-200 mt-0.5
+                                    ${isVolumeOpen ? 'text-[#916A47] bg-[#916A47]/10' : 'text-[#916A47] hover:bg-[#916A47]/10'}
+                                `}
+                                    title="Voice Volume"
                                 >
-                                    {voter.avatarUrl ? (
-                                        <Image
-                                            src={voter.avatarUrl}
-                                            alt={voter.name}
-                                            fill
-                                            sizes="24px"
-                                            className="object-cover grayscale contrast-125 brightness-75"
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center bg-[#916A47]/30">
-                                            <User className="w-3 h-3 text-[#916A47]" />
-                                        </div>
+                                    <Volume2 className="w-4 h-4" />
+                                </button>
+
+                                {/* Volume Slider Flyout */}
+                                <AnimatePresence>
+                                    {isVolumeOpen && (
+                                        <>
+                                            {/* Click Outside Overlay removed to allow onMouseLeave to work properly */}
+
+                                            <motion.div
+                                                initial={{ opacity: 0, scale: 0, y: 10 }}
+                                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                exit={{ opacity: 0, scale: 0, y: 10 }}
+                                                transition={{ duration: 0.15, ease: "easeOut" }}
+                                                className="absolute bottom-full right-0 mb-2 z-50 origin-bottom-right"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <div className="bg-[#050505] rounded-md p-3 flex items-center gap-3 w-[140px] border border-white/5 shadow-[0_15px_40px_rgba(0,0,0,0.9)]">
+                                                    <button
+                                                        onClick={() => handleVolumeChange(volume === 0 ? 1 : 0)}
+                                                        className="text-[#916A47]/70 hover:text-[#916A47] transition-colors shrink-0"
+                                                    >
+                                                        {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                                                    </button>
+
+                                                    <div className="flex-1 w-full">
+                                                        <ElasticSlider
+                                                            defaultValue={1}
+                                                            onChange={handleVolumeChange}
+                                                            min={0}
+                                                            max={1}
+                                                            step={0.05}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                {/* Triangle pointer */}
+                                                <div
+                                                    className="absolute right-2 -bottom-2"
+                                                    style={{
+                                                        width: 0,
+                                                        height: 0,
+                                                        borderLeft: '8px solid transparent',
+                                                        borderRight: '8px solid transparent',
+                                                        borderTop: '8px solid rgba(0, 0, 0, 0.7)',
+                                                    }}
+                                                />
+
+
+                                                {/* Invisible bridge to prevent closing when moving over the gap */}
+                                                <div className="absolute top-full left-0 w-full h-4 bg-transparent" />
+                                            </motion.div>
+                                        </>
                                     )}
-                                </motion.div>
-                            ))}
-                            {voters.length > 5 && (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ delay: 0.5 }}
-                                    className="w-6 h-6 rounded-full border-2 border-[#916A47] bg-[#19130D] flex items-center justify-center text-[10px] text-[#916A47] font-bold"
-                                >
-                                    +{voters.length - 5}
-                                </motion.div>
-                            )}
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                                </AnimatePresence>
+                            </div>
+                        )}
+                    </div>
+                    <div className="text-[12px] md:text-[10px] text-white/30 font-mono">
+                        {player.address ? `${player.address.slice(0, 4)}...${player.address.slice(-4)}` : '0x...'}
+                    </div>
+
+                    {/* Voter Avatars - shows who voted for this player */}
+                    <AnimatePresence>
+                        {voters.length > 0 && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 5 }}
+                                className="flex -space-x-2 mt-2"
+                            >
+                                {voters.slice(0, 5).map((voter, index) => (
+                                    <motion.div
+                                        key={voter.address}
+                                        initial={{ opacity: 0, scale: 0 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0 }}
+                                        transition={{ delay: index * 0.1, type: "spring", stiffness: 500, damping: 25 }}
+                                        className="relative w-6 h-6 rounded-full border-2 border-[#916A47] overflow-hidden bg-[#19130D] shadow-lg"
+                                        title={voter.name}
+                                        style={{ zIndex: voters.length - index }}
+                                    >
+                                        {voter.avatarUrl ? (
+                                            <Image
+                                                src={voter.avatarUrl}
+                                                alt={voter.name}
+                                                fill
+                                                sizes="24px"
+                                                className="object-cover grayscale contrast-125 brightness-75"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center bg-[#916A47]/30">
+                                                <User className="w-3 h-3 text-[#916A47]" />
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                ))}
+                                {voters.length > 5 && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: 0.5 }}
+                                        className="w-6 h-6 rounded-full border-2 border-[#916A47] bg-[#19130D] flex items-center justify-center text-[10px] text-[#916A47] font-bold"
+                                    >
+                                        +{voters.length - 5}
+                                    </motion.div>
+                                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
             </div>
 
             {/* DEAD Badge */}

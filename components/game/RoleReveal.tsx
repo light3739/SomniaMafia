@@ -18,40 +18,66 @@ interface RevealState {
     eciesRegistered: boolean;
 }
 
-const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string; description: string }> = {
+interface AsciiSpinnerProps {
+    className?: string;
+}
+
+const AsciiSpinner: React.FC<AsciiSpinnerProps> = ({ className = '' }) => {
+    const [frame, setFrame] = useState(0);
+    const frames = ['|', '/', '-', '\\'];
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setFrame(prev => (prev + 1) % frames.length);
+        }, 120);
+        return () => clearInterval(interval);
+    }, []);
+    return <span className={`font-mono font-bold inline-block ${className}`}>{frames[frame]}</span>;
+};
+
+const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string; ringColor: string; description: string; label: string }> = {
     [Role.MAFIA]: {
         icon: <Skull className="w-16 h-16" />,
         color: 'text-[#8B0000]',
-        bgColor: 'from-[#8B0000]/40 to-[#8B0000]/20',
+        bgColor: 'from-[#8B0000]/25 to-[#0A0705]/80',
         borderColor: 'border-[#8B0000]/30',
+        ringColor: 'ring-[#8B0000]/10',
+        label: 'MAFIA',
         description: 'Eliminate all civilians to win. Vote by day, kill by night.'
     },
     [Role.DOCTOR]: {
         icon: <Shield className="w-16 h-16" />,
-        color: 'text-[#0D9488]',
-        bgColor: 'from-[#0D9488]/40 to-[#0D9488]/20',
-        borderColor: 'border-[#0D9488]/30',
+        color: 'text-[#2D6A4F]',
+        bgColor: 'from-[#1B4332]/30 to-[#0A0705]/80',
+        borderColor: 'border-[#2D6A4F]/25',
+        ringColor: 'ring-[#2D6A4F]/8',
+        label: 'DOCTOR',
         description: 'Save one player each night from the mafia attack.'
     },
     [Role.DETECTIVE]: {
         icon: <Search className="w-16 h-16" />,
-        color: 'text-[#B45309]',
-        bgColor: 'from-[#B45309]/40 to-[#B45309]/20',
-        borderColor: 'border-[#B45309]/30',
+        color: 'text-[#94A3B8]',
+        bgColor: 'from-[#1E293B]/30 to-[#0A0705]/80',
+        borderColor: 'border-[#94A3B8]/20',
+        ringColor: 'ring-[#94A3B8]/8',
+        label: 'DETECTIVE',
         description: 'Investigate one player each night to reveal their alignment.'
     },
     [Role.CIVILIAN]: {
         icon: <Users className="w-16 h-16" />,
-        color: 'text-[#6B5A4A]',
-        bgColor: 'from-[#6B5A4A]/40 to-[#6B5A4A]/20',
-        borderColor: 'border-[#6B5A4A]/30',
+        color: 'text-[#78716C]',
+        bgColor: 'from-[#292524]/40 to-[#0A0705]/80',
+        borderColor: 'border-[#78716C]/20',
+        ringColor: 'ring-[#78716C]/8',
+        label: 'CIVILIAN',
         description: 'Find and vote out the mafia during the day to survive.'
     },
     [Role.UNKNOWN]: {
         icon: <EyeOff className="w-16 h-16" />,
-        color: 'text-gray-500',
-        bgColor: 'from-gray-950/50 to-gray-900/30',
-        borderColor: 'border-gray-500/20',
+        color: 'text-stone-600',
+        bgColor: 'from-stone-950/50 to-[#0A0705]/80',
+        borderColor: 'border-stone-700/20',
+        ringColor: 'ring-stone-700/8',
+        label: 'UNKNOWN',
         description: 'Role unknown'
     }
 };
@@ -64,7 +90,8 @@ export const RoleReveal: React.FC = React.memo(() => {
         commitAndConfirmRoleOnChain,
         addLog,
         isTxPending,
-        setGameState
+        setGameState,
+        isTestMode
     } = useGameContext();
 
     const { address, chainId } = useAccount();
@@ -91,21 +118,52 @@ export const RoleReveal: React.FC = React.memo(() => {
         }
     }, [myPlayer?.hasConfirmedRole, revealState.hasConfirmed]);
 
+    // Test mode simulation
+    useEffect(() => {
+        if (isTestMode && myPlayer) {
+            const hasStartedRevealing = gameState.revealedCount >= gameState.players.length;
+            
+            if (myPlayer.hasConfirmedRole) {
+                 setRevealState({
+                    myRole: myPlayer.role,
+                    isRevealed: true,
+                    hasSharedKeys: true,
+                    eciesRegistered: true,
+                    hasConfirmed: true
+                 });
+            } else if (hasStartedRevealing) {
+                 setRevealState({
+                    myRole: myPlayer.role,
+                    isRevealed: true,
+                    hasSharedKeys: true,
+                    eciesRegistered: true,
+                    hasConfirmed: false
+                 });
+            } else {
+                 setRevealState({
+                    myRole: null,
+                    isRevealed: false,
+                    hasSharedKeys: true,
+                    eciesRegistered: true,
+                    hasConfirmed: false
+                 });
+            }
+        }
+    }, [isTestMode, myPlayer, gameState.revealedCount, gameState.players.length]);
+
     // Handle ECIES Registration
     const handleRegisterEcies = useCallback(async () => {
         if (!currentRoomId || !address || !walletClient || registerInFlightRef.current) return;
-        
+
         const { isNew } = await loadOrCreateKeypair(currentRoomId.toString(), address);
-        // Register if not already registered OR if it's a freshly generated key
         if (revealState.eciesRegistered && !isNew) return;
 
         registerInFlightRef.current = true;
         try {
             await registerEciesPubkey(currentRoomId.toString(), address, walletClient, chainId);
-            setRevealState(prev => ({ 
-                ...prev, 
+            setRevealState(prev => ({
+                ...prev,
                 eciesRegistered: true,
-                // If it's a new key, reset the flow to re-share keys with the new pubkey
                 ...(isNew && { hasSharedKeys: false, isRevealed: false, myRole: null })
             }));
             console.log("[RoleReveal] ECIES registered successfully");
@@ -145,16 +203,13 @@ export const RoleReveal: React.FC = React.memo(() => {
         } catch (e: any) {
             console.error("[RoleReveal] SRA submission failed:", e);
             addLog(e.message || "Failed to submit SRA key", "danger");
-            
-            // Retry after 3 seconds by allowing the effect to trigger this again
+
             setTimeout(() => {
                 submitInFlightRef.current = false;
             }, 3000);
-            return; // Don't reset flag immediately in finally
+            return;
         } finally {
             setIsProcessing(false);
-            // Only reset if it didn't fail (in success case) or if we don't want retry
-            // But here we want the timeout to handle the reset on failure
             if (revealState.hasSharedKeys) {
                 submitInFlightRef.current = false;
             }
@@ -174,7 +229,6 @@ export const RoleReveal: React.FC = React.memo(() => {
             });
 
             if (role) {
-                // Save to localStorage
                 localStorage.setItem(`my_role_${currentRoomId}_${address.toLowerCase()}`, role);
 
                 setRevealState(prev => ({
@@ -224,7 +278,6 @@ export const RoleReveal: React.FC = React.memo(() => {
 
             await commitAndConfirmRoleOnChain(roleNum, salt);
 
-            // Save salt for future reference if needed
             if (currentRoomId && address) {
                 localStorage.setItem(`role_salt_${currentRoomId}_${address.toLowerCase()}`, salt);
             }
@@ -247,163 +300,239 @@ export const RoleReveal: React.FC = React.memo(() => {
     useEffect(() => {
         if (gameState.phase !== GamePhase.REVEAL) return;
 
-        // Sequence: Register ECIES -> Submit SRA -> Fetch Role -> Auto-Confirm
         if (!revealState.eciesRegistered) {
             handleRegisterEcies();
         } else if (!revealState.hasSharedKeys) {
             handleShareKey();
         } else if (!revealState.isRevealed && !revealState.hasConfirmed) {
-            const interval = setInterval(handleFetchRole, 2000); // Poll every 2s
+            const interval = setInterval(handleFetchRole, 2000);
             return () => clearInterval(interval);
         } else if (!revealState.hasConfirmed && !isProcessing && !isTxPending) {
-            // Auto-confirm role after a 4 second delay so the user can read it
             const timeout = setTimeout(() => {
                 handleConfirmRole();
             }, 4000);
             return () => clearTimeout(timeout);
         }
     }, [
-        gameState.phase, 
-        revealState.eciesRegistered, 
-        revealState.hasSharedKeys, 
-        revealState.isRevealed, 
+        gameState.phase,
+        revealState.eciesRegistered,
+        revealState.hasSharedKeys,
+        revealState.isRevealed,
         revealState.hasConfirmed,
         isProcessing,
         isTxPending,
-        handleRegisterEcies, 
-        handleShareKey, 
+        handleRegisterEcies,
+        handleShareKey,
         handleFetchRole,
         handleConfirmRole,
         walletClient
     ]);
 
-    // UI
+    // ─── UI ─────────────────────────────────────────────────────────────────
     const roleConfig = revealState.myRole ? RoleConfig[revealState.myRole] : RoleConfig[Role.UNKNOWN];
     const keysCollected = gameState.players.filter(p => p.hasConfirmedRole).length;
     const keysNeeded = gameState.players.length;
 
     return (
-        <div className="w-full h-[100dvh] flex flex-col items-center overflow-y-auto overflow-x-hidden p-8 custom-scrollbar">
+        <div className="w-full h-[100dvh] flex flex-col items-center justify-center overflow-hidden p-4 pointer-events-auto">
             <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="max-w-lg w-full my-auto"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+                className="w-full max-w-[740px] bg-[#060403] rounded-sm border border-[#916A47]/20 shadow-[0_40px_80px_rgba(0,0,0,0.97)] flex flex-col overflow-hidden"
             >
-                <AnimatePresence mode="wait">
-                    {!revealState.isRevealed ? (
-                        <motion.div
-                            key="exchange"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            className="bg-[#050505] rounded-md border border-white/5 p-8 shadow-[0_30px_60px_rgba(0,0,0,0.95)]"
-                        >
-                            <div className="text-center mb-6">
-                                <div className="w-10 h-10 mx-auto mb-3 relative">
-                                    <motion.div
-                                        animate={{ x: [-3, 3, -3], rotate: [-5, 5, -5] }}
-                                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                {/* ── HEADER ─────────────────────────────────────────── */}
+                <div className="flex items-center justify-between px-5 py-2.5 border-b border-[#916A47]/15 bg-black/50">
+                    <div className="flex items-center gap-2.5">
+                        <span className="font-mono text-[12px] tracking-[0.3em] text-[#916A47] uppercase">CASE FILE</span>
+                        <span className="text-[#916A47]/50">//</span>
+                        <span className="font-mono text-[12px] tracking-[0.2em] text-white/55 uppercase">
+                            ROOM_{currentRoomId?.toString() || '???'}
+                        </span>
+                    </div>
+                    <span className="font-mono text-[11px] tracking-[0.25em] text-white/45 uppercase">ROLE REVEAL</span>
+                </div>
+
+                {/* ── BODY ───────────────────────────────────────────── */}
+                <div className="flex min-h-[400px]">
+
+                    {/* LEFT — Suspects */}
+                    <div className="w-[210px] shrink-0 border-r border-[#916A47]/10 flex flex-col">
+                        <div className="px-4 py-3 border-b border-[#916A47]/8 flex items-center justify-between">
+                            <span className="font-mono text-[11px] tracking-[0.3em] text-white/55 uppercase">SUSPECTS</span>
+                            <span className="font-mono text-[10px] text-[#916A47]/70">{keysCollected}/{keysNeeded}</span>
+                        </div>
+                        <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
+                            {gameState.players.map((player) => {
+                                const isMe = player.address.toLowerCase() === address?.toLowerCase();
+                                const hasConfirmed = player.hasConfirmedRole;
+                                return (
+                                    <div
+                                        key={player.address}
+                                        className={`flex items-center justify-between px-4 py-2.5 border-b border-white/[0.03] transition-all ${isMe ? 'bg-[#916A47]/5' : ''}`}
                                     >
-                                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" className="text-[#916A47]">
-                                            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" fill="none" />
-                                            <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                        </svg>
-                                    </motion.div>
-                                </div>
-                                <h2 className="text-2xl font-['Cinzel'] text-white mb-1">Role Reveal</h2>
-                                <p className="text-white/40 text-[13px]">
-                                    {!revealState.eciesRegistered ? 'Registering ECIES...' :
-                                        !revealState.hasSharedKeys ? 'Submitting SRA key...' :
-                                            'Waiting for GM response...'}
-                                </p>
-                            </div>
-
-                            <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center gap-4">
-                                <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[#916A47]/10">
-                                    <Loader2 className="w-4 h-4 text-[#916A47] animate-spin" />
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between text-[10px] mb-1.5">
-                                        <span className="text-white/40 uppercase">EXCHANGING DATA OFF-CHAIN...</span>
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className={`text-[11px] shrink-0 ${
+                                                hasConfirmed ? 'text-[#916A47]' :
+                                                isMe ? 'text-[#916A47]/60 animate-pulse' :
+                                                'text-white/35'
+                                            }`}>●</span>
+                                            <span className={`font-mono text-[13px] truncate ${isMe ? 'text-[#916A47]' : 'text-white/70'}`}>
+                                                {player.name}{isMe ? '_YOU' : ''}
+                                            </span>
+                                        </div>
+                                        <span className={`font-mono text-[10px] tracking-wider shrink-0 ml-1 ${hasConfirmed ? 'text-[#916A47]' : 'text-white/35'}`}>
+                                            {hasConfirmed ? 'CONF' : 'WAIT_'}
+                                        </span>
                                     </div>
-                                    <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
-                                        <motion.div
-                                            className="h-full bg-gradient-to-r from-[#916A47] to-[#c9a227]"
-                                            animate={{ width: revealState.hasSharedKeys ? '100%' : '50%' }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    ) : (
-                        <motion.div
-                            key="revealed"
-                            initial={{ opacity: 0, rotateY: 90 }}
-                            animate={{ opacity: 1, rotateY: 0 }}
-                            transition={{ type: "spring", duration: 0.8 }}
-                            className={`bg-gradient-to-br ${roleConfig.bgColor} bg-[#0A0A0A] rounded-md border border-white/10 p-8 md:p-12 shadow-[0_30px_60px_rgba(0,0,0,0.95)] w-full max-w-[360px] md:max-w-[400px] aspect-square flex flex-col justify-between mx-auto relative overflow-hidden`}
-                        >
-                            {/* Role icon — watermark in top-right */}
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 0.12, scale: 1 }}
-                                transition={{ delay: 0.2, duration: 1 }}
-                                className={`absolute top-6 right-6 ${roleConfig.color}`}
-                            >
-                                {roleConfig.icon}
-                            </motion.div>
+                                );
+                            })}
+                        </div>
+                    </div>
 
-                            {/* Pulsing border glow */}
-                            <motion.div
-                                className={`absolute inset-0 rounded-xl border ${roleConfig.borderColor}`}
-                                animate={{ opacity: [0.3, 0.6, 0.3] }}
-                                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                            />
-                            <div className="text-center flex-1 flex flex-col justify-center">
-                                <motion.h2
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.3 }}
-                                    className={`text-4xl font-['Cinzel'] mb-6 ${roleConfig.color}`}
-                                >
-                                    {revealState.myRole}
-                                </motion.h2>
-                                <motion.p
+                    {/* RIGHT — Role content */}
+                    <div className="flex-1 flex flex-col items-center justify-center p-6">
+                        <AnimatePresence mode="wait">
+                            {!revealState.isRevealed ? (
+                                // Loading state
+                                <motion.div
+                                    key="loading"
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
-                                    transition={{ delay: 0.5 }}
-                                    className="text-white/60 text-sm max-w-xs mx-auto"
+                                    exit={{ opacity: 0 }}
+                                    className="flex flex-col items-center gap-5 text-center"
                                 >
-                                    {roleConfig.description}
-                                </motion.p>
-                            </div>
-
-                            <div className="space-y-3 mt-4 md:mt-6">
-                                {!revealState.hasConfirmed ? (
-                                    <motion.button
-                                        onClick={handleConfirmRole}
-                                        disabled={isProcessing || isTxPending}
-                                        whileHover={{ scale: 1.02 }}
-                                        whileTap={{ scale: 0.98 }}
-                                        className={`w-full py-3 px-6 rounded-lg border font-['Cinzel'] text-xs tracking-[0.2em] uppercase transition-all duration-300
-                                            ${roleConfig.borderColor} ${roleConfig.color}
-                                            bg-transparent hover:bg-white/5
-                                            disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
-                                    >
-                                        {(isProcessing || isTxPending)
-                                            ? <><Loader2 className="w-3 h-3 animate-spin" /> Confirming...</>
-                                            : 'I Understand My Role'}
-                                    </motion.button>
-                                ) : (
-                                    <div className={`flex items-center justify-center gap-2 ${roleConfig.color} py-4`}>
-                                        <Check className="w-5 h-5" />
-                                        <span className="font-['Cinzel'] text-xs tracking-[0.2em] uppercase">Role Confirmed</span>
+                                    <div className="h-10 flex items-center justify-center opacity-80 mb-2 mt-4">
+                                        <AsciiSpinner className="text-[#916A47] text-3xl" />
                                     </div>
-                                )}
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                                    <div>
+                                        <p className="font-mono text-[10px] tracking-[0.35em] text-white/50 uppercase mb-2">&gt; STATUS</p>
+                                        <p className="font-mono text-[16px] tracking-wide text-white/80 uppercase">
+                                            {!revealState.eciesRegistered ? 'SECURING_CHANNEL' :
+                                                !revealState.hasSharedKeys ? 'DECRYPTING_DOSSIER' :
+                                                    'VERIFYING_IDENTITY'}
+                                            <span className="animate-pulse ml-1 text-[#916A47]">▌</span>
+                                        </p>
+                                    </div>
+                                    <div className="w-full max-w-[220px]">
+                                        <div className="h-[2px] bg-black/70 rounded-full overflow-hidden">
+                                            <motion.div
+                                                className="h-full bg-[#916A47] rounded-full"
+                                                animate={{ width: revealState.hasSharedKeys ? '100%' : '50%' }}
+                                                transition={{ duration: 0.6 }}
+                                            />
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ) : (
+                                // Role card
+                                <motion.div
+                                    key="revealed"
+                                    initial={{ opacity: 0, rotateY: 90 }}
+                                    animate={{ opacity: 1, rotateY: 0 }}
+                                    transition={{ type: "spring", duration: 0.8 }}
+                                    className={`bg-gradient-to-br ${roleConfig.bgColor} w-[240px] aspect-[3/4] rounded-sm border ${roleConfig.borderColor} ring-1 ${roleConfig.ringColor} p-6 shadow-[0_30px_60px_rgba(0,0,0,0.98)] relative overflow-hidden flex flex-col justify-between`}
+                                >
+                                    {/* SVG Noise */}
+                                    <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-[0.035]" xmlns="http://www.w3.org/2000/svg">
+                                        <filter id="noise-rr2">
+                                            <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="4" stitchTiles="stitch" />
+                                            <feColorMatrix type="saturate" values="0" />
+                                        </filter>
+                                        <rect width="100%" height="100%" filter="url(#noise-rr2)" />
+                                    </svg>
+
+                                    {/* Watermark icon */}
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 0.08, scale: 1 }}
+                                        transition={{ delay: 0.2, duration: 1 }}
+                                        className={`absolute top-4 right-4 ${roleConfig.color}`}
+                                    >
+                                        {roleConfig.icon}
+                                    </motion.div>
+
+                                    {/* CLASSIFIED stamp */}
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ delay: 0.6 }}
+                                        className={`absolute bottom-14 left-3 font-mono text-[7px] tracking-[0.3em] uppercase px-1 py-[2px] border ${roleConfig.borderColor} ${roleConfig.color} opacity-20 rotate-[-7deg] select-none pointer-events-none`}
+                                    >
+                                        CLASSIFIED
+                                    </motion.div>
+
+                                    {/* Pulsing border */}
+                                    <motion.div
+                                        className={`absolute inset-0 border ${roleConfig.borderColor}`}
+                                        animate={{ opacity: [0.2, 0.5, 0.2] }}
+                                        transition={{ duration: 4, repeat: Infinity }}
+                                    />
+
+                                    {/* Content */}
+                                    <div className="text-center flex-1 flex flex-col justify-center relative z-10">
+                                        <motion.p
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            transition={{ delay: 0.15 }}
+                                            className="font-mono text-[7px] tracking-[0.3em] text-white/35 uppercase mb-3"
+                                        >
+                                            CASE FILE // ROLE
+                                        </motion.p>
+                                        <motion.h2
+                                            initial={{ opacity: 0, y: 15 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: 0.3 }}
+                                            className={`text-2xl font-['Cinzel'] mb-3 ${roleConfig.color}`}
+                                        >
+                                            {revealState.myRole}
+                                        </motion.h2>
+                                        <motion.div
+                                            initial={{ scaleX: 0 }}
+                                            animate={{ scaleX: 1 }}
+                                            transition={{ delay: 0.45, duration: 0.5 }}
+                                            className="h-px w-10 mx-auto mb-3 opacity-30"
+                                            style={{ background: 'currentColor' }}
+                                        />
+                                        <motion.p
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            transition={{ delay: 0.55 }}
+                                            className="text-white/40 text-[10px] font-mono leading-relaxed tracking-wide max-w-[170px] mx-auto"
+                                        >
+                                            {roleConfig.description}
+                                        </motion.p>
+                                    </div>
+
+                                    {/* Confirm button */}
+                                    <div className="relative z-10">
+                                        {!revealState.hasConfirmed ? (
+                                            <motion.button
+                                                onClick={handleConfirmRole}
+                                                disabled={isProcessing || isTxPending}
+                                                whileHover={{ scale: 1.01 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                className={`w-full py-2.5 px-4 rounded-sm border font-['Cinzel'] text-[9px] tracking-[0.25em] uppercase transition-all duration-300
+                                                    border-[#8B0000]/30 text-white/50
+                                                    bg-transparent hover:bg-[#8B0000]/12 hover:border-[#8B0000]/55 hover:text-white/80
+                                                    disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                                            >
+                                                {(isProcessing || isTxPending)
+                                                    ? <><Loader2 className="w-3 h-3 animate-spin" /> Confirming...</>
+                                                    : 'I Understand My Role'}
+                                            </motion.button>
+                                        ) : (
+                                            <div className={`flex items-center justify-center gap-2 ${roleConfig.color} py-3`}>
+                                                <Check className="w-4 h-4" />
+                                                <span className="font-['Cinzel'] text-[9px] tracking-[0.2em] uppercase">Confirmed</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                </div>
             </motion.div>
         </div>
     );

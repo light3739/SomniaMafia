@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { User, Shield, Crosshair, Eye, Skull, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { Player, Role, cardVariants } from '../types';
@@ -10,9 +10,14 @@ interface PlayerCardProps {
   onAction: (playerId: `0x${string}`) => void;
   canAct: boolean;
   actionLabel: string;
+  isSpeaking?: boolean;
+  speechTimeRemaining?: number;
 }
 
-export const PlayerCard: React.FC<PlayerCardProps> = ({ player, isMe, onAction, canAct, actionLabel }) => {
+export const PlayerCard: React.FC<PlayerCardProps> = ({ 
+  player, isMe, onAction, canAct, actionLabel, 
+  isSpeaking = false, speechTimeRemaining = 0 
+}) => {
 
   const getRoleIcon = (role: Role) => {
     switch (role) {
@@ -42,8 +47,28 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, isMe, onAction, 
       variants={cardVariants}
       className={`relative group ${!player.isAlive || player.status === 'slashed' ? 'opacity-50 grayscale' : ''}`}
     >
-      {/* Selection Ring */}
-      <div className={`absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl blur opacity-0 group-hover:opacity-75 transition duration-500 ${isMe ? 'opacity-50' : ''}`}></div>
+      {/* Selection Ring - blood-red noir gradient */}
+      <div className={`absolute -inset-0.5 bg-gradient-to-r from-red-950 via-red-900 to-red-950 rounded-xl blur opacity-0 group-hover:opacity-60 transition duration-500 ${isMe ? 'opacity-30' : ''}`}></div>
+
+      {/* Speaking Glow (Aura) */}
+      <AnimatePresence>
+        {isSpeaking && speechTimeRemaining > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ 
+              opacity: 1,
+              boxShadow: [
+                '0 0 0px rgba(145, 106, 71, 0)',
+                '0 0 20px rgba(145, 106, 71, 0.4)',
+                '0 0 0px rgba(145, 106, 71, 0)'
+              ]
+            }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -inset-1 rounded-xl pointer-events-none z-0 border border-[#916A47]/30"
+          />
+        )}
+      </AnimatePresence>
 
       <div className="relative bg-[#1a1a1a] border border-white/5 rounded-xl p-4 flex flex-col items-center gap-3 shadow-lg overflow-hidden min-h-[160px]">
 

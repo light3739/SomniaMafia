@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Role } from '../../types';
 import { Skull, Shield, Search, Moon, CheckCircle2 } from 'lucide-react';
-import { useSoundEffects } from '../ui/SoundEffects';
 
 interface CinematicFeedbackProps {
     role: Role;
@@ -24,8 +23,6 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
     consensusCount = 1,
     totalMafia = 1,
 }) => {
-    const { playMafiaShot, playProtectSound, playInvestigateSound } = useSoundEffects();
-    const hasPlayedRef = React.useRef(false);
     const [showDetectiveResult, setShowDetectiveResult] = React.useState(false);
 
     // Delayed detective result reveal for suspense
@@ -35,19 +32,6 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
             return () => clearTimeout(t);
         }
     }, [role, investigationResult]);
-
-    useEffect(() => {
-        if (isWaitingConsensus || hasPlayedRef.current) return;
-        if (role === Role.CIVILIAN || role === Role.UNKNOWN) return;
-
-        hasPlayedRef.current = true;
-
-        switch (role) {
-            case Role.MAFIA: playMafiaShot(); break;
-            case Role.DOCTOR: playProtectSound(); break;
-            case Role.DETECTIVE: playInvestigateSound(); break;
-        }
-    }, [role, isWaitingConsensus, playMafiaShot, playProtectSound, playInvestigateSound]);
 
     // АБСОЛЮТНО ПЛОСКИЙ И ЖЕСТКИЙ ДИЗАЙН (Minimalist Brutalism / Noir)
     const configs: Record<string, {
