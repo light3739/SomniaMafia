@@ -335,10 +335,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     return (
         <div className="w-full h-[100dvh] flex flex-col items-center justify-center overflow-hidden p-4 pointer-events-auto">
-            <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35 }}
+            <div
                 className="w-full max-w-[740px] bg-[#060403] rounded-sm border border-[#916A47]/20 shadow-[0_40px_80px_rgba(0,0,0,0.97)] flex flex-col overflow-hidden"
             >
                 {/* ── HEADER ─────────────────────────────────────────── */}
@@ -533,7 +530,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                         </AnimatePresence>
                     </div>
                 </div>
-            </motion.div>
+            </div>
         </div>
     );
 });
