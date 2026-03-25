@@ -3314,6 +3314,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const isNative = params.paymentToken === '0x0000000000000000000000000000000000000000';
             const buyInUnits = parseEther(params.buyIn);
             const initialPrizeUnits = parseEther(params.initialPrize);
+            const sessionFeeUnits = LOBBY_FUNDING_VALUE;
             
             // Total ETH Value = BuyIn + InitialPrize + Session Funding (including mandatory room deposit)
             let value = LOBBY_FUNDING_VALUE; // Start with session funding (e.g. 1.0 STT)
@@ -3348,6 +3349,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     tournamentPasswordHash,
                     params.paymentToken,
                     initialPrizeUnits,
+                    sessionFeeUnits,
                     params.roomName,
                     params.nickname,
                     pubKeyHex as any,
@@ -3371,6 +3373,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     tournamentPasswordHash,
                     params.paymentToken,
                     initialPrizeUnits,
+                    sessionFeeUnits,
                     params.roomName,
                     params.nickname,
                     pubKeyHex as any,
