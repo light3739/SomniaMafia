@@ -1799,6 +1799,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const isTournamentRoom = roomData ? tournamentIdFromRoom > 0n : false;
 
             // Tournament participation check for joiner
+            let needsTournamentJoin = false;
+            let tournamentValueRequired = 0n;
+
             if (isTournamentRoom) {
                 try {
                     const tournamentResult = await pClient.readContract({
@@ -1809,6 +1812,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }) as any;
 
                     const buyIn = Array.isArray(tournamentResult) ? BigInt(tournamentResult[3] || 0) : BigInt(tournamentResult.buyIn || 0);
+                    // Handle tuple indexing properly (sessionFee is 8th parameter, index 7)
+                    const sessionFee = Array.isArray(tournamentResult) ? BigInt(tournamentResult[7] || 0) : BigInt(tournamentResult.sessionFee || 0);
+
                     if (tournamentResult && buyIn > 0n) {
                         const isPart = await pClient.readContract({
                             address: contractAddressRef.current,
@@ -1817,14 +1823,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             args: [tournamentIdFromRoom, myAddr as `0x${string}`],
                         }) as boolean;
                         if (!isPart) {
-                            addLog(`Joining tournament #${tournamentIdFromRoom} (buy-in: ${formatEther(buyIn)} ${targetChain.nativeCurrency.symbol}) first...`, "info");
-                            const joined = await joinTournamentOnChain(tournamentIdFromRoom, "", formatEther(buyIn));
-                            if (!joined) {
-                                addLog("Tournament join failed or cancelled.", "danger");
-                                setIsTxPending(false);
-                                return false;
-                            }
-                            addLog("Tournament joined! Continuing to join room...", "success");
+                            needsTournamentJoin = true;
+                            // Add session fee because tournament value requires both
+                            tournamentValueRequired = buyIn + sessionFee;
                         }
                     }
                 } catch (e: any) {
@@ -1835,15 +1836,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 🆕 In tournament rooms, session funding is already paid during joinTournament
             // The contract will pull it from tournamentGasReserves.
             // For non-tournament rooms, we still send LOBBY_FUNDING_VALUE.
-            const txValue = isTournamentRoom ? 0n : LOBBY_FUNDING_VALUE;
+            const txValue = needsTournamentJoin ? tournamentValueRequired : (isTournamentRoom ? 0n : LOBBY_FUNDING_VALUE);
 
-            console.log(`[Join] Tournament status: ${isTournamentRoom}, sending extra value: ${txValue}`);
+            const fnName = needsTournamentJoin ? 'joinTournamentAndRoom' : 'joinRoom';
+            const callArgs = needsTournamentJoin 
+                ? [tournamentIdFromRoom, "", BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature]
+                : [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature];
 
+            console.log(`[Join] Tournament status: ${isTournamentRoom}, needsJoin: ${needsTournamentJoin}, sending value: ${txValue}`);
+            addLog(needsTournamentJoin 
+                ? `Joining tournament #${tournamentIdFromRoom} and room simultaneously...` 
+                : "Joining room...", "info");
 
             // 3.5. Get smart gas config
             const gasConfig = await getSmartGasConfig({
-                functionName: 'joinRoom',
-                args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
+                functionName: fnName,
+                args: callArgs,
                 account: activeAccount as `0x${string}`,
                 value: txValue,
             });
@@ -1852,8 +1860,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const hash = await activeWalletClient.writeContract({
                 address: contractAddressRef.current,
                 abi: MAFIA_ABI,
-                functionName: 'joinRoom',
-                args: [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature],
+                functionName: fnName,
+                args: callArgs,
                 account: activeAccount,
                 chain: targetChain,
                 value: txValue,
