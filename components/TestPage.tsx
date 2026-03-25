@@ -13,6 +13,7 @@ import { WaitingRoom } from './lobby_flow/WaitingRoom';
 import { GameLayout, getPlayerPositions } from './game/GameLayout';
 import { ShufflePhase } from './game/ShufflePhase';
 import { RoleReveal } from './game/RoleReveal';
+import { ShuffleAndReveal } from './game/ShuffleAndReveal';
 import { PlayerSpot } from './game/PlayerSpot';
 import { GamePhase, Role, Player, MafiaChatMessage } from '../types';
 import { GameLog } from './game/GameLog';
@@ -2900,6 +2901,77 @@ const TimersShowcaseTest: React.FC = () => {
     );
 };
 
+// Unified Shuffle & Reveal Test - simulates the full flow
+const ShuffleAndRevealUnifiedTest: React.FC = () => {
+    const { setGameState } = useGameContext();
+    const [currentPhase, setCurrentPhase] = useState<GamePhase.SHUFFLING | GamePhase.REVEAL>(GamePhase.SHUFFLING);
+    const [playersDone, setPlayersDone] = useState(0);
+
+    const TEST_ADDR = '0x1234567890123456789012345678901234567890' as `0x${string}`;
+    const players = generateMockPlayers(Role.MAFIA, TEST_ADDR);
+
+    useEffect(() => {
+        setGameState({
+            phase: currentPhase,
+            dayCount: 0,
+            myPlayerId: TEST_ADDR,
+            players: players.map((p, idx) => ({
+                ...p,
+                hasDeckCommitted: currentPhase === GamePhase.SHUFFLING ? idx < playersDone : true,
+                hasConfirmedRole: currentPhase === GamePhase.REVEAL ? idx < playersDone : false,
+                role: (idx === 0 && currentPhase === GamePhase.REVEAL) ? Role.MAFIA : Role.UNKNOWN
+            })),
+            maxPlayers: 16,
+            mafiaCommittedCount: 0,
+            logs: [],
+            revealedCount: currentPhase === GamePhase.REVEAL ? playersDone : 0,
+            mafiaRevealedCount: 0,
+            phaseDeadline: Math.floor(Date.now() / 1000) + 120,
+            winner: null,
+            mafiaMessages: []
+        });
+    }, [setGameState, currentPhase, playersDone]);
+
+    return (
+        <div className="w-full flex flex-col items-center gap-6">
+            <div className="flex gap-3 p-4 bg-white/5 rounded-xl border border-white/10 backdrop-blur-sm">
+                <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Phase Control</span>
+                    <div className="flex gap-2">
+                        <Button 
+                            variant={currentPhase === GamePhase.SHUFFLING ? 'noir' : 'secondary'}
+                            onClick={() => { setCurrentPhase(GamePhase.SHUFFLING); setPlayersDone(0); }}
+                        >
+                            SHUFFLING
+                        </Button>
+                        <Button 
+                            variant={currentPhase === GamePhase.REVEAL ? 'noir' : 'secondary'}
+                            onClick={() => { setCurrentPhase(GamePhase.REVEAL); setPlayersDone(0); }}
+                        >
+                            REVEAL
+                        </Button>
+                    </div>
+                </div>
+                
+                <div className="w-px bg-white/10 mx-2" />
+
+                <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Mock Progress</span>
+                    <div className="flex gap-2">
+                        <Button variant="ghost" onClick={() => setPlayersDone(0)}>Reset</Button>
+                        <Button variant="ghost" onClick={() => setPlayersDone(p => Math.min(p + 1, players.length))}>Add Done</Button>
+                        <Button variant="ghost" onClick={() => setPlayersDone(players.length)}>Finish All</Button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="w-full max-w-4xl border border-white/5 rounded-lg overflow-hidden shadow-2xl bg-black/40">
+                <ShuffleAndReveal />
+            </div>
+        </div>
+    );
+};
+
 const TestPage: React.FC = () => {
     const { setIsTestMode, setGameState, setIsTxPending } = useGameContext();
     const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
@@ -2957,6 +3029,7 @@ const TestPage: React.FC = () => {
         { name: 'GameLayout (Raw)', group: 'Pages', component: <GameLayout /> },
 
         // Early Game Phases (Animated)
+        { name: '✨ Shuffle & Reveal (Unified)', group: 'Early Game', component: <ShuffleAndRevealUnifiedTest /> },
         { name: 'Shuffle Phase (Animated)', group: 'Early Game', component: <ShufflePhaseAnimatedTest /> },
         { name: 'Role Reveal (Animated)', group: 'Early Game', component: <RoleRevealAnimatedTest /> },
         { name: 'Role Card Showcase', group: 'Early Game', component: <RoleCardShowcaseTest /> },
