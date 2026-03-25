@@ -152,11 +152,11 @@ export const RoleReveal: React.FC = React.memo(() => {
     }, [isTestMode, myPlayer, gameState.revealedCount, gameState.players.length]);
 
     // Handle ECIES Registration
-    const handleRegisterEcies = useCallback(async () => {
+    const handleRegisterEcies = useCallback(async (retryWithWallet = false) => {
         if (!currentRoomId || !address || !walletClient || registerInFlightRef.current) return;
 
         const { isNew } = await loadOrCreateKeypair(currentRoomId.toString(), address);
-        if (revealState.eciesRegistered && !isNew) return;
+        if (revealState.eciesRegistered && !isNew && !retryWithWallet) return;
 
         registerInFlightRef.current = true;
         try {
@@ -165,11 +165,14 @@ export const RoleReveal: React.FC = React.memo(() => {
             
             for (let i = 0; i < 6; i++) {
                 try {
-                    await registerEciesPubkey(currentRoomId.toString(), address, walletClient, chainId);
+                    const forceWallet = retryWithWallet || i >= 3;
+                    console.log(`[RoleReveal] ECIES registration attempt ${i+1}/6 (forceWallet=${forceWallet})`);
+                    await registerEciesPubkey(currentRoomId.toString(), address, walletClient, chainId, forceWallet);
                     registered = true;
                     break;
                 } catch (err) {
                     lastError = err;
+                    console.warn(`[RoleReveal] ECIES registration attempt ${i+1} failed:`, err);
                     if (i < 5) await new Promise(r => setTimeout(r, 2000));
                 }
             }
@@ -182,8 +185,9 @@ export const RoleReveal: React.FC = React.memo(() => {
                 ...(isNew && { hasSharedKeys: false, isRevealed: false, myRole: null })
             }));
             console.log("[RoleReveal] ECIES registered successfully");
-        } catch (e) {
-            console.error("[RoleReveal] ECIES registration failed:", e);
+        } catch (e: any) {
+            console.error("[RoleReveal] ECIES registration completely failed after retries:", e);
+            addLog(e.message || "ECIES registration failed", "danger");
         } finally {
             registerInFlightRef.current = false;
         }
