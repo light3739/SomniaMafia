@@ -712,7 +712,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
             // FIX: Add retry loop for SRA submission to handle GM server phase-check RPC lag
             let submitted = false;
             let lastErr: any;
-            for (let i = 0; i < 6; i++) {
+            for (let i = 0; i < 10; i++) {
                 try {
                     await submitSraKeyToGm({ 
                         roomId: currentRoomId.toString(), 
@@ -729,7 +729,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                     // If server says "outside reveal phase", it's likely RPC lag. Retry.
                     if (msg.includes('400') || msg.includes('phase')) {
                         console.warn(`[Reveal] SRA submission attempt ${i + 1} failed (RPC phase lag?), retrying...`);
-                        await new Promise(r => setTimeout(r, 2000));
+                        await new Promise(r => setTimeout(r, 1500));
                     } else {
                         throw err; // Real error (e.g. auth)
                     }
