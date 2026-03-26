@@ -1219,7 +1219,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     },
                 ],
                 allowFailure: true, // Don't crash entire call if one fails
-                blockTag: 'latest',
+                blockTag: 'pending',
             });
 
             // Extract with safety checks
