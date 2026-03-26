@@ -1633,7 +1633,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     roomId: finalRoomId.toString(),
                     mainWallet: myAddr,
                     sessionAddress,
-                    sessionPrivateKey: sessionPrivKey,
+                    walletClient: activeWalletClient,
                     chainId: targetChain.id,
                 });
             } catch (e) {
@@ -1906,8 +1906,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 await GM.registerSessionOnGm({
                     roomId: roomId.toString(),
                     mainWallet: myAddr,
-                    sessionAddress,
-                    sessionPrivateKey: sessionPrivKey,
+                    sessionAddress: sessionAddress,
+                    walletClient: activeWalletClient,
                     chainId: targetChain.id,
                 });
             } catch (e) {

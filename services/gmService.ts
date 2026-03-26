@@ -61,10 +61,10 @@ export async function registerSessionOnGm(params: {
     roomId: string;
     mainWallet: string;
     sessionAddress: string;
-    sessionPrivateKey: `0x${string}`;
+    walletClient: any;
     chainId?: number;
 }): Promise<void> {
-    const { roomId, mainWallet, sessionAddress, sessionPrivateKey, chainId } = params;
+    const { roomId, mainWallet, sessionAddress, walletClient, chainId } = params;
     const normalizedMain = mainWallet.toLowerCase();
     const normalizedSession = sessionAddress.toLowerCase();
 
@@ -72,10 +72,8 @@ export async function registerSessionOnGm(params: {
     const nonce = Math.random().toString(36).slice(2) + timestamp.toString(36);
     const message = `register-session:${roomId}:${normalizedMain}:${normalizedSession}:${nonce}:${timestamp}`;
 
-    // Sign with session key directly (no popup)
-    const { privateKeyToAccount } = await import('viem/accounts');
-    const sessionAccount = privateKeyToAccount(sessionPrivateKey);
-    const signature = await sessionAccount.signMessage({ message });
+    // Secure: Sign with main wallet to authorize this session Address
+    const signature = await walletClient.signMessage({ message });
 
     const res = await fetch(`${GM_SERVER_URL}/register-session`, {
         method: 'POST',
@@ -85,7 +83,7 @@ export async function registerSessionOnGm(params: {
             sessionAddress: normalizedSession,
             roomId,
             signature,
-            signerAddress: normalizedSession,
+            signerAddress: normalizedMain,
             nonce,
             timestamp,
             chainId,
