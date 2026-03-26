@@ -547,24 +547,33 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
     }, [currentRoomId, writeContractAsync, addLog]);
 
     // Auto-unstick
+    // Auto-unstick (handles both SHUFFLE and REVEAL hangs)
     useEffect(() => {
-        if (!currentRoomId || !myPlayer || !shuffleState.phaseDeadline) return;
+        const globalDeadline = gameState.phaseDeadline;
+        if (!currentRoomId || !myPlayer || !globalDeadline) return;
+
         const check = () => {
-            if (processRef.current || isShuffleProcessing || isTxPending) return;
+            if (processRef.current || isShuffleProcessing || isRevealProcessing || isTxPending) return;
             const nowSec = Math.floor(Date.now() / 1000);
-            if (nowSec <= shuffleState.phaseDeadline + 5) return;
+            
+            // Allow a small buffer after deadline
+            if (nowSec <= globalDeadline + 5) return;
+
+            // Simple deterministic arbitrator: the first alive player in the list handles the kick
             const sorted = [...gameState.players].filter(p => p.isAlive).sort((a, b) => a.address.localeCompare(b.address));
             if (!sorted.length || sorted[0].address.toLowerCase() !== myPlayer.address.toLowerCase()) return;
-            const marker = `${currentRoomId}:${shuffleState.phaseDeadline}`;
+
+            const marker = `${currentRoomId}:${globalDeadline}`;
             if (autoKickMarkerRef.current === marker) return;
             autoKickMarkerRef.current = marker;
-            addLog('Shuffle timeout. Auto-kicking...', 'warning');
+
+            addLog('Phase timeout detected. Auto-unsticking game...', 'warning');
             handleTimeoutKick().catch(() => { autoKickMarkerRef.current = ''; });
         };
         check();
-        const iv = setInterval(check, 2000);
+        const iv = setInterval(check, 3000);
         return () => clearInterval(iv);
-    }, [currentRoomId, myPlayer, shuffleState.phaseDeadline, gameState.players, isShuffleProcessing, isTxPending, handleTimeoutKick, addLog]);
+    }, [currentRoomId, myPlayer, gameState.phaseDeadline, gameState.players, isShuffleProcessing, isRevealProcessing, isTxPending, handleTimeoutKick, addLog]);
 
     // Handle my shuffle turn
     const handleMyTurn = useCallback(async () => {
@@ -669,7 +678,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                     roomId: currentRoomId.toString(),
                     mainWallet: address,
                     sessionAddress: session.address,
-                    sessionPrivateKey: session.privateKey,
+                    walletClient, // SECURE: Sign with main wallet
                     chainId: chainId
                 }).catch(e => {
                     console.warn('[Reveal] Session auto-reg failed (non-blocking):', e);
