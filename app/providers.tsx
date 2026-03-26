@@ -29,7 +29,7 @@ export const config = createConfig({
         },
     },
     // @ts-ignore
-    pollingInterval: 1_000,
+    pollingInterval: 4_000,
 });
 
 const queryClient = new QueryClient();
