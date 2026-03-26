@@ -43,6 +43,11 @@ function getClientIp(req: NextRequest): string {
 
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
+    const method = request.method;
+
+    // Log the request for Docker logs
+    console.log(`[${new Date().toISOString()}] ${method} ${pathname}`);
+
     const { max, windowMs } = getLimit(pathname);
 
     // Skip non-API routes and unlimited ones
