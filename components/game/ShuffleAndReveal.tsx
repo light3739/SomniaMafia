@@ -17,9 +17,10 @@ import {
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import {
-    registerEciesPubkey, submitSraKeyToGm, fetchMyRoleFromGm
+    registerEciesPubkey, submitSraKeyToGm, fetchMyRoleFromGm, registerSessionOnGm
 } from '../../services/gmService';
 import { loadOrCreateKeypair } from '../../services/eciesService';
+import { loadSession } from '../../services/sessionKeyService'; // Add this too
 
 // ─── Shared ────────────────────────────────────────────────────────────────────
 
@@ -451,7 +452,8 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                     { address: runtimeContractAddress, abi: MAFIA_ABI as any, functionName: 'getRoom', args: [currentRoomId] },
                     { address: runtimeContractAddress, abi: MAFIA_ABI as any, functionName: 'getDeck', args: [currentRoomId] }
                 ],
-                allowFailure: true
+                allowFailure: true,
+                blockTag: 'pending'
             });
             const roomData = results[0].status === 'success' ? (results[0].result as any) : null;
             let deck = results[1].status === 'success' ? (results[1].result as string[]) : [];
@@ -653,10 +655,27 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
     // ── Reveal: ECIES registration ─────────────────────────────────────────────
     const handleRegisterEcies = useCallback(async (retryWithWallet = false) => {
         if (!currentRoomId || !address || !walletClient || registerInFlightRef.current) return;
+        
         const { isNew } = await loadOrCreateKeypair(currentRoomId.toString(), address);
         if (revealState.eciesRegistered && !isNew && !retryWithWallet) return;
+        
         registerInFlightRef.current = true;
         try {
+            // PROACTIVE: Ensure session key is registered in server's local cache 
+            // before we try a session-signed registration request.
+            const session = loadSession();
+            if (session && session.mainWallet.toLowerCase() === address.toLowerCase()) {
+                await registerSessionOnGm({
+                    roomId: currentRoomId.toString(),
+                    mainWallet: address,
+                    sessionAddress: session.address,
+                    sessionPrivateKey: session.privateKey,
+                    chainId: chainId
+                }).catch(e => {
+                    console.warn('[Reveal] Session auto-reg failed (non-blocking):', e);
+                });
+            }
+
             let registered = false, lastErr: any;
             for (let i = 0; i < 6; i++) {
                 try {
@@ -680,7 +699,35 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                 const loaded = svc.loadKeys(currentRoomId.toString(), address);
                 if (!loaded) { addLog('Session keys lost — rejoin room', 'danger'); return; }
             }
-            await submitSraKeyToGm({ roomId: currentRoomId.toString(), address, sraKey: svc.getDecryptionKey(), walletClient, chainId });
+            
+            // FIX: Add retry loop for SRA submission to handle GM server phase-check RPC lag
+            let submitted = false;
+            let lastErr: any;
+            for (let i = 0; i < 6; i++) {
+                try {
+                    await submitSraKeyToGm({ 
+                        roomId: currentRoomId.toString(), 
+                        address, 
+                        sraKey: svc.getDecryptionKey(), 
+                        walletClient, 
+                        chainId 
+                    });
+                    submitted = true;
+                    break;
+                } catch (err: any) {
+                    lastErr = err;
+                    const msg = err.message?.toLowerCase() || '';
+                    // If server says "outside reveal phase", it's likely RPC lag. Retry.
+                    if (msg.includes('400') || msg.includes('phase')) {
+                        console.warn(`[Reveal] SRA submission attempt ${i + 1} failed (RPC phase lag?), retrying...`);
+                        await new Promise(r => setTimeout(r, 2000));
+                    } else {
+                        throw err; // Real error (e.g. auth)
+                    }
+                }
+            }
+            if (!submitted) throw lastErr;
+
             setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
         } catch (e: any) {
             addLog(e.message || 'Failed to submit SRA key', 'danger');
