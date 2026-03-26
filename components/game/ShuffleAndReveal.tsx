@@ -329,10 +329,11 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
         commitAndConfirmRoleOnChain, addLog,
         isTxPending, setGameState,
         commitDeckOnChain, revealDeckOnChain,
-        refreshPlayersList, runtimeContractAddress, isTestMode
+        refreshPlayersList, runtimeContractAddress, isTestMode, runtimeChain
     } = useGameContext();
 
-    const { address, chainId } = useAccount();
+    const { address, chainId: wagmiChainId } = useAccount();
+    const chainId = runtimeChain?.id || wagmiChainId;
     const { data: walletClient } = useWalletClient();
     const publicClient = usePublicClient();
     const { writeContractAsync } = useWriteContract();
@@ -670,20 +671,8 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
         
         registerInFlightRef.current = true;
         try {
-            // PROACTIVE: Ensure session key is registered in server's local cache 
-            // before we try a session-signed registration request.
-            const session = loadSession();
-            if (session && session.mainWallet.toLowerCase() === address.toLowerCase()) {
-                await registerSessionOnGm({
-                    roomId: currentRoomId.toString(),
-                    mainWallet: address,
-                    sessionAddress: session.address,
-                    walletClient, // SECURE: Sign with main wallet
-                    chainId: chainId
-                }).catch(e => {
-                    console.warn('[Reveal] Session auto-reg failed (non-blocking):', e);
-                });
-            }
+            // DELETED: Proactive Session Sync (it requested an annoying Main Wallet signature, ignoring the UX of session keys)
+
 
             let registered = false, lastErr: any;
             for (let i = 0; i < 6; i++) {

@@ -126,6 +126,7 @@ interface GameContextType {
     createLobbyOnChain: (maxPlayers?: number, tournamentId?: bigint, nonce?: number) => Promise<boolean>;
     useEmbeddedWallet: boolean;
     setUseEmbeddedWallet: (v: boolean) => void;
+    runtimeChain?: any;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -1630,18 +1631,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 markSessionRegistered();
             }
 
-            // 🆕 Register session key on GM server (bypasses RPC lag, no popup)
-            try {
-                await GM.registerSessionOnGm({
-                    roomId: finalRoomId.toString(),
-                    mainWallet: myAddr,
-                    sessionAddress,
-                    walletClient: activeWalletClient,
-                    chainId: targetChain.id,
-                });
-            } catch (e) {
-                console.warn('[GM] Failed to register session on GM (non-blocking):', e);
-            }
+            // No longer forcing proactive off-chain session registration. 
+            // The GM Server has resilient RPC sync, so it will wait & read it natively from the blockchain without bothering the user.
 
             // 6. IF PRIVATE: Set password on GM server
             if (lobbyPassword) {
@@ -1908,18 +1899,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 5. Mark session as registered
             markSessionRegistered();
 
-            // 🆕 Register session key on GM server (bypasses RPC lag, no popup)
-            try {
-                await GM.registerSessionOnGm({
-                    roomId: roomId.toString(),
-                    mainWallet: myAddr,
-                    sessionAddress: sessionAddress,
-                    walletClient: activeWalletClient,
-                    chainId: targetChain.id,
-                });
-            } catch (e) {
-                console.warn('[GM] Failed to register session on GM (non-blocking):', e);
-            }
+            // No proactive registerSessionOnGm — prevents extra popup. Server will read from chain.
 
             // Register ECIES pubkey on GM server
             try {
