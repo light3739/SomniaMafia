@@ -18,9 +18,9 @@ export async function registerEciesPubkey(
     walletClient: any,
     chainId?: number,
     forceWallet?: boolean
-): Promise<void> {
-    const { publicKey } = await loadOrCreateKeypair(roomId, address);
-    const pubkeyHex = await exportPublicKeyHex(publicKey);
+): Promise<{ publicKey: CryptoKey; privateKey: CryptoKey; isNew: boolean }> {
+    const keypair = await loadOrCreateKeypair(roomId, address);
+    const pubkeyHex = await exportPublicKeyHex(keypair.publicKey);
 
     const meta = await signRequest({
         address,
@@ -50,6 +50,8 @@ export async function registerEciesPubkey(
         const error = await res.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(`Failed to register ECIES pubkey: ${error.error || res.statusText}`);
     }
+
+    return keypair;
 }
 
 /**

@@ -1557,13 +1557,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const newRoomId = Number(nextId) + 1; // Predict next ID
             const isSomnia = (targetChain.id as number) === 5031 || (targetChain.id as number) === 50312;
 
-            // 2. Генерируем ключи
+            // 2. Генерируем ключи (Legacy SRA)
             const keyPair = await generateKeyPair();
             setKeys(keyPair);
-            const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
             // 3. Сессия
             const { sessionAddress, privateKey: sessionPrivKey } = createNewSession(myAddr, newRoomId, targetChain.id);
+            
+            // ПУБЛИЧНЫЙ КЛЮЧ: Для shareKeysToAll отправляем публичный ключ сессионного кошелька!
+            const sessionAccount = privateKeyToAccount(sessionPrivKey);
+            const pubKeyHex = sessionAccount.publicKey;
 
             // ✅ ДОБАВИТЬ: Загружаем/генерируем ECIES keypair для этого игрока
             const eciesKp = await loadOrCreateKeypair(newRoomId.toString(), myAddr);
@@ -1667,8 +1670,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // Register ECIES pubkey on GM server (session already cached above)
             try {
-                await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id);
-                console.log('[ECIES] Pubkey registered successfully');
+                const kp = await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id);
+                eciesPrivKeyRef.current = kp.privateKey;
+                console.log('[ECIES] Pubkey registered successfully and ref updated ✅');
             } catch (e) {
                 console.warn('[ECIES] Failed to register pubkey (non-blocking):', e);
             }
@@ -1749,13 +1753,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 return false;
             }
 
-            // 1. Generate crypto keys
+            // 1. Generate crypto keys (Legacy SRA)
             const keyPair = await generateKeyPair();
             setKeys(keyPair);
-            const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
             // 2. Generate session key
             const { sessionAddress, privateKey: sessionPrivKey } = createNewSession(myAddr, Number(roomId), targetChain.id);
+            
+            // ПУБЛИЧНЫЙ КЛЮЧ: Для shareKeysToAll отправляем публичный ключ сессионного кошелька!
+            const sessionAccount = privateKeyToAccount(sessionPrivKey);
+            const pubKeyHex = sessionAccount.publicKey;
 
             // ✅ ДОБАВИТЬ: ECIES keypair для join
             const eciesKp = await loadOrCreateKeypair(roomId.toString(), myAddr);
@@ -1916,8 +1923,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // Register ECIES pubkey on GM server
             try {
-                await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id);
-                console.log('[ECIES] Public key registered with GM server ✅');
+                const kp = await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id);
+                eciesPrivKeyRef.current = kp.privateKey;
+                console.log('[ECIES] Public key registered and ref updated ✅');
             } catch (e) {
                 console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
             }
@@ -3304,13 +3312,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }) as bigint;
             const newRoomId = Number(nextId) + 1;
 
-            // 2. Generate DH keys
+            // 2. Generate DH keys (Legacy SRA)
             const keyPair = await generateKeyPair();
             setKeys(keyPair);
-            const pubKeyHex = await exportPublicKey(keyPair.publicKey);
 
             // 3. Session Key
-            const { sessionAddress } = createNewSession(account as `0x${string}`, newRoomId, targetChain.id);
+            const { sessionAddress, privateKey: sessionPrivKey } = createNewSession(account as `0x${string}`, newRoomId, targetChain.id);
+            
+            // ПУБЛИЧНЫЙ КЛЮЧ: Для shareKeysToAll отправляем публичный ключ сессионного кошелька!
+            const sessionAccount = privateKeyToAccount(sessionPrivKey);
+            const pubKeyHex = sessionAccount.publicKey;
 
             // 4. ECIES keypair
             const eciesKp = await loadOrCreateKeypair(newRoomId.toString(), account);
@@ -3420,6 +3431,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     // Synchronize state with GM server (password and ECIES keys)
                     try {
+                        const kpResult = await GM.registerEciesPubkey(
+                            roomId.toString(),
+                            account,
+                            client,
+                            targetChain.id
+                        );
+                        eciesPrivKeyRef.current = kpResult.privateKey;
+                        console.log('[ECIES] Atomic registration and ref update ✅');
+                        
                         const results = await Promise.allSettled([
                             params.isPrivate && params.joinPassword 
                                 ? GM.setRoomPassword({
@@ -3429,13 +3449,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                                     walletClient: client,
                                     chainId: targetChain.id
                                   })
-                                : Promise.resolve(),
-                            GM.registerEciesPubkey(
-                                roomId.toString(),
-                                account,
-                                client,
-                                targetChain.id
-                            )
+                                : Promise.resolve()
                         ]);
                         
                         const failed = results.filter(r => r.status === 'rejected');
