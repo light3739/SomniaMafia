@@ -13,10 +13,13 @@ export function WalletAutoConnector() {
     const { ready, authenticated } = usePrivy();
     const { wallets } = useWallets();
     const { setActiveWallet } = useSetActiveWallet();
-    const { address: activeAddress } = useAccount();
+    const { address: activeAddress, isConnecting, isReconnecting } = useAccount();
 
     useEffect(() => {
         if (!ready || !authenticated || wallets.length === 0) return;
+        
+        // Wait for wagmi to finish its initial reconnection to avoid prompting Metamask
+        if (isConnecting || isReconnecting) return;
 
         // SE-FIX: Respect user preference for Embedded vs External
         const preferredWallet = useEmbeddedWallet
@@ -27,10 +30,17 @@ export function WalletAutoConnector() {
         const targetWallet = preferredWallet || wallets[0];
 
         if (targetWallet && targetWallet.address.toLowerCase() !== activeAddress?.toLowerCase()) {
+            // Avoid annoying metamask popups on every reload
+            // Don't force setActiveWallet for external wallets if wagmi has no active address yet, 
+            // as this prompts the user. Only force it if it's a privy wallet.
+            if (!activeAddress && targetWallet.walletClientType !== 'privy') {
+                return;
+            }
+
             console.log(`[WalletAutoConnector] Switching active wallet to ${targetWallet.address} (type: ${targetWallet.walletClientType}, preferred: ${useEmbeddedWallet ? 'embedded' : 'external'})`);
             setActiveWallet(targetWallet);
         }
-    }, [ready, authenticated, wallets, setActiveWallet, activeAddress, useEmbeddedWallet]);
+    }, [ready, authenticated, wallets, setActiveWallet, activeAddress, useEmbeddedWallet, isConnecting, isReconnecting]);
 
     return null;
 }

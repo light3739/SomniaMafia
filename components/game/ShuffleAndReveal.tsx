@@ -116,7 +116,7 @@ const ShufflePanel: React.FC<ShufflePanelProps> = ({
                 'text-white/85'
             }`}>
                 {shuffleState.isFailed
-                    ? '!! CONNECTION_LOST'
+                    ? '!! TX_FAILED_PRESS_RETRY'
                     : shuffleState.hasRevealed
                         ? 'STANDBY // AWAITING_OPERATIVES'
                         : shuffleState.isMyTurn
@@ -509,7 +509,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
         if (isReveal) return; // don't poll shuffle during reveal
         fetchShuffleData();
         if (isTestMode) return;
-        const iv = setInterval(fetchShuffleData, 1500);
+        const iv = setInterval(fetchShuffleData, 3000);
         return () => clearInterval(iv);
     }, [fetchShuffleData, isTestMode, isReveal]);
 
@@ -614,7 +614,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
             setTimeout(fetchShuffleData, 200);
         } catch (e: any) {
             addLog((e?.message || 'Shuffle failed').substring(0, 120), 'danger');
-            const isRevert = (e?.message || '').match(/reverted|InvalidReveal|PhaseDeadlinePassed|revert|Out Of Gas/i);
+            const isRevert = (e?.message || '').match(/reverted|InvalidReveal|PhaseDeadlinePassed|revert|Out Of Gas|fetch|network/i);
             setShuffleState(prev => ({
                 ...prev, retryCount: prev.retryCount + 1, lastErrorTime: Date.now(),
                 isFailed: !!isRevert && prev.retryCount >= 2
@@ -709,7 +709,6 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                 if (!loaded) { addLog('Session keys lost — rejoin room', 'danger'); return; }
             }
             
-            // FIX: Add retry loop for SRA submission to handle GM server phase-check RPC lag
             let submitted = false;
             let lastErr: any;
             for (let i = 0; i < 10; i++) {
@@ -726,12 +725,14 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                 } catch (err: any) {
                     lastErr = err;
                     const msg = err.message?.toLowerCase() || '';
-                    // If server says "outside reveal phase", it's likely RPC lag. Retry.
-                    if (msg.includes('400') || msg.includes('phase')) {
-                        console.warn(`[Reveal] SRA submission attempt ${i + 1} failed (RPC phase lag?), retrying...`);
+                    // Retry on common RPC lag and generic network errors (fetch failed, 502, 504, etc)
+                    if (msg.includes('400') || msg.includes('phase') || msg.includes('fetch') || msg.includes('network') || msg.includes('bad gateway') || msg.includes('502') || msg.includes('504')) {
+                        console.warn(`[Reveal] SRA submission attempt ${i + 1} failed (transient err: ${msg}), retrying...`);
                         await new Promise(r => setTimeout(r, 1500));
                     } else {
-                        throw err; // Real error (e.g. auth)
+                        // For authenticauth / unrecoverable errors, we can try to wait but throw eventually
+                        console.warn(`[Reveal] SRA submission attempt ${i + 1} failed with unhandled err: ${msg}, retrying anyway...`);
+                        await new Promise(r => setTimeout(r, 1500));
                     }
                 }
             }
