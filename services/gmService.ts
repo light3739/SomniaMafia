@@ -75,19 +75,22 @@ export async function registerSessionOnGm(params: {
     // Secure: Sign with main wallet to authorize this session Address
     const signature = await walletClient.signMessage({ message });
 
+    const payload = {
+        mainWallet: normalizedMain,
+        sessionAddress: normalizedSession,
+        roomId,
+        signature,
+        signerAddress: normalizedMain,
+        nonce,
+        timestamp,
+        chainId,
+    };
+    console.log('[GM] Registering session:', { ...payload, signature: '...' });
+
     const res = await fetch(`${GM_SERVER_URL}/register-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            mainWallet: normalizedMain,
-            sessionAddress: normalizedSession,
-            roomId,
-            signature,
-            signerAddress: normalizedMain,
-            nonce,
-            timestamp,
-            chainId,
-        }),
+        body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
