@@ -48,8 +48,7 @@ export async function signRequest(params: {
         session &&
         session.mainWallet.toLowerCase() === normalizedAddress &&
         session.roomId === roomId &&
-        Date.now() < session.expiresAt &&
-        session.registeredOnChain
+        Date.now() < session.expiresAt
     ) {
         const sessionAccount = privateKeyToAccount(session.privateKey);
         const signature = await sessionAccount.signMessage({ message });
