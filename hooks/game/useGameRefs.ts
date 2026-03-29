@@ -73,7 +73,7 @@ export function useGameRefs() {
     useEffect(() => { walletsRef.current = wallets; }, [wallets]);
     useEffect(() => { contractAddressRef.current = runtimeContractAddress; }, [runtimeContractAddress]);
 
-    return {
+    return useMemo(() => ({
         // Wagmi/Privy values
         address, stableAddress, stableChainId, isConnected,
         publicClient, walletClient, wallets,
@@ -102,7 +102,11 @@ export function useGameRefs() {
         avatarCacheRef,
         lastPhaseKeyRef,
         pendingConfirmationsRef,
-    };
+    }), [
+        address, stableAddress, stableChainId, isConnected,
+        publicClient, walletClient, wallets,
+        runtimeChain, runtimeContractAddress, runtimeDeployment
+    ]);
 }
 
 /** Type helper to extract return type for dependency injection */
