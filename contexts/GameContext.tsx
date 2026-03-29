@@ -153,13 +153,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const refs = useGameRefs();
 
     // Sync refs with local state
-    useEffect(() => { refs.playerNameRef.current = playerName; }, [playerName, refs]);
-    useEffect(() => { refs.lobbyNameRef.current = lobbyName; }, [lobbyName, refs]);
-    useEffect(() => { refs.lobbyPasswordRef.current = lobbyPassword; }, [lobbyPassword, refs]);
-    useEffect(() => { refs.avatarUrlRef.current = avatarUrl; }, [avatarUrl, refs]);
-    useEffect(() => { refs.phaseRef.current = gameState.phase; }, [gameState.phase, refs]);
-    useEffect(() => { refs.dayCountRef.current = gameState.dayCount; }, [gameState.dayCount, refs]);
-    useEffect(() => { refs.playersRef.current = gameState.players; }, [gameState.players, refs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { refs.playerNameRef.current = playerName; }, [playerName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { refs.lobbyNameRef.current = lobbyName; }, [lobbyName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { refs.lobbyPasswordRef.current = lobbyPassword; }, [lobbyPassword]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { refs.avatarUrlRef.current = avatarUrl; }, [avatarUrl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { refs.phaseRef.current = gameState.phase; }, [gameState.phase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { refs.dayCountRef.current = gameState.dayCount; }, [gameState.dayCount]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { refs.playersRef.current = gameState.players; }, [gameState.players]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         refs.currentRoomIdRef.current = currentRoomId;
         refs.roleFetchedRef.current = false;
@@ -168,7 +176,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setPlayerMarks({});
         refs.avatarCacheRef.current = {};
         refs.lastPhaseKeyRef.current = '';
-    }, [currentRoomId, refs]);
+    }, [currentRoomId]);
 
     // ==================== LEVEL 1: INFRASTRUCTURE ====================
     const wallet = useWalletManager(refs, useEmbeddedWallet);
