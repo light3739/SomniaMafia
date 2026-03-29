@@ -1608,67 +1608,62 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const receipt = await pClient.waitForTransactionReceipt({ hash });
             if (receipt.status === 'reverted') throw new Error("Transaction reverted on-chain");
 
-            // Now that TX is successful, store the session
-            storeSession(newSessionObj);
-
+            // 6. Extract REAL roomId from logs
             let finalRoomId = BigInt(newRoomId);
-
-            // Proactive off-chain session registration. 
-            if (newSessionObj) {
-                try {
-                    await registerSessionOnGm({
-                        roomId: finalRoomId.toString(),
-                        mainWallet: myAddr,
-                        sessionAddress: newSessionObj.address,
-                        walletClient: activeWalletClient,
-                        chainId: targetChain.id
-                    });
-                    console.log("[Create] Session registered on GM ✅");
-                } catch (e) {
-                    console.warn("[Create] Failed to register session on GM (non-blocking):", e);
+            try {
+                const logs = parseEventLogs({
+                    abi: MAFIA_ABI,
+                    eventName: 'RoomCreated',
+                    logs: receipt.logs
+                });
+                if (logs.length > 0) {
+                   finalRoomId = (logs[0] as any).args.roomId;
+                   console.log(`[Create] Extracted actual roomId from log: ${finalRoomId}`);
                 }
+            } catch (e) {
+                console.warn("[Create] Failed to parse RoomCreated log", e);
             }
 
-            // 6. IF PRIVATE: Set password on GM server
+            // 7. ACTIVATE SESSION IMMEDIATELY
+            newSessionObj.roomId = Number(finalRoomId);
+            newSessionObj.registeredOnChain = true; 
+            storeSession(newSessionObj);
+            markSessionRegistered(); 
+
+            // 8. NON-BLOCKING GM SYNC
+            // Proactive session registration on GM
+            registerSessionOnGm({
+                roomId: finalRoomId.toString(),
+                mainWallet: myAddr,
+                sessionAddress: newSessionObj.address,
+                walletClient: activeWalletClient,
+                chainId: targetChain.id
+            }).catch(e => console.warn("[Create] GM session registration failed:", e));
+
+            // Sync room password if private
             if (lobbyPassword) {
-                let passwordSet = false;
-                for (let attempt = 1; attempt <= 6; attempt++) {
-                    const delay = 1000 + (attempt - 1) * 2000;
-                    if (attempt > 1) await new Promise(r => setTimeout(r, delay));
-
-                    try {
-                        await GM.setRoomPassword({
-                            roomId: finalRoomId.toString(),
-                            address: myAddr,
-                            password: lobbyPassword,
-                            walletClient: activeWalletClient,
-                            signerAddress: myAddr,
-                            chainId: targetChain.id,
-                            maxPlayers: maxPlayers
-                        });
-                        passwordSet = true;
-                        break;
-                    } catch (e: any) {
-                        console.warn(`[PrivateRoom] Attempt ${attempt}/6 failed:`, e.message);
-                    }
-                }
+                GM.setRoomPassword({
+                    roomId: finalRoomId.toString(),
+                    address: myAddr,
+                    password: lobbyPassword,
+                    walletClient: activeWalletClient,
+                    signerAddress: myAddr,
+                    chainId: targetChain.id,
+                    maxPlayers: maxPlayers
+                }).catch(e => console.warn("[Create] GM password sync failed:", e));
             }
 
-            // Register ECIES pubkey on GM server (wait 1.5s for RPC sync)
-            setTimeout(async () => {
-                try {
-                    const kp = await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id);
-                    eciesPrivKeyRef.current = kp.privateKey;
-                    console.log('[ECIES] Pubkey registered successfully and ref updated ✅');
-                } catch (e) {
-                    console.warn('[ECIES] Failed to register pubkey (non-blocking):', e);
-                }
-            }, 1500);
+            // Register ECIES pubkey
+            setTimeout(() => {
+                GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id)
+                    .then(kp => { eciesPrivKeyRef.current = kp.privateKey; })
+                    .catch(e => console.warn('[ECIES] GM registration failed:', e));
+            }, 1000);
 
             setCurrentRoomId(finalRoomId);
-            await refreshPlayersList(finalRoomId);
+            refreshPlayersList(finalRoomId).catch(console.error);
 
-            // Upload avatar to server
+            // Upload avatar
             if (avatarUrl && myAddr) {
                 try {
                     const signed = await signRequest({
@@ -1690,7 +1685,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             roomId: finalRoomId.toString(),
                             address: myAddr,
                             avatar: avatarUrl,
-                            signature: signed.signature,
                             signerAddress: signed.signerAddress,
                             nonce: signed.nonce,
                             timestamp: signed.timestamp,
@@ -1752,12 +1746,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (isJoined) {
                 console.log("[Join] Already in room on-chain. Syncing session and ensuring gas funding...");
                 
-                // If we have a local session, ensure it is registered on-chain too 
-                // in case it is a new one or lacks gas.
-                const currentSession = loadSession();
-                if (currentSession && currentSession.roomId === Number(roomId)) {
+                let currentSession = loadSession();
+                const sessionMatches = currentSession && 
+                                       currentSession.roomId === Number(roomId) && 
+                                       currentSession.mainWallet.toLowerCase() === myAddr.toLowerCase();
+
+                if (!sessionMatches) {
+                    console.log("[Join] No valid session for this room locally. Creating a new one for auto-signing...");
+                    const sessionRes = createNewSession(myAddr, Number(roomId), targetChain.id, undefined, true);
+                    currentSession = sessionRes.session;
+                }
+
+                if (currentSession) {
                     try {
                         const { client: walletClient, account: walletAccount } = await getActiveWalletClient();
+                        
+                        // Register/Fund session key on-chain to ensure it's authorized and has gas
                         const txHash = await walletClient.writeContract({
                             address: contractAddressRef.current,
                             abi: MAFIA_ABI,
@@ -1768,22 +1772,31 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             value: LOBBY_FUNDING_VALUE
                         });
                         console.log(`[Join] Session registered/funded on-chain: ${txHash}`);
+                        
+                        // Wait for confirmation to ensure state consistency
+                        setIsTxPending(true); // Keep pending during this wait
                         await pClient.waitForTransactionReceipt({ hash: txHash });
+                        
+                        // Persistent storage and activation
+                        storeSession(currentSession);
+                        markSessionRegistered();
+
+                        // Force refresh GM players list for this player
+                        await registerSessionOnGm({
+                            roomId: rId.toString(),
+                            mainWallet: myAddr,
+                            sessionAddress: currentSession.address,
+                            walletClient: walletClient,
+                            chainId: targetChain.id
+                        }); 
+                        console.log("[Join] Session synced with GM server ✅");
                     } catch (e) {
                         console.warn("[Join] Failed to register/fund session key on-chain:", e);
+                        // If it fails (e.g. user rejected), we still set the room ID so they can enter, 
+                        // but they will have to sign manually or try again via banner.
                     }
-
-                    // 3.3. Force refresh GM players list
-                    await registerSessionOnGm({
-                        roomId: rId.toString(),
-                        mainWallet: myAddr,
-                        sessionAddress: currentSession.address,
-                        walletClient: activeWalletClient,
-                        chainId: targetChain.id
-                    }); 
                 }
 
-                markSessionRegistered();
                 setCurrentRoomId(rId);
                 await refreshPlayersList(rId);
 
