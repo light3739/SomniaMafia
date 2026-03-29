@@ -168,7 +168,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return '';
     });
     const [lobbyPassword, setLobbyPassword] = useState('');
-    const [currentRoomId, setCurrentRoomId] = useState<bigint | null>(() => {
+    const [currentRoomId, setRawCurrentRoomId] = useState<bigint | null>(() => {
         if (typeof window !== 'undefined') {
             // FIX #24: Try URL param first, then sessionStorage, then localStorage
             const urlParams = new URLSearchParams(window.location.search);
@@ -219,21 +219,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const checkWinInProgressRef = useRef(false);
     const votingFinalizedTimerRef = useRef<NodeJS.Timeout | null>(null);
     const avatarCacheRef = useRef<Record<string, string>>({});
-    useEffect(() => {
-        currentRoomIdRef.current = currentRoomId;
-        roleFetchedRef.current = false;
-        
-        // RESET gameState when room changes to prevent phase-leak from previous room.
-        // This ensures stale Shuffle/Reveal components don't stay mounted and fire requests
-        // for a new room that is still in LOBBY phase.
-        console.log(`[GameContext] Room ID transition from ${currentRoomIdRef.current === currentRoomId ? 'same' : 'new'} id: ${currentRoomId}. Resetting game state.`);
-        setGameState(INITIAL_GAME_STATE);
-        
-        // Also reset marks and caches
-        setPlayerMarks({});
-        avatarCacheRef.current = {};
-        lastPhaseKeyRef.current = '';
-    }, [currentRoomId]);
+    // The currentRoomId state is now updated synchronously with gameState in setCurrentRoomId
 
     // === TX QUEUE: Serialize session key transactions to prevent nonce collisions ===
     const txQueueRef = useRef<Promise<any>>(Promise.resolve());
@@ -894,6 +880,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [getSessionWalletClient]); // getActiveWalletClient and isTestMode (ref) are stable // Removed publicClient, address, runtimeChain from deps
 
     const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
+
+    const setCurrentRoomId = useCallback((id: bigint | null) => {
+        if (currentRoomIdRef.current !== id) {
+            console.log(`[GameContext] Room ID transition from ${currentRoomIdRef.current} to ${id}. Resetting game state synchronously.`);
+            currentRoomIdRef.current = id;
+            setRawCurrentRoomId(id);
+            roleFetchedRef.current = false;
+            setGameState(INITIAL_GAME_STATE);
+            setPlayerMarks({});
+            avatarCacheRef.current = {};
+            lastPhaseKeyRef.current = '';
+        }
+    }, [setGameState]);
 
     // --- REF SYNC ---
     useEffect(() => { runtimeChainRef.current = runtimeChain; }, [runtimeChain]);
