@@ -1659,14 +1659,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
 
-            // Register ECIES pubkey on GM server (session already cached above)
-            try {
-                const kp = await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id);
-                eciesPrivKeyRef.current = kp.privateKey;
-                console.log('[ECIES] Pubkey registered successfully and ref updated ✅');
-            } catch (e) {
-                console.warn('[ECIES] Failed to register pubkey (non-blocking):', e);
-            }
+            // Register ECIES pubkey on GM server (wait 1.5s for RPC sync)
+            setTimeout(async () => {
+                try {
+                    const kp = await GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id);
+                    eciesPrivKeyRef.current = kp.privateKey;
+                    console.log('[ECIES] Pubkey registered successfully and ref updated ✅');
+                } catch (e) {
+                    console.warn('[ECIES] Failed to register pubkey (non-blocking):', e);
+                }
+            }, 1500);
 
             setCurrentRoomId(finalRoomId);
             await refreshPlayersList(finalRoomId);
@@ -1901,14 +1903,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // No proactive registerSessionOnGm — prevents extra popup. Server will read from chain.
 
-            // Register ECIES pubkey on GM server
-            try {
-                const kp = await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id);
-                eciesPrivKeyRef.current = kp.privateKey;
-                console.log('[ECIES] Public key registered and ref updated ✅');
-            } catch (e) {
-                console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
-            }
+            // Register ECIES pubkey on GM server (wait 1.5s for RPC sync)
+            setTimeout(async () => {
+                try {
+                    const kp = await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id);
+                    eciesPrivKeyRef.current = kp.privateKey;
+                    console.log('[ECIES] Public key registered and ref updated ✅');
+                } catch (e) {
+                    console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
+                }
+            }, 1500);
 
             setCurrentRoomId(BigInt(roomId));
             await refreshPlayersList(BigInt(roomId));
