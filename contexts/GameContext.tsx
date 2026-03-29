@@ -1735,12 +1735,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             // 1. Check if already in room to avoid redundant TX and session mismatch
-            const isJoined = await pClient.readContract({
-                address: contractAddressRef.current,
-                abi: MAFIA_ABI,
-                functionName: 'isPlayerInRoom',
-                args: [rId, myAddr as `0x${string}`],
-            }) as boolean;
+            let isJoined = false;
+            try {
+                const currentPlayers = await pClient.readContract({
+                    address: contractAddressRef.current,
+                    abi: MAFIA_ABI,
+                    functionName: 'getPlayers',
+                    args: [rId],
+                }) as any[];
+                isJoined = currentPlayers.some((p: any) => (p.wallet || p[0]).toLowerCase() === myAddr.toLowerCase());
+            } catch (e) {
+                console.warn("[Join] Failed to verify if player is already joined:", e);
+            }
 
             if (isJoined) {
                 console.log("[Join] Already in room on-chain. Syncing session...");
