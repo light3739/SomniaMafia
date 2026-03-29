@@ -1,0 +1,90 @@
+/**
+ * useVotingActions — Day voting phase on-chain actions.
+ *
+ * Handles:
+ * - startVoting
+ * - vote (with optimistic UI + vote map)
+ * - finalizeVoting
+ */
+import { useCallback } from 'react';
+import type { GameRefs } from './useGameRefs';
+import type { TransactionEngine } from './useTransactionEngine';
+import type { LogEntry } from '../../types';
+import React from 'react';
+
+interface VotingDeps {
+    refs: GameRefs;
+    txEngine: TransactionEngine;
+    setIsTxPending: (v: boolean) => void;
+    setVoteMap: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+    addLog: (message: string, type?: LogEntry['type']) => void;
+}
+
+export function useVotingActions(deps: VotingDeps) {
+    const { refs, txEngine, setIsTxPending, setVoteMap, addLog } = deps;
+
+    const startVotingOnChain = useCallback(async () => {
+        const roomId = refs.currentRoomIdRef.current;
+        if (!roomId) return;
+        setIsTxPending(true);
+        try {
+            const hash = await txEngine.sendGameTransaction('startVoting', [roomId]);
+            setIsTxPending(false);
+            txEngine.confirmInBackground(hash, 'startVoting');
+        } catch (e: any) {
+            addLog(e.shortMessage || e.message, "danger");
+            setIsTxPending(false);
+        }
+    }, [refs, txEngine, setIsTxPending, addLog]);
+
+    const voteOnChain = useCallback(async (targetAddress: string) => {
+        const roomId = refs.currentRoomIdRef.current;
+        const myAddr = refs.addressRef.current;
+        const players = refs.playersRef.current;
+        if (!roomId || !myAddr) return;
+        setIsTxPending(true);
+        try {
+            const hash = await txEngine.sendGameTransaction('vote', [roomId, targetAddress]);
+            const targetPlayer = players.find(p => p.address.toLowerCase() === targetAddress.toLowerCase());
+            const targetName = targetPlayer ? (targetPlayer.name || `Player ${players.indexOf(targetPlayer) + 1}`) : targetAddress.slice(0, 6);
+
+            txEngine.applyOptimisticUpdate({ hasVoted: true });
+            setVoteMap(prev => ({ ...prev, [myAddr.toLowerCase()]: targetAddress.toLowerCase() }));
+
+            setIsTxPending(false);
+            txEngine.confirmInBackground(hash, 'vote', () => {
+                txEngine.applyOptimisticUpdate({ hasVoted: false });
+                setVoteMap(prev => {
+                    const next = { ...prev };
+                    delete next[myAddr.toLowerCase()];
+                    return next;
+                });
+            });
+        } catch (e: any) {
+            addLog(e.shortMessage || e.message, "danger");
+            setIsTxPending(false);
+        }
+    }, [refs, txEngine, setIsTxPending, setVoteMap, addLog]);
+
+    const finalizeVotingOnChain = useCallback(async () => {
+        const roomId = refs.currentRoomIdRef.current;
+        const pClient = refs.publicClientRef.current;
+        if (!roomId || !pClient) return;
+        try {
+            const hash = await txEngine.sendGameTransaction('finalizeVoting', [roomId]);
+            addLog("Voting finalized!", "success");
+            await pClient.waitForTransactionReceipt({ hash });
+        } catch (e: any) {
+            addLog(e.shortMessage || e.message, "danger");
+            throw e;
+        }
+    }, [refs, txEngine, addLog]);
+
+    return {
+        startVotingOnChain,
+        voteOnChain,
+        finalizeVotingOnChain,
+    };
+}
+
+export type VotingActions = ReturnType<typeof useVotingActions>;
