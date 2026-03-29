@@ -98,7 +98,7 @@ const ShufflePanel: React.FC<ShufflePanelProps> = ({
     <div className="flex-1 flex flex-col items-center justify-center p-8 gap-8">
         {/* Spinner */}
         <div className="w-14 h-14 flex items-center justify-center opacity-85">
-            {shuffleState.hasRevealed ? (
+            {progress >= 100 ? (
                 <span className="font-mono text-[#916A47] text-4xl">✓</span>
             ) : shuffleState.isFailed ? (
                 <span className="font-mono text-[#8B0000] text-4xl">✗</span>
@@ -181,10 +181,11 @@ interface RevealPanelProps {
     isProcessing: boolean;
     isTxPending: boolean;
     onConfirm: () => void;
+    allConfirmed: boolean;
 }
 
 const RevealPanel: React.FC<RevealPanelProps> = ({
-    revealState, isProcessing, isTxPending, onConfirm
+    revealState, isProcessing, isTxPending, onConfirm, allConfirmed
 }) => {
     const roleConfig = revealState.myRole ? RoleConfig[revealState.myRole] : RoleConfig[Role.UNKNOWN];
 
@@ -309,8 +310,10 @@ const RevealPanel: React.FC<RevealPanelProps> = ({
                                 </motion.button>
                             ) : (
                                 <div className={`flex items-center justify-center gap-2 ${roleConfig.color} py-3.5`}>
-                                    <Check className="w-5 h-5" />
-                                    <span className="font-['Cinzel'] text-[10px] tracking-[0.2em] uppercase">Confirmed</span>
+                                    {allConfirmed ? <Check className="w-5 h-5" /> : <Loader2 className="w-4 h-4 animate-spin" />}
+                                    <span className="font-['Cinzel'] text-[10px] tracking-[0.2em] uppercase">
+                                        {allConfirmed ? 'Confirmed' : 'Awaiting Others...'}
+                                    </span>
                                 </div>
                             )}
                         </div>
@@ -961,6 +964,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                                     isProcessing={isRevealProcessing}
                                     isTxPending={isTxPending}
                                     onConfirm={handleConfirmRole}
+                                    allConfirmed={keysCollected >= totalPlayers}
                                 />
                             ) : (
                                 <ShufflePanel

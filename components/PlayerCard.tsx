@@ -21,7 +21,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
 
   const getRoleIcon = (role: Role) => {
     switch (role) {
-      case Role.MAFIA: return <Crosshair className="w-4 h-4 text-rose-500" />;
+      case Role.MAFIA: return <Crosshair className="w-4 h-4 text-[#8B0000]" />;
       case Role.DOCTOR: return <Shield className="w-4 h-4 text-teal-500" />;
       case Role.DETECTIVE: return <Eye className="w-4 h-4 text-sky-500" />;
       default: return <User className="w-4 h-4 text-gray-400" />;
@@ -48,7 +48,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
       className={`relative group ${!player.isAlive || player.status === 'slashed' ? 'opacity-50 grayscale' : ''}`}
     >
       {/* Selection Ring - blood-red noir gradient */}
-      <div className={`absolute -inset-0.5 bg-gradient-to-r from-red-950 via-red-900 to-red-950 rounded-xl blur opacity-0 group-hover:opacity-60 transition duration-500 ${isMe ? 'opacity-30' : ''}`}></div>
+      <div className={`absolute -inset-0.5 bg-gradient-to-r from-[#4A0000] via-[#8B0000] to-[#4A0000] rounded-xl blur opacity-0 group-hover:opacity-60 transition duration-500 ${isMe ? 'opacity-30' : ''}`}></div>
 
       {/* Speaking Glow (Aura) */}
       <AnimatePresence>
@@ -75,7 +75,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
         {/* Status Badge */}
         {!player.isAlive && (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20 backdrop-blur-[1px]">
-            <Skull className="w-12 h-12 text-red-600/80" />
+            <Skull className="w-12 h-12 text-[#8B0000]/80" />
           </div>
         )}
 

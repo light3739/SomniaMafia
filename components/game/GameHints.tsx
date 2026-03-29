@@ -24,9 +24,9 @@ const HINT_CONFIGS: Record<HintType, HintConfig> = {
         title: 'Discussion Phase',
         description: 'Share your thoughts with other players',
         icon: <Mic className="w-5 h-5" />,
-        accentColor: 'text-amber-400',
-        borderColor: 'border-amber-500/30',
-        bgGradient: 'from-amber-950/80 to-amber-900/30',
+        accentColor: 'text-[#C49A6C]',
+        borderColor: 'border-[#916A47]/35',
+        bgGradient: 'from-[#19130D] to-[#0D0B08]',
         steps: [
             'When it\'s your turn, press the mic to speak',
             'Share observations and suspicions',
@@ -37,9 +37,9 @@ const HINT_CONFIGS: Record<HintType, HintConfig> = {
         title: 'Voting Phase',
         description: 'Vote to eliminate a suspect',
         icon: <MousePointer2 className="w-5 h-5" />,
-        accentColor: 'text-orange-400',
-        borderColor: 'border-orange-500/30',
-        bgGradient: 'from-orange-950/80 to-orange-900/30',
+        accentColor: 'text-[#C47E2B]',
+        borderColor: 'border-[#C47E2B]/30',
+        bgGradient: 'from-[#1A0E04] to-[#0D0B08]',
         steps: [
             'Click on a player card on the game board',
             'Press the "Vote for ..." button to confirm',
@@ -51,9 +51,9 @@ const HINT_CONFIGS: Record<HintType, HintConfig> = {
         title: 'Mafia Night Action',
         description: 'Coordinate with your team',
         icon: <Skull className="w-5 h-5" />,
-        accentColor: 'text-rose-400',
-        borderColor: 'border-rose-500/30',
-        bgGradient: 'from-rose-950/80 to-rose-900/30',
+        accentColor: 'text-[#8B0000]',
+        borderColor: 'border-[#8B0000]/30',
+        bgGradient: 'from-[#1A0505] to-[#0D0B08]',
         steps: [
             'Use the mafia chat to agree on a target',
             'Click a player card, then press "Kill"',
@@ -64,9 +64,9 @@ const HINT_CONFIGS: Record<HintType, HintConfig> = {
         title: 'Doctor Night Action',
         description: 'Protect a player from being killed',
         icon: <Shield className="w-5 h-5" />,
-        accentColor: 'text-teal-400',
-        borderColor: 'border-teal-500/30',
-        bgGradient: 'from-teal-950/80 to-teal-900/30',
+        accentColor: 'text-[#0D9488]',
+        borderColor: 'border-[#0D9488]/30',
+        bgGradient: 'from-[#031A18] to-[#0D0B08]',
         steps: [
             'Click a player card to select who to protect',
             'Press "Protect ..." to confirm',
@@ -77,9 +77,9 @@ const HINT_CONFIGS: Record<HintType, HintConfig> = {
         title: 'Detective Night Action',
         description: 'Investigate a player\'s role',
         icon: <Search className="w-5 h-5" />,
-        accentColor: 'text-sky-400',
-        borderColor: 'border-sky-500/30',
-        bgGradient: 'from-sky-950/80 to-sky-900/30',
+        accentColor: 'text-[#A85832]',
+        borderColor: 'border-[#A85832]/30',
+        bgGradient: 'from-[#1A0C06] to-[#0D0B08]',
         steps: [
             'Click a player card to investigate them',
             'You\'ll learn if they are Mafia or Innocent',
@@ -90,9 +90,9 @@ const HINT_CONFIGS: Record<HintType, HintConfig> = {
         title: 'Night Phase',
         description: 'Wait patiently for dawn',
         icon: <Users className="w-5 h-5" />,
-        accentColor: 'text-indigo-400',
-        borderColor: 'border-indigo-500/30',
-        bgGradient: 'from-indigo-950/80 to-indigo-900/30',
+        accentColor: 'text-[#64748B]',
+        borderColor: 'border-[#475569]/30',
+        bgGradient: 'from-[#0E1117] to-[#0D0B08]',
         steps: [
             'As a civilian, you have no night actions',
             'Other players are acting in secret',
@@ -306,12 +306,12 @@ export const GameHintsOverlay: React.FC<{
                 {activeHint && (
                     <div key={activeHint} className="relative">
                         <HintConnector color={
-                            activeHint === 'discussion' ? '#f59e0b' :
-                                activeHint === 'voting' ? '#f97316' :
-                                    activeHint === 'night_mafia' ? '#f43f5e' :
-                                        activeHint === 'night_doctor' ? '#14b8a6' :
-                                            activeHint === 'night_detective' ? '#0ea5e9' :
-                                                '#6366f1'
+                            activeHint === 'discussion' ? '#C49A6C' :
+                                activeHint === 'voting' ? '#C47E2B' :
+                                    activeHint === 'night_mafia' ? '#8B0000' :
+                                        activeHint === 'night_doctor' ? '#0D9488' :
+                                            activeHint === 'night_detective' ? '#A85832' :
+                                                '#475569'
                         } />
                         <HintCard config={config} onDismiss={onDismiss} />
                     </div>

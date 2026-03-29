@@ -58,11 +58,7 @@ function parseRoom(id: bigint, data: any): {
         return null; 
     }
 }
-/**
- * TODO: When smart contract supports tournaments, read tournament data from chain.
- * For now, we use a stub that returns false for all rooms.
- * Replace this with actual on-chain data when available.
- */
+
 interface TournamentInfo {
     isTournament: boolean;
     prize?: string;
@@ -73,19 +69,16 @@ function getTournamentInfo(room: any): TournamentInfo {
     const isTournament = room.tournamentId && room.tournamentId > 0n;
     return { 
         isTournament,
-        prize: isTournament ? "TBD" : undefined, // In future fetch t.prizePool
+        prize: isTournament ? "TBD" : undefined,
         hasPassword: room.isPrivate 
     };
 }
-
-
 
 export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress, publicClient: ctxPublicClient } = useGameContext();
     const { login, authenticated } = usePrivy();
     const { isConnected } = useAccount();
 
-    // Отслеживаем смену сети явно
     const chainId = useChainId();
     const prevChainIdRef = useRef(chainId);
 
@@ -93,32 +86,29 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const publicClient = ctxPublicClient;
 
     const [rooms, setRooms] = useState<any[]>([]);
-    const [isInitialLoad, setIsInitialLoad] = useState(true); // Для Радара
-    const [isRefreshing, setIsRefreshing] = useState(false);  // Для крутилки
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const [lastUpdate, setLastUpdate] = useState<number>(0);
     const mountedRef = useRef(true);
     const lastFetchRef = useRef(0);
     const MAX_LOBBY_AGE_SEC = 15 * 60;
 
-    // Типизируем причину вызова функции для идеального UX
     type FetchReason = 'initial' | 'refresh' | 'polling';
 
     const fetchRooms = useCallback(async (reason: FetchReason = 'polling') => {
         if (!publicClient) return;
 
         const now = Date.now();
-        // Дебаунс только для фонового поллинга
         if (reason === 'polling' && now - lastFetchRef.current < 1500) return;
         lastFetchRef.current = now;
 
-        // ИЗМЕНЕНИЕ ЗДЕСЬ: Теперь и заход на страницу, и ручной рефреш вызывают Радар
         const isHardLoad = reason === 'initial' || reason === 'refresh';
 
         if (isHardLoad) setIsInitialLoad(true);
         if (reason === 'refresh') setIsRefreshing(true);
 
-        const fetchStartTime = Date.now(); // Засекаем время начала запроса
+        const fetchStartTime = Date.now();
 
         try {
             const roomList: any[] = [];
@@ -168,8 +158,6 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
             roomList.sort((a, b) => b.id - a.id);
 
-            // АНТИ-МЕРЦАНИЕ (ARTIFICIAL DELAY):
-            // Если это хард-лоад (Радар), гарантируем, что он висит минимум 800мс.
             if (isHardLoad && mountedRef.current) {
                 const elapsed = Date.now() - fetchStartTime;
                 const MIN_RADAR_TIME = 800;
@@ -184,7 +172,6 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 setIsInitialLoad(false);
 
                 if (reason === 'refresh') {
-                    // SE-PATTERN: Calculate remaining time to avoid visual jitter
                     const elapsed = Date.now() - fetchStartTime;
                     const MIN_REFRESH_TIME = 500;
                     const remaining = Math.max(0, MIN_REFRESH_TIME - elapsed);
@@ -202,25 +189,21 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         }
     }, [publicClient, initialRoomId, runtimeContractAddress]);
 
-    // Обработка смены сети (Жесткий сброс)
     useEffect(() => {
         if (chainId !== prevChainIdRef.current) {
             prevChainIdRef.current = chainId;
-            setRooms([]); // Мгновенно очищаем старые комнаты
-            fetchRooms('initial'); // Запускаем Радар для новой сети
+            setRooms([]);
+            fetchRooms('initial');
         }
     }, [chainId, fetchRooms]);
 
-    // Жизненный цикл (Первый рендер, фоновый поллинг и ивенты)
     useEffect(() => {
         mountedRef.current = true;
 
-        // Вызываем initial только если комнат еще нет
         if (rooms.length === 0 && isInitialLoad) {
             fetchRooms('initial');
         }
 
-        // SE-PATTERN: Pause polling if tab is not visible to save RPC calls/costs
         const interval = setInterval(() => {
             if (!document.hidden) {
                 fetchRooms('polling');
@@ -232,7 +215,6 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
         if (publicClient) {
             try {
-                // SE-PATTERN: Explicitly store cleanup functions from watchers
                 unwatch1 = publicClient.watchContractEvent({
                     address: runtimeContractAddress, abi: MAFIA_ABI,
                     eventName: 'RoomCreated',
@@ -254,7 +236,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             unwatch1?.();
             unwatch2?.();
         };
-    }, [fetchRooms, publicClient, runtimeContractAddress]); // Убрали лишние триггеры
+    }, [fetchRooms, publicClient, runtimeContractAddress]);
 
     const { setLobbyPassword } = useGameContext();
 
@@ -292,7 +274,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
                 {/* Баннер Инвайта */}
                 {initialRoomId && !isInitialLoad && (
-                    <div className="w-full p-6 bg-gradient-to-br from-[#19130D] to-[#281608] border border-[#D4A54A]/30 rounded-[24px] shadow-[0_0_20px_rgba(212,165,74,0.15)] flex flex-col items-center text-center">
+                    <div className="w-full p-6 bg-gradient-to-br from-[#19130D] to-[#281608] border border-[#D4A54A]/30 rounded-lg shadow-[0_0_20px_rgba(212,165,74,0.15)] flex flex-col items-center text-center">
                         <h3 className="text-white text-xl md:text-2xl font-['Cinzel'] mb-1">Room #{initialRoomId} Invite</h3>
 
                         {initialRoomData ? (
@@ -302,7 +284,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                 {(!isConnected || !authenticated) ? (
                                     <Button
                                         onClick={() => login()}
-                                        variant="outline-gold"
+                                        variant="primary-lobby"
                                         className="w-full py-4 text-sm md:text-base tracking-[0.2em] font-['Cinzel']"
                                     >
                                         Connect Wallet to Join
@@ -310,7 +292,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                 ) : (
                                     <Button
                                         onClick={() => handleJoin(initialRoomData)}
-                                        variant="outline-gold"
+                                        variant="primary-lobby"
                                         isLoading={isTxPending}
                                         disabled={isTxPending}
                                         className="w-full py-4 text-sm md:text-base tracking-[0.2em] font-['Cinzel']"
@@ -355,16 +337,14 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 <div className="w-full flex flex-col gap-3 min-h-[250px]">
                     <AnimatePresence mode="wait">
                         {isInitialLoad || rooms.length === 0 ? (
-                            // ЕДИНЫЙ КОНТЕЙНЕР для загрузки и пустого стейта (он не моргает!)
                             <motion.div
                                 key="status-box"
                                 initial={{ opacity: 0, scale: 0.98 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.98 }}
                                 transition={{ duration: 0.2 }}
-                                className="w-full min-h-[250px] flex flex-col items-center justify-center bg-[#19130D]/40 rounded-[24px] border border-white/5 py-10 relative"
+                                className="w-full min-h-[250px] flex flex-col items-center justify-center bg-[#19130D]/40 rounded-lg border border-white/5 py-10 relative"
                             >
-                                {/* Вложенная анимация: меняем только начинку */}
                                 <AnimatePresence mode="wait">
                                     {isInitialLoad ? (
                                         <motion.div
@@ -406,8 +386,6 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                 </AnimatePresence>
                             </motion.div>
                         ) : (
-                            // А вот СПИСОК КОМНАТ — это уже отдельный блок, 
-                            // он плавно заменит статус-бокс, когда найдутся игры
                             <motion.div
                                 key="list"
                                 initial={{ opacity: 0 }}
@@ -430,7 +408,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                                 whileTap={{ scale: 0.98 }}
                                                 onClick={() => handleJoin(room)}
                                                 disabled={isTxPending}
-                                                className={`w-full p-4 md:p-5 backdrop-blur-md rounded-[16px] flex items-center justify-between group transition-colors relative overflow-hidden text-left
+                                                className={`w-full p-4 md:p-5 backdrop-blur-md rounded-md flex items-center justify-between group transition-colors relative overflow-hidden text-left
                                                     ${tournament.isTournament
                                                         ? 'bg-gradient-to-r from-[#2A1F0A] to-[#19130D] border border-[#D4A54A]/30 hover:border-[#D4A54A]/60 shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
                                                         : 'bg-[#19130D]/80 border border-white/5 hover:border-white/20 shadow-lg'

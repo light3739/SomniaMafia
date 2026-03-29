@@ -41,9 +41,9 @@ interface SocialCardProps {
     onUnlink?: () => void;
 }
 const SocialCard: React.FC<SocialCardProps> = ({ icon, name, linked, username, onLink, onUnlink }) => (
-    <div className={`flex items-center justify-between px-5 py-4 rounded-2xl border transition-all ${linked ? 'border-[#916A47]/30 bg-gradient-to-r from-[#916A47]/10 to-transparent' : 'border-white/10 bg-white/5'}`}>
+    <div className={`flex items-center justify-between px-5 py-4 rounded-lg border transition-all ${linked ? 'border-[#916A47]/30 bg-gradient-to-r from-[#916A47]/10 to-transparent' : 'border-white/10 bg-white/5'}`}>
         <div className="flex items-stretch gap-4">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner border border-white/5 transition-colors ${linked ? 'bg-[#19130D] text-white' : 'bg-black/50 text-white/50'}`}>
+            <div className={`w-10 h-10 rounded-md flex items-center justify-center shadow-inner border border-white/5 transition-colors ${linked ? 'bg-[#19130D] text-white' : 'bg-black/50 text-white/50'}`}>
                 {icon}
             </div>
             <div className="flex flex-col justify-center">
@@ -71,7 +71,7 @@ const SocialCard: React.FC<SocialCardProps> = ({ icon, name, linked, username, o
             ) : (
                 <button
                     onClick={onLink}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[11px] uppercase font-montserrat font-bold tracking-[0.15em] text-[#C19A6B] hover:text-[#f5d9b3] bg-transparent hover:bg-white/5 transition-all border border-[#C19A6B]/50 hover:border-[#C19A6B]"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-md text-[11px] uppercase font-montserrat font-bold tracking-[0.15em] text-[#C19A6B] hover:text-[#f5d9b3] bg-transparent hover:bg-white/5 transition-all border border-[#C19A6B]/50 hover:border-[#C19A6B]"
                 >
                     Connect
                 </button>
@@ -140,17 +140,17 @@ export const SetupProfile: React.FC = () => {
                 const size = Math.min(img.width, img.height);
                 const sourceX = (img.width - size) / 2;
                 const sourceY = (img.height - size) / 2;
-                
+
                 canvas.width = MAX_AVATAR_SIZE;
                 canvas.height = MAX_AVATAR_SIZE;
-                
+
                 // Draw only the central square of the image into the canvas
                 ctx.drawImage(
-                    img, 
+                    img,
                     sourceX, sourceY, size, size, // Source rect (center square)
                     0, 0, MAX_AVATAR_SIZE, MAX_AVATAR_SIZE // Target rect
                 );
-                
+
                 const base64 = canvas.toDataURL('image/jpeg', 0.82);
                 localStorage.setItem(AVATAR_STORAGE_KEY, base64);
                 setAvatarUrl(base64);
@@ -262,132 +262,133 @@ export const SetupProfile: React.FC = () => {
             }
         >
             {/* Profile Card */}
-                <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] p-5 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-4 md:gap-6 items-center">
-                    <h2 className="text-white text-xl md:text-2xl font-['Cinzel']">Your Profile</h2>
+            <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-2xl p-5 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-4 md:gap-6 items-center">
+                <h2 className="text-white text-xl md:text-2xl font-['Cinzel']">Your Profile</h2>
 
-                    {/* Avatar */}
-                    <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                        <div className="w-[100px] h-[100px] md:w-[120px] md:h-[120px] rounded-full border-2 border-[#916A47] shadow-xl overflow-hidden flex items-center justify-center bg-[#19130D] transition-transform group-hover:scale-105">
-                            {avatarUrl ? (
-                                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                {/* Avatar */}
+                <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                    <div className="w-[100px] h-[100px] md:w-[120px] md:h-[120px] rounded-full border-2 border-[#916A47] shadow-xl overflow-hidden flex items-center justify-center bg-[#19130D] transition-transform group-hover:scale-105">
+                        {avatarUrl ? (
+                            <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                        ) : (
+                            <Camera className="w-10 h-10 text-white/20 group-hover:text-white/50 transition-colors" />
+                        )}
+                    </div>
+                    <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Upload className="w-6 h-6 text-white" />
+                    </div>
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+                </div>
+
+                {/* Nickname */}
+                <div className="flex flex-col items-center gap-1 w-full mt-1">
+                    <div className="flex items-center justify-center w-full h-[50px] relative">
+                        {/* The Main Name / Input Container */}
+                        <motion.div
+                            layout
+                            className={`relative flex items-center justify-center h-[50px] w-[180px] md:w-[220px] rounded-md border transition-all ${editingName ? 'bg-[#19130D] border-[#916A47] shadow-inner' : 'bg-black/40 border-white/5 hover:border-white/10 hover:bg-black/60 shadow-lg cursor-pointer group'}`}
+                            onClick={!editingName ? startEditing : undefined}
+                            title={!editingName ? "Click to edit nickname" : undefined}
+                        >
+                            {editingName ? (
+                                <input
+                                    autoFocus
+                                    value={tempName}
+                                    onChange={e => setTempName(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false); }}
+                                    placeholder="Your nickname"
+                                    className="w-full h-full bg-transparent text-center text-white text-xl md:text-2xl font-montserrat font-medium outline-none placeholder-[#916A47] px-4"
+                                />
                             ) : (
-                                <Camera className="w-10 h-10 text-white/20 group-hover:text-white/50 transition-colors" />
+                                <div className="flex items-center justify-center w-full h-full px-4">
+                                    <span className="text-white text-xl md:text-2xl font-montserrat font-medium truncate group-hover:text-[#ffb01d] transition-colors text-center w-full">
+                                        {playerName || <span className="text-white/30 italic text-base font-normal">No nickname set</span>}
+                                    </span>
+                                </div>
+                            )}
+                        </motion.div>
+
+                        {/* The Buttons Container (Only shows during edit) */}
+                        <AnimatePresence>
+                            {editingName && (
+                                <div className="absolute left-1/2 translate-x-[90px] md:translate-x-[110px] flex items-center pl-3">
+                                    <motion.div key="editing-buttons" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="flex gap-1.5" transition={{ duration: 0.15 }}>
+                                        <button onClick={saveName} className="p-2.5 rounded-md bg-[#916A47] text-white hover:bg-[#A37B58] transition-transform active:scale-95 shadow-md border border-[#916A47]" title="Save">
+                                            <Check className="w-4 h-4" />
+                                        </button>
+                                        <button onClick={() => setEditingName(false)} className="p-2.5 rounded-md bg-white/5 text-white/50 hover:text-white hover:bg-white/10 transition-transform active:scale-95 border border-[#916A47]" title="Cancel">
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </motion.div>
+                                </div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                </div>
+            </div>
+
+            {/* Settings Menu Buttons */}
+            <div className="w-full flex flex-col gap-2">
+                <button
+                    onClick={() => setActiveModal('wallet')}
+                    className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-md p-4 border border-white/10 shadow-lg flex items-center justify-between group hover:bg-[rgba(60,32,12,0.80)] transition-all"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#19130D] border border-white/10 flex items-center justify-center">
+                            <Wallet className="w-5 h-5 text-[#ffb01d]" />
+                        </div>
+                        <div className="flex flex-col items-start gap-0.5 mt-1">
+                            <span className="text-white font-montserrat font-medium text-lg md:text-xl tracking-wide leading-none">In-Game Wallet</span>
+                            {hasEmbeddedWallet ? (
+                                !useEmbeddedWallet ? (
+                                    <span className="text-white/30 text-[11px] font-medium tracking-[0.1em] uppercase flex items-center gap-1.5">Disabled</span>
+                                ) : (
+                                    <span className="text-[#C19A6B] text-[11px] font-medium tracking-[0.1em] uppercase flex items-center gap-1.5"><Check className="w-3.5 h-3.5" strokeWidth={2.5} /> Active</span>
+                                )
+                            ) : (
+                                <span className="text-white/40 text-[11px] font-medium tracking-[0.1em] uppercase">Not Created</span>
                             )}
                         </div>
-                        <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Upload className="w-6 h-6 text-white" />
-                        </div>
-                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
                     </div>
+                    <ChevronRight className="w-5 h-5 text-white/30 group-hover:text-white/70 transition-colors" />
+                </button>
 
-                    {/* Nickname */}
-                    <div className="flex flex-col items-center gap-1 w-full mt-1">
-                        <div className="flex items-center justify-center w-full h-[50px] relative">
-                            {/* The Main Name / Input Container */}
-                            <motion.div
-                                layout
-                                className={`relative flex items-center justify-center h-[50px] w-[180px] md:w-[220px] rounded-2xl border transition-all ${editingName ? 'bg-[#19130D] border-white/20 shadow-inner' : 'bg-black/40 border-white/5 hover:border-white/10 hover:bg-black/60 shadow-lg cursor-pointer group'}`}
-                                onClick={!editingName ? startEditing : undefined}
-                                title={!editingName ? "Click to edit nickname" : undefined}
-                            >
-                                {editingName ? (
-                                    <input
-                                        autoFocus
-                                        value={tempName}
-                                        onChange={e => setTempName(e.target.value)}
-                                        onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false); }}
-                                        placeholder="Your nickname"
-                                        className="w-full h-full bg-transparent text-center text-white text-xl md:text-2xl font-montserrat font-medium outline-none placeholder:text-white/20 px-4"
-                                    />
-                                ) : (
-                                    <div className="flex items-center justify-center w-full h-full px-4">
-                                        <span className="text-white text-xl md:text-2xl font-montserrat font-medium truncate group-hover:text-[#ffb01d] transition-colors text-center w-full">
-                                            {playerName || <span className="text-white/30 italic text-base font-normal">No nickname set</span>}
-                                        </span>
-                                    </div>
-                                )}
-                            </motion.div>
-
-                            {/* The Buttons Container (Only shows during edit) */}
-                            <AnimatePresence>
-                                {editingName && (
-                                    <div className="absolute left-1/2 translate-x-[90px] md:translate-x-[110px] flex items-center pl-3">
-                                        <motion.div key="editing-buttons" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="flex gap-1.5" transition={{ duration: 0.15 }}>
-                                            <button onClick={saveName} className="p-2.5 rounded-xl bg-[#916A47] text-white hover:bg-[#A37B58] transition-transform active:scale-95 shadow-md border border-white/10" title="Save">
-                                                <Check className="w-4 h-4" />
-                                            </button>
-                                            <button onClick={() => setEditingName(false)} className="p-2.5 rounded-xl bg-white/5 text-white/50 hover:text-white hover:bg-white/10 transition-transform active:scale-95 border border-white/5" title="Cancel">
-                                                <X className="w-4 h-4" />
-                                            </button>
-                                        </motion.div>
-                                    </div>
-                                )}
-                            </AnimatePresence>
+                <button
+                    onClick={() => setActiveModal('accounts')}
+                    className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-md p-4 border border-white/10 shadow-lg flex items-center justify-between group hover:bg-[rgba(60,32,12,0.80)] transition-all"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#19130D] border border-white/10 flex items-center justify-center">
+                            <Users className="w-5 h-5 text-[#916A47]" />
+                        </div>
+                        <div className="flex flex-col items-start gap-0.5 mt-1">
+                            <span className="text-white font-montserrat font-medium text-lg md:text-xl tracking-wide leading-none">Connected Accounts</span>
+                            <span className="text-white/40 text-[11px] font-medium tracking-[0.1em] uppercase">Manage Social Links</span>
                         </div>
                     </div>
-                </div>
+                    <ChevronRight className="w-5 h-5 text-white/30 group-hover:text-white/70 transition-colors" />
+                </button>
+            </div>
 
-                {/* Settings Menu Buttons */}
-                <div className="w-full flex flex-col gap-2">
-                    <button
-                        onClick={() => setActiveModal('wallet')}
-                        className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-2xl p-4 border border-white/10 shadow-lg flex items-center justify-between group hover:bg-[rgba(60,32,12,0.80)] transition-all"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-[#19130D] border border-white/10 flex items-center justify-center">
-                                <Wallet className="w-5 h-5 text-[#ffb01d]" />
-                            </div>
-                            <div className="flex flex-col items-start gap-0.5 mt-1">
-                                <span className="text-white font-montserrat font-medium text-lg md:text-xl tracking-wide leading-none">In-Game Wallet</span>
-                                {hasEmbeddedWallet ? (
-                                    !useEmbeddedWallet ? (
-                                        <span className="text-white/30 text-[11px] font-medium tracking-[0.1em] uppercase flex items-center gap-1.5">Disabled</span>
-                                    ) : (
-                                        <span className="text-[#C19A6B] text-[11px] font-medium tracking-[0.1em] uppercase flex items-center gap-1.5"><Check className="w-3.5 h-3.5" strokeWidth={2.5} /> Active</span>
-                                    )
-                                ) : (
-                                    <span className="text-white/40 text-[11px] font-medium tracking-[0.1em] uppercase">Not Created</span>
-                                )}
-                            </div>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-white/30 group-hover:text-white/70 transition-colors" />
-                    </button>
-
-                    <button
-                        onClick={() => setActiveModal('accounts')}
-                        className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-2xl p-4 border border-white/10 shadow-lg flex items-center justify-between group hover:bg-[rgba(60,32,12,0.80)] transition-all"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-[#19130D] border border-white/10 flex items-center justify-center">
-                                <Users className="w-5 h-5 text-[#916A47]" />
-                            </div>
-                            <div className="flex flex-col items-start gap-0.5 mt-1">
-                                <span className="text-white font-montserrat font-medium text-lg md:text-xl tracking-wide leading-none">Connected Accounts</span>
-                                <span className="text-white/40 text-[11px] font-medium tracking-[0.1em] uppercase">Manage Social Links</span>
-                            </div>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-white/30 group-hover:text-white/70 transition-colors" />
-                    </button>
-                </div>
-
-                {/* Actions */}
-                <div className="w-full flex flex-col gap-3 mt-4">
-                    <Button
-                        onClick={() => router.push('/create')}
-                        disabled={!hydrated || !playerName.trim()}
-                        className="w-full h-[54px] md:h-[60px] text-lg md:text-xl"
-                    >
-                        Create Game
-                    </Button>
-                    <Button
-                        onClick={() => router.push('/join')}
-                        disabled={!hydrated || !playerName.trim()}
-                        variant="outline-gold"
-                        className="w-full h-[54px] md:h-[60px] text-lg md:text-xl"
-                    >
-                        Connect to Lobby
-                    </Button>
-                </div>
+            {/* Actions */}
+            <div className="w-full flex flex-col gap-3 mt-4">
+                <Button
+                    onClick={() => router.push('/create')}
+                    disabled={!hydrated || !playerName.trim()}
+                    variant="primary-lobby"
+                    className="w-full h-[54px] md:h-[60px] text-lg md:text-xl tracking-[0.1em]"
+                >
+                    Create Game
+                </Button>
+                <Button
+                    onClick={() => router.push('/join')}
+                    disabled={!hydrated || !playerName.trim()}
+                    variant="outline-gold-lobby"
+                    className="w-full h-[54px] md:h-[60px] text-lg md:text-xl tracking-[0.1em]"
+                >
+                    Connect to Lobby
+                </Button>
+            </div>
 
             {/* MODALS */}
             <AnimatePresence>
@@ -403,7 +404,7 @@ export const SetupProfile: React.FC = () => {
                             initial={{ y: 50, scale: 0.95 }}
                             animate={{ y: 0, scale: 1 }}
                             exit={{ y: 20, scale: 0.95 }}
-                            className="w-full max-w-[500px] bg-[#19130D] rounded-[32px] p-6 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto custom-scrollbar"
+                            className="w-full max-w-[500px] bg-[#19130D] rounded-2xl p-6 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto custom-scrollbar"
                             onClick={(e) => e.stopPropagation()}
                         >
                             <div className="flex items-center justify-between mb-5 mt-2">
@@ -417,9 +418,9 @@ export const SetupProfile: React.FC = () => {
                             </div>
 
                             {/* Toggle Use In-Game Wallet */}
-                            <div className="flex items-center justify-between px-5 py-4 rounded-2xl border border-white/10 bg-white/5 mb-2 hover:bg-white/10 transition-colors">
+                            <div className="flex items-center justify-between px-5 py-4 rounded-md border border-white/10 bg-white/5 mb-2 hover:bg-white/10 transition-colors">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-xl bg-black/50 border border-white/10 flex items-center justify-center shadow-inner">
+                                    <div className="w-10 h-10 rounded-md bg-black/50 border border-white/10 flex items-center justify-center shadow-inner">
                                         <Wallet className={`w-5 h-5 transition-colors ${useEmbeddedWallet ? 'text-[#ffb01d]' : 'text-white/30'}`} />
                                     </div>
                                     <div className="flex flex-col gap-1">
@@ -439,9 +440,9 @@ export const SetupProfile: React.FC = () => {
                                 </button>
                             </div>
 
-                            <div className={`flex items-center justify-between px-5 py-4 rounded-2xl border transition-all ${hasEmbeddedWallet ? 'border-[#916A47]/30 bg-gradient-to-r from-[#916A47]/10 to-transparent' : 'border-white/10 bg-white/5'}`}>
+                            <div className={`flex items-center justify-between px-5 py-4 rounded-md border transition-all ${hasEmbeddedWallet ? 'border-[#916A47]/30 bg-gradient-to-r from-[#916A47]/10 to-transparent' : 'border-white/10 bg-white/5'}`}>
                                 <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-xl bg-black/50 border border-white/10 flex items-center justify-center shadow-inner">
+                                    <div className="w-10 h-10 rounded-md bg-black/50 border border-white/10 flex items-center justify-center shadow-inner">
                                         <Wallet className="w-5 h-5 text-white/70" />
                                     </div>
                                     <div className="flex flex-col gap-1">
@@ -463,7 +464,7 @@ export const SetupProfile: React.FC = () => {
                                     ) : (
                                         <button
                                             onClick={() => createWallet?.()}
-                                            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-black bg-[#C19A6B] hover:bg-[#D4B08C] transition-all shadow-[0_0_15px_rgba(193,154,107,0.3)]"
+                                            className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold text-black bg-[#C19A6B] hover:bg-[#D4B08C] transition-all shadow-[0_0_15px_rgba(193,154,107,0.3)]"
                                         >
                                             <Link className="w-4 h-4" /> Create
                                         </button>
@@ -480,7 +481,7 @@ export const SetupProfile: React.FC = () => {
 
                                     {/* Balances block replacing faucets */}
                                     <div className="flex flex-col gap-2 mt-1 mb-2">
-                                        <div className="flex items-center justify-between bg-black/40 rounded-xl p-3 px-4 border border-white/5 group">
+                                        <div className="flex items-center justify-between bg-black/40 rounded-md p-3 px-4 border border-white/5 group">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-8 h-8 rounded-full bg-[#19130D] flex items-center justify-center border border-white/10 shadow-inner p-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
                                                     <img src="/assets/somniayeal.png" alt="Somnia" className="w-full h-full object-contain grayscale-[30%] group-hover:grayscale-0 transition-all" />
@@ -506,7 +507,7 @@ export const SetupProfile: React.FC = () => {
                                     </div>
 
                                     {/* Fund from External Wallet Section */}
-                                    <div className="mt-4 p-5 rounded-2xl border border-[#916A47]/30 bg-gradient-to-b from-[#916A47]/10 to-transparent flex flex-col gap-4 relative overflow-hidden">
+                                    <div className="mt-4 p-5 rounded-md border border-[#916A47]/30 bg-gradient-to-b from-[#916A47]/10 to-transparent flex flex-col gap-4 relative overflow-hidden">
                                         <div className="flex items-center justify-between relative z-10">
                                             <h4 className="text-[#C19A6B] text-[10px] font-montserrat font-bold uppercase tracking-[0.2em] flex items-center gap-2">
                                                 <Wallet className="w-4 h-4 text-[#C19A6B]" /> Fund from Main Wallet
@@ -520,21 +521,21 @@ export const SetupProfile: React.FC = () => {
                                                 </p>
                                                 <button
                                                     onClick={() => linkWallet()}
-                                                    className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-montserrat font-semibold text-sm rounded-xl transition-colors border border-white/10 w-full flex items-center justify-center gap-2 group"
+                                                    className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-montserrat font-semibold text-sm rounded-md transition-colors border border-white/10 w-full flex items-center justify-center gap-2 group"
                                                 >
                                                     <Link className="w-4 h-4 text-white/50 group-hover:text-white transition-colors" /> Connect Main Wallet
                                                 </button>
                                             </div>
                                         ) : (
                                             <div className="flex flex-col gap-4 relative z-10">
-                                                <div className="flex justify-between items-center bg-black/60 p-3.5 rounded-xl border border-white/5">
+                                                <div className="flex justify-between items-center bg-black/60 p-3.5 rounded-md border border-white/5">
                                                     <div className="flex flex-col gap-1.5">
                                                         <span className="text-white/60 text-[10px] font-bold uppercase tracking-[0.15em]">Source Wallet</span>
                                                         <span className="text-white/60 text-sm font-mono border border-white/10 bg-black/40 px-2.5 py-1 rounded-md inline-block w-fit tracking-wide shadow-inner tabular-nums">
                                                             {externalWallet.address.slice(0, 6)}...{externalWallet.address.slice(-4)}
                                                         </span>
                                                     </div>
-                                                    <button onClick={() => linkWallet()} className="text-white/70 text-xs font-semibold hover:text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl border border-white/10 transition-all shadow-sm">Change</button>
+                                                    <button onClick={() => linkWallet()} className="text-white/70 text-xs font-semibold hover:text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-md border border-white/10 transition-all shadow-sm">Change</button>
                                                 </div>
 
                                                 <div className="flex flex-col gap-2 w-full mt-1">
@@ -549,7 +550,7 @@ export const SetupProfile: React.FC = () => {
                                                             <select
                                                                 value={fundingNetwork}
                                                                 onChange={(e) => setFundingNetwork(Number(e.target.value))}
-                                                                className="w-full h-[54px] bg-black/60 border border-white/10 text-white font-montserrat text-sm font-semibold rounded-xl outline-none pl-4 pr-11 appearance-none focus:border-[#C19A6B]/50 focus:bg-black/80 transition-colors cursor-pointer"
+                                                                className="w-full h-[54px] bg-black/60 border border-white/10 text-white font-montserrat text-sm font-semibold rounded-md outline-none pl-4 pr-11 appearance-none focus:border-[#C19A6B]/50 focus:bg-black/80 transition-colors cursor-pointer"
                                                             >
                                                                 <option value={SOMNIA_TESTNET.id}>STT</option>
                                                                 <option value={AVALANCHE_FUJI.id}>AVAX</option>
@@ -561,7 +562,7 @@ export const SetupProfile: React.FC = () => {
                                                         <div className="relative flex-1 group">
                                                             <button
                                                                 onClick={handleMaxClick}
-                                                                className="absolute left-3 top-1/2 -translate-y-1/2 px-2.5 py-1.5 bg-gradient-to-r from-[#C19A6B]/20 to-[#916A47]/20 hover:from-[#C19A6B]/30 hover:to-[#916A47]/30 border border-[#C19A6B]/40 rounded-lg text-[10px] font-bold uppercase tracking-widest text-[#f5d9b3] transition-all z-10 shadow-[0_0_10px_rgba(193,154,107,0.1)]"
+                                                                className="absolute left-3 top-1/2 -translate-y-1/2 px-2.5 py-1.5 bg-gradient-to-r from-[#C19A6B]/20 to-[#916A47]/20 hover:from-[#C19A6B]/30 hover:to-[#916A47]/30 border border-[#C19A6B]/40 rounded-md text-[10px] font-bold uppercase tracking-widest text-[#f5d9b3] transition-all z-10 shadow-[0_0_10px_rgba(193,154,107,0.1)]"
                                                             >
                                                                 MAX
                                                             </button>
@@ -575,7 +576,7 @@ export const SetupProfile: React.FC = () => {
                                                                         setFundAmount(val);
                                                                     }
                                                                 }}
-                                                                className="w-full h-[54px] bg-black/60 border border-white/10 text-white font-mono font-medium text-xl text-right rounded-xl pl-16 pr-5 outline-none focus:border-[#C19A6B] focus:bg-black/80 transition-all placeholder:text-white/30 relative tabular-nums"
+                                                                className="w-full h-[54px] bg-black/60 border border-white/10 text-white font-mono font-medium text-xl text-right rounded-md pl-16 pr-5 outline-none focus:border-[#C19A6B] focus:bg-black/80 transition-all placeholder:text-white/30 relative tabular-nums"
                                                                 placeholder="0.00"
                                                             />
                                                         </div>
@@ -585,7 +586,7 @@ export const SetupProfile: React.FC = () => {
                                                     <button
                                                         onClick={handleFundWallet}
                                                         disabled={isFunding || !fundAmount || isNaN(Number(fundAmount)) || Number(fundAmount) <= 0}
-                                                        className={`w-full py-4 font-montserrat font-semibold text-base tracking-wide rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 border ${isFunding || !fundAmount || isNaN(Number(fundAmount)) || Number(fundAmount) <= 0 ? 'bg-white/5 text-white/30 border-white/5 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-[#916A47] to-[#A37B58] hover:from-[#A37B58] hover:to-[#B68E6A] text-white border-[#C19A6B]/50 hover:border-[#E8CBA3]/70 hover:scale-[1.02] shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(193,154,107,0.3)]'}`}
+                                                        className={`w-full py-4 font-montserrat font-semibold text-base tracking-wide rounded-md transition-all shadow-lg flex items-center justify-center gap-2 border ${isFunding || !fundAmount || isNaN(Number(fundAmount)) || Number(fundAmount) <= 0 ? 'bg-white/5 text-white/30 border-white/5 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-[#916A47] to-[#A37B58] hover:from-[#A37B58] hover:to-[#B68E6A] text-white border-[#C19A6B]/50 hover:border-[#E8CBA3]/70 hover:scale-[1.02] shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(193,154,107,0.3)]'}`}
                                                     >
                                                         {isFunding ? 'Processing...' : 'Send Tokens'}
                                                     </button>
@@ -614,7 +615,7 @@ export const SetupProfile: React.FC = () => {
                             initial={{ y: 50, scale: 0.95 }}
                             animate={{ y: 0, scale: 1 }}
                             exit={{ y: 20, scale: 0.95 }}
-                            className="w-full max-w-[500px] bg-[#19130D] rounded-[32px] p-6 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-6"
+                            className="w-full max-w-[500px] bg-[#19130D] rounded-2xl p-6 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-6"
                             onClick={(e) => e.stopPropagation()}
                         >
                             <div className="flex items-center justify-between mb-5 mt-2">

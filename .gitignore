@@ -65,3 +65,13 @@ ctmpgm_check.ts
 ctmpgm_check.ts
 verification_key.json
 /ops/gm-server/source/dist
+
+# qdrant
+.qdrant_cache.json
+scripts/qdrant_indexer.py
+scripts/__pycache__/qdrant_indexer.cpython-313.pyc
+button_history.txt
+createlobby_history.txt
+joinlobby_history.txt
+mainpage_history.txt
+setup_profile_history.txt

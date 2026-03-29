@@ -166,6 +166,7 @@ export const WaitingRoom: React.FC = () => {
                             onClick={handleStart}
                             isLoading={isTxPending}
                             disabled={isTxPending}
+                            variant="primary-lobby"
                             className="w-full h-[60px] md:h-[70px] text-xl tracking-widest uppercase shadow-[0_10px_40px_rgba(145,106,71,0.2)]"
                         >
                             {isTxPending ? "Starting..." : "Start Game"}

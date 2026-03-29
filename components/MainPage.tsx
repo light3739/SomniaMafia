@@ -56,45 +56,12 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     transition={{ delay: 0.5, duration: 1 }}
                     className="mt-[-10px] relative overflow-hidden bg-black/40 px-2 rounded-full backdrop-blur-md border border-white/10 shadow-xl h-[40px] md:h-[50px] lg:h-[60px] flex items-center justify-center w-[220px] md:w-[300px] lg:w-[380px]"
                 >
-                    <motion.div
-                        animate={{ y: ["0%", "-50%"] }}
-                        transition={{
-                            repeat: Infinity,
-                            ease: "linear",
-                            duration: 5,
-                            delay: 2.0
-                        }}
-                        className="flex flex-col items-center absolute top-0"
-                    >
-                        {/* ITEM 1 */}
-                        <div className="flex w-full flex-row items-center justify-center gap-3 h-[40px] md:h-[50px] lg:h-[60px]">
-                            <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
-                                On Avalanche Fuji
-                            </p>
-                            <Image src={avalancheLogo} alt="Avalanche" width={45} height={40} className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md" />
-                        </div>
-                        {/* ITEM 2 */}
-                        <div className="flex w-full flex-row items-center justify-center gap-3 h-[40px] md:h-[50px] lg:h-[60px]">
-                            <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
-                                On Somnia Testnet
-                            </p>
-                            <Image src={somniaLogo} alt="Somnia" width={45} height={40} className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md" />
-                        </div>
-                        {/* ITEM 1 COPY FOR SEAMLESS LOOP */}
-                        <div className="flex w-full flex-row items-center justify-center gap-3 h-[40px] md:h-[50px] lg:h-[60px]">
-                            <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
-                                On Avalanche Fuji
-                            </p>
-                            <Image src={avalancheLogo} alt="Avalanche" width={45} height={40} className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md" />
-                        </div>
-                        {/* ITEM 2 COPY */}
-                        <div className="flex w-full flex-row items-center justify-center gap-3 h-[40px] md:h-[50px] lg:h-[60px]">
-                            <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
-                                On Somnia Testnet
-                            </p>
-                            <Image src={somniaLogo} alt="Somnia" width={45} height={40} className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md" />
-                        </div>
-                    </motion.div>
+                    <div className="flex flex-row items-center justify-center gap-3 h-full">
+                        <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
+                            On Somnia Network
+                        </p>
+                        <Image src={somniaLogo} alt="Somnia" width={45} height={40} className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md" />
+                    </div>
                 </motion.div>
 
                 {/* CONNECT / ENTER Button */}
@@ -111,13 +78,16 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
 
                         if (!authenticated) {
                             return (
-                                <Button
+                                <button
                                     onClick={() => login()}
-                                    variant="outline-gold"
-                                    className="px-12 py-4 text-base md:text-lg tracking-[0.2em] font-['Cinzel']"
+                                    className="px-14 py-3.5 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-[1.03] transition-all text-base md:text-lg tracking-[0.1em] relative overflow-hidden ring-1 ring-white/10"
+                                    style={{
+                                        background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
+                                    }}
                                 >
-                                    LOGIN / CONNECT
-                                </Button>
+                                    <span className="relative z-10">LOGIN / CONNECT</span>
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
+                                </button>
                             );
                         }
 
@@ -139,13 +109,16 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         }
 
                         return (
-                            <Button
+                            <button
                                 onClick={onStart}
-                                variant="outline-gold"
-                                className="px-12 py-4 text-base md:text-lg tracking-[0.2em] font-['Cinzel']"
+                                className="px-14 py-3.5 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-[1.03] transition-all text-base md:text-lg tracking-[0.1em] relative overflow-hidden ring-1 ring-white/10"
+                                style={{
+                                    background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
+                                }}
                             >
-                                ENTER CITY
-                            </Button>
+                                <span className="relative z-10">ENTER CITY</span>
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
+                            </button>
                         );
                     })()}
                 </motion.div>
