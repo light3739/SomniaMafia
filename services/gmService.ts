@@ -28,7 +28,7 @@ export async function registerEciesPubkey(
         walletClient,
         forceWallet,
         buildMessage: ({ nonce, timestamp }) =>
-            `register-pubkey:${roomId}:${address.toLowerCase()}:${pubkeyHex}:${nonce}:${timestamp}`,
+            `register-pubkey:${String(chainId || 43113)}:${String(roomId)}:${address.toLowerCase()}:${pubkeyHex}:${nonce}:${String(timestamp)}`,
     });
 
     const res = await fetch(`${GM_SERVER_URL}/register-pubkey`, {
@@ -72,7 +72,8 @@ export async function registerSessionOnGm(params: {
 
     const timestamp = Date.now();
     const nonce = Math.random().toString(36).slice(2) + timestamp.toString(36);
-    const message = `register-session:${roomId}:${normalizedMain}:${normalizedSession}:${nonce}:${timestamp}`;
+    const effectiveChainId = String(chainId || 43113);
+    const message = `register-session:${effectiveChainId}:${String(roomId)}:${normalizedMain}:${normalizedSession}:${nonce}:${String(timestamp)}`;
 
     // Secure: Sign with main wallet to authorize this session Address
     const signature = await walletClient.signMessage({ message });
@@ -119,7 +120,7 @@ export async function submitSraKeyToGm(params: {
         roomId: Number(roomId),
         walletClient,
         buildMessage: ({ nonce, timestamp }) =>
-            `submit-key:${roomId}:${sraKey}:${nonce}:${timestamp}`,
+            `submit-key:${String(chainId || 43113)}:${String(roomId)}:${sraKey}:${nonce}:${String(timestamp)}`,
     });
 
     const res = await fetch(`${GM_SERVER_URL}/submit-sra-key`, {
@@ -159,7 +160,7 @@ export async function fetchMyRoleFromGm(params: {
         roomId: Number(roomId),
         walletClient,
         buildMessage: ({ nonce, timestamp }) =>
-            `my-role:${roomId}:${address.toLowerCase()}:${nonce}:${timestamp}`,
+            `my-role:${String(chainId || 43113)}:${String(roomId)}:${address.toLowerCase()}:${nonce}:${String(timestamp)}`,
     });
 
     const query = new URLSearchParams({
@@ -220,7 +221,7 @@ export async function fetchInvestigationProofFromGM(params: {
         roomId: Number(roomId),
         walletClient,
         buildMessage: ({ nonce, timestamp }) =>
-            `investigate:${roomId}:${params.dayCount || 0}:${targetAddress.toLowerCase()}:${nonce}:${timestamp}`,
+            `investigate:${String(chainId || 43113)}:${String(roomId)}:${params.dayCount || 0}:${targetAddress.toLowerCase()}:${nonce}:${String(timestamp)}`,
     });
 
     const body = {
@@ -275,7 +276,7 @@ export async function skipNightActionToGM(params: {
         roomId: Number(roomId),
         walletClient,
         buildMessage: ({ nonce, timestamp }) =>
-            `skip-night:${roomId}:${params.dayCount || 0}:${nonce}:${timestamp}`,
+            `skip-night:${String(chainId || 43113)}:${String(roomId)}:${params.dayCount || 0}:${nonce}:${String(timestamp)}`,
     });
 
     const body = {
@@ -323,7 +324,7 @@ export async function setRoomPassword(params: {
         signerAddress,
         forceWallet: params.forceWallet,
         buildMessage: ({ nonce, timestamp }) =>
-            `setRoomPassword:${roomId}:${address.toLowerCase()}:${nonce}:${timestamp}`,
+            `setRoomPassword:${String(chainId || 43113)}:${String(roomId)}:${address.toLowerCase()}:${nonce}:${String(timestamp)}`,
     });
 
     const res = await fetch(`${GM_SERVER_URL}/room-password`, {
