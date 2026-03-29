@@ -397,8 +397,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Casting to number for consistent comparison
         const chainId = Number(runtimeChain.id);
         const isSomnia = (chainId === 5031 || chainId === 50312);
-        // Regular game is 0 deposit + 1.1 STT for session gas.
-        return isSomnia ? parseEther('1.1') : parseEther('1.1');
+        // Regular game is 0 deposit + 0.8 STT for session gas (faucet-safe for 1.0 STT users)
+        return isSomnia ? parseEther('0.8') : parseEther('0.8');
     }, [runtimeChain.id]);
 
     useEffect(() => {
@@ -1583,8 +1583,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!pClient || !targetChain || !myAddr) { alert("Public client or chain/address not ready!"); return false; }
 
             // 4. Get Smart Gas Config
-            // 4. Get Smart Gas Config (1.1 STT fully for session as deposit is 0)
-            const txValue = isSomnia ? parseEther('1.1') : parseEther('1.1');
+            // 4. Get Smart Gas Config (Deposit is 0, session funding is 1.0 STT fallback or LOBBY_FUNDING_VALUE)
+            const txValue = LOBBY_FUNDING_VALUE;
+            
+            // Check balance before proceeding
+            const balance = await pClient.getBalance({ address: myAddr as `0x${string}` });
+            if (balance < txValue) {
+                const required = formatEther(txValue);
+                const current = formatEther(balance);
+                alert(`Insufficient balance to fund session. You have ${current} STT but need at least ${required} STT. Please use a Faucet.`);
+                setIsTxPending(false);
+                return false;
+            }
+
             const gasConfig = await getSmartGasConfig({
                 functionName: 'createAndJoin',
                 args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, tournamentId],
@@ -1918,6 +1929,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // The contract will pull it from tournamentGasReserves.
             // For non-tournament rooms, we still send LOBBY_FUNDING_VALUE.
             const txValue = needsTournamentJoin ? tournamentValueRequired : (isTournamentRoom ? 0n : LOBBY_FUNDING_VALUE);
+
+            // Check balance before proceeding
+            if (txValue > 0n) {
+                const balance = await pClient.getBalance({ address: myAddr as `0x${string}` });
+                if (balance < txValue) {
+                    const required = formatEther(txValue);
+                    const current = formatEther(balance);
+                    alert(`Insufficient balance. You need at least ${required} STT to join and fund your session. You have ${current} STT.`);
+                    return false;
+                }
+            }
 
             const fnName = needsTournamentJoin ? 'joinTournamentAndRoom' : 'joinRoom';
             const callArgs = needsTournamentJoin 
