@@ -148,7 +148,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 queries.map(i => publicClient.readContract({
                     address: runtimeContractAddress, abi: MAFIA_ABI,
                     functionName: 'getRoom', args: [i],
-                }).then(data => ({ i, data })))
+                }).then((data: any) => ({ i, data })))
             );
 
             const nowSec = Math.floor(Date.now() / 1000);
