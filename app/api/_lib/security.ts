@@ -5,7 +5,7 @@ import { ServerStore } from '@/services/serverStore';
 
 export interface SecurityDependencies {
     publicClient: PublicClient;
-    consumeReplayNonce: (scope: string, roomId: string, actorAddress: string, nonce: string) => Promise<boolean>;
+    consumeReplayNonce: (scope: string, roomId: string, actorAddress: string, nonce: string, chainId?: number | string) => Promise<boolean>;
     now: () => number;
     maxClockSkewMs: number;
     nonceMinLength: number;
@@ -17,8 +17,8 @@ export function createSecurityDependencies(overrides: Partial<SecurityDependenci
             chain: somniaChain,
             transport: http(),
         }),
-        consumeReplayNonce: (scope, roomId, actorAddress, nonce) =>
-            ServerStore.consumeReplayNonce(scope, roomId, actorAddress, nonce),
+        consumeReplayNonce: (scope, roomId, actorAddress, nonce, chainId) =>
+            ServerStore.consumeReplayNonce(scope, roomId, actorAddress, nonce, chainId),
         now: () => Math.floor(Date.now() / 1000), // Unix seconds — matches requestSigning.ts
         maxClockSkewMs: 5 * 60, // 300 seconds (field name kept for compat) — sync with GM server 5min window
         nonceMinLength: 8,
@@ -209,7 +209,7 @@ export async function verifySignedRequestBody<TBody extends Record<string, any>>
     }
 
     if (options.requireReplayProtection !== false) {
-        const accepted = await currentDeps.consumeReplayNonce(options.scope, roomId, actorAddress, nonce);
+        const accepted = await currentDeps.consumeReplayNonce(options.scope, roomId, actorAddress, nonce, chainId);
         if (!accepted) {
             return { ok: false, status: 409, error: 'Replay detected: nonce already used' };
         }

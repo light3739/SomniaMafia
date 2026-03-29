@@ -88,7 +88,7 @@ export async function GET(request: Request) {
         const dynamicClient = createPublicClient({ chain: deployment.chain, transport: http() });
         const contractAddress = deployment.contracts.MafiaDiamond;
 
-        let state = await ServerStore.getDiscussionState(roomId, dayCount);
+        let state = await ServerStore.getDiscussionState(roomId, dayCount, requestChainId);
 
         if (!state) {
             return NextResponse.json({
@@ -123,7 +123,7 @@ export async function GET(request: Request) {
                 const elapsed = (Date.now() - state.speakerStartTime) / 1000;
                 if (elapsed >= state.speakerDuration) {
                     console.log(`[API/Discussion] Auto-advancing speaker ${state.currentSpeakerIndex} (Timeout). Elapsed: ${elapsed.toFixed(1)}s`);
-                    const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
+                    const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, false, requestChainId);
                     if (newState) state = newState;
                 }
             } else if (state.phase === 'initial_delay') {
@@ -131,7 +131,7 @@ export async function GET(request: Request) {
                 const delayElapsed = (Date.now() - (state.delayStartTime || 0)) / 1000;
                 const delayDuration = state.delayDuration || 5;
                 if (delayElapsed >= delayDuration) {
-                    const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers);
+                    const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, false, requestChainId);
                     if (newState) state = newState;
                 }
             }
@@ -249,7 +249,7 @@ export async function POST(request: Request) {
 
         if (action === 'start') {
             // FIX #21: Check if discussion state already exists to prevent double-start reset
-            const existingState = await ServerStore.getDiscussionState(roomId, dayCount);
+            const existingState = await ServerStore.getDiscussionState(roomId, dayCount, requestChainId);
             if (existingState && !existingState.finished) {
                 console.log(`[API/Discussion] Discussion already active for Room #${roomId} Day ${dayCount}, returning existing state`);
                 return buildResponse(existingState, alivePlayers, playerAddress);
@@ -265,20 +265,20 @@ export async function POST(request: Request) {
                 delayStartTime: Date.now(),
                 delayDuration: DELAY_INITIAL
             };
-            await ServerStore.setDiscussionState(roomId, dayCount, newState);
+            await ServerStore.setDiscussionState(roomId, dayCount, newState, requestChainId);
             console.log(`[API/Discussion] Started discussion for Room #${roomId} Day ${dayCount} (initial delay: ${DELAY_INITIAL}s)`);
             return buildResponse(newState, alivePlayers, playerAddress);
         }
 
         if (action === 'skip') {
-            const state = await ServerStore.getDiscussionState(roomId, dayCount);
+            const state = await ServerStore.getDiscussionState(roomId, dayCount, requestChainId);
             if (!state || state.finished) {
                 return NextResponse.json({ error: 'Discussion not active' }, { status: 400 });
             }
 
             // Test Mode: Bypass all checks
             if (roomId === '999') {
-                const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, true);
+                const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, true, requestChainId);
                 return buildResponse(newState, alivePlayers, playerAddress);
             }
 
@@ -291,7 +291,7 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: 'Not your turn to speak (and you are not Host)' }, { status: 403 });
             }
 
-            const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, true);
+            const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, true, requestChainId);
             console.log(`[API/Discussion] Speaker skipped by ${isHost ? 'HOST' : 'PLAYER'} in Room #${roomId} Day ${dayCount}, new index: ${newState?.currentSpeakerIndex}`);
             const response = buildResponse(newState, alivePlayers, playerAddress);
             response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');

@@ -25,7 +25,7 @@ if (redis) {
 /**
  * Memory Fallback (for local development without Redis)
  */
-const memoryStore: Record<string, Record<string, string>> = {};
+const memoryStore: Record<string, Record<string, any>> = {};
 
 // FIX #25: Warn loudly if memoryStore is used in production
 if (!redis && process.env.NODE_ENV === 'production') {
@@ -77,6 +77,7 @@ export class ServerStore {
         roomId: string,
         actorAddress: string,
         nonce: string,
+        chainId?: number | string,
         ttlSeconds: number = REPLAY_NONCE_TTL_SECONDS
     ): Promise<boolean> {
         // Relax restriction for discussion to prevent 502/500 if Redis is missing
@@ -84,7 +85,7 @@ export class ServerStore {
         this.ensureSecureStorageForCriticalPath(isDiscussion ? 'consumeReplayNonce:Discussion' : 'consumeReplayNonce');
 
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `replay:${scope}:${normalizedRoomId}:${actorAddress.toLowerCase()}:${nonce}`;
+        const key = `replay:${scope}:${chainId || 50312}:${normalizedRoomId}:${actorAddress.toLowerCase()}:${nonce}`;
 
         if (!redis) {
             const now = Date.now();
@@ -115,14 +116,14 @@ export class ServerStore {
 
     /**
      * Stores a player's role and salt in Redis.
-     * Uses a Hash structure: room:secrets:{roomId} -> {address: secret}
+     * Uses a Hash structure: room:secrets:{chainId}:{roomId} -> {address: secret}
      */
-    static async storeSecret(roomId: string, address: string, role: number, salt: string, commitment: string): Promise<StoreSecretResult> {
+    static async storeSecret(roomId: string, address: string, role: number, salt: string, commitment: string, chainId?: number | string): Promise<StoreSecretResult> {
         this.ensureSecureStorageForCriticalPath('storeSecret');
 
         const normalizedRoomId = BigInt(roomId).toString();
         const secret: PlayerSecret = { role, salt, commitment };
-        const key = `room:secrets:${normalizedRoomId}`;
+        const key = `room:secrets:${chainId || 50312}:${normalizedRoomId}`;
         const normalizedAddress = address.toLowerCase();
 
         if (!redis) {
@@ -170,11 +171,11 @@ export class ServerStore {
     /**
      * Retrieves all secrets for a specific room.
      */
-    static async getRoomSecrets(roomId: string): Promise<Record<string, PlayerSecret> | null> {
+    static async getRoomSecrets(roomId: string, chainId?: number | string): Promise<Record<string, PlayerSecret> | null> {
         this.ensureSecureStorageForCriticalPath('getRoomSecrets');
 
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:secrets:${normalizedRoomId}`;
+        const key = `room:secrets:${chainId || 50312}:${normalizedRoomId}`;
 
         if (!redis) {
             const data = memoryStore[key];
@@ -182,7 +183,7 @@ export class ServerStore {
 
             const parsed: Record<string, PlayerSecret> = {};
             for (const [addr, secretStr] of Object.entries(data)) {
-                parsed[addr] = JSON.parse(secretStr);
+                parsed[addr] = JSON.parse(secretStr as string);
             }
             return parsed;
         }
@@ -206,9 +207,9 @@ export class ServerStore {
     /**
      * Manually clears room data (optional cleanup).
      */
-    static async clearRoom(roomId: string) {
+    static async clearRoom(roomId: string, chainId?: number | string) {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:secrets:${normalizedRoomId}`;
+        const key = `room:secrets:${chainId || 50312}:${normalizedRoomId}`;
         if (!redis) {
             delete memoryStore[key];
             return;
@@ -226,9 +227,9 @@ export class ServerStore {
     /**
      * Get the current discussion state for a room and day.
      */
-    static async getDiscussionState(roomId: string, dayCount: number): Promise<DiscussionState | null> {
+    static async getDiscussionState(roomId: string, dayCount: number, chainId?: number | string): Promise<DiscussionState | null> {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:discussion:${normalizedRoomId}:${dayCount}`;
+        const key = `room:discussion:${chainId || 50312}:${normalizedRoomId}:${dayCount}`;
 
         const fallback = () => {
             const data = memoryStore[key];
@@ -255,9 +256,9 @@ export class ServerStore {
     /**
      * Set the discussion state for a room and day.
      */
-    static async setDiscussionState(roomId: string, dayCount: number, state: DiscussionState) {
+    static async setDiscussionState(roomId: string, dayCount: number, state: DiscussionState, chainId?: number | string) {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:discussion:${normalizedRoomId}:${dayCount}`;
+        const key = `room:discussion:${chainId || 50312}:${normalizedRoomId}:${dayCount}`;
 
         const fallback = () => {
             if (!memoryStore[key]) memoryStore[key] = {};
@@ -281,8 +282,8 @@ export class ServerStore {
      * Advance discussion state. Handles transitions between phases.
      * Flow: initial_delay -> speaking -> speaking -> ... -> finished
      */
-    static async advanceSpeaker(roomId: string, dayCount: number, totalAlivePlayers: number, force: boolean = false): Promise<DiscussionState | null> {
-        const state = await this.getDiscussionState(roomId, dayCount);
+    static async advanceSpeaker(roomId: string, dayCount: number, totalAlivePlayers: number, force: boolean = false, chainId?: number | string): Promise<DiscussionState | null> {
+        const state = await this.getDiscussionState(roomId, dayCount, chainId);
         if (!state || state.finished) return state;
 
         // Handle initial_delay -> speaking transition
@@ -294,7 +295,7 @@ export class ServerStore {
                 finished: false,
                 phase: 'speaking'
             };
-            await this.setDiscussionState(roomId, dayCount, newState);
+            await this.setDiscussionState(roomId, dayCount, newState, chainId);
             return newState;
         }
 
@@ -316,7 +317,7 @@ export class ServerStore {
                     finished: true,
                     phase: 'finished'
                 };
-                await this.setDiscussionState(roomId, dayCount, finishedState);
+                await this.setDiscussionState(roomId, dayCount, finishedState, chainId);
                 return finishedState;
             }
 
@@ -328,7 +329,7 @@ export class ServerStore {
                 finished: false,
                 phase: 'speaking'
             };
-            await this.setDiscussionState(roomId, dayCount, newState);
+            await this.setDiscussionState(roomId, dayCount, newState, chainId);
             return newState;
         }
 
@@ -338,9 +339,9 @@ export class ServerStore {
     /**
      * Clear discussion state (e.g., when voting starts).
      */
-    static async clearDiscussionState(roomId: string, dayCount: number) {
+    static async clearDiscussionState(roomId: string, dayCount: number, chainId?: number | string) {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:discussion:${normalizedRoomId}:${dayCount}`;
+        const key = `room:discussion:${chainId || 50312}:${normalizedRoomId}:${dayCount}`;
 
         if (!redis) {
             delete memoryStore[key];
@@ -359,9 +360,9 @@ export class ServerStore {
     /**
      * Store a player's avatar (base64) for a specific room.
      */
-    static async storeAvatar(roomId: string, address: string, base64Avatar: string) {
+    static async storeAvatar(roomId: string, address: string, base64Avatar: string, chainId?: number | string) {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:avatars:${normalizedRoomId}`;
+        const key = `room:avatars:${chainId || 50312}:${normalizedRoomId}`;
 
         if (!redis) {
             console.warn(`[ServerStore] Redis not configured. Using MEMORY fallback for avatars`);
@@ -383,9 +384,9 @@ export class ServerStore {
      * Get all avatars for a room.
      * Returns: { "0xaddress": "data:image/...", ... }
      */
-    static async getAvatars(roomId: string): Promise<Record<string, string>> {
+    static async getAvatars(roomId: string, chainId?: number | string): Promise<Record<string, string>> {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:avatars:${normalizedRoomId}`;
+        const key = `room:avatars:${chainId || 50312}:${normalizedRoomId}`;
 
         if (!redis) {
             return memoryStore[key] || {};
@@ -403,12 +404,12 @@ export class ServerStore {
     /**
      * Get a single player's avatar.
      */
-    static async getAvatar(roomId: string, address: string): Promise<string | null> {
+    static async getAvatar(roomId: string, address: string, chainId?: number | string): Promise<string | null> {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:avatars:${normalizedRoomId}`;
+        const key = `room:avatars:${chainId || 50312}:${normalizedRoomId}`;
 
         if (!redis) {
-            return memoryStore[key]?.[address.toLowerCase()] || null;
+            return (memoryStore[key] as any)?.[address.toLowerCase()] || null;
         }
         try {
             const avatar = await redis.hget(key, address.toLowerCase());
@@ -425,9 +426,9 @@ export class ServerStore {
      * Store a player's ECIES public key (65-byte hex) for a specific room.
      * GM uses these to encrypt each player's role individually.
      */
-    static async storeEciesPubKey(roomId: string, address: string, pubKeyHex: string): Promise<void> {
+    static async storeEciesPubKey(roomId: string, address: string, pubKeyHex: string, chainId?: number | string): Promise<void> {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:ecies_pubkeys:${normalizedRoomId}`;
+        const key = `room:ecies_pubkeys:${chainId || 50312}:${normalizedRoomId}`;
         const normalizedAddress = address.toLowerCase();
 
         // Basic validation: uncompressed P-256 point = 65 bytes = 130 hex chars
@@ -455,9 +456,9 @@ export class ServerStore {
      * Get all ECIES public keys for a room.
      * Returns: { "0xaddress": "04abcd...", ... }
      */
-    static async getEciesPubKeys(roomId: string): Promise<Record<string, string>> {
+    static async getEciesPubKeys(roomId: string, chainId?: number | string): Promise<Record<string, string>> {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:ecies_pubkeys:${normalizedRoomId}`;
+        const key = `room:ecies_pubkeys:${chainId || 50312}:${normalizedRoomId}`;
 
         if (!redis) {
             return memoryStore[key] || {};
@@ -475,12 +476,12 @@ export class ServerStore {
     /**
      * Get a single player's ECIES public key.
      */
-    static async getEciesPubKey(roomId: string, address: string): Promise<string | null> {
+    static async getEciesPubKey(roomId: string, address: string, chainId?: number | string): Promise<string | null> {
         const normalizedRoomId = BigInt(roomId).toString();
-        const key = `room:ecies_pubkeys:${normalizedRoomId}`;
+        const key = `room:ecies_pubkeys:${chainId || 50312}:${normalizedRoomId}`;
 
         if (!redis) {
-            return memoryStore[key]?.[address.toLowerCase()] || null;
+            return (memoryStore[key] as any)?.[address.toLowerCase()] || null;
         }
 
         try {

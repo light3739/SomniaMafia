@@ -12,7 +12,7 @@ export async function POST(request: Request) {
         }
 
         // Verify the caller owns the address (or has a valid session key for it)
-        const message = `reveal-secret:${rawRoomId}:${role}:${salt}`;
+        const message = `reveal-secret:${chainId || 43113}:${rawRoomId}:${role}:${salt}`;
 
         // Try verifying against main wallet address first
         let valid = await verifyMessage({
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
 
         const roomId = BigInt(rawRoomId).toString();
         // Store the secret on the server
-        const storeResult = await ServerStore.storeSecret(roomId, address, roleNum, salt, commitment);
+        const storeResult = await ServerStore.storeSecret(roomId, address, roleNum, salt, commitment, chainId);
         if (storeResult.status === 'conflict') {
             return NextResponse.json({ error: 'Secret conflict detected for this player/room' }, { status: 409 });
         }

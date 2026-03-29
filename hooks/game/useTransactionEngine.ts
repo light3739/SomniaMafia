@@ -48,7 +48,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
         value?: bigint;
         nonce?: number;
     }) => {
-        const { functionName, args, account, value = 0n, nonce } = params;
+        const { functionName, args, account, value, nonce } = params;
         const pClient = refs.publicClientRef.current;
         const targetChain = refs.runtimeChainRef.current;
         if (!pClient) throw new Error("PublicClient missing");
@@ -114,7 +114,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
                 account,
                 value,
                 nonce
-            });
+            } as any);
 
             const heavyOps = ['createTournamentAndRoom', 'finalizeVoting', 'endGameZK', 'distributeMafiaPrizes', 'createTournament'];
             const bufferMultiplier = isSomnia && heavyOps.includes(functionName) ? 200n : 150n;
@@ -226,15 +226,17 @@ export function useTransactionEngine(deps: TxEngineDeps) {
                             try {
                                 const pClient = refs.publicClientRef.current;
                                 if (pClient) {
-                                    const mainBound = await pClient.readContract({
+                                    const sessionData = await pClient.readContract({
                                         address: refs.contractAddressRef.current,
                                         abi: MAFIA_ABI,
-                                        functionName: 'sessionToMain',
-                                        args: [session.address as `0x${string}`],
-                                    }).catch(() => "0x0");
+                                        functionName: 'sessionKeys',
+                                        args: [session.mainWallet as `0x${string}`],
+                                    }).catch(() => null) as any;
 
-                                    if (String(mainBound).toLowerCase() === "0x0000000000000000000000000000000000000000") {
-                                        console.error("[Revert Diagnosis] CRITICAL: Session key is NOT registered!");
+                                    const onChainAddr = sessionData ? (Array.isArray(sessionData) ? sessionData[0] : sessionData.sessionAddress) : "0x0";
+
+                                    if (String(onChainAddr).toLowerCase() !== session.address.toLowerCase()) {
+                                        console.error("[Revert Diagnosis] CRITICAL: Session key is NOT registered or mismatched!");
                                     }
                                 }
                             } catch (diagErr) {

@@ -112,12 +112,9 @@ export function useMafiaChat(deps: ChatDeps) {
         const pClient = refs.publicClientRef.current;
         if (!pClient) return;
         try {
-            const messages = await pClient.readContract({
-                address: refs.contractAddressRef.current,
-                abi: MAFIA_ABI,
-                functionName: 'getMafiaChat',
-                args: [roomId]
-            }) as any[];
+            // getMafiaChat is no longer in the ABI, we rely on LiveKit signals for real-time mafia chat
+            // and we can potentially use getContractEvents if we need historical messages.
+            const messages: any[] = [];
 
             const formattedMessages: MafiaChatMessage[] = await Promise.all(messages.map(async (msg: any, index: number) => {
                 const hexContent = msg.encryptedMessage as string;

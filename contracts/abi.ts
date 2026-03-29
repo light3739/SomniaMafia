@@ -1,53 +1,11 @@
-export const MafiaABI = [
-  {
-    "inputs": [],
-    "name": "AccessControlBadConfirmation",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "neededRole",
-        "type": "bytes32"
-      }
-    ],
-    "name": "AccessControlUnauthorizedAccount",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "AlreadyCommitted",
-    "type": "error"
-  },
+/**
+ * 💎 Mafia Diamond Contract ABI
+ * AUTO-GENERATED - DO NOT EDIT
+ */
+export const DIAMOND_ABI = [
   {
     "inputs": [],
     "name": "AlreadyJoined",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "AlreadyRevealed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "AlreadySharedKeys",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "AlreadyVoted",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "ArrayTooLarge",
     "type": "error"
   },
   {
@@ -57,47 +15,12 @@ export const MafiaABI = [
   },
   {
     "inputs": [],
-    "name": "EnforcedPause",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "ExpectedPause",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "InsufficientDeposit",
     "type": "error"
   },
   {
     "inputs": [],
-    "name": "InvalidArrayLength",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidDeckSize",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidMafiaTargetReveal",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "InvalidPlayerCount",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidReveal",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidRoleReveal",
     "type": "error"
   },
   {
@@ -112,47 +35,12 @@ export const MafiaABI = [
   },
   {
     "inputs": [],
-    "name": "MafiaNotReady",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "MafiaTargetAlreadyCommitted",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "MafiaTargetAlreadyRevealed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "NicknameTooLong",
     "type": "error"
   },
   {
     "inputs": [],
-    "name": "NoStalledPlayers",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NotAllRolesRevealed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NotCommitted",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "NotEnoughPlayers",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NotMafiaMember",
     "type": "error"
   },
   {
@@ -163,16 +51,6 @@ export const MafiaABI = [
   {
     "inputs": [],
     "name": "NotParticipant",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "NotYourTurn",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "PhaseDeadlinePassed",
     "type": "error"
   },
   {
@@ -192,37 +70,12 @@ export const MafiaABI = [
   },
   {
     "inputs": [],
-    "name": "ReentrancyGuardReentrantCall",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "RoleAlreadyCommitted",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "RoleAlreadyRevealed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "RoleNotCommitted",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "RoomFull",
     "type": "error"
   },
   {
     "inputs": [],
     "name": "RoomNameTooLong",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "SaltTooLong",
     "type": "error"
   },
   {
@@ -253,7 +106,7 @@ export const MafiaABI = [
   },
   {
     "inputs": [],
-    "name": "TimeNotExpired",
+    "name": "TooEarly",
     "type": "error"
   },
   {
@@ -263,49 +116,27 @@ export const MafiaABI = [
   },
   {
     "inputs": [],
-    "name": "WinConditionNotMet",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "WrongPhase",
     "type": "error"
   },
   {
+    "anonymous": false,
     "inputs": [
       {
-        "internalType": "bytes4",
-        "name": "selector",
-        "type": "bytes4"
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "dayNumber",
+        "type": "uint256"
       }
     ],
-    "name": "FunctionNotFound",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "SessionAlreadyRegistered",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "SessionExpired",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "SessionNotForThisRoom",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "Unauthorized",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "WrongPhase",
-    "type": "error"
+    "name": "DayStarted",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -388,6 +219,25 @@ export const MafiaABI = [
     "inputs": [
       {
         "indexed": true,
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "winCondition",
+        "type": "string"
+      }
+    ],
+    "name": "GameEnded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
         "internalType": "address",
         "name": "newGameMaster",
         "type": "address"
@@ -407,6 +257,44 @@ export const MafiaABI = [
       }
     ],
     "name": "GameStarted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "killed",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "healed",
+        "type": "address"
+      }
+    ],
+    "name": "NightFinalized",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      }
+    ],
+    "name": "NightStarted",
     "type": "event"
   },
   {
@@ -526,6 +414,44 @@ export const MafiaABI = [
     "inputs": [
       {
         "indexed": true,
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "eliminated",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "voteCount",
+        "type": "uint256"
+      }
+    ],
+    "name": "VotingFinalized",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      }
+    ],
+    "name": "VotingStarted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
         "internalType": "address",
         "name": "newVerifier",
         "type": "address"
@@ -560,6 +486,16 @@ export const MafiaABI = [
         "internalType": "address",
         "name": "sessionAddress",
         "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "isPrivate",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
       }
     ],
     "name": "createAndJoin",
@@ -571,6 +507,19 @@ export const MafiaABI = [
       }
     ],
     "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      }
+    ],
+    "name": "forcePhaseTimeout",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -887,6 +836,26 @@ export const MafiaABI = [
             "internalType": "uint8",
             "name": "keysSharedCount",
             "type": "uint8"
+          },
+          {
+            "internalType": "uint128",
+            "name": "depositPool",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "depositPerPlayer",
+            "type": "uint128"
+          },
+          {
+            "internalType": "bool",
+            "name": "isPrivate",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint256",
+            "name": "tournamentId",
+            "type": "uint256"
           }
         ],
         "internalType": "struct MafiaTypes.GameRoom",
@@ -961,6 +930,24 @@ export const MafiaABI = [
     "name": "pause",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "sessionAddress",
+        "type": "address"
+      }
+    ],
+    "name": "registerSessionKey",
+    "outputs": [],
+    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -1162,25 +1149,6 @@ export const MafiaABI = [
       }
     ],
     "name": "AllRolesConfirmed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "dayNumber",
-        "type": "uint256"
-      }
-    ],
-    "name": "DayStarted",
     "type": "event"
   },
   {
@@ -1439,43 +1407,6 @@ export const MafiaABI = [
     "type": "error"
   },
   {
-    "inputs": [],
-    "name": "TooEarly",
-    "type": "error"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "winCondition",
-        "type": "string"
-      }
-    ],
-    "name": "GameEnded",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      }
-    ],
-    "name": "NightStarted",
-    "type": "event"
-  },
-  {
     "anonymous": false,
     "inputs": [
       {
@@ -1498,44 +1429,6 @@ export const MafiaABI = [
       }
     ],
     "name": "VoteCast",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "eliminated",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "voteCount",
-        "type": "uint256"
-      }
-    ],
-    "name": "VotingFinalized",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      }
-    ],
-    "name": "VotingStarted",
     "type": "event"
   },
   {
@@ -1658,31 +1551,6 @@ export const MafiaABI = [
     "type": "event"
   },
   {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "roomId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "killed",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "healed",
-        "type": "address"
-      }
-    ],
-    "name": "NightFinalized",
-    "type": "event"
-  },
-  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -1706,6 +1574,35 @@ export const MafiaABI = [
         "internalType": "uint256",
         "name": "roomId",
         "type": "uint256"
+      }
+    ],
+    "name": "getMafiaConsensus",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "committed",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "revealed",
+        "type": "uint8"
+      },
+      {
+        "internalType": "address",
+        "name": "consensusTarget",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
       },
       {
         "internalType": "string",
@@ -1714,6 +1611,29 @@ export const MafiaABI = [
       }
     ],
     "name": "mafiaMessage",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "victim",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "resolveNightAsGameMaster",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1934,9 +1854,92 @@ export const MafiaABI = [
         "internalType": "uint128",
         "name": "initialPrize",
         "type": "uint128"
+      },
+      {
+        "internalType": "uint128",
+        "name": "sessionFee",
+        "type": "uint128"
       }
     ],
     "name": "createTournament",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "internalType": "uint128",
+        "name": "buyIn",
+        "type": "uint128"
+      },
+      {
+        "internalType": "uint8",
+        "name": "maxPlayers",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "playersPerTable",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "tournamentPasswordHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "paymentToken",
+        "type": "address"
+      },
+      {
+        "internalType": "uint128",
+        "name": "initialPrize",
+        "type": "uint128"
+      },
+      {
+        "internalType": "uint128",
+        "name": "sessionFee",
+        "type": "uint128"
+      },
+      {
+        "internalType": "string",
+        "name": "roomName",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "nickname",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "publicKey",
+        "type": "bytes"
+      },
+      {
+        "internalType": "address",
+        "name": "sessionAddress",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "isPrivate",
+        "type": "bool"
+      },
+      {
+        "internalType": "string",
+        "name": "joinPassword",
+        "type": "string"
+      }
+    ],
+    "name": "createTournamentAndRoom",
     "outputs": [],
     "stateMutability": "payable",
     "type": "function"
@@ -1960,100 +1963,96 @@ export const MafiaABI = [
         "internalType": "uint256",
         "name": "tournamentId",
         "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "password",
-        "type": "string"
-      }
-    ],
-    "name": "joinTournament",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "tournamentId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address[]",
-        "name": "players",
-        "type": "address[]"
-      }
-    ],
-    "name": "removeFromTournamentWhitelist",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "tournamentId",
-        "type": "uint256"
       }
     ],
     "name": "getTournament",
     "outputs": [
       {
-        "internalType": "address",
-        "name": "organizer",
-        "type": "address"
-      },
-      {
-        "internalType": "string",
-        "name": "name",
-        "type": "string"
-      },
-      {
-        "internalType": "bool",
-        "name": "isActive",
-        "type": "bool"
-      },
-      {
-        "internalType": "uint128",
-        "name": "buyIn",
-        "type": "uint128"
-      },
-      {
-        "internalType": "uint8",
-        "name": "maxPlayers",
-        "type": "uint8"
-      },
-      {
-        "internalType": "uint8",
-        "name": "playersPerTable",
-        "type": "uint8"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "passwordHash",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "paymentToken",
-        "type": "address"
-      },
-      {
-        "internalType": "uint128",
-        "name": "initialPrize",
-        "type": "uint128"
-      },
-      {
-        "internalType": "uint128",
-        "name": "prizePool",
-        "type": "uint128"
-      },
-      {
-        "internalType": "uint256",
-        "name": "participantCount",
-        "type": "uint256"
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "id",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "organizer",
+            "type": "address"
+          },
+          {
+            "internalType": "string",
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "internalType": "uint128",
+            "name": "buyIn",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "prizePool",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "sessionFee",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "platformFeePool",
+            "type": "uint128"
+          },
+          {
+            "internalType": "address",
+            "name": "paymentToken",
+            "type": "address"
+          },
+          {
+            "internalType": "uint8",
+            "name": "maxPlayers",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "playersPerTable",
+            "type": "uint8"
+          },
+          {
+            "internalType": "uint8",
+            "name": "currentRound",
+            "type": "uint8"
+          },
+          {
+            "internalType": "enum MafiaTypes.TournamentPhase",
+            "name": "phase",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "passwordHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bool",
+            "name": "prizesClaimed",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint32",
+            "name": "registrationDeadline",
+            "type": "uint32"
+          },
+          {
+            "internalType": "address[]",
+            "name": "participants",
+            "type": "address[]"
+          }
+        ],
+        "internalType": "struct MafiaTypes.Tournament",
+        "name": "",
+        "type": "tuple"
       }
     ],
     "stateMutability": "view",
@@ -2091,6 +2090,85 @@ export const MafiaABI = [
         "type": "uint256"
       },
       {
+        "internalType": "string",
+        "name": "password",
+        "type": "string"
+      }
+    ],
+    "name": "joinTournament",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "tournamentPassword",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "nickname",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "publicKey",
+        "type": "bytes"
+      },
+      {
+        "internalType": "address",
+        "name": "sessionAddress",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "gmSignature",
+        "type": "bytes"
+      }
+    ],
+    "name": "joinTournamentAndRoom",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address[]",
+        "name": "players",
+        "type": "address[]"
+      }
+    ],
+    "name": "removeFromTournamentWhitelist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tournamentId",
+        "type": "uint256"
+      },
+      {
         "internalType": "bool",
         "name": "enabled",
         "type": "bool"
@@ -2101,4 +2179,4 @@ export const MafiaABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   }
-];
+] as const;
