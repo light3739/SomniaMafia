@@ -24,7 +24,7 @@ import { RoleCompositionAnnouncement } from './game/RoleCompositionAnnouncement'
 import { MafiaChat } from './game/MafiaChat';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../contexts/GameContext';
-import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X, Key, Clock, Fuel, Wallet, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { Skull, Shield, Search, Users, EyeOff, Mic, MicOff, Loader2, MessageCircle, Send, X, Key, Clock, Fuel, Wallet, ChevronDown, ChevronUp, AlertTriangle, Camera, Upload, Check, Link, Unlink, LogOut, Edit2, RefreshCw, ChevronRight } from 'lucide-react';
 import { MicButton } from './game/MicButton';
 import { useSoundEffects } from './ui/SoundEffects';
 import { GameHintsOverlay } from './game/GameHints';
@@ -105,7 +105,182 @@ const RoleCompositionAnnouncementWrapper = () => {
     );
 };
 
-// === TEST WRAPPERS FOR NIGHT PHASE WITH SPECIFIC ROLES ===
+const MainMenuButtonsTestWrapper: React.FC = () => {
+    const [isTournament, setIsTournament] = useState(false);
+
+    return (
+        <div className="w-full max-w-4xl space-y-12 p-4">
+            {/* --- MAIN PAGE BUTTONS --- */}
+            <section className="space-y-6 bg-black/40 p-6 rounded-2xl border border-white/5">
+                <h3 className="text-[#C19A6B] text-xs font-bold uppercase tracking-[0.2em] border-b border-white/10 pb-2">MainPage Screens</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[10px] text-white/40 uppercase">1. Login / Connect</span>
+                        <button
+                            className="px-14 py-3.5 rounded-md font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-[1.03] transition-all text-base md:text-lg tracking-[0.1em] relative overflow-hidden ring-1 ring-white/10 w-full"
+                            style={{ background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)' }}
+                        >
+                            <span className="relative z-10">LOGIN / CONNECT</span>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
+                        </button>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[10px] text-white/40 uppercase">2. Switch Network</span>
+                        <Button variant="noir-danger" className="px-12 py-3 text-sm tracking-[0.2em] font-['Cinzel'] w-full">
+                            SWITCH NETWORK
+                        </Button>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[10px] text-white/40 uppercase">3. Enter City</span>
+                        <button
+                            className="px-14 py-3.5 rounded-md font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-[1.03] transition-all text-base md:text-lg tracking-[0.1em] relative overflow-hidden ring-1 ring-white/10 w-full"
+                            style={{ background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)' }}
+                        >
+                            <span className="relative z-10">ENTER CITY</span>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            {/* --- SETUP PROFILE BUTTONS --- */}
+            <section className="space-y-6 bg-black/40 p-6 rounded-2xl border border-white/5">
+                <h3 className="text-[#C19A6B] text-xs font-bold uppercase tracking-[0.2em] border-b border-white/10 pb-2">SetupProfile Screens</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Left: Utility Buttons */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-4">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-[10px] text-white/40 uppercase">Logout</span>
+                                <div className="w-10 h-10 rounded-full bg-black/50 border border-white/10 flex items-center justify-center transition-all hover:bg-[#8B2E2E]/40 hover:border-[#C94040]/50 shadow-sm cursor-pointer">
+                                    <LogOut className="w-5 h-5" />
+                                </div>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <span className="text-[10px] text-white/40 uppercase">Back</span>
+                                <div className="w-10 h-10 rounded-full bg-black/50 border border-white/10 flex items-center justify-center transition-all hover:bg-white/10 cursor-pointer">
+                                    <ChevronDown className="w-5 h-5 rotate-90" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Nickname and Avatar (Simulated) */}
+                        <div className="flex items-center gap-4 p-4 rounded-md bg-white/5 border border-white/10">
+                            <div className="w-12 h-12 rounded-full border-2 border-[#916A47] flex items-center justify-center bg-[#19130D] cursor-pointer">
+                                <Camera className="w-6 h-6 text-white/20" />
+                            </div>
+                            <div className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-md border border-white/5 hover:border-white/20 cursor-pointer group">
+                                <span className="text-white font-medium group-hover:text-[#ffb01d] transition-colors">PlayerName</span>
+                                <Edit2 className="w-4 h-4 text-white/30" />
+                            </div>
+                        </div>
+
+                        {/* List Buttons */}
+                        <div className="space-y-2">
+                            <button className="w-full bg-[rgba(40,22,8,0.70)] p-4 rounded-md border border-white/10 flex items-center justify-between hover:bg-[rgba(60,32,12,0.80)] transition-all">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-[#19130D] border border-white/10 flex items-center justify-center">
+                                        <Wallet className="w-5 h-5 text-[#ffb01d]" />
+                                    </div>
+                                    <span className="text-white font-medium">In-Game Wallet</span>
+                                </div>
+                                <ChevronRight className="w-5 h-5 text-white/30" />
+                            </button>
+                            <button className="w-full bg-[rgba(40,22,8,0.70)] p-4 rounded-md border border-white/10 flex items-center justify-between hover:bg-[rgba(60,32,12,0.80)] transition-all">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-[#19130D] border border-white/10 flex items-center justify-center">
+                                        <Users className="w-5 h-5 text-[#916A47]" />
+                                    </div>
+                                    <span className="text-white font-medium">Connected Accounts</span>
+                                </div>
+                                <ChevronRight className="w-5 h-5 text-white/30" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Right: Main Actions */}
+                    <div className="flex flex-col gap-3 justify-center">
+                        <span className="text-[10px] text-white/40 uppercase text-center mb-1 font-bold tracking-widest">Bottom Actions</span>
+                        <Button variant="primary-lobby" className="w-full h-[60px] text-xl">Create Game</Button>
+                        <Button variant="outline-gold-lobby" className="w-full h-[60px] text-xl">Connect to Lobby</Button>
+                    </div>
+                </div>
+            </section>
+
+            {/* --- CREATE LOBBY BUTTONS --- */}
+            <section className="space-y-6 bg-black/40 p-6 rounded-2xl border border-white/5">
+                <h3 className="text-[#C19A6B] text-xs font-bold uppercase tracking-[0.2em] border-b border-white/10 pb-2">CreateLobby Elements</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                    {/* Toggle Switch */}
+                    <div className="flex flex-col gap-2 items-center">
+                        <span className="text-[10px] text-white/40 uppercase">Tournament Toggle</span>
+                        <button
+                            onClick={() => setIsTournament(!isTournament)}
+                            className={`relative w-[52px] h-[28px] rounded-full transition-all border flex items-center px-[3px] cursor-pointer ${isTournament ? 'bg-[#916A47]/20 border-[#916A47]/40 shadow-[0_0_10px_rgba(145,106,71,0.2)]' : 'bg-black/50 border-white/10'}`}
+                        >
+                            <motion.div animate={{ x: isTournament ? 24 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }} className={`w-[20px] h-[20px] rounded-full shadow-md ${isTournament ? 'bg-gradient-to-b from-[#F0C868] to-[#D4A54A]' : 'bg-[#6b584a]'}`} />
+                        </button>
+                    </div>
+
+                    {/* Tab Switcher */}
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[10px] text-white/40 uppercase px-2 text-center">Tab Switcher</span>
+                        <div className="w-full flex bg-[#19130D] rounded-xl p-1 border border-white/5 h-12 items-stretch">
+                            <button className="flex-1 text-sm font-semibold rounded-lg text-[#281608] bg-gradient-to-r from-[#D4A54A] to-[#B08D57] shadow-md relative z-10 transition-all">Buy-in</button>
+                            <button className="flex-1 text-sm font-semibold rounded-lg text-white/50 hover:text-white/80 transition-all">Free Roll</button>
+                        </div>
+                    </div>
+
+                    {/* Final Action (Dynamic) */}
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[10px] text-white/40 uppercase text-center">Final Button</span>
+                        <Button variant="primary-lobby" className="w-full h-[54px] text-sm tracking-[0.2em] font-['Cinzel']">
+                            CREATE & ENTER
+                        </Button>
+                    </div>
+                </div>
+            </section>
+
+            {/* --- JOIN LOBBY BUTTONS --- */}
+            <section className="space-y-6 bg-black/40 p-6 rounded-2xl border border-white/5">
+                <h3 className="text-[#C19A6B] text-xs font-bold uppercase tracking-[0.2em] border-b border-white/10 pb-2">JoinLobby Elements</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[10px] text-white/40 uppercase">Refresh List</span>
+                        <div className="flex justify-center">
+                            <button className="text-[#D4A54A] hover:text-[#F0C868] p-2 bg-white/5 rounded-full border border-[#D4A54A]/20 transition-all active:scale-95 cursor-pointer">
+                                <RefreshCw className="w-6 h-6" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[10px] text-white/40 uppercase">Lobby Item (Button)</span>
+                        <button className="w-full p-4 bg-[#19130D]/80 border border-white/5 rounded-md flex items-center justify-between hover:border-white/20 transition-all shadow-lg text-left cursor-pointer group">
+                            <div className="flex flex-col items-start gap-1">
+                                <span className="text-white font-bold group-hover:text-amber-400 transition-colors">Noir Syndicate #123</span>
+                                <span className="text-white/40 text-[9px] uppercase font-mono tracking-tighter">Host: 0xABCD...1234</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="text-right">
+                                    <span className="text-white/80 font-bold block leading-none text-lg">8<span className="text-white/30 text-xs">/10</span></span>
+                                    <span className="text-white/30 text-[8px] uppercase tracking-widest block">Players</span>
+                                </div>
+                                <div className="w-8 h-8 rounded-full bg-white/5 text-white/50 flex items-center justify-center group-hover:bg-white/20 group-hover:text-white transition-all">
+                                    <ChevronRight className="w-5 h-5" />
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    );
+};
+
+// === WRAPPERS FROM PREVIOUS STEPS ===
 
 // Generate mock players for testing
 const generateMockPlayers = (myRole: Role, myAddress: `0x${string}`): Player[] => {
@@ -150,7 +325,8 @@ const NightPhaseTestWrapper: React.FC<{ testRole: Role }> = ({ testRole }) => {
 
     useEffect(() => {
         // Set up test game state with Night phase and proper role
-        setGameState({phase: GamePhase.NIGHT,
+        setGameState({
+            phase: GamePhase.NIGHT,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(testRole, TEST_ADDRESS),
@@ -207,7 +383,8 @@ const DayPhaseTestWrapper: React.FC = () => {
     useEffect(() => {
         setIsTestMode(true);
         setCurrentRoomId(BigInt(12345));
-        setGameState({phase: GamePhase.DAY,
+        setGameState({
+            phase: GamePhase.DAY,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: players,
@@ -284,7 +461,8 @@ const VotingPhaseTestWrapper: React.FC = () => {
     const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
-        setGameState({phase: GamePhase.VOTING,
+        setGameState({
+            phase: GamePhase.VOTING,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS),
@@ -324,7 +502,8 @@ const VotingVisualizationTestWrapper: React.FC = () => {
         // Set a mock room ID for the test
         setCurrentRoomId(BigInt(12345));
 
-        setGameState({phase: GamePhase.VOTING,
+        setGameState({
+            phase: GamePhase.VOTING,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: players,
@@ -896,7 +1075,8 @@ export // Wrapper for testing phase timeout transition
             // Now + 10 seconds
             const deadline = Math.floor(Date.now() / 1000) + 10;
 
-            setGameState({phase: GamePhase.NIGHT,
+            setGameState({
+                phase: GamePhase.NIGHT,
                 dayCount: 1,
                 myPlayerId: TEST_ADDRESS,
                 players: generateMockPlayers(Role.MAFIA, TEST_ADDRESS),
@@ -909,9 +1089,9 @@ export // Wrapper for testing phase timeout transition
                 phaseDeadline: deadline,
                 winner: null,
                 mafiaMessages: [],
-            maxPlayers: 16,
-            mafiaCommittedCount: 0,
-        });
+                maxPlayers: 16,
+                mafiaCommittedCount: 0,
+            });
             setTimeout(() => setIsReady(true), 50);
         }, [setGameState]);
 
@@ -930,7 +1110,8 @@ const InvestigationResultTestWrapper: React.FC<{ isMafia: boolean }> = ({ isMafi
     useEffect(() => {
         console.log('[InvestigationTest] Initializing test mode...');
         setIsTestMode(true);
-        setGameState({phase: GamePhase.NIGHT,
+        setGameState({
+            phase: GamePhase.NIGHT,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.DETECTIVE, TEST_ADDRESS),
@@ -969,7 +1150,8 @@ const GameOverTestWrapper: React.FC<{ winner: 'MAFIA' | 'TOWN' }> = ({ winner })
     const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
-        setGameState({phase: GamePhase.ENDED,
+        setGameState({
+            phase: GamePhase.ENDED,
             dayCount: 3,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(winner === 'MAFIA' ? Role.MAFIA : Role.CIVILIAN, TEST_ADDRESS).map(p => {
@@ -1012,7 +1194,8 @@ const PostVotingTransitionTestWrapper: React.FC = () => {
 
     useEffect(() => {
         // Set up mock game state with some logs to display
-        setGameState({phase: GamePhase.VOTING,
+        setGameState({
+            phase: GamePhase.VOTING,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS),
@@ -1061,7 +1244,8 @@ const ShufflePhaseAnimatedTest: React.FC = () => {
     const players = generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS);
 
     useEffect(() => {
-        setGameState({phase: GamePhase.SHUFFLING,
+        setGameState({
+            phase: GamePhase.SHUFFLING,
             dayCount: 0,
             myPlayerId: TEST_ADDRESS,
             players: players.map((p, idx) => ({
@@ -1136,7 +1320,8 @@ const RoleRevealAnimatedTest: React.FC = () => {
     const totalKeys = players.length;
 
     useEffect(() => {
-        setGameState({phase: GamePhase.REVEAL,
+        setGameState({
+            phase: GamePhase.REVEAL,
             dayCount: 0,
             myPlayerId: TEST_ADDRESS,
             players: players.map((p, idx) => ({
@@ -1405,7 +1590,8 @@ const ShufflePhaseTestWrapper: React.FC = () => {
     const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
-        setGameState({phase: GamePhase.SHUFFLING,
+        setGameState({
+            phase: GamePhase.SHUFFLING,
             dayCount: 0,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.CIVILIAN, TEST_ADDRESS).map((p, idx) => ({
@@ -1440,7 +1626,8 @@ const GameFeedTestWrapper: React.FC = () => {
     const { setGameState, addLog, gameState } = useGameContext();
 
     useEffect(() => {
-        setGameState({phase: GamePhase.DAY,
+        setGameState({
+            phase: GamePhase.DAY,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMock16Players(TEST_ADDRESS),
@@ -1548,7 +1735,8 @@ const RoleRevealTestWrapper: React.FC = () => {
     const [isReady, setIsReady] = useState(false);
 
     useEffect(() => {
-        setGameState({phase: GamePhase.REVEAL,
+        setGameState({
+            phase: GamePhase.REVEAL,
             dayCount: 0,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.MAFIA, TEST_ADDRESS).map((p, idx) => ({
@@ -1584,7 +1772,8 @@ const PlayerSpotTestWrapper: React.FC = () => {
     const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
 
     useEffect(() => {
-        setGameState({phase: GamePhase.NIGHT,
+        setGameState({
+            phase: GamePhase.NIGHT,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMockPlayers(Role.DETECTIVE, TEST_ADDRESS),
@@ -2109,7 +2298,8 @@ const GameFeedSimulationTest: React.FC = () => {
 
     // Initial setup
     useEffect(() => {
-        setGameState({phase: GamePhase.DAY,
+        setGameState({
+            phase: GamePhase.DAY,
             dayCount: 1,
             myPlayerId: TEST_ADDRESS,
             players: generateMock16Players(TEST_ADDRESS),
@@ -2529,53 +2719,53 @@ const ButtonConcept: React.FC<{ variant: BtnConceptVariant; type: string; label:
     // ── Variant A: текущий (для сравнения) ──────────────────────────────────
     const variantA: Record<string, string> = {
         'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-medium text-sm transition-all duration-300 cursor-pointer bg-[#0A0A0A] border border-[#916A47]/50 text-[#916A47] hover:bg-[#916A47] hover:text-[#050505] shadow-sm',
-        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase transition-all duration-300 cursor-pointer bg-[#0A0A0A] border border-[#8B0000]/50 text-[#8B0000] hover:bg-[#3D0000] hover:text-[#FF6B6B] shadow-sm',
-        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase transition-all duration-300 cursor-pointer bg-[#0A0A0A] border border-[#916A47]/30 text-[#916A47] hover:bg-[#111111] hover:border-[#916A47]/80 shadow-sm',
+        'danger-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase transition-all duration-300 cursor-pointer bg-[#0A0A0A] border border-[#8B0000]/50 text-[#8B0000] hover:bg-[#3D0000] hover:text-[#FF6B6B] shadow-sm',
+        'vote-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase transition-all duration-300 cursor-pointer bg-[#0A0A0A] border border-[#916A47]/30 text-[#916A47] hover:bg-[#111111] hover:border-[#916A47]/80 shadow-sm',
     };
 
     // ── Variant B: Glow / без заливки ───────────────────────────────────────
     const variantB: Record<string, string> = {
         'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-medium text-sm cursor-pointer transition-all duration-300 bg-transparent border border-[#C5A059]/60 text-[#C5A059] hover:border-[#C5A059] hover:text-white hover:shadow-[0_0_20px_rgba(197,160,89,0.35),inset_0_0_15px_rgba(197,160,89,0.06)]',
-        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 bg-transparent border border-[#8B0000]/50 text-[#cc3333] hover:border-[#cc3333]/80 hover:text-[#ff6666] hover:shadow-[0_0_18px_rgba(200,0,0,0.30),inset_0_0_12px_rgba(200,0,0,0.05)]',
-        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 bg-transparent border border-[#C5A059]/40 text-[#C5A059] hover:border-[#C5A059] hover:text-white hover:shadow-[0_0_24px_rgba(197,160,89,0.4),inset_0_0_18px_rgba(197,160,89,0.08)]',
+        'danger-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 bg-transparent border border-[#8B0000]/50 text-[#cc3333] hover:border-[#cc3333]/80 hover:text-[#ff6666] hover:shadow-[0_0_18px_rgba(200,0,0,0.30),inset_0_0_12px_rgba(200,0,0,0.05)]',
+        'vote-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 bg-transparent border border-[#C5A059]/40 text-[#C5A059] hover:border-[#C5A059] hover:text-white hover:shadow-[0_0_24px_rgba(197,160,89,0.4),inset_0_0_18px_rgba(197,160,89,0.08)]',
     };
 
     // ── Variant C: Solid Premium ─────────────────────────────────────────────
     const variantC: Record<string, string> = {
         'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-lg font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-200 bg-gradient-to-b from-[#A07850] to-[#7A5630] text-[#0A0A0A] border border-[#C5A059]/40 hover:from-[#B5895C] hover:to-[#8A6640] hover:shadow-[0_4px_20px_rgba(145,106,71,0.50)] active:scale-[0.98]',
-        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-lg font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-gradient-to-b from-[#5a0000] to-[#3D0000] text-[#FF8080] border border-[#8B0000]/60 hover:from-[#6d0000] hover:to-[#4D0000] hover:shadow-[0_4px_20px_rgba(139,0,0,0.45)] active:scale-[0.98]',
-        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-lg font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-gradient-to-b from-[#1a1208] to-[#0D0A04] text-[#C5A059] border border-[#C5A059]/50 hover:from-[#2a1e0e] hover:to-[#1a1208] hover:text-[#E0BE80] hover:shadow-[0_4px_24px_rgba(197,160,89,0.35)] active:scale-[0.98]',
+        'danger-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-lg font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-gradient-to-b from-[#5a0000] to-[#3D0000] text-[#FF8080] border border-[#8B0000]/60 hover:from-[#6d0000] hover:to-[#4D0000] hover:shadow-[0_4px_20px_rgba(139,0,0,0.45)] active:scale-[0.98]',
+        'vote-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-lg font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-gradient-to-b from-[#1a1208] to-[#0D0A04] text-[#C5A059] border border-[#C5A059]/50 hover:from-[#2a1e0e] hover:to-[#1a1208] hover:text-[#E0BE80] hover:shadow-[0_4px_24px_rgba(197,160,89,0.35)] active:scale-[0.98]',
     };
 
     // ── Variant D: Minimal Ghost ─────────────────────────────────────────────
     const variantD: Record<string, string> = {
         'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full font-[Montserrat] font-medium text-sm cursor-pointer transition-all duration-200 text-[#C5A059]/80 hover:text-[#C5A059] border-b border-[#916A47]/30 hover:border-[#916A47] rounded-none bg-transparent hover:bg-[#916A47]/05',
-        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 text-[#8B0000]/80 hover:text-[#cc4444] border-b border-[#8B0000]/30 hover:border-[#cc4444] rounded-none bg-transparent',
-        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 text-[#C5A059] border border-[#C5A059]/40 hover:border-[#C5A059] rounded-sm bg-[#C5A059]/05 hover:bg-[#C5A059]/10',
+        'danger-action': 'relative flex items-center justify-center px-6 py-3.5 w-full font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 text-[#8B0000]/80 hover:text-[#cc4444] border-b border-[#8B0000]/30 hover:border-[#cc4444] rounded-none bg-transparent',
+        'vote-action': 'relative flex items-center justify-center px-6 py-3.5 w-full font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 text-[#C5A059] border border-[#C5A059]/40 hover:border-[#C5A059] rounded-sm bg-[#C5A059]/05 hover:bg-[#C5A059]/10',
     };
 
     // ── Variant E: Dark Glass (Frosted backdrop) ────────────────────────────
     // Стекло поверх тёмного фона — backdrop-blur создаёт глубину
     const variantE: Record<string, string> = {
         'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-medium text-sm cursor-pointer transition-all duration-300 backdrop-blur-md bg-[#916A47]/10 border border-[#C5A059]/30 text-[#C5A059] hover:bg-[#916A47]/20 hover:border-[#C5A059]/60 hover:text-white hover:shadow-[0_0_30px_rgba(197,160,89,0.20)] active:scale-[0.98]',
-        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 backdrop-blur-md bg-[#8B0000]/12 border border-[#8B0000]/35 text-[#cc4444] hover:bg-[#8B0000]/25 hover:border-[#cc3333]/60 hover:text-[#ff7777] hover:shadow-[0_0_25px_rgba(139,0,0,0.20)] active:scale-[0.98]',
-        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 backdrop-blur-md bg-[#C5A059]/08 border border-[#C5A059]/40 text-[#C5A059] hover:bg-[#C5A059]/18 hover:border-[#C5A059]/70 hover:text-white hover:shadow-[0_0_35px_rgba(197,160,89,0.25)] active:scale-[0.98]',
+        'danger-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 backdrop-blur-md bg-[#8B0000]/12 border border-[#8B0000]/35 text-[#cc4444] hover:bg-[#8B0000]/25 hover:border-[#cc3333]/60 hover:text-[#ff7777] hover:shadow-[0_0_25px_rgba(139,0,0,0.20)] active:scale-[0.98]',
+        'vote-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-300 backdrop-blur-md bg-[#C5A059]/08 border border-[#C5A059]/40 text-[#C5A059] hover:bg-[#C5A059]/18 hover:border-[#C5A059]/70 hover:text-white hover:shadow-[0_0_35px_rgba(197,160,89,0.25)] active:scale-[0.98]',
     };
 
     // ── Variant F: Noir Pulse (анимированная рамка) ──────────────────────────
     // Рамка «дышит» — живая кнопка которая зовёт нажать
     const variantF: Record<string, string> = {
         'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-sm font-[Montserrat] font-medium text-sm cursor-pointer transition-all duration-200 bg-[#0D0D0D] border border-[#C5A059]/40 text-[#C5A059]/80 hover:border-[#C5A059] hover:text-[#E8C878] hover:bg-[#0D0D0D] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.3),0_0_20px_rgba(197,160,89,0.18),inset_0_0_20px_rgba(197,160,89,0.04)] active:scale-[0.97]',
-        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-sm font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-[#0D0D0D] border border-[#7a0000]/50 text-[#aa2222]/80 hover:border-[#cc2222] hover:text-[#ff5555] hover:bg-[#0D0D0D] hover:shadow-[0_0_0_1px_rgba(180,0,0,0.25),0_0_18px_rgba(180,0,0,0.15),inset_0_0_16px_rgba(180,0,0,0.04)] active:scale-[0.97]',
-        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-sm font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-[#0D0D0D] border border-[#C5A059]/35 text-[#C5A059] hover:border-[#E8C878] hover:text-[#F0D080] hover:bg-[#0D0D0D] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.3),0_0_28px_rgba(197,160,89,0.22),inset_0_0_22px_rgba(197,160,89,0.05)] active:scale-[0.97]',
+        'danger-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-sm font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-[#0D0D0D] border border-[#7a0000]/50 text-[#aa2222]/80 hover:border-[#cc2222] hover:text-[#ff5555] hover:bg-[#0D0D0D] hover:shadow-[0_0_0_1px_rgba(180,0,0,0.25),0_0_18px_rgba(180,0,0,0.15),inset_0_0_16px_rgba(180,0,0,0.04)] active:scale-[0.97]',
+        'vote-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-sm font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-200 bg-[#0D0D0D] border border-[#C5A059]/35 text-[#C5A059] hover:border-[#E8C878] hover:text-[#F0D080] hover:bg-[#0D0D0D] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.3),0_0_28px_rgba(197,160,89,0.22),inset_0_0_22px_rgba(197,160,89,0.05)] active:scale-[0.97]',
     };
 
     // ── Variant G: Hybrid — Gradient fill + glow hover ───────────────────────
     // Лучшее из C и B: градиент всегда (читаемость), glow на hover (атмосфера)
     const variantG: Record<string, string> = {
         'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1C1208] to-[#0D0A04] border border-[#C5A059]/35 text-[#C5A059] hover:from-[#261A0B] hover:to-[#160E06] hover:border-[#C5A059]/70 hover:text-[#E8C878] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.15),0_4px_24px_rgba(197,160,89,0.30),inset_0_1px_0_rgba(197,160,89,0.08)] active:scale-[0.98]',
-        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1A0000] to-[#0D0000] border border-[#8B0000]/40 text-[#cc3333] hover:from-[#240000] hover:to-[#140000] hover:border-[#cc2222]/65 hover:text-[#ff5555] hover:shadow-[0_0_0_1px_rgba(180,0,0,0.15),0_4px_20px_rgba(180,0,0,0.28),inset_0_1px_0_rgba(180,0,0,0.08)] active:scale-[0.98]',
-        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1C1208] to-[#0D0A04] border border-[#C5A059]/40 text-[#C5A059] hover:from-[#261A0B] hover:to-[#160E06] hover:border-[#E8C878]/60 hover:text-[#F0D888] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.12),0_4px_28px_rgba(197,160,89,0.35),inset_0_1px_0_rgba(197,160,89,0.10)] active:scale-[0.98]',
+        'danger-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1A0000] to-[#0D0000] border border-[#8B0000]/40 text-[#cc3333] hover:from-[#240000] hover:to-[#140000] hover:border-[#cc2222]/65 hover:text-[#ff5555] hover:shadow-[0_0_0_1px_rgba(180,0,0,0.15),0_4px_20px_rgba(180,0,0,0.28),inset_0_1px_0_rgba(180,0,0,0.08)] active:scale-[0.98]',
+        'vote-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1C1208] to-[#0D0A04] border border-[#C5A059]/40 text-[#C5A059] hover:from-[#261A0B] hover:to-[#160E06] hover:border-[#E8C878]/60 hover:text-[#F0D888] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.12),0_4px_28px_rgba(197,160,89,0.35),inset_0_1px_0_rgba(197,160,89,0.10)] active:scale-[0.98]',
     };
 
     const classMap: Record<BtnConceptVariant, Record<string, string>> = {
@@ -2627,9 +2817,9 @@ const ButtonShowcaseTest: React.FC = () => {
                     <p className="text-[#C5A059]/80 text-xs leading-relaxed">
                         <span className="font-semibold text-[#C5A059]">🎬 Для вашего нуара рекомендую:</span>{' '}
                         <span className="text-white/50">Варианты <strong className="text-white/70">E</strong>, <strong className="text-white/70">F</strong>, и <strong className="text-white/70">G</strong> разработаны специально под тёмный раин-нуар фон.
-                        G (Hybrid) даёт лучший баланс — кнопка всегда видна даже без hover, но не конкурирует с фоном.
-                        E (Dark Glass) самый атмосферный — blurred стекло исчезает в фоне.
-                        F (Noir Pulse) самый живой — double-ring glow выглядит как неоновый знак.</span>
+                            G (Hybrid) даёт лучший баланс — кнопка всегда видна даже без hover, но не конкурирует с фоном.
+                            E (Dark Glass) самый атмосферный — blurred стекло исчезает в фоне.
+                            F (Noir Pulse) самый живой — double-ring glow выглядит как неоновый знак.</span>
                     </p>
                 </div>
 
@@ -2638,13 +2828,12 @@ const ButtonShowcaseTest: React.FC = () => {
                     {concepts.map(concept => (
                         <div
                             key={concept.id}
-                            className={`flex flex-col gap-3 rounded-md p-3 ${
-                                concept.tag?.includes('Рекомендую')
-                                    ? 'ring-1 ring-[#C5A059]/30 bg-[#C5A059]/04'
-                                    : concept.tag?.includes('Noir')
+                            className={`flex flex-col gap-3 rounded-md p-3 ${concept.tag?.includes('Рекомендую')
+                                ? 'ring-1 ring-[#C5A059]/30 bg-[#C5A059]/04'
+                                : concept.tag?.includes('Noir')
                                     ? 'ring-1 ring-white/08'
                                     : ''
-                            }`}
+                                }`}
                         >
                             {/* Header */}
                             <div className="border-b border-white/10 pb-2">
@@ -2709,31 +2898,31 @@ const GColorButton: React.FC<{ palette: GColorPalette; type: string; label: stri
     // G1 — Warm Gold (текущий G)
     const g1: Record<string, string> = {
         'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1C1208] to-[#0D0A04] border border-[#C5A059]/35 text-[#C5A059] hover:from-[#261A0B] hover:to-[#160E06] hover:border-[#C5A059]/70 hover:text-[#E8C878] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.15),0_4px_24px_rgba(197,160,89,0.30),inset_0_1px_0_rgba(197,160,89,0.08)] active:scale-[0.98]',
-        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1A0000] to-[#0D0000] border border-[#8B0000]/40 text-[#cc3333] hover:from-[#240000] hover:to-[#140000] hover:border-[#cc2222]/65 hover:text-[#ff5555] hover:shadow-[0_0_0_1px_rgba(180,0,0,0.15),0_4px_20px_rgba(180,0,0,0.28)] active:scale-[0.98]',
-        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1C1208] to-[#0D0A04] border border-[#C5A059]/40 text-[#C5A059] hover:from-[#261A0B] hover:to-[#160E06] hover:border-[#E8C878]/60 hover:text-[#F0D888] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.12),0_4px_28px_rgba(197,160,89,0.35)] active:scale-[0.98]',
+        'danger-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1A0000] to-[#0D0000] border border-[#8B0000]/40 text-[#cc3333] hover:from-[#240000] hover:to-[#140000] hover:border-[#cc2222]/65 hover:text-[#ff5555] hover:shadow-[0_0_0_1px_rgba(180,0,0,0.15),0_4px_20px_rgba(180,0,0,0.28)] active:scale-[0.98]',
+        'vote-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#1C1208] to-[#0D0A04] border border-[#C5A059]/40 text-[#C5A059] hover:from-[#261A0B] hover:to-[#160E06] hover:border-[#E8C878]/60 hover:text-[#F0D888] hover:shadow-[0_0_0_1px_rgba(197,160,89,0.12),0_4px_28px_rgba(197,160,89,0.35)] active:scale-[0.98]',
     };
 
     // G2 — Dusty Gold (пыльное, состаренное)
     // Тот же gradient, но accent — тусклый бронзо-оливковый
     const g2: Record<string, string> = {
         'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#181410] to-[#0C0A08] border border-[#A08850]/30 text-[#A08850] hover:from-[#221C14] hover:to-[#14100A] hover:border-[#B89A60]/60 hover:text-[#C8AA70] hover:shadow-[0_0_0_1px_rgba(160,136,80,0.15),0_4px_24px_rgba(160,136,80,0.25)] active:scale-[0.98]',
-        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#160A0A] to-[#0A0404] border border-[#7A3030]/35 text-[#9A4040] hover:from-[#200C0C] hover:to-[#0E0606] hover:border-[#AA4444]/55 hover:text-[#CC5555] hover:shadow-[0_0_0_1px_rgba(150,50,50,0.15),0_4px_20px_rgba(150,50,50,0.22)] active:scale-[0.98]',
-        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#181410] to-[#0C0A08] border border-[#A08850]/35 text-[#A08850] hover:from-[#221C14] hover:to-[#14100A] hover:border-[#C8AA70]/55 hover:text-[#D4B878] hover:shadow-[0_0_0_1px_rgba(160,136,80,0.12),0_4px_28px_rgba(160,136,80,0.28)] active:scale-[0.98]',
+        'danger-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#160A0A] to-[#0A0404] border border-[#7A3030]/35 text-[#9A4040] hover:from-[#200C0C] hover:to-[#0E0606] hover:border-[#AA4444]/55 hover:text-[#CC5555] hover:shadow-[0_0_0_1px_rgba(150,50,50,0.15),0_4px_20px_rgba(150,50,50,0.22)] active:scale-[0.98]',
+        'vote-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#181410] to-[#0C0A08] border border-[#A08850]/35 text-[#A08850] hover:from-[#221C14] hover:to-[#14100A] hover:border-[#C8AA70]/55 hover:text-[#D4B878] hover:shadow-[0_0_0_1px_rgba(160,136,80,0.12),0_4px_28px_rgba(160,136,80,0.28)] active:scale-[0.98]',
     };
 
     // G3 — Slate Silver (холодный нуар, как LA Noire / Disco Elysium)
     const g3: Record<string, string> = {
         'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#10121A] to-[#08090F] border border-[#8090B0]/30 text-[#8090B0] hover:from-[#161822] hover:to-[#0C0D14] hover:border-[#A0B0CC]/60 hover:text-[#C0CCDD] hover:shadow-[0_0_0_1px_rgba(128,144,176,0.15),0_4px_24px_rgba(120,140,180,0.28)] active:scale-[0.98]',
-        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#180C12] to-[#0C0608] border border-[#8B3050]/35 text-[#AA4060] hover:from-[#220E18] hover:to-[#10070A] hover:border-[#CC4466]/60 hover:text-[#EE5577] hover:shadow-[0_0_0_1px_rgba(180,50,80,0.15),0_4px_20px_rgba(160,40,60,0.28)] active:scale-[0.98]',
-        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#10121A] to-[#08090F] border border-[#9090B8]/35 text-[#9090B8] hover:from-[#161822] hover:to-[#0C0D14] hover:border-[#B0B0D8]/60 hover:text-[#D0D0EE] hover:shadow-[0_0_0_1px_rgba(144,144,184,0.15),0_4px_28px_rgba(140,140,200,0.30)] active:scale-[0.98]',
+        'danger-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#180C12] to-[#0C0608] border border-[#8B3050]/35 text-[#AA4060] hover:from-[#220E18] hover:to-[#10070A] hover:border-[#CC4466]/60 hover:text-[#EE5577] hover:shadow-[0_0_0_1px_rgba(180,50,80,0.15),0_4px_20px_rgba(160,40,60,0.28)] active:scale-[0.98]',
+        'vote-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#10121A] to-[#08090F] border border-[#9090B8]/35 text-[#9090B8] hover:from-[#161822] hover:to-[#0C0D14] hover:border-[#B0B0D8]/60 hover:text-[#D0D0EE] hover:shadow-[0_0_0_1px_rgba(144,144,184,0.15),0_4px_28px_rgba(140,140,200,0.30)] active:scale-[0.98]',
     };
 
     // G4 — Frost Gold (мой фаворит: холодный фон + тёплый текст)
     // Холодный тёмный подтон в gradient, но text — яркое warm gold
     const g4: Record<string, string> = {
         'primary-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Montserrat] font-semibold text-sm cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#131318] to-[#09090C] border border-[#C5A059]/30 text-[#D4BE80] hover:from-[#1A1A22] hover:to-[#0E0E14] hover:border-[#D4BE80]/65 hover:text-[#EEDC98] hover:shadow-[0_0_0_1px_rgba(212,190,128,0.18),0_4px_24px_rgba(197,160,89,0.32),inset_0_1px_0_rgba(212,190,128,0.06)] active:scale-[0.98]',
-        'danger-action':  'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#130D0D] to-[#090606] border border-[#9B2020]/35 text-[#CC4444] hover:from-[#1A1010] hover:to-[#0E0808] hover:border-[#DD3333]/60 hover:text-[#FF6666] hover:shadow-[0_0_0_1px_rgba(180,40,40,0.18),0_4px_20px_rgba(200,50,50,0.28),inset_0_1px_0_rgba(200,60,60,0.05)] active:scale-[0.98]',
-        'vote-action':    'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#131318] to-[#09090C] border border-[#C5A059]/32 text-[#D4BE80] hover:from-[#1A1A22] hover:to-[#0E0E14] hover:border-[#EED898]/58 hover:text-[#F4E4A8] hover:shadow-[0_0_0_1px_rgba(212,190,128,0.16),0_4px_30px_rgba(197,160,89,0.38),inset_0_1px_0_rgba(212,190,128,0.07)] active:scale-[0.98]',
+        'danger-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-medium text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#130D0D] to-[#090606] border border-[#9B2020]/35 text-[#CC4444] hover:from-[#1A1010] hover:to-[#0E0808] hover:border-[#DD3333]/60 hover:text-[#FF6666] hover:shadow-[0_0_0_1px_rgba(180,40,40,0.18),0_4px_20px_rgba(200,50,50,0.28),inset_0_1px_0_rgba(200,60,60,0.05)] active:scale-[0.98]',
+        'vote-action': 'relative flex items-center justify-center px-6 py-3.5 w-full rounded-md font-[Cinzel] font-semibold text-[13px] tracking-[0.08em] uppercase cursor-pointer transition-all duration-250 bg-gradient-to-b from-[#131318] to-[#09090C] border border-[#C5A059]/32 text-[#D4BE80] hover:from-[#1A1A22] hover:to-[#0E0E14] hover:border-[#EED898]/58 hover:text-[#F4E4A8] hover:shadow-[0_0_0_1px_rgba(212,190,128,0.16),0_4px_30px_rgba(197,160,89,0.38),inset_0_1px_0_rgba(212,190,128,0.07)] active:scale-[0.98]',
     };
 
     const map: Record<GColorPalette, Record<string, string>> = { G1: g1, G2: g2, G3: g3, G4: g4 };
@@ -2762,9 +2951,8 @@ const ButtonColorShowcaseTest: React.FC = () => {
                     {palettes.map(p => (
                         <div
                             key={p.id}
-                            className={`flex flex-col gap-3 rounded-md p-4 ${
-                                p.rec ? 'ring-1 ring-[#C5A059]/40 bg-[#C5A059]/05' : 'bg-black/20'
-                            }`}
+                            className={`flex flex-col gap-3 rounded-md p-4 ${p.rec ? 'ring-1 ring-[#C5A059]/40 bg-[#C5A059]/05' : 'bg-black/20'
+                                }`}
                         >
                             <div className="border-b border-white/10 pb-3">
                                 <div className="flex items-center gap-2 mb-1">
@@ -2821,9 +3009,9 @@ const TimersShowcaseTest: React.FC = () => {
         <div className="w-[500px] flex flex-col gap-6 bg-[#050505] p-8 rounded-xl border border-white/5 relative shadow-2xl">
             {/* Background texture to simulate game view */}
             <div className="absolute inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'url(/assets/noise.png)', backgroundRepeat: 'repeat' }} />
-            
+
             <h2 className="text-xl font-['Cinzel'] text-[#916A47] text-center mb-2 z-10">Neo-Noir Timer States</h2>
-            
+
             <div className="z-10 flex flex-col gap-6">
                 {/* Discussion Timer (Normal) */}
                 <div>
@@ -2938,13 +3126,13 @@ const ShuffleAndRevealUnifiedTest: React.FC = () => {
                 <div className="flex flex-col gap-1">
                     <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Phase Control</span>
                     <div className="flex gap-2">
-                        <Button 
+                        <Button
                             variant={currentPhase === GamePhase.SHUFFLING ? 'noir' : 'secondary'}
                             onClick={() => { setCurrentPhase(GamePhase.SHUFFLING); setPlayersDone(0); }}
                         >
                             SHUFFLING
                         </Button>
-                        <Button 
+                        <Button
                             variant={currentPhase === GamePhase.REVEAL ? 'noir' : 'secondary'}
                             onClick={() => { setCurrentPhase(GamePhase.REVEAL); setPlayersDone(0); }}
                         >
@@ -2952,7 +3140,7 @@ const ShuffleAndRevealUnifiedTest: React.FC = () => {
                         </Button>
                     </div>
                 </div>
-                
+
                 <div className="w-px bg-white/10 mx-2" />
 
                 <div className="flex flex-col gap-1">
@@ -3027,6 +3215,7 @@ const TestPage: React.FC = () => {
         { name: 'Victory - Mafia', group: 'Pages', component: <GameOverTestWrapper winner="MAFIA" /> },
         { name: 'Victory - Town', group: 'Pages', component: <GameOverTestWrapper winner="TOWN" /> },
         { name: 'GameLayout (Raw)', group: 'Pages', component: <GameLayout /> },
+        { name: 'Main Menu Buttons', group: 'Pages', component: <MainMenuButtonsTestWrapper /> },
 
         // Early Game Phases (Animated)
         { name: '✨ Shuffle & Reveal (Unified)', group: 'Early Game', component: <ShuffleAndRevealUnifiedTest /> },

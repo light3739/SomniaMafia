@@ -68,6 +68,7 @@ export const GameOver: React.FC = React.memo(() => {
     const [refundAutomatic, setRefundAutomatic] = useState(false);
     const [depositAmount, setDepositAmount] = useState<string>('0');
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
+    const hasPlayedSound = useRef(false);
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const [isRevealing, setIsRevealing] = useState(false);
     const [revealTimedOut, setRevealTimedOut] = useState(false);
@@ -422,10 +423,14 @@ export const GameOver: React.FC = React.memo(() => {
 
     // Музыка победы
     useEffect(() => {
+        if (hasPlayedSound.current || !winner) return;
+
         if (winner === 'MAFIA') {
             playMafiaWin();
+            hasPlayedSound.current = true;
         } else if (winner === 'TOWN') {
             playTownWin();
+            hasPlayedSound.current = true;
         }
 
         // Остановка при размонтировании (на всякий случай)
@@ -442,16 +447,16 @@ export const GameOver: React.FC = React.memo(() => {
         'MAFIA': {
             title: 'Mafia Wins!',
             description: 'The mafia has taken control of the town...',
-            color: 'text-rose-400',
-            bg: 'from-rose-950/50 to-rose-900/30 border-rose-400/30',
-            trophy: 'text-rose-400'
+            color: 'text-[#8B0000]',
+            bg: 'from-[#8B0000]/25 to-[#0A0705]/80 border-[#8B0000]/30',
+            trophy: 'text-[#8B0000]'
         },
         'TOWN': {
             title: 'Town Wins!',
             description: 'Justice prevails! All evil has been eliminated.',
-            color: 'text-amber-400',
-            bg: 'from-amber-950/50 to-amber-900/30 border-amber-500/30',
-            trophy: 'text-amber-500'
+            color: 'text-[#916A47]',
+            bg: 'from-[#916A47]/20 to-[#0A0705]/80 border-[#916A47]/30',
+            trophy: 'text-[#916A47]'
         },
         'DRAW': {
             title: 'Draw!',
@@ -665,7 +670,7 @@ export const GameOver: React.FC = React.memo(() => {
                                                 </div>
                                             </div>
                                             {isDead && (
-                                                <Skull className="w-4 h-4 text-rose-400/50" />
+                                                <Skull className="w-4 h-4 text-[#8B0000]/50" />
                                             )}
                                         </div>
                                     </motion.div>
@@ -675,15 +680,7 @@ export const GameOver: React.FC = React.memo(() => {
                     </motion.div>
 
 
-                    {refundClaimed && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="text-center text-emerald-400/60 text-xs mb-4"
-                        >
-                            ✓ {refundAutomatic ? 'Deposit auto-refunded by contract' : 'Deposit refunded'}
-                        </motion.div>
-                    )}
+
 
                     {/* Actions */}
                     <motion.div
@@ -710,7 +707,7 @@ export const GameOver: React.FC = React.memo(() => {
                         <div className="flex gap-4">
                             <Button
                                 onClick={handlePlayAgain}
-                                className="flex-1 h-[60px] text-lg"
+                                className="flex-1 h-[60px] text-lg !text-white"
                             >
                                 <RotateCcw className="w-5 h-5 mr-2" />
                                 Play Again
@@ -718,7 +715,7 @@ export const GameOver: React.FC = React.memo(() => {
                             <Button
                                 onClick={handleHome}
                                 variant="outline-gold"
-                                className="flex-1 h-[60px] text-lg"
+                                className="flex-1 h-[60px] text-lg hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
                             >
                                 <Home className="w-5 h-5 mr-2" />
                                 Home

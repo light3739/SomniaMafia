@@ -104,7 +104,7 @@ export const CreateLobby: React.FC = () => {
         >
             <div className="w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6">
                 {/* Main Card */}
-                <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-[42px] p-6 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-6 mt-2">
+                <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-2xl p-6 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-6 mt-2">
 
                     <h2 className="text-white text-xl md:text-2xl font-['Cinzel'] text-center tracking-widest border-b border-white/10 pb-4">
                         Lobby Settings
@@ -155,7 +155,7 @@ export const CreateLobby: React.FC = () => {
                                 >
                                     Max Players
                                 </label>
-                                <span className="text-white text-lg md:text-xl font-bold font-['Cinzel'] drop-shadow-md select-none">
+                                <span className="text-white text-lg md:text-xl font-bold font-['Montserrat'] drop-shadow-md select-none">
                                     {maxPlayers}
                                 </span>
                             </div>
@@ -223,7 +223,7 @@ export const CreateLobby: React.FC = () => {
                                                 }`}
                                         >
                                             <div className="w-full h-1" /> {/* Spacer */}
-                                            <span className={`transition-all duration-200 ${n === maxPlayers
+                                            <span className={`transition-all duration-200 font-montserrat ${n === maxPlayers
                                                 ? 'text-[#D4A54A] font-bold text-[14px] scale-110 drop-shadow-[0_0_8px_rgba(212,165,74,0.4)]'
                                                 : `text-white/40 text-[12px] ${!isTxPending ? 'group-hover/num:text-white/80' : ''}`
                                                 }`}>
@@ -362,10 +362,13 @@ export const CreateLobby: React.FC = () => {
                         }
                         handleCreate();
                     }}
-                    variant="outline-gold"
+                    variant="primary-lobby"
                     isLoading={isTxPending}
                     disabled={(!lobbyName.trim()) || isTxPending}
-                    className="w-full h-[54px] md:h-[60px] text-lg md:text-xl tracking-[0.2em] font-['Cinzel'] mt-2"
+                    className={`w-full h-[54px] md:h-[60px] text-lg md:text-xl tracking-[0.1em] font-['Cinzel'] transition-all duration-300 mt-2 ${isTournament && lobbyName.trim()
+                        ? '!bg-gradient-to-r !from-[#D4A54A] !to-[#F0C868] !text-[#281608] !border-[#D4A54A]/30 !shadow-[0_0_20px_rgba(212,165,74,0.3)]'
+                        : ''
+                        }`}
                 >
                     {!isConnected
                         ? "Connect Wallet"

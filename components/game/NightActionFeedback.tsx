@@ -46,12 +46,12 @@ export const NightActionFeedback: React.FC<NightActionFeedbackProps> = ({ myRole
         switch (myRole) {
             case Role.MAFIA:
                 return {
-                    bg: 'bg-rose-950/20',
-                    border: 'border-rose-500/20',
-                    text: 'text-rose-300',
-                    separator: 'bg-rose-500/20',
-                    iconBg: 'bg-rose-500',
-                    highlight: 'text-rose-400'
+                    bg: 'bg-[#8B0000]/10',
+                    border: 'border-[#8B0000]/30',
+                    text: 'text-[#8B0000]',
+                    separator: 'bg-[#8B0000]/20',
+                    iconBg: 'bg-[#8B0000]',
+                    highlight: 'text-[#8B0000]'
                 };
             case Role.DOCTOR:
                 return {
@@ -99,29 +99,29 @@ export const NightActionFeedback: React.FC<NightActionFeedbackProps> = ({ myRole
             {myRole === Role.MAFIA && (
                 <>
                     {nightState.mafiaConsensusTarget ? (
-                        <div className="p-4 bg-rose-900/40 rounded-xl">
-                            <p className="text-xs uppercase tracking-wider mb-2 text-rose-400">Kill Order Submitted</p>
-                            <p className="text-xl font-bold text-rose-400 text-center">
+                        <div className="p-4 bg-[#8B0000]/20 rounded-xl">
+                            <p className="text-xs uppercase tracking-wider mb-2 text-[#8B0000]">Kill Order Submitted</p>
+                            <p className="text-xl font-bold text-[#8B0000] text-center">
                                 {consensusTargetName} will be eliminated
                             </p>
                         </div>
                     ) : nightState.hasCommitted ? (
-                        <div className="p-3 bg-rose-900/20 rounded-lg">
+                        <div className="p-3 bg-[#8B0000]/10 rounded-lg">
                             <div className="flex items-center gap-2">
-                                <Check className="w-4 h-4 text-rose-400" />
-                                <span className="text-rose-300 text-sm">
+                                <Check className="w-4 h-4 text-[#8B0000]" />
+                                <span className="text-[#8B0000]/80 text-sm">
                                     Kill order sealed
                                 </span>
                             </div>
-                            <p className="text-rose-200/40 text-xs mt-2">
+                            <p className="text-white/20 text-xs mt-2">
                                 The target will be eliminated at dawn unless protected.
                             </p>
                         </div>
                     ) : (
-                        <div className="p-3 bg-rose-900/20 rounded-lg">
+                        <div className="p-3 bg-[#8B0000]/5 rounded-lg">
                             <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-rose-500 animate-pulse" />
-                                <span className="text-rose-300 text-sm">Waiting for action...</span>
+                                <div className="w-3 h-3 rounded-full bg-[#8B0000] animate-pulse" />
+                                <span className="text-[#8B0000]/70 text-sm">Waiting for action...</span>
                             </div>
                         </div>
                     )}
@@ -170,7 +170,7 @@ export const NightActionFeedback: React.FC<NightActionFeedbackProps> = ({ myRole
                                     <p className="text-xs uppercase tracking-wider mb-2 text-sky-400/70">Investigation Result</p>
                                     <p className="text-xl font-bold text-white">
                                         {targetName} is{' '}
-                                        <span className={nightState.investigationResult === Role.MAFIA ? 'text-rose-500' : 'text-white/70'}>
+                                        <span className={nightState.investigationResult === Role.MAFIA ? 'text-[#8B0000]' : 'text-white/70'}>
                                             {nightState.investigationResult === Role.MAFIA ? 'MAFIA' : 'INNOCENT'}
                                         </span>
                                     </p>

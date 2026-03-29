@@ -555,8 +555,10 @@ export const RoleReveal: React.FC = React.memo(() => {
                                             </motion.button>
                                         ) : (
                                             <div className={`flex items-center justify-center gap-2 ${roleConfig.color} py-3`}>
-                                                <Check className="w-4 h-4" />
-                                                <span className="font-['Cinzel'] text-[9px] tracking-[0.2em] uppercase">Confirmed</span>
+                                                {keysCollected >= keysNeeded ? <Check className="w-4 h-4" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                                <span className="font-['Cinzel'] text-[9px] tracking-[0.2em] uppercase">
+                                                    {keysCollected >= keysNeeded ? 'Confirmed' : 'Awaiting Others...'}
+                                                </span>
                                             </div>
                                         )}
                                     </div>
