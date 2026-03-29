@@ -5,7 +5,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import { useGameContext } from '../../contexts/GameContext';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
-import { usePublicClient, useAccount, useChainId } from 'wagmi';
+import { useAccount, useChainId } from 'wagmi';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { NetworkSelector } from '../ui/NetworkSelector';
 import { FlowLayout } from '../layout/FlowLayout';
@@ -81,7 +81,7 @@ function getTournamentInfo(room: any): TournamentInfo {
 
 
 export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
-    const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress } = useGameContext();
+    const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress, publicClient: ctxPublicClient } = useGameContext();
     const { login, authenticated } = usePrivy();
     const { isConnected } = useAccount();
 
@@ -90,7 +90,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const prevChainIdRef = useRef(chainId);
 
     const router = useRouter();
-    const publicClient = usePublicClient();
+    const publicClient = ctxPublicClient;
 
     const [rooms, setRooms] = useState<any[]>([]);
     const [isInitialLoad, setIsInitialLoad] = useState(true); // Для Радара
