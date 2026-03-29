@@ -1760,15 +1760,41 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             if (isJoined) {
-                console.log("[Join] Already in room on-chain. Syncing session...");
+                console.log("[Join] Already in room on-chain. Syncing session and verifying on-chain status...");
                 
                 let currentSession = loadSession();
                 const sessionMatches = currentSession && 
                                        currentSession.roomId === Number(roomId) && 
                                        currentSession.mainWallet.toLowerCase() === myAddr.toLowerCase();
 
-                // Only create/register a new session if one is missing or not registered
-                if (!sessionMatches || !currentSession?.registeredOnChain) {
+                // Advanced sync check: verify if the on-chain registered address matches our local one
+                let onChainSessionSynced = false;
+                try {
+                    const onChainData = await pClient.readContract({
+                        address: contractAddressRef.current,
+                        abi: MAFIA_ABI,
+                        functionName: 'sessionKeys',
+                        args: [myAddr as `0x${string}`],
+                    }) as any;
+
+                    if (onChainData && currentSession) {
+                        const onChainAddr = (Array.isArray(onChainData) ? onChainData[0] : onChainData.sessionAddress).toLowerCase();
+                        const onChainRoomId = (Array.isArray(onChainData) ? onChainData[2] : onChainData.roomId).toString();
+                        
+                        onChainSessionSynced = onChainAddr === currentSession.address.toLowerCase() && 
+                                               onChainRoomId === rId.toString() &&
+                                               (Array.isArray(onChainData) ? onChainData[3] : onChainData.isActive);
+                        
+                        if (!onChainSessionSynced) {
+                            console.log(`[Join] Session mismatch! Local: ${currentSession.address}, On-Chain: ${onChainAddr}. Forcing resync...`);
+                        }
+                    }
+                } catch (e) {
+                    console.warn("[Join] Failed to verify on-chain sessionKey data:", e);
+                }
+
+                // Only create/register a new session if one is missing or not registered or mismatched
+                if (!sessionMatches || !currentSession?.registeredOnChain || !onChainSessionSynced) {
                     if (!sessionMatches) {
                         console.log("[Join] No valid session for this room locally. Creating a new one for auto-signing...");
                         const sessionRes = createNewSession(myAddr, Number(roomId), targetChain.id, undefined, true);
@@ -1779,6 +1805,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         try {
                             const { client: walletClient, account: walletAccount } = await getActiveWalletClient();
                             
+                            // Check balance for session funding
+                            const balance = await pClient.getBalance({ address: myAddr as `0x${string}` });
+                            if (balance < LOBBY_FUNDING_VALUE) {
+                                alert(`Insufficient balance to re-sync session. You need at least ${formatEther(LOBBY_FUNDING_VALUE)} STT.`);
+                                return false;
+                            }
+
                             // Register/Fund session key on-chain to ensure it's authorized and has gas
                             const txHash = await walletClient.writeContract({
                                 address: contractAddressRef.current,
@@ -1789,7 +1822,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                                 account: walletAccount,
                                 value: LOBBY_FUNDING_VALUE
                             });
-                            console.log(`[Join] Session registered/funded on-chain: ${txHash}`);
+                            console.log(`[Join] Session re-registered/funded on-chain: ${txHash}`);
                             
                             await pClient.waitForTransactionReceipt({ hash: txHash });
                             
@@ -1803,13 +1836,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                                 walletClient: walletClient,
                                 chainId: targetChain.id
                             }); 
-                            console.log("[Join] New session synced with GM server ✅");
+                            console.log("[Join] Session re-synced with GM server ✅");
                         } catch (e) {
-                            console.warn("[Join] Failed to register/fund session key on-chain:", e);
+                            console.warn("[Join] Failed to register/fund session key during sync:", e);
                         }
                     }
                 } else {
-                    console.log("[Join] Valid registered session already exists. Skipping transaction.");
+                    console.log("[Join] Valid registered session already exists and is synced. Skipping transaction.");
                 }
 
                 setCurrentRoomId(rId);
