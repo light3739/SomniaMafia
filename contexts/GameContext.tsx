@@ -132,6 +132,21 @@ interface GameContextType {
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
+const INITIAL_GAME_STATE: GameState = {
+    phase: GamePhase.LOBBY,
+    dayCount: 0,
+    players: [],
+    myPlayerId: null,
+    logs: [],
+    mafiaMessages: [],
+    revealedCount: 0,
+    mafiaCommittedCount: 0,
+    mafiaRevealedCount: 0,
+    phaseDeadline: 0,
+    winner: null,
+    maxPlayers: 16
+};
+
 export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     // Session
     const [playerName, setPlayerName] = useState(() => {
@@ -207,6 +222,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         currentRoomIdRef.current = currentRoomId;
         roleFetchedRef.current = false;
+        
+        // RESET gameState when room changes to prevent phase-leak from previous room.
+        // This ensures stale Shuffle/Reveal components don't stay mounted and fire requests
+        // for a new room that is still in LOBBY phase.
+        console.log(`[GameContext] Room ID transition from ${currentRoomIdRef.current === currentRoomId ? 'same' : 'new'} id: ${currentRoomId}. Resetting game state.`);
+        setGameState(INITIAL_GAME_STATE);
+        
+        // Also reset marks and caches
+        setPlayerMarks({});
+        avatarCacheRef.current = {};
+        lastPhaseKeyRef.current = '';
     }, [currentRoomId]);
 
     // === TX QUEUE: Serialize session key transactions to prevent nonce collisions ===
@@ -867,20 +893,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     }, [getSessionWalletClient]); // getActiveWalletClient and isTestMode (ref) are stable // Removed publicClient, address, runtimeChain from deps
 
-    const [gameState, setGameState] = useState<GameState>({
-        phase: GamePhase.LOBBY,
-        dayCount: 0,
-        players: [],
-        myPlayerId: null,
-        logs: [],
-        mafiaMessages: [],
-        revealedCount: 0,
-        mafiaCommittedCount: 0,
-        mafiaRevealedCount: 0,
-        phaseDeadline: 0,
-        winner: null,
-        maxPlayers: 16
-    });
+    const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
 
     // --- REF SYNC ---
     useEffect(() => { runtimeChainRef.current = runtimeChain; }, [runtimeChain]);
