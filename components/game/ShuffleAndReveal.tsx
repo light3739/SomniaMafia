@@ -675,11 +675,12 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
 
 
             let registered = false, lastErr: any;
-            for (let i = 0; i < 6; i++) {
+            for (let i = 0; i < 15; i++) { // Increased attempts
                 try {
-                    await registerEciesPubkey(currentRoomId.toString(), address, walletClient, chainId, retryWithWallet || i >= 3);
+                    // Only fallback to Main Wallet (forceWallet) after 12 failed attempts
+                    await registerEciesPubkey(currentRoomId.toString(), address, walletClient, chainId, retryWithWallet || i >= 12);
                     registered = true; break;
-                } catch (e) { lastErr = e; if (i < 5) await new Promise(r => setTimeout(r, 2000)); }
+                } catch (e) { lastErr = e; if (i < 14) await new Promise(r => setTimeout(r, 2000)); }
             }
             if (!registered) throw lastErr;
             setRevealState(prev => ({ ...prev, eciesRegistered: true, ...(isNew && { hasSharedKeys: false, isRevealed: false, myRole: null }) }));
