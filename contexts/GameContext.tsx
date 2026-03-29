@@ -397,9 +397,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Casting to number for consistent comparison
         const chainId = Number(runtimeChain.id);
         const isSomnia = (chainId === 5031 || chainId === 50312);
-        // Shannon testnet currently has defaultDeposit = 0, but sending 1.0 STT 
-        // ensures the session address is funded with gas for gameplay actions.
-        return isSomnia ? parseEther('1.0') : parseEther('1.0');
+        // Regular game is 0 deposit + 1.1 STT for session gas.
+        return isSomnia ? parseEther('1.1') : parseEther('1.1');
     }, [runtimeChain.id]);
 
     useEffect(() => {
@@ -1584,7 +1583,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!pClient || !targetChain || !myAddr) { alert("Public client or chain/address not ready!"); return false; }
 
             // 4. Get Smart Gas Config
-            const txValue = isSomnia ? parseEther('1.0') : parseEther('1.0');
+            // 4. Get Smart Gas Config (1.1 STT fully for session as deposit is 0)
+            const txValue = isSomnia ? parseEther('1.1') : parseEther('1.1');
             const gasConfig = await getSmartGasConfig({
                 functionName: 'createAndJoin',
                 args: [lobbyName, maxPlayers, safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, !!lobbyPassword, tournamentId],
@@ -1750,46 +1750,39 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }) as boolean;
 
             if (isJoined) {
-                console.log("[Join] Already in room on-chain. Syncing session and proceeding...");
+                console.log("[Join] Already in room on-chain. Syncing session and ensuring gas funding...");
                 
-                // CRITICAL: Check if our local session matches the on-chain session
-                try {
-                    const onChainSession = await pClient.readContract({
-                        address: contractAddressRef.current,
-                        abi: MAFIA_ABI,
-                        functionName: 'sessionKeys',
-                        args: [myAddr as `0x${string}`],
-                    }) as any;
-                    
-                    const localSession = loadSession();
-                    const onChainAddr = String(onChainSession.sessionAddress || "").toLowerCase();
-                    const localAddr = String(localSession?.address || "").toLowerCase();
-                    
-                    if (onChainAddr !== "0x0000000000000000000000000000000000000000" && onChainAddr !== localAddr) {
-                        console.warn("[Session] On-chain session mismatch detected!", { onChainAddr, localAddr });
-                        if (localSession) {
-                            addLog("Session mismatch detected! Re-syncing with GM server...", "warning");
-                            const { client: activeWalletClient } = await getActiveWalletClient();
-                            await registerSessionOnGm({
-                                roomId: rId.toString(),
-                                mainWallet: myAddr,
-                                sessionAddress: localSession.address,
-                                walletClient: activeWalletClient,
-                                chainId: targetChain.id
-                            });
-                            addLog("Session re-synced with GM ✅", "success");
-                        } else {
-                            addLog("Session mismatch: Your session is lost. You may need to use MetaMask.", "warning");
-                        }
+                // If we have a local session, ensure it is registered on-chain too 
+                // in case it is a new one or lacks gas.
+                const currentSession = loadSession();
+                if (currentSession && currentSession.roomId === Number(roomId)) {
+                    try {
+                        const { client: walletClient, account: walletAccount } = await getActiveWalletClient();
+                        const txHash = await walletClient.writeContract({
+                            address: contractAddressRef.current,
+                            abi: MAFIA_ABI,
+                            functionName: 'registerSessionKey',
+                            args: [BigInt(rId), currentSession.address as `0x${string}`],
+                            chain: targetChain,
+                            account: walletAccount,
+                            value: LOBBY_FUNDING_VALUE
+                        });
+                        console.log(`[Join] Session registered/funded on-chain: ${txHash}`);
+                        await pClient.waitForTransactionReceipt({ hash: txHash });
+                    } catch (e) {
+                        console.warn("[Join] Failed to register/fund session key on-chain:", e);
                     }
-                } catch (e) {
-                    console.warn("[Session] Failed to verify on-chain session address", e);
                 }
 
                 markSessionRegistered();
                 setCurrentRoomId(rId);
-                await refreshPlayersList(rId);
+                
+                // 3.3. Force refresh GM players list
+                await registerSessionOnGm(rId); 
+                await refreshPlayersList();
+
                 setIsTxPending(false);
+                setNavigating(false);
                 return true;
             }
 
