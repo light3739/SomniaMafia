@@ -8,13 +8,14 @@ import { useWallets } from '@privy-io/react-auth';
 import { GamePhase, GameState, Player, Role, LogEntry, MafiaChatMessage } from '../types';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL, AVALANCHE_FUJI, getDeploymentByChainId } from '../contracts/config';
 import { generateKeyPair, exportPublicKey, stringToHex } from '../services/cryptoUtils';
-import { loadSession, createNewSession, markSessionRegistered, getSessionAccount, createSessionWalletClient } from '../services/sessionKeyService';
+import { loadSession, createNewSession, storeSession, markSessionRegistered, getSessionAccount, createSessionWalletClient } from '../services/sessionKeyService';
 import { loadOrCreateKeypair, exportPublicKeyHex, eciesDecrypt, EciesEncrypted } from '../services/eciesService';
 import { generateEndGameProof } from '../services/zkProof';
 import { ShuffleService } from '../services/shuffleService';
 import { signRequest } from '../services/requestSigning';
 import { buildAvatarMessage, buildNightActionMessage, buildResolveNightMessage, buildDiscussionMessage, buildInvestigateMessage, buildRoleSyncMessage, buildMafiaMembersMessage } from '../services/signingSchema';
 import * as GM from '../services/gmService';
+import { registerSessionOnGm } from '../services/gmService';
 import { emitGameSignal } from '../services/signalBus';
 
 const shotSound = "/assets/mafia_shot.wav";
@@ -1563,7 +1564,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setKeys(keyPair);
 
             // 3. Сессия
-            const { sessionAddress, privateKey: sessionPrivKey } = createNewSession(myAddr, newRoomId, targetChain.id);
+            const { sessionAddress, privateKey: sessionPrivKey, session: newSessionObj } = createNewSession(myAddr, newRoomId, targetChain.id, undefined, true);
             
             // ПУБЛИЧНЫЙ КЛЮЧ: Для shareKeysToAll отправляем публичный ключ сессионного кошелька!
             const sessionAccount = privateKeyToAccount(sessionPrivKey);
@@ -1607,29 +1608,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const receipt = await pClient.waitForTransactionReceipt({ hash });
             if (receipt.status === 'reverted') throw new Error("Transaction reverted on-chain");
 
-            let finalRoomId = BigInt(newRoomId);
-            try {
-                const logs = parseEventLogs({
-                    abi: MAFIA_ABI,
-                    eventName: 'RoomCreated',
-                    logs: receipt.logs
-                });
-                if (logs.length > 0) {
-                    finalRoomId = (logs[0] as any).args.roomId;
-                }
-            } catch (e) {
-                console.warn("[Lobby] Failed to parse RoomCreated log, falling back to predicted ID", e);
-            }
+            // Now that TX is successful, store the session
+            storeSession(newSessionObj);
 
-            // Sync session roomId and registration status EARLY
-            const session = loadSession();
-            if (session) {
-                session.roomId = Number(finalRoomId);
-                session.registeredOnChain = true;
-                localStorage.setItem('somnia_mafia_session', JSON.stringify(session));
-            } else {
-                markSessionRegistered();
-            }
+            let finalRoomId = BigInt(newRoomId);
 
             // No longer forcing proactive off-chain session registration. 
             // The GM Server has resilient RPC sync, so it will wait & read it natively from the blockchain without bothering the user.
@@ -1746,12 +1728,80 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 return false;
             }
 
-            // 1. Generate crypto keys (Legacy SRA)
+            // 1. Check if already in room to avoid redundant TX and session mismatch
+            const isJoined = await pClient.readContract({
+                address: contractAddressRef.current,
+                abi: MAFIA_ABI,
+                functionName: 'isPlayerInRoom',
+                args: [rId, myAddr as `0x${string}`],
+            }) as boolean;
+
+            if (isJoined) {
+                console.log("[Join] Already in room on-chain. Syncing session and proceeding...");
+                
+                // CRITICAL: Check if our local session matches the on-chain session
+                try {
+                    const onChainSession = await pClient.readContract({
+                        address: contractAddressRef.current,
+                        abi: MAFIA_ABI,
+                        functionName: 'sessionKeys',
+                        args: [myAddr as `0x${string}`],
+                    }) as any;
+                    
+                    const localSession = loadSession();
+                    const onChainAddr = String(onChainSession.sessionAddress || "").toLowerCase();
+                    const localAddr = String(localSession?.address || "").toLowerCase();
+                    
+                    if (onChainAddr !== "0x0000000000000000000000000000000000000000" && onChainAddr !== localAddr) {
+                        console.warn("[Session] On-chain session mismatch detected!", { onChainAddr, localAddr });
+                        if (localSession) {
+                            addLog("Session mismatch detected! Re-syncing with GM server...", "warning");
+                            const { client: activeWalletClient } = await getActiveWalletClient();
+                            await registerSessionOnGm({
+                                roomId: rId.toString(),
+                                mainWallet: myAddr,
+                                sessionAddress: localSession.address,
+                                walletClient: activeWalletClient,
+                                chainId: targetChain.id
+                            });
+                            addLog("Session re-synced with GM ✅", "success");
+                        } else {
+                            addLog("Session mismatch: Your session is lost. You may need to use MetaMask.", "warning");
+                        }
+                    }
+                } catch (e) {
+                    console.warn("[Session] Failed to verify on-chain session address", e);
+                }
+
+                markSessionRegistered();
+                setCurrentRoomId(rId);
+                await refreshPlayersList(rId);
+                setIsTxPending(false);
+                return true;
+            }
+
+            // 2. Generate/Load Session 
+            // Reuse existing session if it matches roomId and mainWallet
+            const existing = loadSession();
+            let sessionAddress: `0x${string}`;
+            let sessionPrivKey: `0x${string}`;
+            let newSessionObj: any = null;
+
+            if (existing && existing.roomId === Number(roomId) && existing.mainWallet.toLowerCase() === myAddr.toLowerCase()) {
+                sessionAddress = existing.address;
+                sessionPrivKey = existing.privateKey;
+                console.log("[Lobby] Reusing existing session key for join");
+            } else {
+                const sessionRes = createNewSession(myAddr, Number(roomId), targetChain.id, undefined, true);
+                sessionAddress = sessionRes.sessionAddress;
+                sessionPrivKey = sessionRes.privateKey;
+                newSessionObj = sessionRes.session;
+                console.log("[Lobby] Generating new session key for join");
+            }
+
+            // 3. Generate crypto keys (Legacy SRA)
             const keyPair = await generateKeyPair();
             setKeys(keyPair);
-
-            // 2. Generate session key
-            const { sessionAddress, privateKey: sessionPrivKey } = createNewSession(myAddr, Number(roomId), targetChain.id);
             
             // ПУБЛИЧНЫЙ КЛЮЧ: Для shareKeysToAll отправляем публичный ключ сессионного кошелька!
             const sessionAccount = privateKeyToAccount(sessionPrivKey);
@@ -1877,6 +1927,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const joinReceipt = await pClient.waitForTransactionReceipt({ hash });
             if (joinReceipt.status === 'reverted') throw new Error("Transaction reverted on-chain");
+
+            // Successful! Now commit session if we generated a new one
+            if (newSessionObj) {
+                storeSession(newSessionObj);
+            }
+            markSessionRegistered();
 
             // DEBUG: Check deposit collection on join
             try {

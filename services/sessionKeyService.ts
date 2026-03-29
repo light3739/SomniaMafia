@@ -168,8 +168,9 @@ export function createNewSession(
   mainWallet: `0x${string}`,
   roomId: number,
   chainId: number,
-  durationMs: number = 4 * 60 * 60 * 1000 // 4 hours default
-): { sessionAddress: `0x${string}`; privateKey: `0x${string}` } {
+  durationMs: number = 4 * 60 * 60 * 1000, // 4 hours default
+  skipStore: boolean = false
+): { sessionAddress: `0x${string}`; privateKey: `0x${string}`; session: StoredSession } {
   const { privateKey, address } = generateSessionKey();
 
   const session: StoredSession = {
@@ -182,9 +183,11 @@ export function createNewSession(
     registeredOnChain: false,
   };
 
-  storeSession(session);
+  if (!skipStore) {
+    storeSession(session);
+  }
 
-  return { sessionAddress: address, privateKey };
+  return { sessionAddress: address, privateKey, session };
 }
 
 /**
