@@ -1731,7 +1731,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const abandoned = JSON.parse(localStorage.getItem('mafia_abandoned_rooms') || '[]');
             if (abandoned.includes(rId.toString())) {
                 addLog("You have already left this game session and cannot rejoin.", "danger");
-                setIsTxPending(false);
                 return false;
             }
 
@@ -1744,63 +1743,60 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }) as boolean;
 
             if (isJoined) {
-                console.log("[Join] Already in room on-chain. Syncing session and ensuring gas funding...");
+                console.log("[Join] Already in room on-chain. Syncing session...");
                 
                 let currentSession = loadSession();
                 const sessionMatches = currentSession && 
                                        currentSession.roomId === Number(roomId) && 
                                        currentSession.mainWallet.toLowerCase() === myAddr.toLowerCase();
 
-                if (!sessionMatches) {
-                    console.log("[Join] No valid session for this room locally. Creating a new one for auto-signing...");
-                    const sessionRes = createNewSession(myAddr, Number(roomId), targetChain.id, undefined, true);
-                    currentSession = sessionRes.session;
-                }
-
-                if (currentSession) {
-                    try {
-                        const { client: walletClient, account: walletAccount } = await getActiveWalletClient();
-                        
-                        // Register/Fund session key on-chain to ensure it's authorized and has gas
-                        const txHash = await walletClient.writeContract({
-                            address: contractAddressRef.current,
-                            abi: MAFIA_ABI,
-                            functionName: 'registerSessionKey',
-                            args: [BigInt(rId), currentSession.address as `0x${string}`],
-                            chain: targetChain,
-                            account: walletAccount,
-                            value: LOBBY_FUNDING_VALUE
-                        });
-                        console.log(`[Join] Session registered/funded on-chain: ${txHash}`);
-                        
-                        // Wait for confirmation to ensure state consistency
-                        setIsTxPending(true); // Keep pending during this wait
-                        await pClient.waitForTransactionReceipt({ hash: txHash });
-                        
-                        // Persistent storage and activation
-                        storeSession(currentSession);
-                        markSessionRegistered();
-
-                        // Force refresh GM players list for this player
-                        await registerSessionOnGm({
-                            roomId: rId.toString(),
-                            mainWallet: myAddr,
-                            sessionAddress: currentSession.address,
-                            walletClient: walletClient,
-                            chainId: targetChain.id
-                        }); 
-                        console.log("[Join] Session synced with GM server ✅");
-                    } catch (e) {
-                        console.warn("[Join] Failed to register/fund session key on-chain:", e);
-                        // If it fails (e.g. user rejected), we still set the room ID so they can enter, 
-                        // but they will have to sign manually or try again via banner.
+                // Only create/register a new session if one is missing or not registered
+                if (!sessionMatches || !currentSession?.registeredOnChain) {
+                    if (!sessionMatches) {
+                        console.log("[Join] No valid session for this room locally. Creating a new one for auto-signing...");
+                        const sessionRes = createNewSession(myAddr, Number(roomId), targetChain.id, undefined, true);
+                        currentSession = sessionRes.session;
                     }
+
+                    if (currentSession) {
+                        try {
+                            const { client: walletClient, account: walletAccount } = await getActiveWalletClient();
+                            
+                            // Register/Fund session key on-chain to ensure it's authorized and has gas
+                            const txHash = await walletClient.writeContract({
+                                address: contractAddressRef.current,
+                                abi: MAFIA_ABI,
+                                functionName: 'registerSessionKey',
+                                args: [BigInt(rId), currentSession.address as `0x${string}`],
+                                chain: targetChain,
+                                account: walletAccount,
+                                value: LOBBY_FUNDING_VALUE
+                            });
+                            console.log(`[Join] Session registered/funded on-chain: ${txHash}`);
+                            
+                            await pClient.waitForTransactionReceipt({ hash: txHash });
+                            
+                            storeSession(currentSession);
+                            markSessionRegistered();
+
+                            await registerSessionOnGm({
+                                roomId: rId.toString(),
+                                mainWallet: myAddr,
+                                sessionAddress: currentSession.address,
+                                walletClient: walletClient,
+                                chainId: targetChain.id
+                            }); 
+                            console.log("[Join] New session synced with GM server ✅");
+                        } catch (e) {
+                            console.warn("[Join] Failed to register/fund session key on-chain:", e);
+                        }
+                    }
+                } else {
+                    console.log("[Join] Valid registered session already exists. Skipping transaction.");
                 }
 
                 setCurrentRoomId(rId);
                 await refreshPlayersList(rId);
-
-                setIsTxPending(false);
                 return true;
             }
 
@@ -1850,7 +1846,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (roomData && isPrivate) {
                     if (!lobbyPassword) {
                         alert("This room is private. Please enter the password.");
-                        setIsTxPending(false);
                         return false;
                     }
                     addLog("Requesting join permit (private room)...", "info");
@@ -1869,7 +1864,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // CRITICAL: If it's a private room and we failed to get permit, STOP here
                 const isPrivateData = Array.isArray(roomData) ? Boolean(roomData[18]) : Boolean(roomData?.isPrivate);
                 if (roomData && isPrivateData) {
-                    setIsTxPending(false);
                     alert(`Failed to get join permit: ${e.message}`);
                     return false;
                 }
@@ -2046,12 +2040,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
 
-            setIsTxPending(false);
             return true;
         } catch (e: any) {
+            console.error(e);
             addLog(e.shortMessage || e.message, "danger");
-            setIsTxPending(false);
             return false;
+        } finally {
+            setIsTxPending(false);
         }
     }, []); // ABSOLUTELY STABLE
 
