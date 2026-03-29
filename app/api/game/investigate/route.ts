@@ -61,7 +61,7 @@ export const POST = withSignedRoute<{
         console.log('[API/Investigate] Verification SUCCESS via GM proof');
 
         // 2. Get target's role from ServerStore
-        const secrets = await ServerStore.getRoomSecrets(roomId.toString());
+        const secrets = await ServerStore.getRoomSecrets(roomId.toString(), body.chainId);
         if (!secrets || !secrets[body.targetAddress.toLowerCase()]) {
             return NextResponse.json({ error: 'Target role not found in server records' }, { status: 404 });
         }

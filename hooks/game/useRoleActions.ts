@@ -60,7 +60,7 @@ export function useRoleActions(deps: RoleDeps) {
         try {
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                 try {
-                    const message = `reveal-secret:${roomId}:${role}:${salt}`;
+                    const message = `reveal-secret:${refs.runtimeChainRef.current.id}:${roomId}:${role}:${salt}`;
                     let signature: `0x${string}`;
                     let signerAddress: string = playerAddress;
                     let sessionKeyAddress: string | undefined;

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { ServerStore } from '@/services/serverStore';
 import { withSignedRoute } from '@/app/api/_lib/security';
 import { buildAvatarMessage } from '@/services/signingSchema';
+import { ACTIVE_DEPLOYMENT } from '@/contracts/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +39,7 @@ export const POST = withSignedRoute<{
         return NextResponse.json({ error: 'Avatar too large. Max 100KB' }, { status: 400 });
     }
 
-    await ServerStore.storeAvatar(roomId, body.address, body.avatar);
+    await ServerStore.storeAvatar(roomId, body.address, body.avatar, body.chainId);
     return NextResponse.json({ success: true });
 });
 
@@ -56,7 +57,8 @@ export async function GET(request: Request) {
         }
 
         const roomId = BigInt(rawRoomId).toString();
-        const avatars = await ServerStore.getAvatars(roomId);
+        const requestChainId = searchParams.get('chainId') || ACTIVE_DEPLOYMENT.chainId.toString();
+        const avatars = await ServerStore.getAvatars(roomId, requestChainId);
 
         return NextResponse.json({ avatars });
     } catch (error: any) {

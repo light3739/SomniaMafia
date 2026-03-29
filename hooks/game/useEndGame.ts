@@ -41,7 +41,7 @@ export function useEndGame(deps: EndGameDeps) {
                     address: refs.contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: 'getPlayerDeposit',
-                    args: [roomId, myAddr],
+                    args: [roomId, myAddr as `0x${string}`],
                 }) as Promise<bigint>,
                 pClient.readContract({
                     address: refs.contractAddressRef.current,

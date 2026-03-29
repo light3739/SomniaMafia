@@ -113,7 +113,7 @@ export default function ZKTestPage() {
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'joinRoom',
-                    args: [BigInt(roomId), "BotPlayer", "0x00" as `0x${string}`, "0x0000000000000000000000000000000000000000" as `0x${string}`],
+                    args: [BigInt(roomId), "BotPlayer", "0x00" as `0x${string}`, "0x0000000000000000000000000000000000000000" as `0x${string}`, "0x" as `0x${string}`],
                     value: BigInt(0),
                     gas: 500000n
                 });
@@ -171,7 +171,7 @@ export default function ZKTestPage() {
                     address: MAFIA_CONTRACT_ADDRESS,
                     abi: MAFIA_ABI,
                     functionName: 'createAndJoin',
-                    args: ["ZK-Test-Lobby", 4, "TestPlayer", "0x00" as `0x${string}`, "0x0000000000000000000000000000000000000000" as `0x${string}`],
+                    args: ["ZK-Test-Lobby", 4, "TestPlayer", "0x00" as `0x${string}`, "0x0000000000000000000000000000000000000000" as `0x${string}`, false, 0n],
                     value: BigInt(0)
                 });
                 addLog(`Lobby created! TX: ${hash.slice(0, 10)}...`);
