@@ -78,7 +78,7 @@ export const DEPLOYMENTS = {
 const envNetwork = process.env.NEXT_PUBLIC_ACTIVE_NETWORK as SupportedNetwork | undefined;
 export const ACTIVE_NETWORK: SupportedNetwork = envNetwork && envNetwork in DEPLOYMENTS
     ? envNetwork
-    : 'avalanche_fuji';
+    : 'somnia_testnet';
 export const ACTIVE_DEPLOYMENT = DEPLOYMENTS[ACTIVE_NETWORK];
 
 export function getDeployment(network: SupportedNetwork) {

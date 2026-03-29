@@ -1613,8 +1613,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             let finalRoomId = BigInt(newRoomId);
 
-            // No longer forcing proactive off-chain session registration. 
-            // The GM Server has resilient RPC sync, so it will wait & read it natively from the blockchain without bothering the user.
+            // Proactive off-chain session registration. 
+            if (newSessionObj) {
+                try {
+                    await registerSessionOnGm({
+                        roomId: finalRoomId.toString(),
+                        mainWallet: myAddr,
+                        sessionAddress: newSessionObj.address,
+                        walletClient: activeWalletClient,
+                        chainId: targetChain.id
+                    });
+                    console.log("[Create] Session registered on GM ✅");
+                } catch (e) {
+                    console.warn("[Create] Failed to register session on GM (non-blocking):", e);
+                }
+            }
 
             // 6. IF PRIVATE: Set password on GM server
             if (lobbyPassword) {
@@ -1957,7 +1970,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // 5. Mark session as registered
             markSessionRegistered();
 
-            // No proactive registerSessionOnGm — prevents extra popup. Server will read from chain.
+            // PROACTIVE: Register session on GM immediately after it's registered on-chain
+            if (sessionAddress) {
+                try {
+                    const { client: activeWalletClient } = await getActiveWalletClient();
+                    await registerSessionOnGm({
+                        roomId: roomId.toString(),
+                        mainWallet: myAddr,
+                        sessionAddress,
+                        walletClient: activeWalletClient,
+                        chainId: targetChain.id
+                    });
+                    console.log("[Lobby] Session registered on GM after join ✅");
+                } catch (e) {
+                    console.warn("[Lobby] Proactive session registration on GM failed:", e);
+                }
+            }
 
             // Register ECIES pubkey on GM server (wait 1.5s for RPC sync)
             setTimeout(async () => {
