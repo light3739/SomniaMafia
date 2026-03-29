@@ -1772,17 +1772,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     } catch (e) {
                         console.warn("[Join] Failed to register/fund session key on-chain:", e);
                     }
+
+                    // 3.3. Force refresh GM players list
+                    await registerSessionOnGm({
+                        roomId: rId.toString(),
+                        mainWallet: myAddr,
+                        sessionAddress: currentSession.address,
+                        walletClient: activeWalletClient,
+                        chainId: targetChain.id
+                    }); 
                 }
 
                 markSessionRegistered();
                 setCurrentRoomId(rId);
-                
-                // 3.3. Force refresh GM players list
-                await registerSessionOnGm(rId); 
-                await refreshPlayersList();
+                await refreshPlayersList(rId);
 
                 setIsTxPending(false);
-                setNavigating(false);
                 return true;
             }
 
