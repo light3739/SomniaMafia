@@ -29,10 +29,14 @@ export function useVotingActions(deps: VotingDeps) {
         setIsTxPending(true);
         try {
             const hash = await txEngine.sendGameTransaction('startVoting', [roomId]);
-            setIsTxPending(false);
-            txEngine.confirmInBackground(hash, 'startVoting');
+            const pClient = refs.publicClientRef.current;
+            if (pClient) {
+                const receipt = await pClient.waitForTransactionReceipt({ hash });
+                if (receipt.status === 'reverted') throw new Error("startVoting reverted");
+            }
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
+        } finally {
             setIsTxPending(false);
         }
     }, [refs, txEngine, setIsTxPending, addLog]);
@@ -51,17 +55,20 @@ export function useVotingActions(deps: VotingDeps) {
             txEngine.applyOptimisticUpdate({ hasVoted: true });
             setVoteMap(prev => ({ ...prev, [myAddr.toLowerCase()]: targetAddress.toLowerCase() }));
 
-            setIsTxPending(false);
-            txEngine.confirmInBackground(hash, 'vote', () => {
-                txEngine.applyOptimisticUpdate({ hasVoted: false });
-                setVoteMap(prev => {
-                    const next = { ...prev };
-                    delete next[myAddr.toLowerCase()];
-                    return next;
-                });
-            });
+            const pClient = refs.publicClientRef.current;
+            if (pClient) {
+                const receipt = await pClient.waitForTransactionReceipt({ hash });
+                if (receipt.status === 'reverted') throw new Error("vote reverted");
+            }
         } catch (e: any) {
+            txEngine.applyOptimisticUpdate({ hasVoted: false });
+            setVoteMap(prev => {
+                const next = { ...prev };
+                delete next[myAddr.toLowerCase()];
+                return next;
+            });
             addLog(e.shortMessage || e.message, "danger");
+        } finally {
             setIsTxPending(false);
         }
     }, [refs, txEngine, setIsTxPending, setVoteMap, addLog]);

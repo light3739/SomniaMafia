@@ -311,10 +311,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
             if (!revealState.eciesRegistered) handleRegisterEcies();
             else if (!revealState.hasSharedKeys) handleShareKey();
             else if (!revealState.isRevealed) handleFetchRole();
-            else if (!revealState.hasConfirmed) {
-                const t = setTimeout(handleConfirmRole, 4000);
-                return () => clearTimeout(t);
-            }
+            else if (!revealState.hasConfirmed) handleConfirmRole();
         }
     }, [isReveal, shuffleState.isMyTurn, shuffleState.hasCommitted, isShuffleProcessing, isTxPending, revealState, handleMyTurn, handleRevealRecovery, handleRegisterEcies, handleShareKey, handleFetchRole, handleConfirmRole]);
 
