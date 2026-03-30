@@ -254,7 +254,12 @@ export function useMafiaChat(deps: ChatDeps) {
                     }]
                 }));
             }
-            txEngine.confirmInBackground(hash, 'mafiaMessage');
+            
+            const pClient = refs.publicClientRef.current;
+            if (pClient) {
+                const receipt = await pClient.waitForTransactionReceipt({ hash });
+                if (receipt.status === 'reverted') throw new Error("mafiaMessage reverted");
+            }
         } catch (e: any) {
             addLog(`Chat failed: ${e.shortMessage || e.message}`, "danger");
             throw e;

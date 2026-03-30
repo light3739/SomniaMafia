@@ -399,18 +399,24 @@ export function useRoleActions(deps: RoleDeps) {
     // === CONFIRM ROLE ===
     const confirmRoleOnChain = useCallback(async () => {
         const roomId = refs.currentRoomIdRef.current;
-        if (!roomId) return;
+        const pClient = refs.publicClientRef.current;
+        if (!roomId || !pClient) return;
         setIsTxPending(true);
         try {
             const hash = await txEngine.sendGameTransaction('confirmRole', [roomId]);
-            addLog("Role confirmed.", "success");
+            addLog("Confirming role on-chain...", "info");
             txEngine.applyOptimisticUpdate({ hasConfirmedRole: true });
-            setIsTxPending(false);
-            txEngine.confirmInBackground(hash, 'confirmRole', () => {
+            
+            const receipt = await pClient.waitForTransactionReceipt({ hash });
+            if (receipt.status === 'reverted') {
                 txEngine.applyOptimisticUpdate({ hasConfirmedRole: false });
-            });
+                throw new Error("confirmRole reverted");
+            }
+            addLog("Role confirmed.", "success");
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
+            txEngine.applyOptimisticUpdate({ hasConfirmedRole: false });
+        } finally {
             setIsTxPending(false);
         }
     }, [refs, txEngine, setIsTxPending, addLog]);
@@ -450,16 +456,20 @@ export function useRoleActions(deps: RoleDeps) {
                 console.log("Found local salt but not confirmed on-chain. Attempting `confirmRole` fallback...");
                 try {
                     const hash = await txEngine.sendGameTransaction('confirmRole', [roomId]);
-                    addLog("Role confirmed (fallback).", "success");
-                    txEngine.confirmInBackground(hash, 'confirmRole (fallback)');
+                    addLog("Role confirmed (fallback). Waiting...", "success");
+                    const receipt = await pClient.waitForTransactionReceipt({ hash });
+                    if (receipt.status === 'reverted') throw new Error("Fallback confirmRole reverted");
+                    txEngine.applyOptimisticUpdate({ hasConfirmedRole: true });
                 } catch (err: any) {
                     console.warn("Fallback confirmRole failed — retrying full commitAndConfirmRole...", err.shortMessage || err.message);
                     try {
                         const { ShuffleService } = await import('../../services/shuffleService');
                         const roleHash = await ShuffleService.createRoleCommitHashAsync(role, savedSalt);
                         const retryHash = await txEngine.sendGameTransaction('commitAndConfirmRole', [roomId, roleHash]);
-                        addLog("Role committed & confirmed (recovery).", "success");
-                        txEngine.confirmInBackground(retryHash, 'commitAndConfirmRole (recovery)');
+                        addLog("Role committed & confirmed (recovery). Waiting...", "success");
+                        const receipt = await pClient.waitForTransactionReceipt({ hash: retryHash });
+                        if (receipt.status === 'reverted') throw new Error("Recovery commit-confirm reverted");
+                        txEngine.applyOptimisticUpdate({ hasConfirmedRole: true });
                     } catch (retryErr: any) {
                         console.error("Full commitAndConfirmRole retry also failed:", retryErr);
                         if (myAddr) localStorage.removeItem(`role_salt_${roomId.toString()}_${myAddr.toLowerCase()}`);
@@ -472,9 +482,11 @@ export function useRoleActions(deps: RoleDeps) {
                     const { ShuffleService } = await import('../../services/shuffleService');
                     const roleHash = await ShuffleService.createRoleCommitHashAsync(role, saltToUse);
                     const txHash = await txEngine.sendGameTransaction('commitAndConfirmRole', [roomId, roleHash]);
-                    addLog("Role committed & confirmed on-chain!", "success");
+                    addLog("Role committed & confirmed on-chain! Waiting...", "success");
+                    const receipt = await pClient.waitForTransactionReceipt({ hash: txHash });
+                    if (receipt.status === 'reverted') throw new Error("Normal commit-confirm reverted");
                     if (myAddr) localStorage.setItem(`role_salt_${roomId.toString()}_${myAddr.toLowerCase()}`, saltToUse);
-                    txEngine.confirmInBackground(txHash, 'commitAndConfirmRole');
+                    txEngine.applyOptimisticUpdate({ hasConfirmedRole: true });
                 } catch (txErr: any) {
                     const errMsg = (txErr.message || "").toLowerCase();
                     const shortMsg = (txErr.shortMessage || "").toLowerCase();
@@ -497,7 +509,9 @@ export function useRoleActions(deps: RoleDeps) {
                             console.log("Role committed but NOT confirmed. Calling confirmRole...");
                             addLog("Role previously committed. Confirming now...", "info");
                             const confirmHash = await txEngine.sendGameTransaction('confirmRole', [roomId]);
-                            txEngine.confirmInBackground(confirmHash, 'confirmRole (retry)');
+                            const receipt = await pClient.waitForTransactionReceipt({ hash: confirmHash });
+                            if (receipt.status === 'reverted') throw new Error("Retry confirm reverted");
+                            txEngine.applyOptimisticUpdate({ hasConfirmedRole: true });
                             addLog("Role confirmed separately!", "success");
                         } else {
                             console.log("Role already confirmed on-chain.");
@@ -512,6 +526,7 @@ export function useRoleActions(deps: RoleDeps) {
             }
 
             if (myAddr) {
+                // Sync with server only after we are 100% sure it's on chain
                 syncSecretWithServer(roomId.toString(), myAddr, role, saltToUse)
                     .catch(err => console.warn('[commitAndConfirm] Server sync failed (non-blocking):', err));
             }

@@ -47,11 +47,14 @@ export function useShuffleActions(deps: ShuffleDeps) {
             // startGame always uses main wallet, so we need to handle it specially
             // Use the sendGameTransaction with useSessionKey=false
             const hash = await txEngine.sendGameTransaction('startGame', [roomId], false);
-            addLog("Starting game...", "phase");
-            setIsTxPending(false);
-            txEngine.confirmInBackground(hash, 'startGame');
+            addLog("Starting game... Waiting for confirmation", "phase");
+            
+            const receipt = await pClient.waitForTransactionReceipt({ hash });
+            if (receipt.status === 'reverted') throw new Error("startGame reverted");
+            addLog("Game started!", "success");
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
+        } finally {
             setIsTxPending(false);
         }
     }, [refs, txEngine, setIsTxPending, addLog]);
@@ -110,14 +113,23 @@ export function useShuffleActions(deps: ShuffleDeps) {
     // === REVEAL DECK ===
     const revealDeckOnChain = useCallback(async (deck: string[], salt: string) => {
         const roomId = refs.currentRoomIdRef.current;
-        if (!roomId) return;
+        const pClient = refs.publicClientRef.current;
+        if (!roomId || !pClient) return;
         const cleanSalt = salt.startsWith('0x') ? salt.slice(2) : salt;
         setIsTxPending(true);
         try {
             const hash = await txEngine.sendGameTransaction('revealDeck', [roomId, deck, cleanSalt]);
-            addLog("Deck revealed!", "success");
+            addLog("Deck revealed! Waiting for confirmation...", "success");
+            
+            const receipt = await pClient.waitForTransactionReceipt({ hash });
+            if (receipt.status === 'reverted') {
+                console.error(`[revealDeck] ❌ TX reverted on-chain! Hash: ${hash}`);
+                addLog("Reveal reverted on-chain!", "danger");
+                throw new Error("revealDeck reverted");
+            }
+            console.log(`[revealDeck] ✅ Confirmed in block ${receipt.blockNumber}`);
             setIsTxPending(false);
-            txEngine.confirmInBackground(hash, 'revealDeck');
+            return hash;
         } catch (e: any) {
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
@@ -136,9 +148,14 @@ export function useShuffleActions(deps: ShuffleDeps) {
                 recipients,
                 encryptedKeys.map(k => k as `0x${string}`)
             ]);
-            addLog(`Keys shared to ${recipients.length} players!`, "success");
-            setIsTxPending(false);
-            txEngine.confirmInBackground(hash, 'shareKeysToAll');
+            addLog(`Keys shared to ${recipients.length} players! Waiting for confirmation...`, "info");
+            
+            const pClient = refs.publicClientRef.current;
+            if (pClient) {
+                const receipt = await pClient.waitForTransactionReceipt({ hash });
+                if (receipt.status === 'reverted') throw new Error("shareKeysToAll reverted");
+            }
+            addLog("Keys confirmed on-chain!", "success");
         } catch (e: any) {
             const errMsg = (e.message || '').toLowerCase() + (e.shortMessage || '').toLowerCase();
             if (errMsg.includes('alreadyshared') || errMsg.includes('keysalreadyshared')) {
