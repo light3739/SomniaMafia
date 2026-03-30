@@ -91,6 +91,7 @@ export function useNightActions(deps: NightDeps) {
                             dayCount: resolvedDayCount,
                             nonce,
                             timestamp,
+                            chainId: targetChain.id,
                         }),
                     });
 
@@ -230,6 +231,7 @@ export function useNightActions(deps: NightDeps) {
                     targetAddress: target,
                     nonce,
                     timestamp,
+                    chainId: targetChain.id,
                 }),
             });
 
@@ -301,6 +303,7 @@ export function useNightActions(deps: NightDeps) {
                         roomId: roomId.toString(),
                         nonce,
                         timestamp,
+                        chainId: targetChain.id,
                     }),
                 });
 

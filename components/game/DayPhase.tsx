@@ -222,6 +222,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                         action: 'start',
                         nonce,
                         timestamp,
+                        chainId,
                     }),
                 });
 
@@ -294,6 +295,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                     action: 'skip',
                     nonce,
                     timestamp,
+                    chainId,
                 }),
             });
 
