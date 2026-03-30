@@ -22,6 +22,49 @@ import {
 import { loadOrCreateKeypair } from '../../services/eciesService';
 import { loadSession } from '../../services/sessionKeyService'; // Add this too
 
+// ─── TypewriterText (ERASE & TYPE EFFECT) ────────────────────────────────────
+
+const TypewriterText: React.FC<{ text: string; delay?: number; speed?: number }> = ({ text, delay = 0, speed = 45 }) => {
+    const [displayText, setDisplayText] = useState(text);
+    const [isAnimating, setIsAnimating] = useState(false);
+    const targetTextRef = useRef(text);
+
+    useEffect(() => {
+        if (text === targetTextRef.current) return;
+        
+        setIsAnimating(true);
+        targetTextRef.current = text;
+        
+        // Phase 1: Erase
+        let currentText = displayText;
+        const eraseInterval = setInterval(() => {
+            if (currentText.length > 0) {
+                currentText = currentText.slice(0, -1);
+                setDisplayText(currentText);
+            } else {
+                clearInterval(eraseInterval);
+                // Phase 2: Type new text
+                let i = 0;
+                const typeInterval = setInterval(() => {
+                    if (i < text.length) {
+                        setDisplayText(text.slice(0, i + 1));
+                        i++;
+                    } else {
+                        clearInterval(typeInterval);
+                        setIsAnimating(false);
+                    }
+                }, speed);
+            }
+        }, speed / 1.5);
+
+        return () => {
+            clearInterval(eraseInterval);
+        };
+    }, [text, speed]);
+
+    return <span>{displayText}</span>;
+};
+
 // ─── Shared ────────────────────────────────────────────────────────────────────
 
 const AsciiSpinner: React.FC<{ className?: string }> = ({ className = '' }) => {
@@ -36,40 +79,51 @@ const AsciiSpinner: React.FC<{ className?: string }> = ({ className = '' }) => {
 
 // ─── Role config (Reveal) ──────────────────────────────────────────────────────
 
-const RoleConfig: Record<Role, {
-    icon: React.ReactNode;
-    color: string; bgColor: string; borderColor: string; ringColor: string;
-    description: string; label: string;
-}> = {
+const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string; ringColor: string; description: string; label: string }> = {
     [Role.MAFIA]: {
-        icon: <Skull className="w-20 h-20" />,
-        color: 'text-[#8B0000]', bgColor: 'from-[#8B0000]/25 to-[#0A0705]/80',
-        borderColor: 'border-[#8B0000]/30', ringColor: 'ring-[#8B0000]/10',
-        label: 'MAFIA', description: 'Eliminate all civilians to win. Vote by day, kill by night.'
+        icon: <Skull className="w-16 h-16" />,
+        color: 'text-[#8B0000]',
+        bgColor: 'from-[#8B0000]/25 to-[#0A0705]/80',
+        borderColor: 'border-[#8B0000]/30',
+        ringColor: 'ring-[#8B0000]/10',
+        label: 'MAFIA',
+        description: 'Eliminate all civilians to win. Vote by day, kill by night.'
     },
     [Role.DOCTOR]: {
-        icon: <Shield className="w-20 h-20" />,
-        color: 'text-[#2D6A4F]', bgColor: 'from-[#1B4332]/30 to-[#0A0705]/80',
-        borderColor: 'border-[#2D6A4F]/25', ringColor: 'ring-[#2D6A4F]/8',
-        label: 'DOCTOR', description: 'Save one player each night from the mafia attack.'
+        icon: <Shield className="w-16 h-16" />,
+        color: 'text-[#0D9488]',
+        bgColor: 'from-[#0D9488]/25 to-[#0A0705]/80',
+        borderColor: 'border-[#0D9488]/30',
+        ringColor: 'ring-[#0D9488]/10',
+        label: 'DOCTOR',
+        description: 'Save one player each night from the mafia attack.'
     },
     [Role.DETECTIVE]: {
-        icon: <Search className="w-20 h-20" />,
-        color: 'text-[#94A3B8]', bgColor: 'from-[#1E293B]/30 to-[#0A0705]/80',
-        borderColor: 'border-[#94A3B8]/20', ringColor: 'ring-[#94A3B8]/8',
-        label: 'DETECTIVE', description: 'Investigate one player each night to reveal their alignment.'
+        icon: <Search className="w-16 h-16" />,
+        color: 'text-[#A85832]',
+        bgColor: 'from-[#A85832]/25 to-[#0A0705]/80',
+        borderColor: 'border-[#A85832]/30',
+        ringColor: 'ring-[#A85832]/10',
+        label: 'DETECTIVE',
+        description: 'Investigate one player each night to reveal their alignment.'
     },
     [Role.CIVILIAN]: {
-        icon: <Users className="w-20 h-20" />,
-        color: 'text-[#78716C]', bgColor: 'from-[#292524]/40 to-[#0A0705]/80',
-        borderColor: 'border-[#78716C]/20', ringColor: 'ring-[#78716C]/8',
-        label: 'CIVILIAN', description: 'Find and vote out the mafia during the day to survive.'
+        icon: <Users className="w-16 h-16" />,
+        color: 'text-[#6B5A4A]',
+        bgColor: 'from-[#6B5A4A]/25 to-[#0A0705]/80',
+        borderColor: 'border-[#6B5A4A]/20',
+        ringColor: 'ring-[#6B5A4A]/8',
+        label: 'CIVILIAN',
+        description: 'Find and vote out the mafia during the day to survive.'
     },
     [Role.UNKNOWN]: {
-        icon: <EyeOff className="w-20 h-20" />,
-        color: 'text-stone-600', bgColor: 'from-stone-950/50 to-[#0A0705]/80',
-        borderColor: 'border-stone-700/20', ringColor: 'ring-stone-700/8',
-        label: 'UNKNOWN', description: 'Role unknown'
+        icon: <EyeOff className="w-16 h-16" />,
+        color: 'text-stone-600',
+        bgColor: 'from-stone-950/50 to-[#0A0705]/80',
+        borderColor: 'border-stone-700/20',
+        ringColor: 'ring-stone-700/8',
+        label: 'UNKNOWN',
+        description: 'Role unknown'
     }
 };
 
@@ -89,84 +143,102 @@ interface ShufflePanelProps {
     isProcessing: boolean;
     isTxPending: boolean;
     currentShufflerName?: string;
+    totalPlayers: number;
     onRetry: () => void;
 }
 
 const ShufflePanel: React.FC<ShufflePanelProps> = ({
-    shuffleState, progress, isProcessing, isTxPending, currentShufflerName, onRetry
-}) => (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 gap-8">
-        {/* Spinner */}
-        <div className="w-14 h-14 flex items-center justify-center opacity-85">
-            {progress >= 100 ? (
-                <span className="font-mono text-[#916A47] text-4xl">✓</span>
-            ) : shuffleState.isFailed ? (
-                <span className="font-mono text-[#8B0000] text-4xl">✗</span>
-            ) : (
-                <AsciiSpinner className="text-[#916A47] text-4xl" />
+    shuffleState, progress, isProcessing, isTxPending, currentShufflerName, totalPlayers, onRetry
+}) => {
+    const dealtCardsCount = Math.floor(progress / 100 * totalPlayers); 
+
+    return (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 gap-12">
+            {/* Status Section */}
+
+            {/* Status */}
+            <div className="text-center">
+                <p className="font-mono text-[10px] tracking-[0.35em] text-white/35 uppercase mb-3.5">&gt; STATUS</p>
+                <div className="flex items-center justify-center gap-1.5">
+                    <p className={`font-mono text-[16px] tracking-widest uppercase leading-tight ${
+                        shuffleState.isFailed ? 'text-[#8B0000]' :
+                        shuffleState.hasRevealed ? 'text-[#c8a84b]' :
+                        'text-white/85'
+                    }`}>
+                        {(() => {
+                            const fullText = shuffleState.isFailed
+                                ? 'TX_FAILED_PRESS_RETRY'
+                                : shuffleState.hasRevealed
+                                    ? 'PENDING // ALL_OPERATIVES'
+                                    : shuffleState.isMyTurn
+                                        ? (shuffleState.hasCommitted ? 'STEP_2 // SEALING_DOSSIER' : 'STEP_1 // SCRAMBLING_DATA')
+                                        : `PENDING // ${currentShufflerName?.toUpperCase() || 'PLAYER'}`;
+                            
+                            const parts = fullText.split(' // ');
+                            if (parts.length > 1) {
+                                return (
+                                    <>
+                                        <span className="opacity-40">{parts[0]} // </span>
+                                        <TypewriterText text={parts[1]} />
+                                    </>
+                                );
+                            }
+                            return <TypewriterText text={fullText} />;
+                        })()}
+                    </p>
+                    {!shuffleState.hasRevealed && !shuffleState.isFailed && (
+                        <motion.div
+                            className="w-2 h-4 bg-[#c8a84b]"
+                            animate={{ opacity: [1, 1, 0, 0, 1] }}
+                            transition={{ 
+                                duration: 1, 
+                                repeat: Infinity, 
+                                times: [0, 0.5, 0.51, 0.99, 1],
+                                ease: "linear"
+                            }}
+                        />
+                    )}
+                </div>
+            </div>
+
+            {/* Hero Progress — Enlarged Cards */}
+            <div className="w-full">
+                <div className="flex gap-3 justify-center">
+                    {[...Array(totalPlayers)].map((_, i) => {
+                        const isDone = i < shuffleState.currentShufflerIndex;
+                        const isActive = i === shuffleState.currentShufflerIndex && !shuffleState.hasRevealed && !shuffleState.isFailed;
+                        return (
+                            <div
+                                key={i}
+                                className={`w-8 h-11 border text-[12px] flex items-center justify-center rounded-[2px] transition-all duration-500 overflow-hidden relative ${
+                                    isDone 
+                                        ? 'border-[#c8a84b] text-[#c8a84b] bg-[#c8a84b]/20 shadow-[0_0_12px_rgba(200,168,75,0.25)]'
+                                        : isActive
+                                            ? 'border-[#c8a84b] text-[#c8a84b] bg-[#c8a84b]/5 animate-pulse'
+                                            : 'border-white/10 text-white/10 bg-[#13120f]/50'
+                                }`}
+                            >
+                                {(isDone || isActive) && <div className={`absolute top-0 left-0 right-0 h-[3px] bg-[#c8a84b] ${isActive ? 'animate-pulse' : ''}`} />}
+                                <span className="font-mono">?</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {shuffleState.isFailed && shuffleState.isMyTurn && (
+                <Button
+                    variant="ghost"
+                    className="text-[10px] font-mono tracking-[0.3em] h-10 px-8 border-[#8B0000]/40 text-[#8B0000] hover:bg-[#8B0000]/10 uppercase rounded-sm"
+                    onClick={onRetry}
+                >
+                    <RefreshCw className="w-3.5 h-3.5 mr-2" />
+                    RETRY OPERATION
+                </Button>
             )}
         </div>
-
-        {/* Status */}
-        <div className="text-center">
-            <p className="font-mono text-[11px] tracking-[0.35em] text-white/50 uppercase mb-3">&gt; STATUS</p>
-            <p className={`font-mono text-[19px] tracking-wide uppercase leading-tight ${
-                shuffleState.isFailed ? 'text-[#8B0000]' :
-                shuffleState.hasRevealed ? 'text-[#916A47]' :
-                'text-white/85'
-            }`}>
-                {shuffleState.isFailed
-                    ? '!! TX_FAILED_PRESS_RETRY'
-                    : shuffleState.hasRevealed
-                        ? 'STANDBY // AWAITING_OPERATIVES'
-                        : shuffleState.isMyTurn
-                            ? (shuffleState.hasCommitted ? 'STEP_2 // SEALING_DOSSIER...' : 'STEP_1 // SCRAMBLING_DATA...')
-                            : `STANDBY // ${currentShufflerName?.toUpperCase() || 'PLAYER'}`
-                }
-                {!shuffleState.hasRevealed && !shuffleState.isFailed && (
-                    <span className="animate-pulse ml-1 text-[#916A47]">▌</span>
-                )}
-            </p>
-        </div>
-
-        {/* Progress bar */}
-        <div className="w-full max-w-[320px]">
-            <div className="flex justify-between font-mono text-[11px] tracking-wide mb-2.5">
-                <span className="text-white/50 uppercase">PROGRESS</span>
-                <span className="text-[#916A47]">{Math.floor(progress)}%</span>
-            </div>
-            <div className="h-[2px] bg-black/70 rounded-full overflow-hidden relative">
-                <motion.div
-                    className={`h-full rounded-full ${shuffleState.isFailed ? 'bg-[#8B0000]' : 'bg-[#916A47]'}`}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ duration: 0.8, ease: 'easeOut' }}
-                />
-                {!shuffleState.isFailed && !shuffleState.hasRevealed && progress > 0 && (
-                    <motion.div
-                        className="absolute top-0 h-full w-6 bg-white/20 blur-[2px] rounded-full"
-                        animate={{ left: `${Math.max(progress - 2, 0)}%` }}
-                        transition={{ duration: 0.8, ease: 'easeOut' }}
-                    />
-                )}
-            </div>
-            <div className="font-mono text-[11px] tracking-wide mt-2.5 text-white/45 uppercase">
-                PLAYER {shuffleState.currentShufflerIndex + 1} / {Math.ceil(100 / Math.max(progress / shuffleState.currentShufflerIndex || 1, 1))} &bull; {shuffleState.deck.length} CARDS
-            </div>
-        </div>
-
-        {shuffleState.isFailed && shuffleState.isMyTurn && (
-            <Button
-                variant="ghost"
-                className="text-[11px] font-mono tracking-widest py-1 h-8 border-[#8B0000]/40 text-[#8B0000]/70 hover:bg-[#8B0000]/10 uppercase"
-                onClick={onRetry}
-            >
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                RETRY
-            </Button>
-        )}
-    </div>
-);
+    );
+};
 
 // ─── RevealPanel (right content during REVEAL) ────────────────────────────────
 
@@ -182,38 +254,58 @@ interface RevealPanelProps {
     isTxPending: boolean;
     onConfirm: () => void;
     allConfirmed: boolean;
+    isTestMode: boolean;
 }
 
 const RevealPanel: React.FC<RevealPanelProps> = ({
-    revealState, isProcessing, isTxPending, onConfirm, allConfirmed
+    revealState, isProcessing, isTxPending, onConfirm, allConfirmed, isTestMode
 }) => {
     const roleConfig = revealState.myRole ? RoleConfig[revealState.myRole] : RoleConfig[Role.UNKNOWN];
 
     return (
         <div className="flex-1 flex flex-col items-center justify-center p-8">
             <AnimatePresence mode="wait">
-                {!revealState.isRevealed ? (
+                {(!revealState.isRevealed && !isTestMode) ? (
+                    // Loading state
                     <motion.div
                         key="loading"
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="flex flex-col items-center gap-6 text-center"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="flex flex-col items-center gap-5 text-center"
                     >
-                        <div className="h-14 flex items-center justify-center opacity-85">
-                            <AsciiSpinner className="text-[#916A47] text-4xl" />
+                        {/* ASCII Spinner */}
+                        <div className="h-14 flex items-center justify-center mb-6">
+                            <div className="relative w-14 h-14 flex items-center justify-center border border-white/5 bg-[#0f0e10] rounded-sm">
+                                <AsciiSpinner className="text-[#c8a84b] text-2xl" />
+                            </div>
                         </div>
                         <div>
-                            <p className="font-mono text-[11px] tracking-[0.35em] text-white/50 uppercase mb-3">&gt; STATUS</p>
-                            <p className="font-mono text-[19px] tracking-wide text-white/85 uppercase">
-                                {!revealState.eciesRegistered ? 'SECURING_CHANNEL' :
-                                    !revealState.hasSharedKeys ? 'DECRYPTING_DOSSIER' :
-                                        'VERIFYING_IDENTITY'}
-                                <span className="animate-pulse ml-1 text-[#916A47]">▌</span>
+                            <p className="font-mono text-[10px] tracking-[0.35em] text-white/50 uppercase mb-2">&gt; STATUS</p>
+                            <p className="font-mono text-[16px] tracking-wide text-white/80 uppercase">
+                                <TypewriterText 
+                                    text={!revealState.eciesRegistered ? 'SECURING_CHANNEL' :
+                                        !revealState.hasSharedKeys ? 'DECRYPTING_DOSSIER' :
+                                            'VERIFYING_IDENTITY'} 
+                                />
+                                <motion.span
+                                    className="ml-1 text-[#c8a84b]"
+                                    animate={{ opacity: [1, 1, 0, 0, 1] }}
+                                    transition={{ 
+                                        duration: 1, 
+                                        repeat: Infinity, 
+                                        times: [0, 0.5, 0.51, 0.99, 1],
+                                        ease: "linear"
+                                    }}
+                                >
+                                    ▌
+                                </motion.span>
                             </p>
                         </div>
-                        <div className="w-full max-w-[260px]">
+                        <div className="w-full max-w-[220px]">
                             <div className="h-[2px] bg-black/70 rounded-full overflow-hidden">
                                 <motion.div
-                                    className="h-full bg-[#916A47] rounded-full"
+                                    className="h-full bg-[#c8a84b] rounded-full"
                                     animate={{ width: revealState.hasSharedKeys ? '100%' : '50%' }}
                                     transition={{ duration: 0.6 }}
                                 />
@@ -221,23 +313,24 @@ const RevealPanel: React.FC<RevealPanelProps> = ({
                         </div>
                     </motion.div>
                 ) : (
+                    // Role card (Original Design)
                     <motion.div
                         key="revealed"
                         initial={{ opacity: 0, rotateY: 90 }}
                         animate={{ opacity: 1, rotateY: 0 }}
-                        transition={{ type: 'spring', duration: 0.8 }}
-                        className={`bg-gradient-to-br ${roleConfig.bgColor} w-[270px] aspect-[3/4] rounded-sm border ${roleConfig.borderColor} ring-1 ${roleConfig.ringColor} p-7 shadow-[0_30px_60px_rgba(0,0,0,0.98)] relative overflow-hidden flex flex-col justify-between`}
+                        transition={{ type: "spring", duration: 0.8 }}
+                        className={`bg-gradient-to-br ${roleConfig.bgColor} w-[240px] aspect-[3/4] rounded-sm border ${roleConfig.borderColor} ring-1 ${roleConfig.ringColor} p-6 shadow-[0_30px_60px_rgba(0,0,0,0.98)] relative overflow-hidden flex flex-col justify-between`}
                     >
-                        {/* SVG noise */}
+                        {/* SVG Noise */}
                         <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-[0.035]" xmlns="http://www.w3.org/2000/svg">
-                            <filter id="noise-sar">
+                            <filter id="noise-original">
                                 <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="4" stitchTiles="stitch" />
                                 <feColorMatrix type="saturate" values="0" />
                             </filter>
-                            <rect width="100%" height="100%" filter="url(#noise-sar)" />
+                            <rect width="100%" height="100%" filter="url(#noise-original)" />
                         </svg>
 
-                        {/* Watermark */}
+                        {/* Watermark icon */}
                         <motion.div
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 0.08, scale: 1 }}
@@ -252,7 +345,7 @@ const RevealPanel: React.FC<RevealPanelProps> = ({
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 0.6 }}
-                            className={`absolute bottom-16 left-3 font-mono text-[8px] tracking-[0.3em] uppercase px-1.5 py-[2px] border ${roleConfig.borderColor} ${roleConfig.color} opacity-20 rotate-[-7deg] select-none pointer-events-none`}
+                            className={`absolute top-7 left-4 font-mono text-[10px] tracking-[0.3em] uppercase px-2 py-[3px] border ${roleConfig.borderColor} ${roleConfig.color} opacity-20 rotate-[-12deg] select-none pointer-events-none`}
                         >
                             CLASSIFIED
                         </motion.div>
@@ -267,25 +360,33 @@ const RevealPanel: React.FC<RevealPanelProps> = ({
                         {/* Content */}
                         <div className="text-center flex-1 flex flex-col justify-center relative z-10">
                             <motion.p
-                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}
-                                className="font-mono text-[8px] tracking-[0.3em] text-white/35 uppercase mb-4"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.15 }}
+                                className="font-mono text-[7px] tracking-[0.3em] text-white/35 uppercase mb-3"
                             >
                                 CASE FILE // ROLE
                             </motion.p>
                             <motion.h2
-                                initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-                                className={`text-3xl font-['Cinzel'] mb-4 ${roleConfig.color}`}
+                                initial={{ opacity: 0, y: 15 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.3 }}
+                                className={`text-[24px] font-[Cinzel] font-semibold tracking-[0.2em] mb-3 ${roleConfig.color}`}
                             >
                                 {revealState.myRole}
                             </motion.h2>
                             <motion.div
-                                initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 0.45, duration: 0.5 }}
-                                className="h-px w-12 mx-auto mb-4 opacity-30"
+                                initial={{ scaleX: 0 }}
+                                animate={{ scaleX: 1 }}
+                                transition={{ delay: 0.45, duration: 0.5 }}
+                                className="h-px w-10 mx-auto mb-3 opacity-30"
                                 style={{ background: 'currentColor' }}
                             />
                             <motion.p
-                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.55 }}
-                                className="text-white/45 text-[12px] font-mono leading-relaxed tracking-wide max-w-[195px] mx-auto"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.55 }}
+                                className="text-white/40 text-[10px] font-mono leading-relaxed tracking-wide max-w-[170px] mx-auto"
                             >
                                 {roleConfig.description}
                             </motion.p>
@@ -297,21 +398,20 @@ const RevealPanel: React.FC<RevealPanelProps> = ({
                                 <motion.button
                                     onClick={onConfirm}
                                     disabled={isProcessing || isTxPending}
-                                    whileHover={{ scale: 1.01 }}
                                     whileTap={{ scale: 0.98 }}
-                                    className={`w-full py-3 px-4 rounded-sm border font-['Cinzel'] text-[10px] tracking-[0.25em] uppercase transition-all duration-300
-                                        border-[#8B0000]/30 text-white/55
-                                        bg-transparent hover:bg-[#8B0000]/12 hover:border-[#8B0000]/55 hover:text-white/85
+                                    className={`w-full py-2.5 px-4 rounded-sm border font-[Cinzel] text-[9px] tracking-[0.25em] uppercase transition-all duration-300
+                                        border-white/10 text-white/50
+                                        bg-transparent hover:bg-white/[0.05] hover:border-white/30 hover:text-white/80
                                         disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
                                 >
                                     {(isProcessing || isTxPending)
-                                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Confirming...</>
+                                        ? <><Loader2 className="w-3 h-3 animate-spin" /> Confirming...</>
                                         : 'I Understand My Role'}
                                 </motion.button>
                             ) : (
-                                <div className={`flex items-center justify-center gap-2 ${roleConfig.color} py-3.5`}>
-                                    {allConfirmed ? <Check className="w-5 h-5" /> : <Loader2 className="w-4 h-4 animate-spin" />}
-                                    <span className="font-['Cinzel'] text-[10px] tracking-[0.2em] uppercase">
+                                <div className={`flex items-center justify-center gap-2 ${roleConfig.color} py-3`}>
+                                    {allConfirmed ? <Check className="w-4 h-4" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                    <span className="font-['Montserrat'] text-[9px] tracking-[0.2em] uppercase font-bold opacity-80">
                                         {allConfirmed ? 'Confirmed' : 'Awaiting Others...'}
                                     </span>
                                 </div>
@@ -430,15 +530,20 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
     // ── Test mode simulation ───────────────────────────────────────────────────
     useEffect(() => {
         if (!isTestMode || !myPlayer) return;
-        const hasStarted = gameState.revealedCount >= gameState.players.length;
-        if (myPlayer.hasConfirmedRole) {
-            setRevealState({ myRole: myPlayer.role, isRevealed: true, hasSharedKeys: true, eciesRegistered: true, hasConfirmed: true });
-        } else if (hasStarted) {
-            setRevealState({ myRole: myPlayer.role, isRevealed: true, hasSharedKeys: true, eciesRegistered: true, hasConfirmed: false });
+        const isRevealPhase = gameState.phase === GamePhase.REVEAL;
+        
+        if (isRevealPhase) {
+            console.log('[ShuffleAndReveal] TestMode: Setting revealState to visible for role:', myPlayer.role);
+            if (myPlayer.hasConfirmedRole) {
+                setRevealState({ myRole: myPlayer.role, isRevealed: true, hasSharedKeys: true, eciesRegistered: true, hasConfirmed: true });
+            } else {
+                setRevealState({ myRole: myPlayer.role, isRevealed: true, hasSharedKeys: true, eciesRegistered: true, hasConfirmed: false });
+            }
         } else {
-            setRevealState({ myRole: null, isRevealed: false, hasSharedKeys: true, eciesRegistered: true, hasConfirmed: false });
+            // Reset for shuffle phase
+            setRevealState(prev => ({ ...prev, isRevealed: false, myRole: null, hasConfirmed: false }));
         }
-    }, [isTestMode, myPlayer, gameState.revealedCount, gameState.players.length]);
+    }, [isTestMode, myPlayer, gameState.phase, gameState.revealedCount, gameState.players.length]);
 
     // ── Shuffle: fetch from contract ───────────────────────────────────────────
     const fetchShuffleData = useCallback(async () => {
@@ -743,7 +848,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
     }, [currentRoomId, address, walletClient, chainId, revealState.hasSharedKeys, addLog]);
 
     const handleFetchRole = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient || revealState.isRevealed || revealState.hasConfirmed || !revealState.hasSharedKeys || fetchInFlightRef.current) return;
+        if (isTestMode || !currentRoomId || !address || !walletClient || revealState.isRevealed || revealState.hasConfirmed || !revealState.hasSharedKeys || fetchInFlightRef.current) return;
         fetchInFlightRef.current = true;
         try {
             const role = await fetchMyRoleFromGm({ roomId: currentRoomId.toString(), address, walletClient, chainId });
@@ -807,63 +912,59 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
         const isMe = player.address.toLowerCase() === address?.toLowerCase();
 
         if (isReveal) {
-            // Reveal sidebar: highlight who has confirmed role
             const hasConfirmed = player.hasConfirmedRole;
             return (
                 <div
-                    className={`flex items-center justify-between px-5 py-3 border-b border-white/[0.03] transition-all ${
-                        hasConfirmed ? 'bg-[#916A47]/[0.06]' : isMe ? 'bg-[#916A47]/5' : ''
+                    className={`flex items-center justify-between px-4 py-2.5 border-b border-white/[0.03] transition-all hover:bg-white/[0.02] ${
+                        hasConfirmed ? 'bg-[#c8a84b]/[0.05]' : isMe ? 'bg-[#c8a84b]/[0.03]' : ''
                     }`}
                 >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                        <span className={`text-[13px] shrink-0 transition-colors ${
-                            hasConfirmed ? 'text-[#916A47]' :
-                            isMe ? 'text-[#916A47]/60 animate-pulse' :
-                            'text-white/30'
-                        }`}>●</span>
-                        <span className={`font-mono text-[14px] truncate ${isMe ? 'text-[#916A47]' : hasConfirmed ? 'text-white/80' : 'text-white/55'}`}>
-                            {player.name}{isMe ? '_YOU' : ''}
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasConfirmed ? 'bg-[#c8a84b]' : 'bg-[#3a3838]'}`} />
+                        <span className={`font-mono text-[13px] tracking-wide truncate ${isMe ? 'text-[#e8c86a]' : hasConfirmed ? 'text-white/80' : 'text-white/40'}`}>
+                            {player.name}{isMe ? ' (YOU)' : ''}
                         </span>
                     </div>
-                    <span className={`font-mono text-[11px] tracking-wider shrink-0 ml-1 ${hasConfirmed ? 'text-[#916A47]' : 'text-white/30'}`}>
-                        {hasConfirmed ? 'CONF' : 'WAIT_'}
-                    </span>
+                    <div className={`text-[9px] tracking-[0.2em] font-mono px-1.5 py-0.5 rounded-[1px] border ${
+                        hasConfirmed 
+                            ? 'border-[#4a8a5a]/30 text-[#4a8a5a] bg-[#4a8a5a]/[0.05]' 
+                            : 'border-white/10 text-white/20'
+                    }`}>
+                        CONF
+                    </div>
                 </div>
             );
         }
 
-        // Shuffle sidebar
         const isDone = index < shuffleState.currentShufflerIndex || (isMe && shuffleState.hasRevealed);
         const isActive = index === shuffleState.currentShufflerIndex && !isDone;
         return (
             <motion.div
                 layout
-                className={`flex items-center justify-between px-5 py-3 border-b border-white/[0.03] transition-all ${
-                    isActive ? 'bg-[#916A47]/[0.15]' : isDone ? 'bg-[#916A47]/[0.08]' : ''
+                className={`flex items-center justify-between px-4 py-2.5 border-b border-white/[0.03] transition-all hover:bg-white/[0.02] ${
+                    isActive ? 'bg-[#c8a84b]/[0.08]' : isDone ? 'bg-[#c8a84b]/[0.04]' : ''
                 }`}
             >
-                <div className="flex items-center gap-2.5 min-w-0">
-                    <span className={`text-[13px] shrink-0 transition-colors ${
-                        isDone ? 'text-[#916A47]' :
-                        isActive ? 'text-[#916A47] animate-pulse' :
-                        'text-white/30'
-                    }`}>●</span>
-                    <span className={`font-mono text-[14px] truncate ${
-                        isMe ? 'text-[#916A47]' :
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive || isDone ? 'bg-[#c8a84b]' : 'bg-[#3a3838]'}`} />
+                    <span className={`font-mono text-[13px] tracking-wide truncate ${
+                        isMe ? 'text-[#e8c86a]' :
                         isDone ? 'text-white/80' :
                         isActive ? 'text-white/90' :
-                        'text-white/55'
+                        'text-white/40'
                     }`}>
-                        {player.name}{isMe ? '_YOU' : ''}
+                        {player.name}{isMe ? ' (YOU)' : ''}
                     </span>
                 </div>
-                <span className={`font-mono text-[11px] tracking-wider shrink-0 ml-1 ${
-                    isDone ? 'text-[#916A47]' :
-                    isActive ? 'text-[#916A47]' :
-                    'text-white/25'
+                <div className={`text-[9px] tracking-[0.2em] font-mono px-1.5 py-0.5 rounded-[1px] border ${
+                    isDone 
+                        ? 'border-[#c8a84b]/30 text-[#c8a84b] bg-[#c8a84b]/[0.05]' 
+                        : isActive 
+                            ? 'border-[#c8a84b]/60 text-[#c8a84b] bg-[#c8a84b]/[0.1] shadow-[0_0_5px_rgba(200,168,75,0.2)]'
+                            : 'border-white/10 text-white/10'
                 }`}>
-                    {isDone ? 'DONE' : isActive ? (isShuffleProcessing ? '●●●' : 'ACTIVE') : 'WAIT_'}
-                </span>
+                    {isDone ? 'DONE' : isActive ? 'ACTIVE' : 'WAIT'}
+                </div>
             </motion.div>
         );
     };
@@ -871,72 +972,73 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
     // ── Render ─────────────────────────────────────────────────────────────────
     return (
         <div className="w-full h-[100dvh] flex flex-col items-center justify-center overflow-hidden p-4 pointer-events-auto">
-            <div className="w-full max-w-[820px] bg-[#060403] rounded-sm border border-[#916A47]/20 shadow-[0_40px_80px_rgba(0,0,0,0.97)] flex flex-col overflow-hidden">
+            <div className="w-full max-w-[820px] bg-[#09080b] rounded-sm border border-white/5 shadow-[0_45px_100px_rgba(0,0,0,0.95)] flex flex-col overflow-hidden">
 
                 {/* ── HEADER ─────────────────────────────────────────── */}
-                <div className="flex items-center justify-between px-6 py-3 border-b border-[#916A47]/15 bg-black/50">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.05] bg-[#0f0e10]">
                     <div className="flex items-center gap-3">
-                        <span className="font-mono text-[13px] tracking-[0.3em] text-[#916A47] uppercase">CASE FILE</span>
-                        <span className="text-[#916A47]/50">//</span>
-                        <span className="font-mono text-[13px] tracking-[0.2em] text-white/55 uppercase">
+                        <span className="font-mono text-[11px] tracking-[0.4em] text-white/30 uppercase">CASE FILE</span>
+                        <span className="text-white/10">//</span>
+                        <span className="font-mono text-[11px] tracking-[0.3em] text-[#c8a84b] uppercase font-bold">
                             ROOM_{currentRoomId?.toString() || '???'}
                         </span>
                     </div>
-                    <div className="flex items-center gap-3">
-                        {/* Phase label — smooth cross-fade */}
+                    <div className="flex items-center gap-4">
                         <AnimatePresence mode="wait" initial={false}>
-                            <motion.span
+                            <motion.div
                                 key={isReveal ? 'reveal' : 'shuffle'}
-                                initial={{ opacity: 0, y: -4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 4 }}
-                                transition={{ duration: 0.25 }}
-                                className="font-mono text-[12px] tracking-[0.25em] text-white/45 uppercase"
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 10 }}
+                                className="flex items-center gap-2.5"
                             >
-                                {isReveal ? 'ROLE REVEAL' : 'SHUFFLE PHASE'}
-                            </motion.span>
+                                <div className="w-1.5 h-1.5 bg-[#c8a84b] rounded-full animate-pulse" />
+                                <span className="font-mono text-[11px] tracking-[0.3em] text-[#c8a84b] uppercase font-semibold">
+                                    {isReveal ? 'ROLE REVEAL' : 'SHUFFLE PHASE'}
+                                </span>
+                            </motion.div>
                         </AnimatePresence>
 
-                        {/* Shuffle-only controls */}
-                        {!isReveal && (
-                            <>
+                        {isReveal ? (
+                            <div className="h-4 w-[1px] bg-white/10" />
+                        ) : null}
+
+                        {isReveal ? (
+                            <span className="font-mono text-[11px] tracking-[0.2em] text-white/40">
+                                <span className="text-[#c8a84b]">{keysCollected}</span>/{totalPlayers} CONFIRMED
+                            </span>
+                        ) : (
+                            <div className="flex items-center gap-3">
                                 {Date.now() / 1000 > shuffleState.phaseDeadline && shuffleState.phaseDeadline > 0 && (
                                     <button
                                         onClick={handleTimeoutKick}
                                         disabled={isShuffleProcessing}
-                                        className="font-mono text-[9px] tracking-widest text-[#8B0000]/60 hover:text-[#8B0000] uppercase animate-pulse transition-colors"
+                                        className="font-mono text-[9px] tracking-widest text-[#8B0000] hover:brightness-125 uppercase transition-all"
                                     >
-                                        KICK
+                                        [FORCE_KICK]
                                     </button>
                                 )}
                                 <button
                                     onClick={forceSync}
                                     disabled={isSyncing}
-                                    className="text-white/15 hover:text-[#916A47]/50 transition-colors"
+                                    className="text-white/20 hover:text-[#c8a84b] transition-colors"
                                 >
-                                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                                    <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
                                 </button>
-                            </>
-                        )}
-
-                        {/* Reveal-only counter */}
-                        {isReveal && (
-                            <span className="font-mono text-[12px] text-[#916A47]/70">
-                                {keysCollected}/{totalPlayers}
-                            </span>
+                            </div>
                         )}
                     </div>
                 </div>
 
                 {/* ── BODY ───────────────────────────────────────────── */}
-                <div className="flex min-h-[440px]">
+                <div className="flex min-h-[460px] bg-[#09080a]">
 
                     {/* LEFT — Suspects */}
-                    <div className="w-[230px] shrink-0 border-r border-[#916A47]/10 flex flex-col">
-                        <div className="px-5 py-3.5 border-b border-[#916A47]/8 flex items-center justify-between">
-                            <span className="font-mono text-[12px] tracking-[0.3em] text-white/55 uppercase">SUSPECTS</span>
+                    <div className="w-[220px] shrink-0 border-r border-white/[0.05] flex flex-col bg-[#0f0e10]/50">
+                        <div className="px-5 py-3.5 border-b border-white/[0.05] flex items-center justify-between">
+                            <span className="font-mono text-[10px] tracking-[0.3em] text-white/30 uppercase">SUSPECTS</span>
                             {!isReveal && (
-                                <span className="font-mono text-[11px] text-[#916A47]/60">
+                                <span className="font-mono text-[10px] text-[#c8a84b]/60">
                                     {shuffleState.currentShufflerIndex}/{totalPlayers}
                                 </span>
                             )}
@@ -948,16 +1050,21 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                         </div>
                     </div>
 
-                    {/* RIGHT — phase content (AnimatePresence prevents flash) */}
-                    <AnimatePresence mode="wait" initial={false}>
+                    {/* RIGHT — content */}
+                    <AnimatePresence>
                         <motion.div
                             key={isReveal ? 'reveal-panel' : 'shuffle-panel'}
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={{ duration: 0.3, ease: 'easeInOut' }}
+                            transition={{ duration: 0.2 }}
                             className="flex-1 flex"
                         >
+                            {isTestMode && isReveal && (
+                                <div className="absolute top-2 right-2 z-50 text-[8px] font-mono text-white/20">
+                                    DEBUG: isRevealed={revealState.isRevealed ? 'YES' : 'NO'}
+                                </div>
+                            )}
                             {isReveal ? (
                                 <RevealPanel
                                     revealState={revealState}
@@ -965,6 +1072,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                                     isTxPending={isTxPending}
                                     onConfirm={handleConfirmRole}
                                     allConfirmed={keysCollected >= totalPlayers}
+                                    isTestMode={isTestMode}
                                 />
                             ) : (
                                 <ShufflePanel
@@ -973,6 +1081,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                                     isProcessing={isShuffleProcessing}
                                     isTxPending={isTxPending}
                                     currentShufflerName={currentShuffler?.name}
+                                    totalPlayers={totalPlayers}
                                     onRetry={() => {
                                         setShuffleState(prev => ({ ...prev, isFailed: false, retryCount: 0 }));
                                         handleMyTurn();
@@ -984,9 +1093,9 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                 </div>
 
                 {/* ── FOOTER ─────────────────────────────────────────── */}
-                <div className="px-6 py-2.5 border-t border-[#916A47]/8 bg-black/30">
-                    <span className="font-mono text-[8px] tracking-[0.3em] text-white/30 uppercase flex justify-center">
-                        // SOMNIA NETWORK //
+                <div className="px-6 py-3 border-t border-white/[0.05] bg-[#0f0e10]">
+                    <span className="font-mono text-[9px] tracking-[0.4em] text-white/20 uppercase flex justify-center">
+                        // SOMNIA PROTOCOL // SECURE CHANNEL ACTIVE //
                     </span>
                 </div>
             </div>

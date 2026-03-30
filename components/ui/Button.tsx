@@ -20,7 +20,7 @@ export const Button: React.FC<ButtonProps> = ({
     const variants = {
         // Главная
         primary: "bg-[#916A47] text-[#050505] hover:brightness-110 font-bold border border-[#C5A059]/30 shadow-md rounded-md",
-        'primary-lobby': "bg-[#916A47] hover:bg-[#a37a55] text-white shadow-lg border border-white/10 rounded-md",
+        'primary-lobby': "bg-[#A8784F] hover:bg-[#8A6340] text-white shadow-lg border border-white/10 rounded-md transition-all",
 
         // Вторичные
         secondary: "bg-[#0A0A0A] hover:bg-[#111111] text-white/80 border border-white/5 shadow-sm rounded-md",
@@ -28,7 +28,7 @@ export const Button: React.FC<ButtonProps> = ({
 
         // OUTLINE-GOLD — инверсия при наведении, но приглушённая
         'outline-gold': "bg-[#1A1510] border border-[#B88A5E] text-[#B88A5E] hover:bg-[#6B5038] hover:border-[#6B5038] hover:text-[#F0E6D8] shadow-sm rounded-md transition-all",
-        'outline-gold-lobby': "bg-[#1A1510] border-2 border-[#916A47] text-size-2 text-[#B88A5E] hover:bg-[#916A47] hover:text-[#F0E6D8] shadow-sm rounded-md transition-all",
+        'outline-gold-lobby': "bg-[#1A1510] border-2 border-[#A8784F] text-[#A8784F] hover:bg-[#6B4A2E] hover:border-[#6B4A2E] hover:text-[#F0E6D8] shadow-sm rounded-md transition-all",
         ghost: "bg-transparent text-white/60 hover:text-white",
 
         // Спец-кнопки

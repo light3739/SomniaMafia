@@ -3,6 +3,8 @@
 @theme {
   --font-serif: var(--font-cinzel), serif;
   --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  --font-ui: var(--font-rajdhani), sans-serif;
+  --font-mono: var(--font-share-tech-mono), monospace;
 }
 
 :root {
@@ -135,7 +137,26 @@ button:disabled,
   transition: all 0.8s ease-in-out;
 }
 
-/* Мягкое свечение для говорящего (Нуар-стайл) */
+/* Speaking glow (Noir style) */
 .speaking-glow {
   border-color: rgba(145, 106, 71, 0.8) !important;
+}
+
+/* Animations for Neo-Noir UI */
+@keyframes spin-reverse {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+.animate-spin-reverse {
+  animation: spin-reverse linear infinite;
+}
+
+@keyframes pulse-noir {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.95); }
+}
+
+.animate-pulse-noir {
+  animation: pulse-noir 2s ease-in-out infinite;
 }

@@ -61,14 +61,14 @@ export const CreateLobby: React.FC = () => {
             // TOURNAMENT FLOW
             const buyIn = tournamentType === 'buy-in' ? tournamentAmount : '0';
             const initialPrize = tournamentType === 'free-roll' ? tournamentAmount : '0';
-            
+
             // For now, use native token
             const paymentToken = '0x0000000000000000000000000000000000000000' as `0x${string}`;
 
             // 0. Fetch base nonce to prevent "nonce too low" errors in rapid succession
-            const baseNonce = await publicClient?.getTransactionCount({ 
-                address: address as `0x${string}`, 
-                blockTag: 'pending' 
+            const baseNonce = await publicClient?.getTransactionCount({
+                address: address as `0x${string}`,
+                blockTag: 'pending'
             }) || 0;
 
             const success = await createTournamentAndRoomOnChain({
@@ -125,7 +125,7 @@ export const CreateLobby: React.FC = () => {
                                 autoFocus
                                 disabled={isTxPending}
                                 containerClassName="w-full"
-                                className="h-[50px] md:h-[54px] !font-['Montserrat'] focus:border-[#D4A54A]"
+                                className="h-[50px] md:h-[54px] !font-['Montserrat'] focus:border-[#C49A3C]"
                             />
                         </div>
 
@@ -141,7 +141,7 @@ export const CreateLobby: React.FC = () => {
                                 placeholder="Leave empty for public"
                                 disabled={isTxPending}
                                 containerClassName="w-full"
-                                className="h-[50px] md:h-[54px] !font-['Montserrat'] focus:border-[#D4A54A]"
+                                className="h-[50px] md:h-[54px] !font-['Montserrat'] focus:border-[#C49A3C]"
                                 type="password"
                             />
                         </div>
@@ -168,18 +168,14 @@ export const CreateLobby: React.FC = () => {
 
                                 {/* Анимированный ползунок (Framer Motion) */}
                                 <motion.div
-                                    className="absolute top-[12px] w-[20px] h-[20px] rounded-full bg-[#D4A54A] border-2 border-[#281608] pointer-events-none z-20"
+                                    className="absolute top-[12px] w-[20px] h-[20px] rounded-full bg-white/90 border border-white/10 pointer-events-none z-20"
                                     animate={{
                                         left: `calc(${((maxPlayers - 10) / 6) * 100}% - ${((maxPlayers - 10) / 6) * 20}px)`,
-                                        scale: sliderActive && !isTxPending ? 1.15 : 1,
-                                        boxShadow: sliderActive && !isTxPending
-                                            ? "0 0 15px rgba(212, 165, 74, 0.6)"
-                                            : "0 0 10px rgba(212, 165, 74, 0.4)"
+                                        scale: sliderActive && !isTxPending ? 1.15 : 1
                                     }}
                                     transition={{
                                         left: { type: "spring", stiffness: 400, damping: 30 },
-                                        scale: { duration: 0.15 },
-                                        boxShadow: { duration: 0.15 }
+                                        scale: { duration: 0.15 }
                                     }}
                                 />
 
@@ -224,7 +220,7 @@ export const CreateLobby: React.FC = () => {
                                         >
                                             <div className="w-full h-1" /> {/* Spacer */}
                                             <span className={`transition-all duration-200 font-montserrat ${n === maxPlayers
-                                                ? 'text-[#D4A54A] font-bold text-[14px] scale-110 drop-shadow-[0_0_8px_rgba(212,165,74,0.4)]'
+                                                ? 'text-white font-bold text-[14px] scale-110'
                                                 : `text-white/40 text-[12px] ${!isTxPending ? 'group-hover/num:text-white/80' : ''}`
                                                 }`}>
                                                 {n}
@@ -243,7 +239,7 @@ export const CreateLobby: React.FC = () => {
                     <div className="flex flex-col w-full">
                         {/* Tournament Toggle Row */}
                         <div className="w-full flex items-center justify-between py-2 px-2">
-                            <span className="text-[#D4A54A] text-sm md:text-base font-semibold uppercase tracking-wider font-['Montserrat']">
+                            <span className="text-[#C49A3C] text-sm md:text-base font-semibold uppercase tracking-wider font-['Montserrat']">
                                 Tournament Mode
                             </span>
                             <button
@@ -256,15 +252,15 @@ export const CreateLobby: React.FC = () => {
                                 data-custom-sound="true"
                                 className="relative w-[52px] h-[28px] rounded-full transition-all duration-300 ease-in-out cursor-pointer border shadow-inner flex items-center px-[3px]"
                                 style={{
-                                    backgroundColor: isTournament ? 'rgba(212, 165, 74, 0.15)' : 'rgba(0, 0, 0, 0.5)',
-                                    borderColor: isTournament ? 'rgba(212, 165, 74, 0.4)' : 'rgba(255, 255, 255, 0.1)'
+                                    backgroundColor: isTournament ? 'rgba(196, 154, 60, 0.15)' : 'rgba(0, 0, 0, 0.5)',
+                                    borderColor: isTournament ? 'rgba(196, 154, 60, 0.4)' : 'rgba(255, 255, 255, 0.1)'
                                 }}
                             >
                                 <motion.div
                                     animate={{ x: isTournament ? 24 : 0 }}
                                     transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                                     className={`w-[20px] h-[20px] rounded-full shadow-md transition-colors duration-300 ${isTournament
-                                        ? 'bg-gradient-to-b from-[#F0C868] to-[#D4A54A] shadow-[0_0_10px_rgba(212,165,74,0.5)]'
+                                        ? 'bg-gradient-to-b from-[#A8784F] to-[#C49A3C] shadow-[0_0_10px_rgba(196,154,60,0.5)]'
                                         : 'bg-[#6b584a]'
                                         }`}
                                 />
@@ -293,13 +289,13 @@ export const CreateLobby: React.FC = () => {
                                                             setTournamentType(type);
                                                         }
                                                     }}
-                                                    className={`relative flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 ${tournamentType === type ? 'text-[#281608]' : 'text-white/50 hover:text-white/80'
+                                                    className={`relative flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 group ${tournamentType === type ? 'text-[#281608]' : 'text-white/50 hover:text-white/80 hover:bg-white/5'
                                                         }`}
                                                 >
                                                     {tournamentType === type && (
                                                         <motion.div
                                                             layoutId="tournament-tab"
-                                                            className="absolute inset-0 bg-gradient-to-r from-[#D4A54A] to-[#B08D57] rounded-lg shadow-md"
+                                                            className="absolute inset-0 bg-[#C49A3C] rounded-lg"
                                                             style={{ zIndex: 0 }}
                                                             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                                                         />
@@ -313,7 +309,7 @@ export const CreateLobby: React.FC = () => {
 
                                         {/* Dynamic Input based on Type */}
                                         <div className="flex flex-col gap-1.5 px-2">
-                                            <label className="text-[#D4A54A]/80 text-xs md:text-sm font-medium uppercase tracking-wider">
+                                            <label className="text-[#C49A3C]/80 text-xs md:text-sm font-medium uppercase tracking-wider">
                                                 {tournamentType === 'buy-in' ? 'Entry Fee per player' : 'Total Prize Pool'}
                                             </label>
                                             <div className="relative">
@@ -329,18 +325,18 @@ export const CreateLobby: React.FC = () => {
                                                     placeholder="0.00"
                                                     disabled={isTxPending}
                                                     containerClassName="w-full"
-                                                    className="h-[50px] md:h-[54px] !font-['Montserrat'] !text-[#D4A54A] !border-[#D4A54A]/30 focus:!border-[#D4A54A] !pr-16"
+                                                    className="h-[50px] md:h-[54px] text-center !pl-16 !font-['Montserrat'] !text-[#C49A3C] !border-[#C49A3C]/30 focus:!border-[#C49A3C] !pr-16"
                                                     type="text"
                                                     inputMode="decimal"
                                                 />
-                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#D4A54A]/50 text-sm font-bold pointer-events-none">
+                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#C49A3C]/50 text-sm font-bold pointer-events-none">
                                                     {currencySymbol}
                                                 </span>
                                             </div>
 
                                             {/* Прячем дергание: фиксированная высота под текст */}
                                             <div className="h-[16px] mt-1 pl-1">
-                                                <span className={`text-[11px] text-[#D4A54A]/60 italic transition-opacity duration-300 block ${tournamentType === 'free-roll' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                                                <span className={`text-[11px] text-[#C49A3C]/60 italic transition-opacity duration-300 block ${tournamentType === 'free-roll' ? 'opacity-100' : 'opacity-0 pointer-events-none'
                                                     }`}>
                                                     * You will need to deposit this amount upon creation.
                                                 </span>
@@ -364,9 +360,9 @@ export const CreateLobby: React.FC = () => {
                     }}
                     variant="primary-lobby"
                     isLoading={isTxPending}
-                    disabled={(!lobbyName.trim()) || isTxPending}
-                    className={`w-full h-[54px] md:h-[60px] text-lg md:text-xl tracking-[0.1em] font-['Cinzel'] transition-all duration-300 mt-2 ${isTournament && lobbyName.trim()
-                        ? '!bg-gradient-to-r !from-[#D4A54A] !to-[#F0C868] !text-[#281608] !border-[#D4A54A]/30 !shadow-[0_0_20px_rgba(212,165,74,0.3)]'
+                    disabled={(!lobbyName.trim()) || (isTournament && (!tournamentAmount.trim() || Number(tournamentAmount) <= 0)) || isTxPending}
+                    className={`w-full h-[54px] md:h-[60px] text-lg md:text-xl tracking-[0.1em] font-['Cinzel'] transition-all duration-300 mt-2 ${isTournament
+                        ? '!bg-[#C49A3C] hover:!bg-[#B8894A] !text-[#281608] !border-[#C49A3C]/30'
                         : ''
                         }`}
                 >

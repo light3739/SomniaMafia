@@ -248,7 +248,6 @@ export const SetupProfile: React.FC = () => {
     return (
         <FlowLayout
             backTo="/"
-            maxWidth="560px"
             rightElement={
                 <button
                     onClick={() => logout().then(() => router.push('/'))}

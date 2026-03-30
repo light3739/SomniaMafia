@@ -51,22 +51,22 @@ export const FlowLayout: React.FC<FlowLayoutProps> = ({
                 }}
             />
 
-            {/* Sticky Header: Always transparent, with proper spacing */}
+            {/* Sticky Header: Always transparent, absolute vertical centering for perfect alignment */}
             <div 
-                className={`w-full flex items-center justify-between sticky top-0 z-50 px-1 pt-4 pb-3 -mx-1`}
+                className={`w-full relative sticky top-0 z-50 h-[76px] shrink-0`}
                 style={{ maxWidth }}
             >
-                <div className="-ml-2">
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 -ml-2">
                     <BackButton to={backTo} label={backLabel} />
                 </div>
                 
                 {title && (
-                    <h1 className="text-white text-lg font-['Cinzel'] font-bold tracking-widest absolute left-1/2 -translate-x-1/2 pointer-events-none">
+                    <h1 className="text-white text-lg font-['Cinzel'] font-bold tracking-widest absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
                         {title}
                     </h1>
                 )}
 
-                <div className="flex items-center gap-2">
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2">
                     {rightElement}
                 </div>
             </div>

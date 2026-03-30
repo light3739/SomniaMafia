@@ -117,7 +117,7 @@ const MainMenuButtonsTestWrapper: React.FC = () => {
                     <div className="flex flex-col gap-2">
                         <span className="text-[10px] text-white/40 uppercase">1. Login / Connect</span>
                         <button
-                            className="px-14 py-3.5 rounded-md font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-[1.03] transition-all text-base md:text-lg tracking-[0.1em] relative overflow-hidden ring-1 ring-white/10 w-full"
+                            className="px-14 py-3.5 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-[1.03] transition-all text-base md:text-lg tracking-[0.1em] relative overflow-hidden ring-1 ring-white/10 w-full"
                             style={{ background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)' }}
                         >
                             <span className="relative z-10">LOGIN / CONNECT</span>
@@ -127,13 +127,55 @@ const MainMenuButtonsTestWrapper: React.FC = () => {
 
                     <div className="flex flex-col gap-2">
                         <span className="text-[10px] text-white/40 uppercase">2. Switch Network</span>
-                        <Button variant="noir-danger" className="px-12 py-3 text-sm tracking-[0.2em] font-['Cinzel'] w-full">
+                        <Button variant="noir-danger" className="px-12 py-4 text-base md:text-lg tracking-[0.2em] font-['Cinzel'] w-full">
                             SWITCH NETWORK
                         </Button>
                     </div>
 
                     <div className="flex flex-col gap-2">
                         <span className="text-[10px] text-white/40 uppercase">3. Enter City</span>
+                        <button
+                            className="px-13 py-3.5 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-[1.03] transition-all text-base md:text-base tracking-[0.1em] relative overflow-hidden ring-1 ring-white/10 w-full"
+                            style={{ background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)' }}
+                        >
+                            <span className="relative z-10">ENTER CITY</span>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            {/* --- MAIN PAGE BUTTONS COMPARSION --- */}
+            <section className="space-y-6 bg-black/40 p-6 rounded-2xl border border-white/5">
+                <h3 className="text-[#C19A6B] text-xs font-bold uppercase tracking-[0.2em] border-b border-white/10 pb-2">Start Button Variants Comparison</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                    {/* Small / Original */}
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[10px] text-white/40 uppercase">1. Small (Original, px-8 text-sm)</span>
+                        <button
+                            className="px-8 py-3 rounded-md font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-105 transition-all text-sm md:text-base tracking-wider relative overflow-hidden ring-1 ring-white/10 w-full"
+                            style={{ background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)' }}
+                        >
+                            <span className="relative z-10">ENTER CITY</span>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
+                        </button>
+                    </div>
+
+                    {/* Medium / User adjusted */}
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[10px] text-white/40 uppercase">2. Medium (px-13 text-base)</span>
+                        <button
+                            className="px-13 py-3.5 rounded-md font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-[1.03] transition-all text-base md:text-base tracking-[0.1em] relative overflow-hidden ring-1 ring-white/10 w-full"
+                            style={{ background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)' }}
+                        >
+                            <span className="relative z-10">ENTER CITY</span>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
+                        </button>
+                    </div>
+
+                    {/* Large / Previous */}
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[10px] text-white/40 uppercase">3. Large (px-14 text-lg)</span>
                         <button
                             className="px-14 py-3.5 rounded-md font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-[1.03] transition-all text-base md:text-lg tracking-[0.1em] relative overflow-hidden ring-1 ring-white/10 w-full"
                             style={{ background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)' }}
@@ -351,7 +393,7 @@ const NightPhaseTestWrapper: React.FC<{ testRole: Role }> = ({ testRole }) => {
         return (
             <div className="w-full h-full flex items-center justify-center text-white">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mx-auto mb-2"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#916A47] mx-auto mb-2"></div>
                     <p>Setting up {testRole} test...</p>
                 </div>
             </div>
@@ -414,10 +456,12 @@ const DayPhaseTestWrapper: React.FC = () => {
                 <h4 className="text-[#916A47] font-bold text-sm">🎤 Mic Test Controls</h4>
                 <button
                     onClick={() => setIsMyTurn(!isMyTurn)}
-                    className={`w-full px-4 py-2 rounded-lg font-medium text-sm ${isMyTurn ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'
+                    className={`w-full px-4 py-2 rounded-lg font-medium text-sm transition-all ${isMyTurn
+                        ? 'bg-[#1A1510] border border-[#916A47] text-[#C49A3C] shadow-[0_0_10px_rgba(145,106,71,0.25)]'
+                        : 'bg-[#111111] border border-white/10 text-white/40'
                         }`}
                 >
-                    {isMyTurn ? '✓ My Turn to Speak' : '✗ Not My Turn'}
+                    {isMyTurn ? '🎤 My Turn to Speak' : '🔇 Not My Turn'}
                 </button>
                 <div className="flex gap-2">
                     <button
@@ -1310,7 +1354,7 @@ const ShufflePhaseAnimatedTest: React.FC = () => {
 
 // Animated Role Reveal - simulates the key collection and role reveal flow  
 const RoleRevealAnimatedTest: React.FC = () => {
-    const { setGameState } = useGameContext();
+    const { setGameState, setIsTestMode } = useGameContext();
     const [keysCollected, setKeysCollected] = useState(0);
     const [isRevealed, setIsRevealed] = useState(false);
     const [selectedRole, setSelectedRole] = useState<Role>(Role.MAFIA);
@@ -1320,6 +1364,7 @@ const RoleRevealAnimatedTest: React.FC = () => {
     const totalKeys = players.length;
 
     useEffect(() => {
+        setIsTestMode(true);
         setGameState({
             phase: GamePhase.REVEAL,
             dayCount: 0,
@@ -1331,15 +1376,15 @@ const RoleRevealAnimatedTest: React.FC = () => {
             maxPlayers: 16,
             mafiaCommittedCount: 0,
             logs: [
-                { id: '1', timestamp: '12:00:00', message: 'Revealing roles...', type: 'phase' }
+                { id: '1', timestamp: '12:00:00', message: 'Revealing roles (Test Mode)...', type: 'phase' }
             ],
-            revealedCount: keysCollected,
+            revealedCount: isRevealed ? totalKeys : keysCollected,
             mafiaRevealedCount: 0,
             phaseDeadline: Math.floor(Date.now() / 1000) + 120,
             winner: null,
             mafiaMessages: []
         });
-    }, [setGameState, keysCollected, isRevealed, selectedRole]);
+    }, [setGameState, setIsTestMode, keysCollected, isRevealed, selectedRole]);
 
     // Auto-play simulation
     useEffect(() => {
@@ -3091,14 +3136,16 @@ const TimersShowcaseTest: React.FC = () => {
 
 // Unified Shuffle & Reveal Test - simulates the full flow
 const ShuffleAndRevealUnifiedTest: React.FC = () => {
-    const { setGameState } = useGameContext();
+    const { setGameState, setIsTestMode } = useGameContext();
     const [currentPhase, setCurrentPhase] = useState<GamePhase.SHUFFLING | GamePhase.REVEAL>(GamePhase.SHUFFLING);
     const [playersDone, setPlayersDone] = useState(0);
+    const [selectedRole, setSelectedRole] = useState<Role>(Role.MAFIA);
 
     const TEST_ADDR = '0x1234567890123456789012345678901234567890' as `0x${string}`;
-    const players = generateMockPlayers(Role.MAFIA, TEST_ADDR);
+    const players = generateMockPlayers(selectedRole, TEST_ADDR);
 
     useEffect(() => {
+        setIsTestMode(true);
         setGameState({
             phase: currentPhase,
             dayCount: 0,
@@ -3107,7 +3154,7 @@ const ShuffleAndRevealUnifiedTest: React.FC = () => {
                 ...p,
                 hasDeckCommitted: currentPhase === GamePhase.SHUFFLING ? idx < playersDone : true,
                 hasConfirmedRole: currentPhase === GamePhase.REVEAL ? idx < playersDone : false,
-                role: (idx === 0 && currentPhase === GamePhase.REVEAL) ? Role.MAFIA : Role.UNKNOWN
+                role: (idx === 0 && currentPhase === GamePhase.REVEAL) ? selectedRole : Role.UNKNOWN
             })),
             maxPlayers: 16,
             mafiaCommittedCount: 0,
@@ -3118,7 +3165,7 @@ const ShuffleAndRevealUnifiedTest: React.FC = () => {
             winner: null,
             mafiaMessages: []
         });
-    }, [setGameState, currentPhase, playersDone]);
+    }, [setGameState, setIsTestMode, currentPhase, playersDone, selectedRole]);
 
     return (
         <div className="w-full flex flex-col items-center gap-6">
@@ -3149,6 +3196,26 @@ const ShuffleAndRevealUnifiedTest: React.FC = () => {
                         <Button variant="ghost" onClick={() => setPlayersDone(0)}>Reset</Button>
                         <Button variant="ghost" onClick={() => setPlayersDone(p => Math.min(p + 1, players.length))}>Add Done</Button>
                         <Button variant="ghost" onClick={() => setPlayersDone(players.length)}>Finish All</Button>
+                    </div>
+                </div>
+
+                <div className="w-px bg-white/10 mx-2" />
+
+                <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Select Role</span>
+                    <div className="flex gap-1">
+                        {[Role.MAFIA, Role.DETECTIVE, Role.DOCTOR, Role.CIVILIAN].map(role => (
+                            <button
+                                key={role}
+                                onClick={() => { setSelectedRole(role); setPlayersDone(0); }}
+                                className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${selectedRole === role
+                                    ? 'bg-amber-600 text-white border border-amber-400'
+                                    : 'bg-white/5 text-white/40 hover:bg-white/10 border border-transparent'
+                                    }`}
+                            >
+                                {role}
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>
