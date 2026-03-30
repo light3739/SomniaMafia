@@ -139,11 +139,10 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                 addLog(`Voting time expired. Auto-finalizing (Node ${myIndex})...`, "warning");
 
                 forcePhaseTimeoutOnChain().catch(err => {
-                    console.error('[DayPhase] forcePhaseTimeout failed:', err);
-                    const isTimeNotExpired = String(err?.message || err?.shortMessage || '').includes('TimeNotExpired');
+                    // Failure loop protection: cooldown before retrying ANY failed attempt
                     setTimeout(() => {
                         votingTimeoutRef.current = false;
-                    }, isTimeNotExpired ? 10_000 : 0);
+                    }, 10_000);
                 });
             }
         };
