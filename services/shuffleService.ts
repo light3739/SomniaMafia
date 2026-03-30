@@ -16,10 +16,10 @@ const PRIME = BigInt('0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1' +
 // Per-room offset to avoid v^e mod p = v when v ∈ {0,1}
 // Derived deterministically from roomId so all players in the same room compute the same offset
 // Range: 100..10099 — always > 1 to avoid fixed-point, unique per room
-function getCardOffset(roomId: string | number): number {
-    const id = typeof roomId === 'string' ? parseInt(roomId) || 0 : roomId;
-    // Simple deterministic hash: spread across range [100, 10099]
-    return 100 + ((id * 7919 + 104729) % 10000);
+function getCardOffset(roomId: string | number | bigint): number {
+    const rid = BigInt(roomId);
+    const result = 100n + ((rid * 7919n + 104729n) % 10000n);
+    return Number(result);
 }
 
 export interface ShuffleKeys {

@@ -166,6 +166,7 @@ export function useRoleActions(deps: RoleDeps) {
                             txHash,
                             nonce,
                             timestamp,
+                            chainId: refs.runtimeChainRef.current.id,
                         }),
                     });
 

@@ -203,14 +203,25 @@ export async function fetchMyRoleFromGm(params: {
         const { privateKey } = await loadOrCreateKeypair(roomId, address);
         const roleStr = await eciesDecrypt(data.encrypted, privateKey);
 
+        const normalized = roleStr.trim().toUpperCase();
         const roleMap: Record<string, Role> = {
             MAFIA: Role.MAFIA,
             DOCTOR: Role.DOCTOR,
             DETECTIVE: Role.DETECTIVE,
             CIVILIAN: Role.CIVILIAN,
+            CIVIL: Role.CIVILIAN, // Alias
         };
 
-        return roleMap[roleStr] || Role.UNKNOWN;
+        let myRole = roleMap[normalized];
+        if (myRole === undefined) {
+            const num = parseInt(normalized, 10);
+            const roleEnumMap: Record<number, Role> = {
+                1: Role.MAFIA, 2: Role.DOCTOR, 3: Role.DETECTIVE, 4: Role.CIVILIAN
+            };
+            myRole = roleEnumMap[num] || Role.UNKNOWN;
+        }
+
+        return myRole;
     } catch (e: any) {
         if (e instanceof DOMException && e.name === 'OperationError') return Role.UNKNOWN;
         throw e;

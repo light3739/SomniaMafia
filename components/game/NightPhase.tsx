@@ -266,6 +266,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     roomId: currentRoomId.toString(),
                     nonce,
                     timestamp,
+                    chainId,
                 }),
             });
 

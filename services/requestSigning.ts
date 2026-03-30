@@ -22,19 +22,19 @@ function generateNonce(timestamp: number): string {
 
 export async function signRequest(params: {
     address: string;
-    roomId?: number;
+    roomId?: string | number;
     walletClient?: SignCapableClient | null;
     signerAddress?: string;
     forceWallet?: boolean; // NEW: bypass session key even if registered
     buildMessage: (input: { nonce: string; timestamp: number }) => string;
 }): Promise<SignedRequestMeta> {
-    const { address, roomId, walletClient, signerAddress, buildMessage } = params;
+    const { address, roomId, walletClient, buildMessage } = params;
 
     if (!address) {
         throw new Error('Missing address for signing');
     }
 
-    const timestamp = Date.now(); // Unix milliseconds — GM server expects ms for modern sig (Date.now())
+    const timestamp = Date.now();
     const nonce = generateNonce(timestamp);
     const message = buildMessage({ nonce, timestamp });
 
@@ -44,10 +44,9 @@ export async function signRequest(params: {
     if (
         !params.forceWallet &&
         roomId !== undefined &&
-        Number.isFinite(roomId) &&
         session &&
         session.mainWallet.toLowerCase() === normalizedAddress &&
-        session.roomId === roomId &&
+        BigInt(session.roomId) === BigInt(roomId) &&
         Date.now() < session.expiresAt
     ) {
         const sessionAccount = privateKeyToAccount(session.privateKey);

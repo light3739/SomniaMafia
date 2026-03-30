@@ -59,6 +59,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                     address: myAddr,
                     nonce,
                     timestamp,
+                    chainId,
                 }),
             });
 
