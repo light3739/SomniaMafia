@@ -29,7 +29,7 @@ export interface GameContextType {
     // Shuffle (V4: commit-reveal)
     startGameOnChain: () => Promise<void>;
     commitDeckOnChain: (deckHash: string) => Promise<`0x${string}` | undefined>;
-    revealDeckOnChain: (deck: string[], salt: string) => Promise<void>;
+    revealDeckOnChain: (deck: string[], salt: string) => Promise<`0x${string}` | undefined>;
 
     // Reveal (V3: batch share keys)
     shareKeysToAllOnChain: (recipients: string[], encryptedKeys: string[]) => Promise<void>;
