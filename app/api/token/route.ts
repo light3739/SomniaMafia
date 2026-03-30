@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
                         playerAddress: String(body.playerAddress),
                         nonce,
                         timestamp,
+                        chainId,
                     }),
             });
 

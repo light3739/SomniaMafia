@@ -12,7 +12,8 @@ export async function POST(request: Request) {
         }
 
         // Verify the caller owns the address (or has a valid session key for it)
-        const message = `reveal-secret:${chainId || 43113}:${rawRoomId}:${role}:${salt}`;
+        // Standardize format: reveal-secret:chainId:roomId:role:salt
+        const message = `reveal-secret:${String(chainId || 43113)}:${String(rawRoomId)}:${String(role)}:${String(salt)}`;
 
         // Try verifying against main wallet address first
         let valid = await verifyMessage({

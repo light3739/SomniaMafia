@@ -27,6 +27,7 @@ export const POST = withSignedRoute<{
         dayCount: body.dayCount || 0,
         nonce,
         timestamp,
+        chainId: body.chainId,
     }),
 }, async ({ body, roomId, signerAddress }) => {
     try {

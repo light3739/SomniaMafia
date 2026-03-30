@@ -24,11 +24,12 @@ export const POST = withSignedRoute<{
     getRoomId: (body) => body.roomId,
     getActorAddress: (body) => body.address,
     getSignerAddress: (body) => body.signerAddress,
-    getMessage: ({ roomId, actorAddress, nonce, timestamp }) => buildAvatarMessage({
+    getMessage: ({ body, roomId, actorAddress, nonce, timestamp }) => buildAvatarMessage({
         roomId,
         address: actorAddress,
         nonce,
         timestamp,
+        chainId: body.chainId,
     }),
 }, async ({ body, roomId }) => {
     if (!body.avatar.startsWith('data:image/')) {
