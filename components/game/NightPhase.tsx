@@ -496,12 +496,10 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
 
                 forcePhaseTimeoutOnChain().catch(err => {
                     console.error('[NightPhase] forcePhaseTimeout failed:', err);
-                    const isTimeNotExpired = String(err?.message || err?.shortMessage || '').includes('TimeNotExpired');
-                    // For TimeNotExpired: contract deadline not yet reached — retry after 10s
-                    // For other errors: retry sooner (2s via next interval tick)
+                    // Failure loop protection: cooldown before retrying ANY failed attempt
                     setTimeout(() => {
                         timeoutTriggeredRef.current = false;
-                    }, isTimeNotExpired ? 10_000 : 0);
+                    }, 10_000);
                 });
             }
         };
