@@ -776,12 +776,11 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                             animate={{ opacity: 1 }}
                                             exit={{ opacity: 0 }}
                                             transition={{ duration: 0.3 }}
-                                            className={`p-3 rounded-md border w-full h-full shadow-[0_5px_15px_rgba(0,0,0,0.8)] z-10 relative ${
-                                                myRole === Role.MAFIA ? 'bg-[#1A0505] border-[#8B0000]' :
-                                                myRole === Role.DOCTOR ? 'bg-[#031A18] border-[#0D9488]' :
-                                                myRole === Role.DETECTIVE ? 'bg-[#1A0C06] border-[#A85832]' : 
-                                                'bg-[#0A0A0A] border-[#916A47]/30'
-                                            }`}
+                                            className={`p-3 rounded-sm border w-full h-full shadow-[0_5px_15px_rgba(0,0,0,0.8)] z-10 relative ${myRole === Role.MAFIA ? 'bg-[#1A0505] border-[#8B0000]' :
+                                                    myRole === Role.DOCTOR ? 'bg-[#031A18] border-[#0D9488]' :
+                                                        myRole === Role.DETECTIVE ? 'bg-[#1A0C06] border-[#A85832]' :
+                                                            'bg-[#0A0A0A] border-[#916A47]/30'
+                                                }`}
                                         >
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-3">
@@ -809,8 +808,12 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                             animate={{ opacity: 1 }}
                                             exit={{ opacity: 0 }}
                                             transition={{ duration: 0.3 }}
-                                            className="absolute inset-0 p-3 rounded-md border border-[#916A47]/30 bg-[#0A0A0A]/0 shadow-[0_5px_15px_rgba(0,0,0,0.8)]"
-                                        />
+                                            className="absolute inset-0 p-3 rounded-sm border border-[#916A47]/50 bg-[#0A0A0A]/50 shadow-[0_5px_15px_rgba(0,0,0,0.8)] flex items-center justify-center gap-2"
+                                        >
+                                            <span className="text-[#916A47] text-[10px] tracking-[3px] font-mono font-bold">
+                                                CLICK PLAYER TO SELECT
+                                            </span>
+                                        </motion.div>
                                     )}
                                 </AnimatePresence>
                             </div>
@@ -822,8 +825,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                 className={`w-full h-[50px] font-['Cinzel'] tracking-[0.08em] text-[13px] uppercase transition-all duration-300 disabled:!brightness-100 ${!selectedTarget
                                     ? 'disabled:!opacity-100 disabled:!brightness-[0.9] !bg-[#1A1612] !border-[#916A47]/30 !text-[#916A47]/40'
                                     : (myRole === Role.MAFIA ? '!text-[#8B0000] !border-[#8B0000] hover:!bg-[#5A0000] hover:!border-[#5A0000] hover:!text-white' :
-                                       myRole === Role.DOCTOR ? '!text-[#0D9488] !border-[#0D9488] hover:!bg-[#065F56] hover:!border-[#065F56] hover:!text-white' :
-                                       myRole === Role.DETECTIVE ? '!text-[#A85832] !border-[#A85832] hover:!bg-[#7D4225] hover:!border-[#7D4225] hover:!text-white' : '')
+                                        myRole === Role.DOCTOR ? '!text-[#0D9488] !border-[#0D9488] hover:!bg-[#065F56] hover:!border-[#065F56] hover:!text-white' :
+                                            myRole === Role.DETECTIVE ? '!text-[#A85832] !border-[#A85832] hover:!bg-[#7D4225] hover:!border-[#7D4225] hover:!text-white' : '')
                                     }`}
                                 data-custom-sound
                             >

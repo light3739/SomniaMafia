@@ -152,9 +152,9 @@ export const WaitingRoom: React.FC = () => {
 
                 {/* Session Key Management */}
                 {currentRoomId !== null && (
-                    <SessionKeyBanner 
-                        roomId={Number(currentRoomId)} 
-                        className="w-full" 
+                    <SessionKeyBanner
+                        roomId={Number(currentRoomId)}
+                        className="w-full"
                         defaultExpanded={true}
                     />
                 )}

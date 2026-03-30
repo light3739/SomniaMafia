@@ -20,7 +20,7 @@ const LockIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
 );
 const TrophyIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D4A54A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C49A3C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
 );
 const ChevronRight = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -49,13 +49,13 @@ function parseRoom(id: bigint, data: any): {
             isPrivate = Boolean(data.isPrivate);
             tournamentId = BigInt(data.tournamentId || 0);
         }
-        return { 
-            id: Number(data.id ?? id), host, name, players: playersCount, 
-            max: maxPlayers, phase, timestamp, isPrivate, tournamentId 
+        return {
+            id: Number(data.id ?? id), host, name, players: playersCount,
+            max: maxPlayers, phase, timestamp, isPrivate, tournamentId
         };
-    } catch (e) { 
+    } catch (e) {
         console.error("[JoinLobby] parseRoom error:", e);
-        return null; 
+        return null;
     }
 }
 
@@ -67,10 +67,10 @@ interface TournamentInfo {
 
 function getTournamentInfo(room: any): TournamentInfo {
     const isTournament = room.tournamentId && room.tournamentId > 0n;
-    return { 
+    return {
         isTournament,
         prize: isTournament ? "TBD" : undefined,
-        hasPassword: room.isPrivate 
+        hasPassword: room.isPrivate
     };
 }
 
@@ -274,12 +274,12 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
                 {/* Баннер Инвайта */}
                 {initialRoomId && !isInitialLoad && (
-                    <div className="w-full p-6 bg-gradient-to-br from-[#19130D] to-[#281608] border border-[#D4A54A]/30 rounded-lg shadow-[0_0_20px_rgba(212,165,74,0.15)] flex flex-col items-center text-center">
+                    <div className="w-full p-6 bg-gradient-to-br from-[#19130D] to-[#281608] border border-[#C49A3C]/30 rounded-lg shadow-[0_0_20px_rgba(196,154,60,0.15)] flex flex-col items-center text-center">
                         <h3 className="text-white text-xl md:text-2xl font-['Cinzel'] mb-1">Room #{initialRoomId} Invite</h3>
 
                         {initialRoomData ? (
                             <div className="flex flex-col gap-4 w-full mt-2">
-                                <p className="text-white/60 text-sm">You have been invited to join <span className="text-[#D4A54A] font-semibold">{initialRoomData.name || 'this session'}</span>.</p>
+                                <p className="text-white/60 text-sm">You have been invited to join <span className="text-[#C49A3C] font-semibold">{initialRoomData.name || 'this session'}</span>.</p>
 
                                 {(!isConnected || !authenticated) ? (
                                     <Button
@@ -323,7 +323,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                         <button
                             onClick={() => fetchRooms('refresh')}
                             disabled={isRefreshing || isInitialLoad}
-                            className="text-[#D4A54A] hover:text-[#F0C868] transition-colors p-1 disabled:opacity-50"
+                            className="text-[#C49A3C] hover:text-[#A8784F] transition-colors p-1 disabled:opacity-50"
                             title="Refresh List"
                         >
                             <motion.div animate={{ rotate: isRefreshing ? 360 : 0 }} transition={{ duration: 0.5, ease: "easeInOut" }}>
@@ -356,9 +356,9 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                             className="flex flex-col items-center"
                                         >
                                             <div className="relative flex items-center justify-center mb-6 mt-2">
-                                                <div className="absolute w-16 h-16 border-2 border-[#D4A54A] rounded-full animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-20" />
-                                                <div className="absolute w-10 h-10 border-2 border-[#D4A54A] rounded-full animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-40" style={{ animationDelay: '0.4s' }} />
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D4A54A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                                                <div className="absolute w-16 h-16 border-2 border-[#C49A3C] rounded-full animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-20" />
+                                                <div className="absolute w-10 h-10 border-2 border-[#C49A3C] rounded-full animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-40" style={{ animationDelay: '0.4s' }} />
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C49A3C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
                                                     <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
                                                 </svg>
                                             </div>
@@ -375,7 +375,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                             transition={{ duration: 0.2 }}
                                             className="flex flex-col items-center"
                                         >
-                                            <span className="text-[#D4A54A]/30 mb-3">
+                                            <span className="text-[#C49A3C]/30 mb-3">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                             </span>
                                             <span className="text-white/40 text-center leading-relaxed">
@@ -410,21 +410,21 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                                 disabled={isTxPending}
                                                 className={`w-full p-4 md:p-5 backdrop-blur-md rounded-md flex items-center justify-between group transition-colors relative overflow-hidden text-left
                                                     ${tournament.isTournament
-                                                        ? 'bg-gradient-to-r from-[#2A1F0A] to-[#19130D] border border-[#D4A54A]/30 hover:border-[#D4A54A]/60 shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
+                                                        ? 'bg-gradient-to-r from-[#2A1F0A] to-[#19130D] border border-[#C49A3C]/30 hover:border-[#C49A3C]/60 shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
                                                         : 'bg-[#19130D]/80 border border-white/5 hover:border-white/20 shadow-lg'
                                                     }
                                                 `}
                                             >
                                                 {tournament.isTournament && (
                                                     <div className="absolute inset-0 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity">
-                                                        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4A54A]/50 to-transparent" />
+                                                        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#C49A3C]/50 to-transparent" />
                                                     </div>
                                                 )}
 
                                                 <div className="flex flex-col items-start gap-1.5">
                                                     <div className="flex items-center gap-2">
                                                         {tournament.isTournament && <TrophyIcon />}
-                                                        <span className={`text-base md:text-lg font-bold tracking-wide ${tournament.isTournament ? 'text-[#F0C868]' : 'text-white/90'}`}>
+                                                        <span className={`text-base md:text-lg font-bold tracking-wide ${tournament.isTournament ? 'text-[#A8784F]' : 'text-white/90'}`}>
                                                             {room.name || `Room #${room.id}`}
                                                         </span>
                                                         {tournament.hasPassword && <LockIcon />}
@@ -432,7 +432,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-white/40 text-[10px] font-mono uppercase">HOST: {room.host.slice(0, 8)}...</span>
                                                         {tournament.isTournament && (
-                                                            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#D4A54A]/10 text-[#D4A54A] border border-[#D4A54A]/20">
+                                                            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#C49A3C]/10 text-[#C49A3C] border border-[#C49A3C]/20">
                                                                 Tournament
                                                             </span>
                                                         )}
@@ -442,12 +442,12 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                                 <div className="flex items-center gap-5">
                                                     {tournament.isTournament && tournament.prize && (
                                                         <div className="text-right hidden sm:block">
-                                                            <span className="text-[#D4A54A] font-bold text-sm block">{tournament.prize}</span>
-                                                            <span className="text-[#D4A54A]/50 text-[9px] uppercase tracking-widest">Prize Pool</span>
+                                                            <span className="text-[#C49A3C] font-bold text-sm block">{tournament.prize}</span>
+                                                            <span className="text-[#C49A3C]/50 text-[9px] uppercase tracking-widest">Prize Pool</span>
                                                         </div>
                                                     )}
                                                     <div className="text-right">
-                                                        <span className={`font-bold text-lg block leading-none ${tournament.isTournament ? 'text-[#D4A54A]' : 'text-white/80'}`}>
+                                                        <span className={`font-bold text-lg block leading-none ${tournament.isTournament ? 'text-[#C49A3C]' : 'text-white/80'}`}>
                                                             {room.players}<span className="text-white/30 text-sm">/{room.max}</span>
                                                         </span>
                                                         <span className="text-white/30 text-[9px] uppercase tracking-widest mt-1 block">Players</span>
@@ -455,7 +455,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
                                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300
                                                         ${tournament.isTournament
-                                                            ? 'bg-[#D4A54A]/10 text-[#D4A54A] group-hover:bg-[#D4A54A] group-hover:text-[#281608]'
+                                                            ? 'bg-[#C49A3C]/10 text-[#C49A3C] group-hover:bg-[#C49A3C] group-hover:text-[#281608]'
                                                             : 'bg-white/5 text-white/50 group-hover:bg-white/20 group-hover:text-white'
                                                         }
                                                     `}>

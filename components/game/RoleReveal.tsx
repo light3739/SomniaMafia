@@ -34,6 +34,41 @@ const AsciiSpinner: React.FC<AsciiSpinnerProps> = ({ className = '' }) => {
     return <span className={`font-mono font-bold inline-block ${className}`}>{frames[frame]}</span>;
 };
 
+// ─── TypewriterText (Typewriter effect) ──────────────────────────────────────
+
+const TypewriterText: React.FC<{ text: string; delay?: number; speed?: number }> = ({ text, delay = 0, speed = 45 }) => {
+    const [displayText, setDisplayText] = useState(text);
+    const targetTextRef = useRef(text);
+
+    useEffect(() => {
+        if (text === targetTextRef.current) return;
+        targetTextRef.current = text;
+        
+        let currentText = displayText;
+        const eraseInterval = setInterval(() => {
+            if (currentText.length > 0) {
+                currentText = currentText.slice(0, -1);
+                setDisplayText(currentText);
+            } else {
+                clearInterval(eraseInterval);
+                let i = 0;
+                const typeInterval = setInterval(() => {
+                    if (i < text.length) {
+                        setDisplayText(text.slice(0, i + 1));
+                        i++;
+                    } else {
+                        clearInterval(typeInterval);
+                    }
+                }, speed);
+            }
+        }, speed / 1.5);
+
+        return () => clearInterval(eraseInterval);
+    }, [text, speed]);
+
+    return <span>{displayText}</span>;
+};
+
 const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string; ringColor: string; description: string; label: string }> = {
     [Role.MAFIA]: {
         icon: <Skull className="w-16 h-16" />,
@@ -46,28 +81,28 @@ const RoleConfig: Record<Role, { icon: React.ReactNode; color: string; bgColor: 
     },
     [Role.DOCTOR]: {
         icon: <Shield className="w-16 h-16" />,
-        color: 'text-[#2D6A4F]',
-        bgColor: 'from-[#1B4332]/30 to-[#0A0705]/80',
-        borderColor: 'border-[#2D6A4F]/25',
-        ringColor: 'ring-[#2D6A4F]/8',
+        color: 'text-[#0D9488]',
+        bgColor: 'from-[#0D9488]/25 to-[#0A0705]/80',
+        borderColor: 'border-[#0D9488]/30',
+        ringColor: 'ring-[#0D9488]/10',
         label: 'DOCTOR',
         description: 'Save one player each night from the mafia attack.'
     },
     [Role.DETECTIVE]: {
         icon: <Search className="w-16 h-16" />,
-        color: 'text-[#94A3B8]',
-        bgColor: 'from-[#1E293B]/30 to-[#0A0705]/80',
-        borderColor: 'border-[#94A3B8]/20',
-        ringColor: 'ring-[#94A3B8]/8',
+        color: 'text-[#A85832]',
+        bgColor: 'from-[#A85832]/25 to-[#0A0705]/80',
+        borderColor: 'border-[#A85832]/30',
+        ringColor: 'ring-[#A85832]/10',
         label: 'DETECTIVE',
         description: 'Investigate one player each night to reveal their alignment.'
     },
     [Role.CIVILIAN]: {
         icon: <Users className="w-16 h-16" />,
-        color: 'text-[#78716C]',
-        bgColor: 'from-[#292524]/40 to-[#0A0705]/80',
-        borderColor: 'border-[#78716C]/20',
-        ringColor: 'ring-[#78716C]/8',
+        color: 'text-[#6B5A4A]',
+        bgColor: 'from-[#6B5A4A]/25 to-[#0A0705]/80',
+        borderColor: 'border-[#6B5A4A]/20',
+        ringColor: 'ring-[#6B5A4A]/8',
         label: 'CIVILIAN',
         description: 'Find and vote out the mafia during the day to survive.'
     },
@@ -120,36 +155,16 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // Test mode simulation
     useEffect(() => {
-        if (isTestMode && myPlayer) {
-            const hasStartedRevealing = gameState.revealedCount >= gameState.players.length;
-            
-            if (myPlayer.hasConfirmedRole) {
-                 setRevealState({
-                    myRole: myPlayer.role,
-                    isRevealed: true,
-                    hasSharedKeys: true,
-                    eciesRegistered: true,
-                    hasConfirmed: true
-                 });
-            } else if (hasStartedRevealing) {
-                 setRevealState({
-                    myRole: myPlayer.role,
-                    isRevealed: true,
-                    hasSharedKeys: true,
-                    eciesRegistered: true,
-                    hasConfirmed: false
-                 });
-            } else {
-                 setRevealState({
-                    myRole: null,
-                    isRevealed: false,
-                    hasSharedKeys: true,
-                    eciesRegistered: true,
-                    hasConfirmed: false
-                 });
-            }
+        if (!isTestMode || !myPlayer) return;
+        const isRevealPhase = gameState.phase === GamePhase.REVEAL;
+        if (!isRevealPhase) return;
+
+        if (myPlayer.hasConfirmedRole) {
+            setRevealState({ myRole: myPlayer.role, isRevealed: true, hasSharedKeys: true, eciesRegistered: true, hasConfirmed: true });
+        } else {
+            setRevealState({ myRole: myPlayer.role, isRevealed: true, hasSharedKeys: true, eciesRegistered: true, hasConfirmed: false });
         }
-    }, [isTestMode, myPlayer, gameState.revealedCount, gameState.players.length]);
+    }, [isTestMode, myPlayer, gameState.phase, gameState.revealedCount, gameState.players.length]);
 
     // Handle ECIES Registration
     const handleRegisterEcies = useCallback(async (retryWithWallet = false) => {
@@ -253,7 +268,7 @@ export const RoleReveal: React.FC = React.memo(() => {
 
     // Handle Role Fetching
     const handleFetchRole = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient || revealState.isRevealed || revealState.hasConfirmed || !revealState.hasSharedKeys || fetchInFlightRef.current) return;
+        if (isTestMode || !currentRoomId || !address || !walletClient || revealState.isRevealed || revealState.hasConfirmed || !revealState.hasSharedKeys || fetchInFlightRef.current) return;
         fetchInFlightRef.current = true;
         try {
             const role = await fetchMyRoleFromGm({
@@ -358,15 +373,16 @@ export const RoleReveal: React.FC = React.memo(() => {
         isTxPending,
         handleRegisterEcies,
         handleShareKey,
-        handleFetchRole,
-        handleConfirmRole,
+            handleConfirmRole,
         walletClient
     ]);
 
-    // ─── UI ─────────────────────────────────────────────────────────────────
-    const roleConfig = revealState.myRole ? RoleConfig[revealState.myRole] : RoleConfig[Role.UNKNOWN];
     const keysCollected = gameState.players.filter(p => p.hasConfirmedRole).length;
-    const keysNeeded = gameState.players.length;
+    const totalPlayers = gameState.players.length;
+    const allConfirmed = keysCollected >= totalPlayers;
+
+    // ── UI ─────────────────────────────────────────────────────────────────
+    const roleConfig = revealState.myRole ? RoleConfig[revealState.myRole] : RoleConfig[Role.UNKNOWN];
 
     return (
         <div className="w-full h-[100dvh] flex flex-col items-center justify-center overflow-hidden p-4 pointer-events-auto">
@@ -392,7 +408,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                     <div className="w-[210px] shrink-0 border-r border-[#916A47]/10 flex flex-col">
                         <div className="px-4 py-3 border-b border-[#916A47]/8 flex items-center justify-between">
                             <span className="font-mono text-[11px] tracking-[0.3em] text-white/55 uppercase">SUSPECTS</span>
-                            <span className="font-mono text-[10px] text-[#916A47]/70">{keysCollected}/{keysNeeded}</span>
+                            <span className="font-mono text-[10px] text-[#c8a84b]/70">{keysCollected}/{totalPlayers}</span>
                         </div>
                         <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
                             {gameState.players.map((player) => {
@@ -434,16 +450,31 @@ export const RoleReveal: React.FC = React.memo(() => {
                                     exit={{ opacity: 0 }}
                                     className="flex flex-col items-center gap-5 text-center"
                                 >
-                                    <div className="h-10 flex items-center justify-center opacity-80 mb-2 mt-4">
-                                        <AsciiSpinner className="text-[#916A47] text-3xl" />
+                                    <div className="h-14 flex items-center justify-center mb-6">
+                                        <div className="relative w-14 h-14 flex items-center justify-center border border-white/5 bg-[#0f0e10] rounded-sm">
+                                            <AsciiSpinner className="text-[#c8a84b] text-2xl" />
+                                        </div>
                                     </div>
                                     <div>
                                         <p className="font-mono text-[10px] tracking-[0.35em] text-white/50 uppercase mb-2">&gt; STATUS</p>
                                         <p className="font-mono text-[16px] tracking-wide text-white/80 uppercase">
-                                            {!revealState.eciesRegistered ? 'SECURING_CHANNEL' :
-                                                !revealState.hasSharedKeys ? 'DECRYPTING_DOSSIER' :
-                                                    'VERIFYING_IDENTITY'}
-                                            <span className="animate-pulse ml-1 text-[#916A47]">▌</span>
+                                            <TypewriterText 
+                                                text={!revealState.eciesRegistered ? 'SECURING_CHANNEL' :
+                                                    !revealState.hasSharedKeys ? 'DECRYPTING_DOSSIER' :
+                                                        'VERIFYING_IDENTITY'} 
+                                            />
+                                            <motion.span
+                                                className="ml-1 text-[#c8a84b]"
+                                                animate={{ opacity: [1, 1, 0, 0, 1] }}
+                                                transition={{ 
+                                                    duration: 1, 
+                                                    repeat: Infinity, 
+                                                    times: [0, 0.5, 0.51, 0.99, 1],
+                                                    ease: "linear"
+                                                }}
+                                            >
+                                                ▌
+                                            </motion.span>
                                         </p>
                                     </div>
                                     <div className="w-full max-w-[220px]">
@@ -489,7 +520,7 @@ export const RoleReveal: React.FC = React.memo(() => {
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
                                         transition={{ delay: 0.6 }}
-                                        className={`absolute bottom-14 left-3 font-mono text-[7px] tracking-[0.3em] uppercase px-1 py-[2px] border ${roleConfig.borderColor} ${roleConfig.color} opacity-20 rotate-[-7deg] select-none pointer-events-none`}
+                                        className={`absolute top-7 left-4 font-mono text-[10px] tracking-[0.3em] uppercase px-2 py-[3px] border ${roleConfig.borderColor} ${roleConfig.color} opacity-20 rotate-[-12deg] select-none pointer-events-none`}
                                     >
                                         CLASSIFIED
                                     </motion.div>
@@ -542,7 +573,6 @@ export const RoleReveal: React.FC = React.memo(() => {
                                             <motion.button
                                                 onClick={handleConfirmRole}
                                                 disabled={isProcessing || isTxPending}
-                                                whileHover={{ scale: 1.01 }}
                                                 whileTap={{ scale: 0.98 }}
                                                 className={`w-full py-2.5 px-4 rounded-sm border font-['Cinzel'] text-[9px] tracking-[0.25em] uppercase transition-all duration-300
                                                     border-[#8B0000]/30 text-white/50
@@ -555,9 +585,9 @@ export const RoleReveal: React.FC = React.memo(() => {
                                             </motion.button>
                                         ) : (
                                             <div className={`flex items-center justify-center gap-2 ${roleConfig.color} py-3`}>
-                                                {keysCollected >= keysNeeded ? <Check className="w-4 h-4" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                                                <span className="font-['Cinzel'] text-[9px] tracking-[0.2em] uppercase">
-                                                    {keysCollected >= keysNeeded ? 'Confirmed' : 'Awaiting Others...'}
+                                                {allConfirmed ? <Check className="w-4 h-4" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                                <span className="font-['Montserrat'] text-[9px] tracking-[0.2em] uppercase font-bold opacity-80">
+                                                    {allConfirmed ? 'Confirmed' : 'Awaiting Others...'}
                                                 </span>
                                             </div>
                                         )}

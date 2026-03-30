@@ -63,10 +63,10 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
             accent: 'bg-[#B45309]'
         },
         [Role.CIVILIAN]: {
-            icon: <Moon strokeWidth={1} className="w-24 h-24 md:w-32 md:h-32 text-[#3A3A3A]" />,
+            icon: <Moon strokeWidth={1} className="w-24 h-24 md:w-32 md:h-32 text-[#6B5A4A]" />,
             title: 'DEEP SLEEP',
             desc: `Every sound in the dark makes your heart race. Pray for sunrise.`,
-            accent: 'bg-[#3A3A3A]'
+            accent: 'bg-[#6B5A4A]'
         },
     };
 

@@ -210,11 +210,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [dataSync.refreshPlayersList]);
 
     // ==================== DERIVED STATE ====================
+    // ==================== DERIVED STATE ====================
     const myPlayer = useMemo(() => {
+        // Fallback to myPlayerId if in test mode (for local testing without wallet)
+        const currentAddr = (isTestMode && gameState.myPlayerId) ? (gameState.myPlayerId as `0x${string}`) : refs.stableAddress;
+        
         return gameState.players.find(p =>
-            p.address.toLowerCase() === refs.stableAddress?.toLowerCase()
+            p.address.toLowerCase() === currentAddr?.toLowerCase()
         );
-    }, [gameState.players, refs.stableAddress]);
+    }, [gameState.players, refs.stableAddress, isTestMode, gameState.myPlayerId]);
 
     // ==================== LEVEL 3: DOMAIN ACTIONS ====================
     const lobby = useLobbyActions({
@@ -319,7 +323,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isTestMode, setIsTestMode, setIsTxPending,
         playerMarks, setPlayerMark, voteMap, setVoteMap,
         runtimeContractAddress: refs.runtimeContractAddress,
-        currencySymbol: refs.runtimeChain.nativeCurrency.symbol,
+        currencySymbol: refs.runtimeChain.name.toLowerCase().includes('somnia') ? 'SOMI' : refs.runtimeChain.nativeCurrency.symbol,
         publicClient: refs.publicClient,
         address: refs.stableAddress,
         useEmbeddedWallet, setUseEmbeddedWallet,

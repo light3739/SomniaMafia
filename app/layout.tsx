@@ -15,6 +15,20 @@ const montserrat = Montserrat({
   variable: "--font-montserrat",
 });
 
+import { Rajdhani, Share_Tech_Mono } from "next/font/google";
+
+const rajdhani = Rajdhani({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-rajdhani",
+});
+
+const shareTechMono = Share_Tech_Mono({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-share-tech-mono",
+});
+
 export const metadata = {
   title: "Onchain Mafia | Web3 Social Deduction",
   description: "A synchronized, ZK-powered Mafia game on the Somnia and Avalanche Blockchains. Play directly in your browser with session keys.",
@@ -53,7 +67,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${cinzel.variable} ${montserrat.variable} antialiased bg-black text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden`}>
+      <body className={`${cinzel.variable} ${montserrat.variable} ${rajdhani.variable} ${shareTechMono.variable} antialiased bg-black text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden`}>
         <Providers>
           <BackgroundMusic />
           <SoundEffects />

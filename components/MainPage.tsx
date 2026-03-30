@@ -111,7 +111,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         return (
                             <button
                                 onClick={onStart}
-                                className="px-14 py-3.5 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-[1.03] transition-all text-base md:text-lg tracking-[0.1em] relative overflow-hidden ring-1 ring-white/10"
+                                className="px-13 py-3.5 rounded-xl font-mono font-bold text-black shadow-[0_0_15px_rgba(231,213,113,0.3)] hover:shadow-[0_0_25px_rgba(231,213,113,0.6)] hover:scale-[1.03] transition-all text-base md:text-base tracking-[0.1em] relative overflow-hidden ring-1 ring-white/10"
                                 style={{
                                     background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
                                 }}

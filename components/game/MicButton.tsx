@@ -480,8 +480,8 @@ export function MicButton({
                         : error
                             ? 'bg-red-900/40 border-2 border-red-500/50 hover:bg-red-800/60'
                             : isMuted
-                                ? 'bg-gray-800/80 border-2 border-gray-500/50 hover:border-[#916A47]/70 hover:bg-gray-700/80'
-                                : 'bg-green-600 border-2 border-green-400/70 shadow-[0_0_20px_rgba(34,197,94,0.4)]'
+                                ? 'bg-[#111111] border-2 border-[#916A47]/40 hover:border-[#916A47]/80 hover:bg-[#1A1510]'
+                                : 'bg-[#1A1510] border-2 border-[#916A47] shadow-[0_0_14px_rgba(145,106,71,0.35)]'
                     }
                 `}
                 whileHover={!isDisabled ? { scale: 1.05 } : {}}
@@ -505,17 +505,10 @@ export function MicButton({
                     )}
                 </AnimatePresence>
 
-                {/* Speaking pulse animation */}
-                <AnimatePresence>
-                    {!isMuted && canSpeak && isConnected && (
-                        <motion.div
-                            initial={{ scale: 1, opacity: 0.5 }}
-                            animate={{ scale: 1.5, opacity: 0 }}
-                            transition={{ repeat: Infinity, duration: 1.5, ease: "easeOut" }}
-                            className="absolute inset-0 rounded-full bg-green-500"
-                        />
-                    )}
-                </AnimatePresence>
+                {/* Speaking pulse animation — CSS-only to avoid AnimatePresence remount jank */}
+                {!isMuted && canSpeak && isConnected && (
+                    <span className="absolute inset-0 rounded-full bg-[#916A47]/30 animate-ping" />
+                )}
 
                 {/* Icon */}
                 {isConnecting ? (
@@ -526,9 +519,9 @@ export function MicButton({
                         <span className="text-[8px] text-red-400 font-bold">RETRY</span>
                     </div>
                 ) : isMuted ? (
-                    <MicOff className={`w-6 h-6 ${isDisabled ? 'text-gray-500' : 'text-gray-300'}`} />
+                    <MicOff className={`w-6 h-6 ${isDisabled ? 'text-gray-500' : 'text-[#916A47]/70'}`} />
                 ) : (
-                    <Mic className="w-6 h-6 text-white" />
+                    <Mic className="w-6 h-6 text-[#C49A3C]" />
                 )}
             </motion.button>
 
