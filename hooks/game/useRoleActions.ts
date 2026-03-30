@@ -15,6 +15,7 @@ import { loadSession } from '../../services/sessionKeyService';
 import { loadOrCreateKeypair, eciesDecrypt, type EciesEncrypted } from '../../services/eciesService';
 import { buildRevealSecretMessage, buildRoleSyncMessage } from '../../services/signingSchema';
 import { signRequest } from '../../services/requestSigning';
+import { SignatureBuilder } from '../../services/SignatureBuilder';
 import { Role, GameState, GamePhase } from '../../types';
 import type { GameRefs } from './useGameRefs';
 import type { WalletManager } from './useWalletManager';
@@ -258,9 +259,11 @@ export function useRoleActions(deps: RoleDeps) {
                 const signed = await signRequest({
                     address: myAddr,
                     roomId: Number(roomId),
-                    walletClient: activeWalletClient,
                     buildMessage: ({ nonce, timestamp }) =>
-                        `my-role:${roomId}:${myAddr.toLowerCase()}:${nonce}:${timestamp}`,
+                        new SignatureBuilder('my-role', String(targetChain.id), String(roomId))
+                            .withAddress(myAddr)
+                            .withModern(nonce, timestamp)
+                            .build(),
                 });
 
                 const params = new URLSearchParams({
@@ -418,7 +421,7 @@ export function useRoleActions(deps: RoleDeps) {
         const pClient = refs.publicClientRef.current;
         if (!roomId || !pClient) return;
 
-        const savedSalt = myAddr ? localStorage.getItem(`role_salt_${roomId}_${myAddr.toLowerCase()}`) : null;
+        const savedSalt = myAddr ? localStorage.getItem(`role_salt_${roomId.toString()}_${myAddr.toLowerCase()}`) : null;
         let saltToUse = salt;
 
         const isConfirmedOnChain = myPlayer?.hasConfirmedRole;
@@ -435,7 +438,7 @@ export function useRoleActions(deps: RoleDeps) {
         else if (role === 4) roleEnumStr = Role.CIVILIAN;
 
         if (roleEnumStr && myAddr) {
-            localStorage.setItem(`my_role_${roomId}_${myAddr.toLowerCase()}`, roleEnumStr);
+            localStorage.setItem(`my_role_${roomId.toString()}_${myAddr.toLowerCase()}`, roleEnumStr);
         }
 
         setIsTxPending(true);
@@ -455,14 +458,10 @@ export function useRoleActions(deps: RoleDeps) {
                         const roleHash = await ShuffleService.createRoleCommitHashAsync(role, savedSalt);
                         const retryHash = await txEngine.sendGameTransaction('commitAndConfirmRole', [roomId, roleHash]);
                         addLog("Role committed & confirmed (recovery).", "success");
-                        if (myAddr) {
-                            syncRoleCommitToGM(roomId, myAddr, retryHash)
-                                .catch(err => console.warn('[commitAndConfirm recovery] GM role-commit sync failed:', err));
-                        }
                         txEngine.confirmInBackground(retryHash, 'commitAndConfirmRole (recovery)');
                     } catch (retryErr: any) {
                         console.error("Full commitAndConfirmRole retry also failed:", retryErr);
-                        if (myAddr) localStorage.removeItem(`role_salt_${roomId}_${myAddr.toLowerCase()}`);
+                        if (myAddr) localStorage.removeItem(`role_salt_${roomId.toString()}_${myAddr.toLowerCase()}`);
                         throw retryErr;
                     }
                 }
@@ -473,11 +472,7 @@ export function useRoleActions(deps: RoleDeps) {
                     const roleHash = await ShuffleService.createRoleCommitHashAsync(role, saltToUse);
                     const txHash = await txEngine.sendGameTransaction('commitAndConfirmRole', [roomId, roleHash]);
                     addLog("Role committed & confirmed on-chain!", "success");
-                    if (myAddr) {
-                        syncRoleCommitToGM(roomId, myAddr, txHash)
-                            .catch(err => console.warn('[commitAndConfirm] GM role-commit sync failed:', err));
-                    }
-                    if (myAddr) localStorage.setItem(`role_salt_${roomId}_${myAddr.toLowerCase()}`, saltToUse);
+                    if (myAddr) localStorage.setItem(`role_salt_${roomId.toString()}_${myAddr.toLowerCase()}`, saltToUse);
                     txEngine.confirmInBackground(txHash, 'commitAndConfirmRole');
                 } catch (txErr: any) {
                     const errMsg = (txErr.message || "").toLowerCase();
@@ -520,7 +515,6 @@ export function useRoleActions(deps: RoleDeps) {
                     .catch(err => console.warn('[commitAndConfirm] Server sync failed (non-blocking):', err));
             }
 
-            setIsTxPending(false);
         } catch (e: any) {
             console.error("Confirmation error:", e);
             const errMsg = (e.message || '').toLowerCase() + (e.shortMessage || '').toLowerCase();
@@ -537,11 +531,10 @@ export function useRoleActions(deps: RoleDeps) {
         } finally {
             setIsTxPending(false);
         }
-    }, [refs, txEngine, dataSync, myPlayer, syncSecretWithServer, syncRoleCommitToGM, setIsTxPending, addLog]);
+    }, [refs, txEngine, dataSync, myPlayer, syncSecretWithServer, setIsTxPending, addLog]);
 
     return {
         syncSecretWithServer,
-        syncRoleCommitToGM,
         decryptMyRoleFromGM,
         fetchMyRoleFromGM,
         commitRoleOnChain,
