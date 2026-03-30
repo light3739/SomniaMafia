@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
     try {
         // CLEANUP: We explicitly do NOT pass req.nextUrl.searchParams (signature/nonce) 
         // to the GM server to avoid 403 authorization failures on the GM side.
-        const url = `${GM_SERVER_URL}/room-roles/${encodeURIComponent(roomId)}`;
+        const chainId = req.nextUrl.searchParams.get('chainId');
+        let url = `${GM_SERVER_URL}/room-roles/${encodeURIComponent(roomId)}`;
+        if (chainId) url += `?chainId=${chainId}`;
         
         const gmRes = await fetch(url, {
             headers: { 'Content-Type': 'application/json' },

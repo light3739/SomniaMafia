@@ -228,7 +228,7 @@ export function useRoleActions(deps: RoleDeps) {
             const plaintext = await eciesDecrypt(encrypted, privKey);
             const text = plaintext.trim().toUpperCase();
             const roleStringMap: Record<string, number> = {
-                'MAFIA': 1, 'DOCTOR': 2, 'DETECTIVE': 3, 'CIVILIAN': 4
+                'MAFIA': 1, 'DOCTOR': 2, 'DETECTIVE': 3, 'CIVILIAN': 4, 'CITIZEN': 4
             };
             const roleNum = roleStringMap[text] ?? parseInt(text, 10);
 

@@ -52,7 +52,7 @@ const contractRoleToRole = (contractRole: number): Role => {
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = React.memo(() => {
-    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain, runtimeChain } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const router = useRouter();
@@ -309,7 +309,7 @@ export const GameOver: React.FC = React.memo(() => {
 
         if (!roomId) return;
         try {
-            const res = await fetch(`/api/game/room-roles?roomId=${roomId.toString()}`);
+            const res = await fetch(`/api/game/room-roles?roomId=${roomId.toString()}&chainId=${runtimeChain.id}`);
             if (!res.ok) {
                 console.warn(`[GameOver] GM roles fetch failed: ${res.status}`);
                 return;
