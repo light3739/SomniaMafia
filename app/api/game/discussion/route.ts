@@ -201,6 +201,7 @@ export async function POST(request: Request) {
                     action: body.action,
                     nonce,
                     timestamp,
+                    chainId,
                 }),
             });
 

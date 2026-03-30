@@ -8,7 +8,7 @@ export function buildAvatarMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `avatar:${input.chainId || 43113}:${input.roomId}:${input.address.toLowerCase()}:${input.nonce}:${input.timestamp}`;
+  return `avatar:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.address.toLowerCase()}:${input.nonce}:${String(input.timestamp)}`;
 }
 
 export function buildRegisterPubkeyMessage(input: {
@@ -19,7 +19,7 @@ export function buildRegisterPubkeyMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `register-pubkey:${input.chainId || 43113}:${input.roomId}:${input.address.toLowerCase()}:${input.pubkey}:${input.nonce}:${input.timestamp}`;
+  return `register-pubkey:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.address.toLowerCase()}:${input.pubkey}:${input.nonce}:${String(input.timestamp)}`;
 }
 
 export function buildNightActionMessage(input: {
@@ -31,7 +31,7 @@ export function buildNightActionMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `night:${input.chainId || 43113}:${input.roomId}:${input.dayCount}:${input.actionType}:${input.targetAddress.toLowerCase()}:${input.nonce}:${input.timestamp}`;
+  return `night:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.dayCount}:${input.actionType}:${input.targetAddress.toLowerCase()}:${input.nonce}:${String(input.timestamp)}`;
 }
 
 export function buildResolveNightMessage(input: {
@@ -40,7 +40,7 @@ export function buildResolveNightMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `resolve-night:${input.chainId || 43113}:${input.roomId}:${input.nonce}:${input.timestamp}`;
+  return `resolve-night:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.nonce}:${String(input.timestamp)}`;
 }
 
 export function buildDiscussionMessage(input: {
@@ -51,7 +51,7 @@ export function buildDiscussionMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `discussion:${input.chainId || 43113}:${input.roomId}:${input.dayCount}:${input.action}:${input.nonce}:${input.timestamp}`;
+  return `discussion:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.dayCount}:${input.action}:${input.nonce}:${String(input.timestamp)}`;
 }
 
 export function buildTokenMessage(input: {
@@ -62,7 +62,7 @@ export function buildTokenMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `token:${input.chainId || 43113}:${input.room}:${input.username}:${input.playerAddress.toLowerCase()}:${input.nonce}:${input.timestamp}`;
+  return `token:${String(input.chainId || 43113)}:${String(input.room)}:${input.username}:${input.playerAddress.toLowerCase()}:${input.nonce}:${String(input.timestamp)}`;
 }
 
 export function buildInvestigateMessage(input: {
@@ -73,7 +73,7 @@ export function buildInvestigateMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `investigate:${input.chainId || 43113}:${input.roomId}:${input.dayCount}:${input.targetAddress.toLowerCase()}:${input.nonce}:${input.timestamp}`;
+  return `investigate:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.dayCount}:${input.targetAddress.toLowerCase()}:${input.nonce}:${String(input.timestamp)}`;
 }
 
 export function buildRoleSyncMessage(input: {
@@ -83,7 +83,7 @@ export function buildRoleSyncMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `sync-role-commit:${input.chainId || 43113}:${input.roomId}:${input.txHash.toLowerCase()}:${input.nonce}:${input.timestamp}`;
+  return `sync-role-commit:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.txHash.toLowerCase()}:${input.nonce}:${String(input.timestamp)}`;
 }
 
 export function buildTeammatesMessage(input: {
@@ -92,7 +92,7 @@ export function buildTeammatesMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `teammates:${input.chainId || 43113}:${input.roomId}:${input.nonce}:${input.timestamp}`;
+  return `teammates:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.nonce}:${String(input.timestamp)}`;
 }
 export function buildMafiaMembersMessage(input: {
   roomId: string;
@@ -100,5 +100,5 @@ export function buildMafiaMembersMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `mafia-members:${input.chainId || 43113}:${input.roomId}:${input.nonce}:${input.timestamp}`;
+  return `mafia-members:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.nonce}:${String(input.timestamp)}`;
 }

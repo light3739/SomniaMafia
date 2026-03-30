@@ -18,7 +18,7 @@ export const POST = withSignedRoute<{
     getRoomId: (body) => body.roomId,
     getActorAddress: (body) => body.playerAddress,
     getSignerAddress: (body) => body.callerAddress,
-    getMessage: ({ roomId, nonce, timestamp }) => buildResolveNightMessage({ roomId, nonce, timestamp }),
+    getMessage: ({ body, roomId, nonce, timestamp }) => buildResolveNightMessage({ roomId, nonce, timestamp, chainId: body.chainId }),
 }, async ({ body, roomId }) => {
     const gmRes = await fetch(`${GM_SERVER_URL}/resolve-night`, {
         method: 'POST',

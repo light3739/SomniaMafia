@@ -30,6 +30,7 @@ export const POST = withSignedRoute<{
         dayCount: body.dayCount,
         nonce,
         timestamp,
+        chainId: body.chainId,
     }),
 }, async ({ body, roomId, signerAddress }) => {
     if (!['kill', 'heal', 'check'].includes(body.actionType)) {
