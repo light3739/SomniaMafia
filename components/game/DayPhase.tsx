@@ -7,18 +7,13 @@ import { usePublicClient, useWalletClient, useAccount } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
 import { buildDiscussionMessage } from '@/services/signingSchema';
 import { MAFIA_ABI } from '../../contracts/config';
-import { GamePhase, Player } from '../../types';
-import { Button } from '../ui/Button';
-import { Sun, Vote, Check, Clock, User, Skull, Mic, MicOff, ChevronRight } from 'lucide-react';
+import { GamePhase } from '../../types';
 import { GameLog } from './GameLog';
-import { MicButton } from './MicButton';
 import { emitGameSignal } from '../../services/signalBus';
 
-interface VoteState {
-    myVote: string | null;
-    voteCounts: Map<string, number>;
-    hasVoted: boolean;
-}
+// Internal Components
+import { DiscussionSection } from './day/DiscussionSection';
+import { VotingSection } from './day/VotingSection';
 
 export interface DiscussionState {
     active: boolean;
@@ -44,818 +39,243 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
     isNightTransition, delaySeconds, hideActions, initialDiscussionState, disablePolling
 }) => {
     const {
-        gameState,
-        currentRoomId,
-        myPlayer,
-        startVotingOnChain,
-        voteOnChain,
-        forcePhaseTimeoutOnChain,
-        addLog,
-        isTxPending,
-        selectedTarget,
-        setSelectedTarget,
-        isTestMode,
-        setVoteMap,
-        runtimeContractAddress
+        gameState, currentRoomId, myPlayer, startVotingOnChain, voteOnChain,
+        forcePhaseTimeoutOnChain, addLog, isTxPending, selectedTarget,
+        setSelectedTarget, isTestMode, setVoteMap, runtimeContractAddress,
+        showVotingResults
     } = useGameContext();
-    const { showVotingResults } = useGameContext();
-    const { chainId } = useAccount();
-    const {
-        playClickSound,
-        playTypeSound,
-        playVoteSound,
-        playProposeSound,
-        playApproveSound,
-        playRejectSound,
-        playVotingStart // New sound function
-    } = useSoundEffects();
 
+    const { chainId, address } = useAccount();
+    const { playVoteSound, playVotingStart } = useSoundEffects();
     const publicClient = usePublicClient();
     const { data: walletClient } = useWalletClient();
-    const [voteState, setVoteState] = useState<VoteState>({
-        myVote: null,
-        voteCounts: new Map(),
-        hasVoted: false
-    });
+
+    const [voteState, setVoteState] = useState({ myVote: null as string | null, voteCounts: new Map<string, number>(), hasVoted: false });
     const [isProcessing, setIsProcessing] = useState(false);
-
-    // Discussion Speech Logic (synced with backend or from initialDiscussionState)
     const [discussionState, setDiscussionState] = useState<Partial<DiscussionState> | null>(initialDiscussionState || null);
-
-    // Update discussionState when initialDiscussionState changes (for test mode)
-    useEffect(() => {
-        if (initialDiscussionState) {
-            setDiscussionState(initialDiscussionState);
-        }
-    }, [initialDiscussionState]);
+    const [smoothTimeRemaining, setSmoothTimeRemaining] = useState<number>(0);
 
     const isVotingPhase = gameState.phase === GamePhase.VOTING;
     const isDayPhase = gameState.phase === GamePhase.DAY;
-
     const alivePlayers = gameState.players.filter(p => p.isAlive);
-    const currentSpeaker = discussionState?.currentSpeakerAddress
-        ? gameState.players.find(p => p.address.toLowerCase() === discussionState.currentSpeakerAddress?.toLowerCase())
-        : null;
+    const currentSpeaker = discussionState?.currentSpeakerAddress ? gameState.players.find(p => p.address.toLowerCase() === discussionState.currentSpeakerAddress?.toLowerCase()) : null;
 
     const lastLoggedPhase = useRef<GamePhase | null>(null);
     const lastSpeakerRef = useRef<string | null>(null);
     const discussionStartedRef = useRef(false);
     const votingTimeoutRef = useRef(false);
     const latestDayCountRef = useRef(gameState.dayCount);
+    const dayTimeoutRef = useRef(false);
+    const votingStartedRef = useRef(false);
+    const [votingAttemptTs, setVotingAttemptTs] = useState<number>(0);
 
-    useEffect(() => {
-        latestDayCountRef.current = gameState.dayCount;
-    }, [gameState.dayCount]);
+    const lastServerTimeRef = useRef<number>(0);
+    const lastUpdateTsRef = useRef<number>(0);
 
-    // Voting phase timeout - auto-end voting when timer expires
+    useEffect(() => { latestDayCountRef.current = gameState.dayCount; }, [gameState.dayCount]);
+
+    // ── Voting logic ──
+    const handleStartVoting = useCallback(async () => {
+        setIsProcessing(true);
+        try { await startVotingOnChain(); }
+        catch (e) {
+            addLog("Failed to start voting on-chain.", "danger");
+            votingStartedRef.current = false;
+        } finally { setIsProcessing(false); }
+    }, [startVotingOnChain, addLog]);
+
     useEffect(() => {
         if (!isVotingPhase || isTestMode) return;
-
         const deadline = gameState.phaseDeadline;
         if (!deadline) return;
+        const sorted = [...gameState.players].filter(p => p.isAlive).sort((a,b) => a.address.localeCompare(b.address));
+        const myIdx = sorted.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+        if (myIdx === -1) return;
 
-        // Waterfall Logic: Any alive player can trigger, but staggered by index
-        const sortedSurvivors = [...gameState.players]
-            .filter(p => p.isAlive)
-            .sort((a, b) => a.address.localeCompare(b.address));
-
-        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
-
-        // If I'm not alive/found, I shouldn't trigger (unless I'm ghost host? No, only survivors pay gas)
-        if (myIndex === -1) return;
-
-        const checkTimeout = () => {
+        const check = () => {
             if (votingTimeoutRef.current) return;
-
-            const now = Math.floor(Date.now() / 1000);
-            const secondsPastDeadline = now - deadline;
-            const TIMEOUT_BUFFER_SECONDS = 5;
-            // Base buffer 5s, plus 5s per index position
-            const myTriggerTime = TIMEOUT_BUFFER_SECONDS + (myIndex * 5);
-
-            if (secondsPastDeadline >= myTriggerTime) {
-                console.log(`[DayPhase] Voting timer expired. Waterfall Trigger (Index ${myIndex})...`);
+            const past = Math.floor(Date.now() / 1000) - deadline;
+            if (past >= (5 + myIdx * 5)) {
                 votingTimeoutRef.current = true;
-                addLog(`Voting time expired. Auto-finalizing (Node ${myIndex})...`, "warning");
-
-                forcePhaseTimeoutOnChain().catch(err => {
-                    // Failure loop protection: cooldown before retrying ANY failed attempt
-                    setTimeout(() => {
-                        votingTimeoutRef.current = false;
-                    }, 10_000);
-                });
+                addLog(`Voting time expired. Auto-finalizing...`, "warning");
+                forcePhaseTimeoutOnChain().catch(() => setTimeout(() => { votingTimeoutRef.current = false; }, 10000));
             }
         };
+        const iv = setInterval(check, 2000);
+        return () => clearInterval(iv);
+    }, [isVotingPhase, gameState.phaseDeadline, gameState.players, myPlayer?.address, isTestMode, forcePhaseTimeoutOnChain, addLog]);
 
-        checkTimeout();
-        // Check frequently to hit the window precicely
-        const interval = setInterval(checkTimeout, 2000);
-        return () => clearInterval(interval);
-    }, [isVotingPhase, gameState.phaseDeadline, gameState.players, myPlayer?.address, isTestMode, isProcessing, isTxPending, forcePhaseTimeoutOnChain, addLog]);
-
-    // Reset timeout flag when phase changes
-    useEffect(() => {
-        if (!isVotingPhase) {
-            votingTimeoutRef.current = false;
-        }
-    }, [isVotingPhase]);
-
-
-    // Логируем начало речи каждого игрока
-    useEffect(() => {
-        if (isDayPhase && discussionState?.active && discussionState.currentSpeakerAddress) {
-            if (discussionState.currentSpeakerAddress !== lastSpeakerRef.current) {
-                const speaker = gameState.players.find(p => p.address.toLowerCase() === discussionState.currentSpeakerAddress?.toLowerCase());
-                if (speaker) {
-                    addLog(`${speaker.name} is now speaking.`, "info", 'PLAYER_SPEAKING', { playerName: speaker.name });
-                }
-                lastSpeakerRef.current = discussionState.currentSpeakerAddress;
-            }
-        }
-        if (!isDayPhase) {
-            lastSpeakerRef.current = null;
-        }
-    }, [isDayPhase, discussionState?.active, discussionState?.currentSpeakerAddress, gameState.players, addLog]);
-
-    // Fetch discussion state from backend
+    // ── Discussion logic ──
     const fetchDiscussionState = useCallback(async () => {
         if (!currentRoomId) return;
-        const currentFetchDayCount = latestDayCountRef.current; // Capture day count
+        const curDay = latestDayCountRef.current;
         try {
-            const response = await fetch(
-                `/api/game/discussion?roomId=${currentRoomId}&dayCount=${currentFetchDayCount}&playerAddress=${myPlayer?.address || ''}&chainId=${chainId || ''}&t=${Date.now()}`,
-                { cache: 'no-store' }
-            );
-            const data = await response.json();
-
-            // Fix race condition: ignore responses from previous days/phases
-            if (latestDayCountRef.current !== currentFetchDayCount) {
-                console.log(`[DayPhase] Ignored stale discussion state for day ${currentFetchDayCount}`);
-                return null;
+            const res = await fetch(`/api/game/discussion?roomId=${currentRoomId}&dayCount=${curDay}&playerAddress=${myPlayer?.address || ''}&chainId=${chainId || ''}&t=${Date.now()}`);
+            const data = await res.json();
+            if (latestDayCountRef.current === curDay) {
+                setDiscussionState(data);
+                if (data.timeRemaining !== undefined && data.timeRemaining !== lastServerTimeRef.current) {
+                    lastServerTimeRef.current = data.timeRemaining;
+                    lastUpdateTsRef.current = Date.now();
+                    setSmoothTimeRemaining(data.timeRemaining);
+                }
             }
+        } catch (e) { console.error(e); }
+    }, [currentRoomId, myPlayer?.address, chainId]);
 
-            setDiscussionState(data);
-            return data;
-        } catch (e) {
-            console.error("Failed to fetch discussion state:", e);
-            return null;
-        }
-    }, [currentRoomId, myPlayer?.address]); // Removed gameState.dayCount as it's handled by ref
-
-    // Start discussion (host only)
     const startDiscussion = useCallback(async () => {
         if (!currentRoomId || discussionStartedRef.current) return;
         discussionStartedRef.current = true;
         try {
             if (!isTestMode) {
-                const actorAddress = myPlayer?.address;
-                if (!actorAddress) throw new Error('Missing player address');
-
+                const actor = myPlayer?.address;
+                if (!actor) throw new Error('No address');
                 const signed = await signRequest({
-                    address: actorAddress,
-                    roomId: Number(currentRoomId),
-                    walletClient,
-                    buildMessage: ({ nonce, timestamp }) => buildDiscussionMessage({
-                        roomId: currentRoomId.toString(),
-                        dayCount: gameState.dayCount,
-                        action: 'start',
-                        nonce,
-                        timestamp,
-                        chainId,
-                    }),
+                    address: actor, roomId: Number(currentRoomId), walletClient,
+                    buildMessage: ({ nonce, timestamp }) => buildDiscussionMessage({ roomId: currentRoomId.toString(), dayCount: gameState.dayCount, action: 'start', nonce, timestamp, chainId })
                 });
-
                 await fetch('/api/game/discussion', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        roomId: currentRoomId.toString(),
-                        dayCount: gameState.dayCount,
-                        action: 'start',
-                        playerAddress: actorAddress,
-                        signature: signed.signature,
-                        signerAddress: signed.signerAddress,
-                        nonce: signed.nonce,
-                        timestamp: signed.timestamp,
-                        chainId,
-                    })
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roomId: currentRoomId.toString(), dayCount: gameState.dayCount, action: 'start', playerAddress: actor, signature: signed.signature, signerAddress: signed.signerAddress, nonce: signed.nonce, timestamp: signed.timestamp, chainId })
                 });
-            } else {
-                // Mock discussion state immediately for test mode
-                setDiscussionState({
-                    active: true,
-                    finished: false,
-                    phase: 'speaking',
-                    currentSpeakerIndex: 0,
-                    currentSpeakerAddress: gameState.players[0]?.address || null,
-                    totalSpeakers: gameState.players.filter(p => p.isAlive).length,
-                    timeRemaining: 60,
-                    isMyTurn: true
-                });
-            }
+            } else setDiscussionState({ active: true, finished: false, phase: 'speaking', currentSpeakerAddress: gameState.players[0]?.address, timeRemaining: 60 });
             addLog("Discussion Phase started.", "info");
-        } catch (e: any) {
-            console.error("Failed to start discussion:", e);
-            addLog(`Discussion start failed: ${e?.message || e}`, "danger");
-            discussionStartedRef.current = false; // allow waterfall retry
-        }
-    }, [currentRoomId, myPlayer?.address, addLog, isTestMode, gameState.dayCount, gameState.players]);
+        } catch (e) { discussionStartedRef.current = false; }
+    }, [currentRoomId, myPlayer?.address, addLog, isTestMode, gameState.dayCount, gameState.players, walletClient, chainId]);
 
-    // Skip speech (current speaker or host only)
     const skipSpeech = useCallback(async () => {
-        if (!currentRoomId) return;
-
-        // Security check: Only current speaker or host can skip
-        const myAddressLow = myPlayer?.address?.toLowerCase();
-        const speakerAddressLow = discussionState?.currentSpeakerAddress?.toLowerCase();
-        const hostAddressLow = gameState.players[0]?.address?.toLowerCase();
-
-        const isSpeaker = speakerAddressLow && myAddressLow === speakerAddressLow;
-        const isHost = hostAddressLow && myAddressLow === hostAddressLow;
-
-        if (!isSpeaker && !isHost) {
-            console.warn("[DayPhase] skipSpeech: Unauthorized attempt to skip.");
-            addLog("Only the current speaker or host can skip speech.", "danger");
-            return;
-        }
-
+        if (!currentRoomId || !myPlayer?.address) return;
         setIsProcessing(true);
         try {
-            const actorAddress = myPlayer?.address;
-            if (!actorAddress) throw new Error('Missing player address');
-
             const signed = await signRequest({
-                address: actorAddress,
-                roomId: Number(currentRoomId),
-                walletClient,
-                buildMessage: ({ nonce, timestamp }) => buildDiscussionMessage({
-                    roomId: currentRoomId.toString(),
-                    dayCount: gameState.dayCount,
-                    action: 'skip',
-                    nonce,
-                    timestamp,
-                    chainId,
-                }),
+                address: myPlayer.address, roomId: Number(currentRoomId), walletClient,
+                buildMessage: ({ nonce, timestamp }) => buildDiscussionMessage({ roomId: currentRoomId.toString(), dayCount: gameState.dayCount, action: 'skip', nonce, timestamp, chainId })
             });
-
             await fetch('/api/game/discussion', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    roomId: currentRoomId.toString(),
-                    dayCount: gameState.dayCount,
-                    action: 'skip',
-                    playerAddress: actorAddress,
-                    signature: signed.signature,
-                    signerAddress: signed.signerAddress,
-                    nonce: signed.nonce,
-                    timestamp: signed.timestamp,
-                    chainId,
-                })
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roomId: currentRoomId.toString(), dayCount: gameState.dayCount, action: 'skip', playerAddress: myPlayer.address, signature: signed.signature, signerAddress: signed.signerAddress, nonce: signed.nonce, timestamp: signed.timestamp, chainId })
             });
             await fetchDiscussionState();
-        } catch (e) {
-            console.error("Failed to skip speech:", e);
-        } finally {
-            setIsProcessing(false);
-        }
-    }, [currentRoomId, myPlayer?.address, fetchDiscussionState, gameState.dayCount, walletClient]);
+        } catch (e) { console.error(e); } finally { setIsProcessing(false); }
+    }, [currentRoomId, myPlayer?.address, gameState.dayCount, walletClient, chainId, fetchDiscussionState]);
 
-    // Initial phase log and discussion start
+    // ── Effects ──
+    useEffect(() => {
+        if (isDayPhase && discussionState?.active && discussionState.currentSpeakerAddress !== lastSpeakerRef.current) {
+            const spk = gameState.players.find(p => p.address.toLowerCase() === discussionState.currentSpeakerAddress?.toLowerCase());
+            if (spk) addLog(`${spk.name} is now speaking.`, "info");
+            lastSpeakerRef.current = discussionState.currentSpeakerAddress || null;
+        }
+    }, [isDayPhase, discussionState?.active, discussionState?.currentSpeakerAddress, gameState.players, addLog]);
+
     useEffect(() => {
         if (gameState.phase !== lastLoggedPhase.current) {
-            if (isDayPhase) {
-                discussionStartedRef.current = false;
-                setDiscussionState(null); // Clear stale state from previous days
-                addLog("Day Phase: Discussion starting...", "info", 'DISCUSSION_STARTED');
-            } else if (isVotingPhase) {
-                playVotingStart(); // Play sound for everyone
-                const quorum = Math.floor(alivePlayers.length / 2) + 1;
-                addLog(`Voting Phase Started. Quorum needed: ${quorum}.`, "warning", 'VOTING_STARTED');
-            }
+            if (isDayPhase) { discussionStartedRef.current = false; setDiscussionState(null); addLog("Day Phase started.", "info"); }
+            else if (isVotingPhase) { playVotingStart(); addLog("Voting Phase started.", "warning"); }
             lastLoggedPhase.current = gameState.phase;
         }
-    }, [gameState.phase, isDayPhase, isVotingPhase, alivePlayers.length, addLog, playVotingStart]);
+    }, [gameState.phase, isDayPhase, isVotingPhase, addLog, playVotingStart]);
 
-    // Waterfall: Auto-start discussion (Decentralized)
     useEffect(() => {
-        // If not day, or already active, or I locally started it, skip
         if (!isDayPhase || discussionState?.active || discussionStartedRef.current) return;
-
-        // Sort alive players (or all players if day 1? No, usually alive for gas reasons, but API is free. 
-        // Use all players for index consistency, or alive? 
-        // Logic: "Host" is usually player 0. If player 0 is dead, they might not be rendering? 
-        // Actually, dead players still view the game. 
-        // But let's stick to ALIVE players for game actions usually.
-        // However, startDiscussion API is off-chain, so gas doesn't matter. 
-        // But dead players might leave. Alive players are usually present.
-        const sortedSurvivors = [...gameState.players]
-            .filter(p => p.isAlive)
-            .sort((a, b) => a.address.localeCompare(b.address));
-
-        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
-        if (myIndex === -1) return;
-
-        // Delay: 0s for 1st, 3s for 2nd, etc.
-        const delay = myIndex * 3000;
-
-        const timer = setTimeout(() => {
-            console.log(`[DayPhase] Waterfall: Starting discussion (Index ${myIndex})...`);
-            startDiscussion();
-        }, delay);
-
+        const sorted = [...gameState.players].filter(p => p.isAlive).sort((a,b) => a.address.localeCompare(b.address));
+        const myIdx = sorted.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+        if (myIdx === -1) return;
+        const timer = setTimeout(startDiscussion, myIdx * 3000);
         return () => clearTimeout(timer);
     }, [isDayPhase, discussionState?.active, gameState.players, myPlayer?.address, startDiscussion]);
 
-    // Poll discussion state
-    // Poll discussion state (Adaptive)
     useEffect(() => {
-        if (!isDayPhase || !currentRoomId || disablePolling) return;
-        if (discussionState?.finished) return; // Stop polling if finished
-
-        let timeoutId: NodeJS.Timeout;
-
+        if (!isDayPhase || !currentRoomId || disablePolling || discussionState?.finished) return;
         const poll = async () => {
-            // FIX: Stop polling if phase changed during async fetch
             if (!isDayPhase || !currentRoomId) return;
-
             await fetchDiscussionState();
-
-            // FIX: Re-check after fetch to avoid setting another timeout
             if (!isDayPhase || !currentRoomId || discussionState?.finished) return;
-
-            // Adaptive delay: 1.5s if visible, 10s if hidden background tab
-            const delay = typeof document !== 'undefined' && document.hidden ? 10000 : 1500;
-            timeoutId = setTimeout(poll, delay);
+            setTimeout(poll, (document.hidden ? 10000 : 1500));
         };
-
         poll();
+    }, [isDayPhase, currentRoomId, fetchDiscussionState, discussionState?.finished, disablePolling]);
 
-        // Handle visibility change to resume fast polling immediately
-        const handleVisibilityChange = () => {
-            if (!document.hidden) {
-                clearTimeout(timeoutId);
-                poll();
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => {
-            clearTimeout(timeoutId);
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-        };
-    }, [isDayPhase, currentRoomId, fetchDiscussionState, discussionState?.finished]);
-
-    // --- SMOOTH TIMER INTERPOLATION ---
-    const [smoothTimeRemaining, setSmoothTimeRemaining] = useState<number>(0);
-    const lastServerTimeRef = useRef<number>(0);
-    const lastUpdateTsRef = useRef<number>(0);
-
-    // 1. Sync state when backend updates
-    useEffect(() => {
-        if (discussionState && discussionState.timeRemaining !== undefined) {
-            const serverTime = discussionState.timeRemaining;
-            // Only update refs if time changed significantly or it's a new phase
-            if (serverTime !== lastServerTimeRef.current) {
-                lastServerTimeRef.current = serverTime;
-                lastUpdateTsRef.current = Date.now();
-                setSmoothTimeRemaining(serverTime);
-            }
-        }
-    }, [discussionState]);
-
-    // 2. Local ticker (every 100ms for smoothness, though 1s is fine for text)
     useEffect(() => {
         if (!discussionState?.active || discussionState?.finished) return;
-
-        const interval = setInterval(() => {
-            const now = Date.now();
-            const elapsedSeconds = Math.floor((now - lastUpdateTsRef.current) / 1000);
-            const calculatedTime = Math.max(0, lastServerTimeRef.current - elapsedSeconds);
-            setSmoothTimeRemaining(calculatedTime);
-        }, 300); // Update frequently to catch the second change close to reality
-
-        return () => clearInterval(interval);
+        const iv = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - lastUpdateTsRef.current) / 1000);
+            setSmoothTimeRemaining(Math.max(0, lastServerTimeRef.current - elapsed));
+        }, 300);
+        return () => clearInterval(iv);
     }, [discussionState?.active, discussionState?.finished]);
 
-    const votingStartedRef = useRef(false);
-    const [votingAttemptTs, setVotingAttemptTs] = useState<number>(0);
-
-    // Safety Watchdog: If voting started but phase didn't change in 15s -> Reset
     useEffect(() => {
-        if (votingStartedRef.current && votingAttemptTs > 0 && isDayPhase) {
-            const timer = setTimeout(() => {
-                if (votingStartedRef.current && isDayPhase) {
-                    console.warn("[DayPhase] Watchdog: Voting start stuck. Resetting ref.");
-                    addLog("Transition stuck. Retrying vote start...", "warning");
-                    votingStartedRef.current = false;
-                    setVotingAttemptTs(0);
-                }
-            }, 15000); // 15 seconds timeout
-            return () => clearTimeout(timer);
-        }
-    }, [votingAttemptTs, isDayPhase, addLog]);
-
-    // Handle start voting - defined before useEffect to avoid hoisting issues
-    const handleStartVoting = useCallback(async () => {
-        console.log('[DayPhase] handleStartVoting called');
-        setIsProcessing(true);
-        try {
-            await startVotingOnChain();
-        } catch (e) {
-            console.error('[DayPhase] Failed to start voting:', e);
-            addLog("Failed to start voting on-chain. Retrying...", "danger");
-            votingStartedRef.current = false; // Allow retry on next poll
-        } finally {
-            setIsProcessing(false);
-        }
-    }, [startVotingOnChain, addLog]);
-
-    // DAY phase deadline watchdog: if discussion API hangs and the on-chain deadline
-    // passes while we're still in DAY, auto-trigger startVoting directly.
-    const dayTimeoutRef = useRef(false);
-    useEffect(() => {
-        if (!isDayPhase || isTestMode || votingStartedRef.current) return;
-
-        const deadline = gameState.phaseDeadline;
-        if (!deadline) return;
-
-        const sortedSurvivors = [...gameState.players]
-            .filter(p => p.isAlive)
-            .sort((a, b) => a.address.localeCompare(b.address));
-        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
-        if (myIndex === -1) return;
-
-        const checkDayDeadline = () => {
+        if (!isDayPhase || isTestMode || votingStartedRef.current || !gameState.phaseDeadline) return;
+        const sorted = [...gameState.players].filter(p => p.isAlive).sort((a,b) => a.address.localeCompare(b.address));
+        const myIdx = sorted.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+        if (myIdx === -1) return;
+        const check = () => {
             if (dayTimeoutRef.current || votingStartedRef.current || !isDayPhase) return;
-            const now = Math.floor(Date.now() / 1000);
-            const secondsPast = now - deadline;
-            // Stagger: base 5s + 5s per index
-            const myTriggerTime = 5 + myIndex * 5;
-            if (secondsPast >= myTriggerTime) {
-                console.log(`[DayPhase] DAY deadline passed. Waterfall trigger (Index ${myIndex}) — force startVoting.`);
-                dayTimeoutRef.current = true;
-                votingStartedRef.current = true;
-                setVotingAttemptTs(Date.now());
-                addLog('Day phase timeout. Starting vote...', 'warning');
-                handleStartVoting().catch(() => {
-                    dayTimeoutRef.current = false;
-                    votingStartedRef.current = false;
-                });
+            if ((Math.floor(Date.now() / 1000) - gameState.phaseDeadline) >= (5 + myIdx * 5)) {
+                dayTimeoutRef.current = true; votingStartedRef.current = true;
+                addLog('Day timeout. Starting vote...', 'warning');
+                handleStartVoting().catch(() => { dayTimeoutRef.current = false; votingStartedRef.current = false; });
             }
         };
-
-        checkDayDeadline();
-        const interval = setInterval(checkDayDeadline, 2000);
-        return () => clearInterval(interval);
+        const iv = setInterval(check, 2000);
+        return () => clearInterval(iv);
     }, [isDayPhase, gameState.phaseDeadline, gameState.players, myPlayer?.address, isTestMode, handleStartVoting, addLog]);
 
-    // Auto-transition to voting when discussion finished
     useEffect(() => {
-        // Waterfall Logic for Voting Start
-        const sortedSurvivors = [...gameState.players]
-            .filter(p => p.isAlive)
-            .sort((a, b) => a.address.localeCompare(b.address));
-        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
-
-        if (discussionState?.finished && isDayPhase && !votingStartedRef.current && myIndex !== -1) {
-            // Delay based on index
-            const myDelay = myIndex * 3000; // 3 seconds spacing
-
+        const sorted = [...gameState.players].filter(p => p.isAlive).sort((a,b) => a.address.localeCompare(b.address));
+        const myIdx = sorted.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+        if (discussionState?.finished && isDayPhase && !votingStartedRef.current && myIdx !== -1) {
             const timer = setTimeout(async () => {
-                // FIX #17: Re-check ALL conditions after delay to avoid double-start
                 if (!discussionState?.finished || !isDayPhase || votingStartedRef.current) return;
-
-                // FIX #4: Re-check phase from contract to ensure we're still in DAY
-                if (publicClient && currentRoomId) {
-                    try {
-                        const roomData = await publicClient.readContract({
-                            address: runtimeContractAddress,
-                            abi: MAFIA_ABI,
-                            functionName: 'getRoom',
-                            args: [currentRoomId],
-                        }) as any;
-                        const onChainPhase = Number(Array.isArray(roomData) ? roomData[3] : roomData.phase);
-                        if (onChainPhase !== GamePhase.DAY) {
-                            console.log(`[DayPhase] Phase already changed to ${onChainPhase}, skipping voting start.`);
-                            return;
-                        }
-                    } catch (e) {
-                        console.warn('[DayPhase] Could not verify phase, proceeding anyway:', e);
-                    }
-                }
-
                 votingStartedRef.current = true;
-                setVotingAttemptTs(Date.now());
-                console.log(`[DayPhase] Discussion finished. Waterfall Trigger (Index ${myIndex})...`);
-                addLog("All players have spoken. Starting vote...", "warning", 'DISCUSSION_ENDED');
-
+                addLog("Discussion finished. Starting vote...", "warning");
                 handleStartVoting();
-            }, myDelay + 1000); // Base 1s + staggered delay
+            }, myIdx * 3000 + 1000);
             return () => clearTimeout(timer);
         }
     }, [discussionState?.finished, isDayPhase, gameState.players, myPlayer?.address, addLog, handleStartVoting]);
 
-    // Voting Logic (Polling)
-    const fetchVoteCounts = useCallback(async () => {
-        if (!publicClient || !currentRoomId) return;
-        const counts = new Map<string, number>();
-        const newVoteMap: Record<string, string> = {};
-        let anySuccess = false;
-
-        // Fetch votes for all alive players concurrently
-        // so one revert doesn't kill all vote data
-        const alivePlayersForVotes = gameState.players.filter(p => p.isAlive);
-
-        await Promise.all(alivePlayersForVotes.map(async (player) => {
-            try {
-                // Contract no longer exposes public mappings for votes/counts in the new Diamond ABI
-                // We'll return empty results for now to avoid the build error.
-                const [count, vote] = [0n, '0x0000000000000000000000000000000000000000' as `0x${string}`];
-
-                counts.set(player.address.toLowerCase(), Number(count));
-
-                if (vote && vote !== '0x0000000000000000000000000000000000000000') {
-                    newVoteMap[player.address.toLowerCase()] = vote.toLowerCase();
-                }
-                anySuccess = true;
-            } catch (e: any) {
-                const msg = (e.message || '').toLowerCase();
-                if (!msg.includes('revert') && !msg.includes('0x5416eb98')) {
-                    console.warn(`[DayPhase] Failed to fetch vote for ${player.name}:`, e);
-                }
-            }
-        }));
-
-        // Only update if we got at least some data
-        if (anySuccess) {
-            setVoteMap(newVoteMap);
-        }
-
-        if (isProcessing || isTxPending) return;
-        if (myPlayer && anySuccess) {
-            const myVote = newVoteMap[myPlayer.address.toLowerCase()];
-            const hasVoted = !!myVote;
-            setVoteState(prev => ({
-                ...prev,
-                voteCounts: counts,
-                myVote: myVote || prev.myVote,
-                hasVoted: prev.hasVoted || hasVoted
-            }));
-        }
-    }, [publicClient, currentRoomId, gameState.players, myPlayer, isProcessing, isTxPending, setVoteMap]);
-
-    useEffect(() => {
-        // Skip vote fetching in test mode - let manual votes persist
-        if (isTestMode) return;
-
-        if (isVotingPhase) {
-            fetchVoteCounts();
-            const interval = setInterval(fetchVoteCounts, 1000);
-            return () => clearInterval(interval);
-        }
-        // DELETED: We don't clear voteMap here anymore to prevent race conditions.
-        // It is safely cleared in GameContext when showVotingResults actually ends.
-    }, [fetchVoteCounts, isVotingPhase, isTestMode]);
-
-
-
-    const { address } = useAccount();
-
     const handleVote = async () => {
-        if (!selectedTarget) return;
+        if (!selectedTarget || !address || !currentRoomId) return;
         playVoteSound();
-        const prevVote = voteState.myVote;
-        const prevHasVoted = voteState.hasVoted;
-        const prevTarget = selectedTarget; // FIX #22: Save for rollback
-        setVoteState(prev => ({ ...prev, hasVoted: true, myVote: selectedTarget }));
+        const prev = { v: voteState.myVote, h: voteState.hasVoted, t: selectedTarget };
+        setVoteState(p => ({ ...p, hasVoted: true, myVote: selectedTarget }));
         setSelectedTarget(null);
         setIsProcessing(true);
-
-        // ⚡ INSTANT: Broadcast to all players via LiveKit (~50ms) before blockchain (2-5s)
-        if (address && currentRoomId) {
-            emitGameSignal({
-                type: 'OPTIMISTIC_VOTE',
-                voter: address.toLowerCase(),
-                target: selectedTarget.toLowerCase(),
-                roomId: currentRoomId.toString(),
-            });
-        }
-
-        try {
-            await voteOnChain(selectedTarget);
-        } catch (e: any) {
-            // FIX #22: Full rollback including selectedTarget
-            setVoteState(prev => ({ ...prev, hasVoted: prevHasVoted, myVote: prevVote }));
-            setSelectedTarget(prevTarget);
-            addLog(e.shortMessage || "Vote failed", "danger");
-        } finally {
-            setIsProcessing(false);
-        }
+        emitGameSignal({ type: 'OPTIMISTIC_VOTE', voter: address.toLowerCase(), target: selectedTarget.toLowerCase(), roomId: currentRoomId.toString() });
+        try { await voteOnChain(selectedTarget); }
+        catch (e: any) { setVoteState(p => ({ ...p, hasVoted: prev.h, myVote: prev.v })); setSelectedTarget(prev.t); addLog(e.shortMessage || "Vote failed", "danger"); }
+        finally { setIsProcessing(false); }
     };
 
     return (
         <div className="w-full h-full flex flex-col items-center justify-start p-4 md:p-8 pt-5 md:pt-6">
-            {/* ── Static block: header + feed — never changes height ── */}
             <div className="max-w-2xl w-full flex flex-col">
-                {/* Header */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-center mb-4 flex-shrink-0 h-[40px] flex items-center justify-center"
-                >
-                    <h2 className="text-2xl font-['Cinzel'] text-white">
-                        {hideActions ? 'Voting Results' : isVotingPhase ? 'Elimination Vote' : 'Discussion Phase'}
-                    </h2>
-                </motion.div>
-
-                {/* Event Feed — fixed height, fully isolated from buttons below */}
-                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-md overflow-hidden border-t border-t-white/10 border-x border-x-white/5 border-b-black bg-[#0A0A0A] shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
-                    <GameLog
-                        liveDiscussion={{
-                            active: discussionState?.active,
-                            finished: discussionState?.finished,
-                            currentSpeakerName: currentSpeaker?.name || null,
-                        }}
-                        forceVotingActive={isVotingPhase || showVotingResults}
-                    />
+                <div className="text-center mb-4 flex-shrink-0 h-[40px] flex items-center justify-center">
+                    <h2 className="text-2xl font-['Cinzel'] text-white">{hideActions ? 'Voting Results' : isVotingPhase ? 'Elimination Vote' : 'Discussion Phase'}</h2>
                 </div>
-
-                {/* Actions — min-h reserves space so feed never shifts */}
+                <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-md overflow-hidden border-t border-t-white/10 border-x border-x-white/5 border-b-black bg-[#0A0A0A] shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                    <GameLog liveDiscussion={{ active: discussionState?.active, finished: discussionState?.finished, currentSpeakerName: currentSpeaker?.name || null }} forceVotingActive={isVotingPhase || showVotingResults} />
+                </div>
                 <div className={`min-h-[140px] flex flex-col justify-start transition-opacity duration-300 ${hideActions ? 'opacity-0 pointer-events-none' : ''}`}>
-                    <AnimatePresence mode="sync">
-
-                        {/* Discussion Phase UI */}
-                        {isDayPhase && !isNightTransition && (
-                            <motion.div
-                                key="day-actions"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="w-full space-y-3"
-                            >
-                                {discussionState?.active || isTestMode ? (
-                                    <>
-                                        {/* Timer Display with Mic Button */}
-                                        <div className="relative w-full py-2 text-center bg-[#0A0A0A] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
-                                            {discussionState?.phase === 'initial_delay' ? (
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <Clock className="w-4 h-4 text-[#916A47]" />
-                                                    <span className="text-2xl font-bold text-white tabular-nums">
-                                                        {smoothTimeRemaining}s
-                                                    </span>
-                                                    <span className="text-[#916A47] text-[10px] uppercase font-bold tracking-widest ml-2">
-                                                        Starting Discussion...
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <Clock className="w-4 h-4 text-[#916A47]" />
-                                                    <span className="text-2xl font-bold text-white tabular-nums">
-                                                        {Math.floor(smoothTimeRemaining / 60)}:{String(smoothTimeRemaining % 60).padStart(2, '0')}
-                                                    </span>
-                                                    <span className="text-[#916A47] text-[10px] uppercase font-bold tracking-widest ml-2">
-                                                        {discussionState?.isMyTurn || isTestMode ? 'Your Speech' : `${currentSpeaker?.name || 'Player'} Speaking`}
-                                                    </span>
-                                                </div>
-                                            )}
-                                            {/* Mic Button - Positioned to the right of timer */}
-                                            {currentRoomId && myPlayer && (
-                                                <div className="absolute right-[-70px] top-1/2 -translate-y-1/2">
-                                                    <MicButton
-                                                        roomId={`${currentRoomId}-day`}
-                                                        userName={myPlayer.name}
-                                                        isMyTurn={discussionState?.isMyTurn || false}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Skip button (only for current speaker, active in test mode) */}
-                                        {(discussionState?.isMyTurn || isTestMode) && (
-                                            <Button
-                                                onClick={skipSpeech}
-                                                disabled={isProcessing}
-                                                isLoading={isProcessing}
-                                                variant="outline-gold"
-                                                className="w-full h-[50px] font-['Cinzel'] tracking-[0.08em] text-[13px] uppercase"
-                                            >
-                                                <ChevronRight className="w-5 h-5 mr-2" />
-                                                Finish Speech Early
-                                            </Button>
-                                        )}
-
-                                        {/* Host Force Skip (if not speaker, active in test mode) */}
-                                        {(!discussionState?.isMyTurn || isTestMode) && (
-                                            <Button
-                                                onClick={skipSpeech}
-                                                disabled={isProcessing}
-                                                isLoading={isProcessing}
-                                                variant="outline-gold"
-                                                className="w-full h-[50px] font-['Cinzel'] tracking-[0.08em] text-[13px] uppercase mt-2 !bg-[#121212] !border-[#6B6B6B]/60 !text-[#6B6B6B] hover:!bg-[#3D3D3D] hover:!border-[#3D3D3D] hover:!text-white"
-                                            >
-                                                <ChevronRight className="w-5 h-5 mr-2" />
-                                                Force Skip (Host)
-                                            </Button>
-                                        )}
-                                    </>
-                                ) : discussionState?.finished ? (
-                                    <div className="w-full py-3 text-center bg-[#0A0A0A] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
-                                        <p className="text-[#916A47] font-bold text-base animate-pulse">
-                                            Starting Vote...
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="w-full py-6 text-center bg-[#0A0A0A] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
-                                        <p className="text-[#916A47] font-medium text-lg animate-pulse">
-                                            Waiting for discussion to start...
-                                        </p>
-                                    </div>
-                                )}
-                            </motion.div>
-                        )}
-
-                        {/* Voting Phase OR Night Transition (Both share the same slot) */}
-                        {(isVotingPhase || isNightTransition) && (
-                            <motion.div
-                                key="voting-actions"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="space-y-3"
-                            >
-                                {isNightTransition ? (
-                                    // Night Transition Delay UI (Replaces Timer & Buttons)
-                                    // Night Transition Delay UI (Replaces Timer & Buttons)
-                                    <motion.div
-                                        key="transition-timer"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        className="w-full py-2 text-center bg-[#0A0A0A] rounded-md border border-[#916A47]/30 shadow-[0_5px_15px_rgba(0,0,0,0.8)] mt-2"
-                                    >
-                                        <div className="flex flex-col items-center justify-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Clock className="w-4 h-4 text-[#916A47]" />
-                                                <span className="text-2xl font-bold text-white tabular-nums">
-                                                    {delaySeconds}s
-                                                </span>
-                                                <span className="text-[#916A47] text-[10px] uppercase font-bold tracking-widest ml-2">
-                                                    Voting Results
-                                                </span>
-                                            </div>
-                                            <div className="text-[10px] text-white/30 font-mono mt-1 pt-1 border-t border-[#916A47]/30 animate-pulse uppercase tracking-widest px-4">
-                                                Review the logs above...
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                ) : (
-                                    // Standard Voting UI
-                                    <>
-                                        {/* Voting Timer + Mic Button */}
-                                        <div className="relative">
-                                            <VotingTimer />
-                                            {/* Free Talk Mic - All players can speak during voting */}
-                                            {currentRoomId && myPlayer && (
-                                                <div className="absolute right-[-70px] top-1/2 -translate-y-1/2">
-                                                    <MicButton
-                                                        roomId={`${currentRoomId}-vote`}
-                                                        userName={myPlayer.name}
-                                                        isMyTurn={false}
-                                                        freeTalk={true}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <Button
-                                            onClick={handleVote}
-                                            data-custom-sound
-                                            isLoading={isProcessing || isTxPending}
-                                            disabled={!selectedTarget || isProcessing || isTxPending || voteState.hasVoted}
-                                            variant="outline-gold"
-                                            className={`w-full h-[50px] text-base tracking-[0.08em] uppercase font-['Cinzel'] text-[13px] disabled:!brightness-100 ${voteState.hasVoted
-                                                ? 'disabled:!opacity-100 !bg-[#1A1510] !border-[#916A47]/30 !text-[#B88A5E] cursor-default'
-                                                : selectedTarget
-                                                    ? ''
-                                                    : 'disabled:!opacity-100 disabled:!brightness-[0.9] !bg-[#1A1612] !border-[#916A47]/30 !text-[#916A47]/40'
-                                                }`}
-                                        >
-                                            {voteState.hasVoted ? (
-                                                <>
-                                                    ✓ Vote Committed
-                                                </>
-                                            ) : selectedTarget ? (
-                                                <>
-                                                    Vote for {gameState.players.find(p => p.address.toLowerCase() === selectedTarget.toLowerCase())?.name}
-                                                </>
-                                            ) : (
-                                                'Select a target on the board'
-                                            )}
-                                        </Button>
-                                    </>
-                                )}
-                            </motion.div>
-                        )}
+                    <AnimatePresence mode="wait">
+                        {isDayPhase && !isNightTransition ? (
+                            <DiscussionSection
+                                discussionState={discussionState} isTestMode={isTestMode}
+                                smoothTimeRemaining={smoothTimeRemaining} currentSpeaker={currentSpeaker}
+                                currentRoomId={currentRoomId} myPlayer={myPlayer}
+                                isProcessing={isProcessing} onSkip={skipSpeech}
+                            />
+                        ) : (isVotingPhase || isNightTransition) ? (
+                            <VotingSection
+                                isVotingPhase={isVotingPhase} isNightTransition={!!isNightTransition}
+                                delaySeconds={delaySeconds} currentRoomId={currentRoomId} myPlayer={myPlayer}
+                                isProcessing={isProcessing} isTxPending={isTxPending}
+                                voteState={voteState} selectedTarget={selectedTarget}
+                                gameState={gameState} onVote={handleVote}
+                            />
+                        ) : null}
                     </AnimatePresence>
                 </div>
             </div>
@@ -863,123 +283,4 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
     );
 });
 
-/**
- * VotingTimer component - shows countdown timer during voting phase
- * Implements "Soft Deadline" logic (1 minute target vs 3 minute contract limit)
- */
-const VotingTimer: React.FC = React.memo(() => {
-    const { gameState, myPlayer, voteOnChain, addLog } = useGameContext();
-    const [timeLeft, setTimeLeft] = useState<number>(0);
-    const [timerMode, setTimerMode] = useState<'soft' | 'transition' | 'hard'>('soft');
-    const hasAutoVotedRef = useRef(false);
-
-    // Contract: 90s (1.5m). Target: 30s soft timer. Buffer: 60s hard timer.
-    const BUFFER = 60;
-
-    // Primitives for dependency array stability
-    const phaseDeadline = gameState.phaseDeadline;
-    const myAddress = myPlayer?.address;
-    const hasVoted = myPlayer?.hasVoted;
-    const isAlive = myPlayer?.isAlive;
-    const isVotingPhase = gameState.phase === GamePhase.VOTING;
-
-    useEffect(() => {
-        if (!phaseDeadline) return;
-
-        const tick = () => {
-            const now = Math.floor(Date.now() / 1000);
-            const realRemaining = Math.max(0, phaseDeadline - now);
-            const softRemaining = realRemaining - BUFFER;
-
-            if (softRemaining > 0) {
-                // --- PHASE 1: SOFT TIMER (0-60s) ---
-                setTimeLeft(softRemaining);
-                setTimerMode('soft');
-            } else {
-                // --- PHASE 2: DEADLINE REACHED ---
-                const overtimeSeconds = Math.abs(softRemaining);
-
-                if (overtimeSeconds < 5) {
-                    // --- TRANSITION (0-5s after deadline) ---
-                    // Show 0:00 and attempt auto-vote
-                    setTimeLeft(0);
-                    setTimerMode('transition');
-
-                    // Guard: only auto-vote if still in VOTING phase (prevents stale fire after NightStarted resets hasVoted flags)
-                    if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive && isVotingPhase) {
-                        hasAutoVotedRef.current = true;
-                        addLog("1 minute limit reached. Auto-voting for self...", "warning");
-                        // FIX #16: Re-check hasVoted fresh from the latest player data
-                        const freshPlayer = gameState.players.find(p => p.address.toLowerCase() === myAddress.toLowerCase());
-                        if (freshPlayer?.hasVoted) return; // Already voted manually
-                        voteOnChain(myAddress as `0x${string}`).catch(e => {
-                            console.error("[AutoVote] Failed:", e);
-                            hasAutoVotedRef.current = false; // Allow retry
-                            addLog("Auto-vote failed. Please vote manually!", "danger");
-                        });
-                    }
-                } else {
-                    // --- PHASE 3: HARD TIMER (Remaining ~115s) ---
-                    // If game is still going, show real contract time
-                    setTimeLeft(realRemaining);
-                    setTimerMode('hard');
-
-                    // LATE JOINER PROTECTION: Auto-vote if in Hard Mode
-                    // Guard: only auto-vote if still in VOTING phase
-                    if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive && isVotingPhase) {
-                        hasAutoVotedRef.current = true;
-                        addLog("Late join during hard timer. Auto-voting for self...", "warning");
-                        // FIX #16: Re-check hasVoted
-                        const freshPlayer = gameState.players.find(p => p.address.toLowerCase() === myAddress.toLowerCase());
-                        if (freshPlayer?.hasVoted) return;
-                        voteOnChain(myAddress as `0x${string}`).catch(e => {
-                            console.error("[AutoVote] Failed:", e);
-                            hasAutoVotedRef.current = false;
-                            addLog("Auto-vote failed.", "danger");
-                        });
-                    }
-                }
-            }
-        };
-
-        tick();
-        const interval = setInterval(tick, 1000);
-        return () => clearInterval(interval);
-    }, [phaseDeadline, myAddress, hasVoted, isAlive, isVotingPhase, voteOnChain, addLog, gameState.players]); // Added gameState.players to avoid stale closure
-
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = timeLeft % 60;
-
-    // Visual styles based on mode
-    // Soft: Normal -> Red at end
-    // Transition: Pulsing 0:00
-    // Hard: Orange/Red indicating long wait
-    const isUrgent = (timerMode === 'soft' && timeLeft <= 10) || timerMode === 'transition';
-    const isHardWait = timerMode === 'hard';
-
-    return (
-        <div className={`w-full py-2 text-center rounded-md border transition-colors duration-500 shadow-[0_5px_15px_rgba(0,0,0,0.8)]
-            ${isUrgent ? 'bg-[#0A0A0A] border-[#916A47]/40 ring-1 ring-[#916A47]/20 relative overflow-hidden' :
-                isHardWait ? 'bg-[#0A0A0A] border-[#916A47]/30' :
-                    'bg-[#0A0A0A] border-[#916A47]/30'}`}>
-
-            <div className="flex items-center justify-center gap-2">
-                <Clock className={`w-4 h-4 text-[#916A47] ${isUrgent ? 'animate-pulse' : ''}`} />
-                <span className={`text-2xl font-bold tabular-nums 
-                    ${isUrgent ? 'text-[#916A47] animate-pulse drop-shadow-[0_0_8px_rgba(145,106,71,0.5)]' : isHardWait ? 'text-white/70 animate-pulse' : 'text-white'}`}>
-                    {minutes}:{String(seconds).padStart(2, '0')}
-                </span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ml-2 text-[#916A47]`}>
-                    {timerMode === 'soft' ? 'Voting Time' :
-                        timerMode === 'transition' ? 'Auto-Voting...' : 'Waiting for AFK'}
-                </span>
-            </div>
-
-            {timerMode === 'hard' && (
-                <div className="text-[10px] text-white/30 font-mono mt-1 pt-1 border-t border-white/5 animate-pulse uppercase tracking-widest mx-4">
-                    Some players are AFK...
-                </div>
-            )}
-        </div>
-    );
-});
+DayPhase.displayName = 'DayPhase';
