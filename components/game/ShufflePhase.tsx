@@ -677,14 +677,13 @@ export const ShufflePhase: React.FC = React.memo(() => {
                                 shuffleState.hasRevealed ? 'text-[#916A47]' :
                                     'text-white/80'
                                 }`}>
-                                {shuffleState.isFailed
-                                    ? '!! CONNECTION_LOST'
-                                    : shuffleState.hasRevealed
-                                        ? 'STANDBY // AWAITING_OPERATIVES'
-                                        : shuffleState.isMyTurn
-                                            ? (shuffleState.hasCommitted ? 'STEP_2 // SEALING_DOSSIER...' : 'STEP_1 // SCRAMBLING_DATA...')
-                                            : `STANDBY // ${currentShuffler?.name?.toUpperCase() || 'PLAYER'}`
-                                }
+                                {(() => {
+                                    if (shuffleState.isFailed) return '!! CONNECTION_LOST';
+                                    if (shuffleState.hasRevealed) return 'STANDBY // AWAITING_OPERATIVES';
+                                    
+                                    const name = currentShuffler?.name?.toUpperCase() || 'PLAYER';
+                                    return `PENDING // ${name}`;
+                                })()}
                                 {!shuffleState.hasRevealed && !shuffleState.isFailed && (
                                     <span className="animate-pulse ml-1 text-[#916A47]">▌</span>
                                 )}
