@@ -1,3 +1,5 @@
+import { SignatureBuilder } from './SignatureBuilder';
+
 export type DiscussionActionType = 'start' | 'skip';
 export type NightActionType = 'kill' | 'heal' | 'check';
 
@@ -8,7 +10,10 @@ export function buildAvatarMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `avatar:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.address.toLowerCase()}:${input.nonce}:${String(input.timestamp)}`;
+  return new SignatureBuilder('avatar', input.chainId, input.roomId)
+    .withAddress(input.address)
+    .withModern(input.nonce, input.timestamp)
+    .build();
 }
 
 export function buildRegisterPubkeyMessage(input: {
@@ -19,7 +24,11 @@ export function buildRegisterPubkeyMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `register-pubkey:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.address.toLowerCase()}:${input.pubkey}:${input.nonce}:${String(input.timestamp)}`;
+  return new SignatureBuilder('register-pubkey', input.chainId, input.roomId)
+    .withAddress(input.address)
+    .withParam(input.pubkey)
+    .withModern(input.nonce, input.timestamp)
+    .build();
 }
 
 export function buildNightActionMessage(input: {
@@ -31,7 +40,12 @@ export function buildNightActionMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `night:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.dayCount}:${input.actionType}:${input.targetAddress.toLowerCase()}:${input.nonce}:${String(input.timestamp)}`;
+  return new SignatureBuilder('night', input.chainId, input.roomId)
+    .withParam(input.dayCount)
+    .withParam(input.actionType)
+    .withAddress(input.targetAddress)
+    .withModern(input.nonce, input.timestamp)
+    .build();
 }
 
 export function buildResolveNightMessage(input: {
@@ -40,7 +54,9 @@ export function buildResolveNightMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `resolve-night:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.nonce}:${String(input.timestamp)}`;
+  return new SignatureBuilder('resolve-night', input.chainId, input.roomId)
+    .withModern(input.nonce, input.timestamp)
+    .build();
 }
 
 export function buildDiscussionMessage(input: {
@@ -51,7 +67,11 @@ export function buildDiscussionMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `discussion:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.dayCount}:${input.action}:${input.nonce}:${String(input.timestamp)}`;
+  return new SignatureBuilder('discussion', input.chainId, input.roomId)
+    .withParam(input.dayCount)
+    .withParam(input.action)
+    .withModern(input.nonce, input.timestamp)
+    .build();
 }
 
 export function buildTokenMessage(input: {
@@ -62,7 +82,11 @@ export function buildTokenMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `token:${String(input.chainId || 43113)}:${String(input.room)}:${input.username}:${input.playerAddress.toLowerCase()}:${input.nonce}:${String(input.timestamp)}`;
+  return new SignatureBuilder('token', input.chainId, input.room)
+    .withParam(input.username)
+    .withAddress(input.playerAddress)
+    .withModern(input.nonce, input.timestamp)
+    .build();
 }
 
 export function buildInvestigateMessage(input: {
@@ -73,7 +97,11 @@ export function buildInvestigateMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `investigate:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.dayCount}:${input.targetAddress.toLowerCase()}:${input.nonce}:${String(input.timestamp)}`;
+  return new SignatureBuilder('investigate', input.chainId, input.roomId)
+    .withParam(input.dayCount)
+    .withAddress(input.targetAddress)
+    .withModern(input.nonce, input.timestamp)
+    .build();
 }
 
 export function buildRoleSyncMessage(input: {
@@ -83,7 +111,10 @@ export function buildRoleSyncMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `sync-role-commit:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.txHash.toLowerCase()}:${input.nonce}:${String(input.timestamp)}`;
+  return new SignatureBuilder('sync-role-commit', input.chainId, input.roomId)
+    .withAddress(input.txHash)
+    .withModern(input.nonce, input.timestamp)
+    .build();
 }
 
 export function buildTeammatesMessage(input: {
@@ -92,13 +123,18 @@ export function buildTeammatesMessage(input: {
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `teammates:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.nonce}:${String(input.timestamp)}`;
+  return new SignatureBuilder('teammates', input.chainId, input.roomId)
+    .withModern(input.nonce, input.timestamp)
+    .build();
 }
+
 export function buildMafiaMembersMessage(input: {
   roomId: string;
   nonce: string;
   timestamp: number;
   chainId?: number | string;
 }): string {
-  return `mafia-members:${String(input.chainId || 43113)}:${String(input.roomId)}:${input.nonce}:${String(input.timestamp)}`;
+  return new SignatureBuilder('mafia-members', input.chainId, input.roomId)
+    .withModern(input.nonce, input.timestamp)
+    .build();
 }
