@@ -65,28 +65,46 @@ async function verifySessionKeyOwnership(
     validateRoomMatch: boolean,
     contractAddress?: `0x${string}`
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-    const sessionRaw = await deps.publicClient.readContract({
-        address: contractAddress || MAFIA_CONTRACT_ADDRESS,
-        abi: MAFIA_ABI,
-        functionName: 'sessionKeys',
-        args: [actorAddress as `0x${string}`],
-    });
+    const MAX_ATTEMPTS = 3;
+    let lastError = '';
 
-    const session = toSessionKeyRecord(sessionRaw as any);
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+            const sessionRaw = await deps.publicClient.readContract({
+                address: contractAddress || MAFIA_CONTRACT_ADDRESS,
+                abi: MAFIA_ABI,
+                functionName: 'sessionKeys',
+                args: [actorAddress as `0x${string}`],
+            });
 
-    if (!session.sessionAddress || session.sessionAddress.toLowerCase() !== signerAddress) {
-        return { ok: false, status: 403, error: 'Session key is not registered for this player' };
+            const session = toSessionKeyRecord(sessionRaw as any);
+
+            if (session.sessionAddress && session.sessionAddress.toLowerCase() === signerAddress.toLowerCase()) {
+                if (!session.isActive || Number(session.expiresAt) <= deps.now()) {
+                    return { ok: false, status: 403, error: 'Session key inactive or expired' };
+                }
+
+                if (validateRoomMatch && BigInt(roomId) !== session.roomId) {
+                    return { ok: false, status: 403, error: 'Session key room mismatch' };
+                }
+
+                return { ok: true };
+            }
+            
+            lastError = session.sessionAddress 
+                ? `Session key mismatch: expected ${signerAddress}, found ${session.sessionAddress}` 
+                : 'Session key not found for player';
+        } catch (e: any) {
+            lastError = e.message || 'Contract read failed';
+        }
+
+        if (attempt < MAX_ATTEMPTS) {
+            console.log(`[security] Session key check attempt ${attempt} failed, retrying in 1s...`);
+            await new Promise(r => setTimeout(r, 1000));
+        }
     }
 
-    if (!session.isActive || Number(session.expiresAt) <= deps.now()) {
-        return { ok: false, status: 403, error: 'Session key inactive or expired' };
-    }
-
-    if (validateRoomMatch && BigInt(roomId) !== session.roomId) {
-        return { ok: false, status: 403, error: 'Session key room mismatch' };
-    }
-
-    return { ok: true };
+    return { ok: false, status: 403, error: `Session key is not registered for this player (${lastError})` };
 }
 
 export interface SignedRequestVerificationContext<TBody> {

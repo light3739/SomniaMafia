@@ -236,7 +236,11 @@ export async function fetchInvestigationProofFromGM(params: {
         roomId: Number(roomId),
         walletClient,
         buildMessage: ({ nonce, timestamp }) =>
-            `investigate:${String(chainId || 43113)}:${String(roomId)}:${params.dayCount || 0}:${targetAddress.toLowerCase()}:${nonce}:${String(timestamp)}`,
+            new SignatureBuilder('investigate', chainId, roomId)
+                .withParam(params.dayCount || 0)
+                .withAddress(targetAddress)
+                .withModern(nonce, timestamp)
+                .build(),
     });
 
     const body = {
@@ -291,7 +295,10 @@ export async function skipNightActionToGM(params: {
         roomId: Number(roomId),
         walletClient,
         buildMessage: ({ nonce, timestamp }) =>
-            `skip-night:${String(chainId || 43113)}:${String(roomId)}:${params.dayCount || 0}:${nonce}:${String(timestamp)}`,
+            new SignatureBuilder('skip-night', chainId, roomId)
+                .withParam(params.dayCount || 0)
+                .withModern(nonce, timestamp)
+                .build(),
     });
 
     const body = {
@@ -339,7 +346,10 @@ export async function setRoomPassword(params: {
         signerAddress,
         forceWallet: params.forceWallet,
         buildMessage: ({ nonce, timestamp }) =>
-            `setRoomPassword:${String(chainId || 43113)}:${String(roomId)}:${address.toLowerCase()}:${nonce}:${String(timestamp)}`,
+            new SignatureBuilder('setRoomPassword', chainId, roomId)
+                .withAddress(address)
+                .withModern(nonce, timestamp)
+                .build(),
     });
 
     const res = await fetch(`${GM_SERVER_URL}/room-password`, {
