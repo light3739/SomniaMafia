@@ -10,8 +10,13 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const queryParams = new URLSearchParams(searchParams);
-        const url = `${GM_SERVER_URL}/mafia-members/${roomId}?${queryParams.toString()}`;
+        // Only forward params the GM server needs — avoid leaking stale signature/nonce
+        const gmParams = new URLSearchParams();
+        for (const key of ['playerAddress', 'signature', 'signerAddress', 'nonce', 'timestamp', 'chainId']) {
+            const val = searchParams.get(key);
+            if (val) gmParams.set(key, val);
+        }
+        const url = `${GM_SERVER_URL}/mafia-members/${roomId}?${gmParams.toString()}`;
         
         const res = await fetch(url, {
             headers: { 'Content-Type': 'application/json' },

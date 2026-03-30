@@ -212,6 +212,7 @@ export function MicButton({
                                 playerAddress,
                                 nonce,
                                 timestamp,
+                                chainId: chainIdRef.current,
                             }),
                         });
                         signature = signed.signature;

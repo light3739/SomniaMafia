@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { verifyMessage, createPublicClient, http } from 'viem';
 import { getDeploymentByChainId, ACTIVE_DEPLOYMENT, MAFIA_ABI } from '@/contracts/config';
 import { ServerStore } from '@/services/serverStore';
+import { buildRevealSecretMessage } from '@/services/signingSchema';
 
 export async function POST(request: Request) {
     try {
@@ -11,9 +12,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        // Verify the caller owns the address (or has a valid session key for it)
-        // Standardize format: reveal-secret:chainId:roomId:role:salt
-        const message = `reveal-secret:${String(chainId || 43113)}:${String(rawRoomId)}:${String(role)}:${String(salt)}`;
+        // Use SignatureBuilder for deterministic message construction
+        const message = buildRevealSecretMessage({
+            roomId: rawRoomId,
+            role,
+            salt,
+            chainId,
+        });
 
         // Try verifying against main wallet address first
         let valid = await verifyMessage({
