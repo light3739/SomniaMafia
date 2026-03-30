@@ -1,205 +1,82 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, http } from 'viem';
-import { MAFIA_ABI, getDeploymentByChainId, ACTIVE_DEPLOYMENT } from '@/contracts/config';
-import { ServerStore, DiscussionState } from '@/services/serverStore';
 import { verifySignedRequestBody } from '@/app/api/_lib/security';
 import { buildDiscussionMessage } from '@/services/signingSchema';
 
 export const dynamic = 'force-dynamic';
 
-const FLAG_ACTIVE = 2;
-const SPEAKER_DURATION = 60; // seconds per speaker
-const DELAY_INITIAL = 5; // seconds before first speaker
-
-// ─── RPC Cache ─────────────────────────────────────────────────────────────
-// getPlayers() is called every second per player during DAY phase.
-// Cache results for 10 seconds per room to avoid RPC rate-limit bans.
-// (Player list only changes at voting end — safe to cache.)
-const rpcPlayersCache = new Map<string, { players: any[]; expiresAt: number }>();
-const RPC_CACHE_TTL_MS = 10_000; // 10 seconds
-
-async function getCachedPlayers(
-    roomId: string,
-    chainId: number,
-    contractAddress: string,
-    dynamicClient: any
-): Promise<any[]> {
-    const cacheKey = `${roomId}:${chainId}`;
-    const cached = rpcPlayersCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-        return cached.players;
-    }
-    const players: any = await dynamicClient.readContract({
-        address: contractAddress as `0x${string}`,
-        abi: MAFIA_ABI,
-        functionName: 'getPlayers',
-        args: [BigInt(roomId)],
-    });
-    const allShuffled = shufflePlayers(players, roomId);
-    const alivePlayers = allShuffled.filter((p: any) => (Number(p.flags) & FLAG_ACTIVE) !== 0);
-    rpcPlayersCache.set(cacheKey, { players: alivePlayers, expiresAt: Date.now() + RPC_CACHE_TTL_MS });
-    return alivePlayers;
-}
+const GM_SERVER_URL = process.env.GM_SERVER_URL || 'https://gm-test.mafiaonchain.live';
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 
 /**
- * Deterministic shuffle using roomId as seed (must match frontend GameLayout.tsx logic)
- */
-function shufflePlayers(players: any[], roomId: string): any[] {
-    const shuffled = [...players];
-    const seed = Number(BigInt(roomId) % 1000000n);
-    let m = shuffled.length, t, i;
-    let s = seed;
-
-    const random = () => {
-        s = (s * 9301 + 49297) % 233280;
-        return s / 233280;
-    };
-
-    while (m) {
-        i = Math.floor(random() * m--);
-        t = shuffled[m];
-        shuffled[m] = shuffled[i];
-        shuffled[i] = t;
-    }
-    return shuffled;
-}
-
-/**
- * GET /api/game/discussion?roomId=...&playerAddress=...
- * Returns current discussion state with calculated time remaining.
+ * GET /api/game/discussion
+ * Proxy to GM Server
  */
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
-        const rawRoomId = searchParams.get('roomId');
-        const playerAddress = searchParams.get('playerAddress');
+        const roomId = searchParams.get('roomId');
+        const dayCount = searchParams.get('dayCount') || '1';
+        const playerAddress = searchParams.get('playerAddress') || '';
+        const chainId = searchParams.get('chainId') || '43113';
 
-        if (!rawRoomId) {
+        if (!roomId) {
             return NextResponse.json({ error: 'Missing roomId' }, { status: 400 });
         }
 
-        const roomId = BigInt(rawRoomId).toString();
-        const rawDayCount = searchParams.get('dayCount');
-        const dayCount = rawDayCount ? parseInt(rawDayCount) : 1;
+        const gmUrl = `${GM_SERVER_URL}/discussion?roomId=${roomId}&dayCount=${dayCount}&playerAddress=${playerAddress}&chainId=${chainId}`;
+        const gmResp = await fetch(gmUrl, {
+            headers: { 'Authorization': `Bearer ${INTERNAL_API_KEY}` },
+            cache: 'no-store'
+        });
 
-        const rawChainId = searchParams.get('chainId');
-        const requestChainId = rawChainId ? Number(rawChainId) : ACTIVE_DEPLOYMENT.chainId;
-        const deployment = getDeploymentByChainId(requestChainId);
-        const dynamicClient = createPublicClient({ chain: deployment.chain, transport: http() });
-        const contractAddress = deployment.contracts.MafiaDiamond;
-
-        let state = await ServerStore.getDiscussionState(roomId, dayCount, requestChainId);
-
-        if (!state) {
-            return NextResponse.json({
-                active: false,
-                message: 'Discussion not started'
-            });
+        if (!gmResp.ok) {
+            const err = await gmResp.json().catch(() => ({ error: 'GM server error' }));
+            return NextResponse.json(err, { status: gmResp.status });
         }
 
-        // Get alive players — uses 10-second RPC cache to prevent rate-limit bans
-        let alivePlayers: any[] = [];
-        try {
-            alivePlayers = await getCachedPlayers(roomId, requestChainId, contractAddress, dynamicClient);
-        } catch (e) {
-            if (roomId === '999') {
-                alivePlayers = Array(10).fill(null).map((_, i) => ({
-                    wallet: `0x${(i + 1).toString().repeat(40)}`,
-                    nickname: `Player ${i + 1}`,
-                    flags: FLAG_ACTIVE
-                }));
-                alivePlayers = shufflePlayers(alivePlayers, roomId);
-            } else throw e;
-        }
-
-        // Shuffle moved inside try/catch to ensure stability
-        // alivePlayers = shufflePlayers(alivePlayers, roomId);
-        const totalSpeakers = alivePlayers.length;
-
-        // Auto-advance based on current phase
-        if (!state.finished) {
-            if (state.phase === 'speaking') {
-                // Check if speaker time expired
-                const elapsed = (Date.now() - state.speakerStartTime) / 1000;
-                if (elapsed >= state.speakerDuration) {
-                    console.log(`[API/Discussion] Auto-advancing speaker ${state.currentSpeakerIndex} (Timeout). Elapsed: ${elapsed.toFixed(1)}s`);
-                    const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, false, requestChainId);
-                    if (newState) state = newState;
-                }
-            } else if (state.phase === 'initial_delay') {
-                // Check if delay time expired
-                const delayElapsed = (Date.now() - (state.delayStartTime || 0)) / 1000;
-                const delayDuration = state.delayDuration || 5;
-                if (delayElapsed >= delayDuration) {
-                    const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, false, requestChainId);
-                    if (newState) state = newState;
-                }
-            }
-        }
-
-        const response = buildResponse(state, alivePlayers, playerAddress);
+        const data = await gmResp.json();
+        const response = NextResponse.json(data);
+        
+        // Ensure no caching
         response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         response.headers.set('Pragma', 'no-cache');
         response.headers.set('Expires', '0');
+        
         return response;
-
     } catch (error: any) {
-        console.error('[API/Discussion] GET Error:', error);
+        console.error('[API/Discussion] GET Proxy Error:', error);
         return NextResponse.json({ error: error.message || 'Internal error' }, { status: 500 });
     }
 }
 
 /**
  * POST /api/game/discussion
- * Body: { roomId, dayCount, action: 'start' | 'skip', playerAddress }
+ * Standardized signature verification then proxy to GM Server
  */
 export async function POST(request: Request) {
     try {
-        const {
-            roomId: rawRoomId,
-            dayCount: rawDayCount,
-            action,
-            playerAddress,
-            signature,
-            signerAddress,
-            nonce,
-            timestamp,
-            chainId,
-        } = await request.json();
+        const body = await request.json();
+        const { roomId: rawRoomId, action, dayCount, playerAddress, chainId } = body;
 
-        if (!rawRoomId || !action) {
-            return NextResponse.json({ error: 'Missing roomId or action' }, { status: 400 });
-        }
-
-        if (!playerAddress) {
-            return NextResponse.json({ error: 'Missing playerAddress' }, { status: 400 });
+        if (!rawRoomId || !action || !playerAddress) {
+            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
         const roomId = BigInt(rawRoomId).toString();
-        const dayCount = rawDayCount ? parseInt(rawDayCount) : 1;
 
+        // 1. Verify Signature (Standardized Pattern)
         if (roomId !== '999') {
             const verified = await verifySignedRequestBody({
                 scope: 'discussion-action',
-                body: {
-                    roomId,
-                    action,
-                    dayCount,
-                    playerAddress,
-                    signature,
-                    signerAddress,
-                    nonce,
-                    timestamp,
-                    chainId,
-                },
+                body,
                 requiredFields: ['roomId', 'action', 'dayCount', 'playerAddress', 'signature', 'nonce', 'timestamp'],
-                getRoomId: (body) => body.roomId,
-                getActorAddress: (body) => body.playerAddress,
-                getSignerAddress: (body) => body.signerAddress,
-                getMessage: ({ body, roomId, nonce, timestamp }) => buildDiscussionMessage({
+                getRoomId: (b) => b.roomId,
+                getActorAddress: (b) => b.playerAddress,
+                getSignerAddress: (b) => b.signerAddress,
+                getMessage: ({ roomId, nonce, timestamp }) => buildDiscussionMessage({
                     roomId,
-                    dayCount: body.dayCount,
-                    action: body.action,
+                    dayCount: Number(dayCount || 1),
+                    action: action as any,
                     nonce,
                     timestamp,
                     chainId,
@@ -211,134 +88,26 @@ export async function POST(request: Request) {
             }
         }
 
-        // Get alive players — use cache for GET performance, but POST (skip/start) can afford uncached
-        let alivePlayers: any[] = [];
-        let hostAddress = '0x0000000000000000000000000000000000000000';
+        // 2. Proxy to GM Server
+        const gmResp = await fetch(`${GM_SERVER_URL}/discussion`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${INTERNAL_API_KEY}`
+            },
+            body: JSON.stringify(body)
+        });
 
-        const requestChainId = chainId ? Number(chainId) : ACTIVE_DEPLOYMENT.chainId;
-        const deployment = getDeploymentByChainId(requestChainId);
-        const dynamicClient = createPublicClient({ chain: deployment.chain, transport: http() });
-        const contractAddress = deployment.contracts.MafiaDiamond;
-
-        try {
-            // For POST we also want the host address — do a fresh uncached read only for host,
-            // but for alivePlayers we still use the cache to avoid hammering RPC on skip.
-            alivePlayers = await getCachedPlayers(roomId, requestChainId, contractAddress, dynamicClient);
-
-            const roomData = await dynamicClient.readContract({
-                address: contractAddress as `0x${string}`,
-                abi: MAFIA_ABI,
-                functionName: 'getRoom',
-                args: [BigInt(roomId)],
-            }) as any;
-            hostAddress = roomData.host;
-
-        } catch (e) {
-            if (roomId === '999') {
-                alivePlayers = Array(10).fill(null).map((_, i) => ({
-                    wallet: i === 0 ? (playerAddress || '0xhost') : `0x${(i + 1).toString().repeat(40)}`,
-                    nickname: i === 0 ? 'Tester' : `Player ${i + 1}`,
-                    flags: FLAG_ACTIVE
-                }));
-                alivePlayers = shufflePlayers(alivePlayers, roomId);
-                hostAddress = playerAddress || '0xhost';
-            } else throw e;
+        if (!gmResp.ok) {
+            const err = await gmResp.json().catch(() => ({ error: 'GM server action failed' }));
+            return NextResponse.json(err, { status: gmResp.status });
         }
 
-        // Shuffle moved inside try/catch
-        // alivePlayers = shufflePlayers(alivePlayers, roomId);
-        const totalSpeakers = alivePlayers.length;
-
-        if (action === 'start') {
-            // FIX #21: Check if discussion state already exists to prevent double-start reset
-            const existingState = await ServerStore.getDiscussionState(roomId, dayCount, requestChainId);
-            if (existingState && !existingState.finished) {
-                console.log(`[API/Discussion] Discussion already active for Room #${roomId} Day ${dayCount}, returning existing state`);
-                return buildResponse(existingState, alivePlayers, playerAddress);
-            }
-
-            // Initialize discussion state with initial delay
-            const newState: DiscussionState = {
-                currentSpeakerIndex: 0,
-                speakerStartTime: Date.now(),
-                speakerDuration: SPEAKER_DURATION,
-                finished: false,
-                phase: 'initial_delay',
-                delayStartTime: Date.now(),
-                delayDuration: DELAY_INITIAL
-            };
-            await ServerStore.setDiscussionState(roomId, dayCount, newState, requestChainId);
-            console.log(`[API/Discussion] Started discussion for Room #${roomId} Day ${dayCount} (initial delay: ${DELAY_INITIAL}s)`);
-            return buildResponse(newState, alivePlayers, playerAddress);
-        }
-
-        if (action === 'skip') {
-            const state = await ServerStore.getDiscussionState(roomId, dayCount, requestChainId);
-            if (!state || state.finished) {
-                return NextResponse.json({ error: 'Discussion not active' }, { status: 400 });
-            }
-
-            // Test Mode: Bypass all checks
-            if (roomId === '999') {
-                const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, true, requestChainId);
-                return buildResponse(newState, alivePlayers, playerAddress);
-            }
-
-            // Verify it's the current speaker OR the Host
-            const currentSpeaker = alivePlayers[state.currentSpeakerIndex];
-            const isSpeaker = currentSpeaker?.wallet.toLowerCase() === playerAddress?.toLowerCase();
-            const isHost = hostAddress.toLowerCase() === playerAddress?.toLowerCase();
-
-            if (!isSpeaker && !isHost) {
-                return NextResponse.json({ error: 'Not your turn to speak (and you are not Host)' }, { status: 403 });
-            }
-
-            const newState = await ServerStore.advanceSpeaker(roomId, dayCount, totalSpeakers, true, requestChainId);
-            console.log(`[API/Discussion] Speaker skipped by ${isHost ? 'HOST' : 'PLAYER'} in Room #${roomId} Day ${dayCount}, new index: ${newState?.currentSpeakerIndex}`);
-            const response = buildResponse(newState, alivePlayers, playerAddress);
-            response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-            return response;
-        }
-
-        return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+        const data = await gmResp.json();
+        return NextResponse.json(data);
 
     } catch (error: any) {
-        console.error('[API/Discussion] POST Error:', error);
+        console.error('[API/Discussion] POST Proxy Error:', error);
         return NextResponse.json({ error: error.message || 'Internal error' }, { status: 500 });
     }
-}
-
-function buildResponse(state: DiscussionState | null, alivePlayers: any[], playerAddress?: string | null) {
-    if (!state) {
-        return NextResponse.json({ active: false, finished: true, phase: 'finished' });
-    }
-
-    const currentSpeaker = alivePlayers[state.currentSpeakerIndex];
-
-    // Calculate time remaining based on current phase
-    let timeRemaining = 0;
-    if (state.phase === 'speaking') {
-        const elapsed = (Date.now() - state.speakerStartTime) / 1000;
-        timeRemaining = Math.max(0, Math.floor(state.speakerDuration - elapsed));
-    } else if (state.phase === 'initial_delay') {
-        const elapsed = (Date.now() - (state.delayStartTime || 0)) / 1000;
-        timeRemaining = Math.max(0, Math.ceil((state.delayDuration || 5) - elapsed));
-    }
-
-    const isMyTurn = playerAddress && state.phase === 'speaking'
-        ? currentSpeaker?.wallet.toLowerCase() === playerAddress.toLowerCase()
-        : false;
-
-    return NextResponse.json({
-        active: !state.finished,
-        finished: state.finished,
-        phase: state.phase || 'speaking',
-        currentSpeakerIndex: state.currentSpeakerIndex,
-        currentSpeakerAddress: currentSpeaker?.wallet || null,
-        totalSpeakers: alivePlayers.length,
-        timeRemaining,
-        speakerDuration: state.speakerDuration,
-        delayDuration: state.delayDuration,
-        isMyTurn
-    });
 }
