@@ -252,9 +252,10 @@ export function LiveKitVoiceChat({
     onClose,
     showTextChat = false,
 }: LiveKitVoiceChatProps) {
-    const { address } = useAccount();
+    const { address, chainId } = useAccount();
     const { data: walletClient } = useWalletClient();
     const addressRef = useRef(address);
+    const chainIdRef = useRef(chainId);
     const walletClientRef = useRef(walletClient);
     const userNameRef = useRef(userName);
     const [token, setToken] = useState("");
@@ -360,6 +361,7 @@ export function LiveKitVoiceChat({
     }, []);
 
     useEffect(() => { addressRef.current = address; }, [address]);
+    useEffect(() => { chainIdRef.current = chainId; }, [chainId]);
     useEffect(() => { walletClientRef.current = walletClient; }, [walletClient]);
     useEffect(() => { userNameRef.current = userName; }, [userName]);
 
@@ -418,6 +420,7 @@ export function LiveKitVoiceChat({
                                 playerAddress,
                                 nonce: n,
                                 timestamp: t,
+                                chainId: chainIdRef.current,
                             }),
                         });
                         signature = signed.signature;
@@ -439,6 +442,7 @@ export function LiveKitVoiceChat({
                         signature,
                         nonce,
                         timestamp,
+                        chainId: chainIdRef.current,
                     }),
                     headers: { "Content-Type": "application/json" },
                 });

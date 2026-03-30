@@ -7,7 +7,7 @@ import { useGameContext } from '@/contexts/GameContext';
 import { GamePhase } from '@/types';
 import { Room, RoomEvent, DataPacket_Kind } from 'livekit-client';
 import { useSoundEffects } from '@/components/ui/SoundEffects';
-import { useWalletClient } from 'wagmi';
+import { useWalletClient, useAccount } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
 import { buildTokenMessage } from '@/services/signingSchema';
 
@@ -40,6 +40,7 @@ export const ChatToggleButton: React.FC<{
 }> = ({ isExpanded, onToggle, unreadCount = 0, canWrite = false }) => {
     const { gameState, myPlayer, currentRoomId } = useGameContext();
     const { data: walletClient } = useWalletClient();
+    const { chainId } = useAccount();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -163,6 +164,7 @@ export const ChatToggleButton: React.FC<{
                             playerAddress,
                             nonce,
                             timestamp,
+                            chainId,
                         }),
                     });
                     signature = signed.signature;
@@ -183,6 +185,7 @@ export const ChatToggleButton: React.FC<{
                         signature,
                         nonce,
                         timestamp,
+                        chainId,
                     })
                 });
 

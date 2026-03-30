@@ -138,3 +138,19 @@ export function buildMafiaMembersMessage(input: {
     .withModern(input.nonce, input.timestamp)
     .build();
 }
+
+/**
+ * Reveal-secret message — deterministic, no nonce/timestamp.
+ * One reveal per player per room, verified via commitment hash.
+ */
+export function buildRevealSecretMessage(input: {
+  roomId: string | number;
+  role: number | string;
+  salt: string;
+  chainId?: number | string;
+}): string {
+  return new SignatureBuilder('reveal-secret', input.chainId, input.roomId)
+    .withParam(input.role)
+    .withParam(input.salt)
+    .build();
+}

@@ -13,8 +13,8 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { MAFIA_ABI, GM_SERVER_URL } from '../../contracts/config';
 import { loadSession } from '../../services/sessionKeyService';
 import { loadOrCreateKeypair, eciesDecrypt, type EciesEncrypted } from '../../services/eciesService';
+import { buildRevealSecretMessage, buildRoleSyncMessage } from '../../services/signingSchema';
 import { signRequest } from '../../services/requestSigning';
-import { buildRoleSyncMessage } from '../../services/signingSchema';
 import { Role, GameState, GamePhase } from '../../types';
 import type { GameRefs } from './useGameRefs';
 import type { WalletManager } from './useWalletManager';
@@ -60,7 +60,12 @@ export function useRoleActions(deps: RoleDeps) {
         try {
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                 try {
-                    const message = `reveal-secret:${refs.runtimeChainRef.current.id}:${roomId}:${role}:${salt}`;
+                    const message = buildRevealSecretMessage({
+                        roomId,
+                        role,
+                        salt,
+                        chainId: refs.runtimeChainRef.current.id,
+                    });
                     let signature: `0x${string}`;
                     let signerAddress: string = playerAddress;
                     let sessionKeyAddress: string | undefined;

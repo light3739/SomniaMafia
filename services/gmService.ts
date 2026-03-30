@@ -2,6 +2,7 @@ import { GM_SERVER_URL } from '../contracts/config';
 import { loadOrCreateKeypair, exportPublicKeyHex, eciesDecrypt, type EciesEncrypted } from './eciesService';
 import { signRequest } from './requestSigning';
 import { Role } from '../types';
+import { SignatureBuilder } from './SignatureBuilder';
 
 export interface GmRoleResponse {
     encrypted?: EciesEncrypted;
@@ -28,7 +29,11 @@ export async function registerEciesPubkey(
         walletClient,
         forceWallet,
         buildMessage: ({ nonce, timestamp }) =>
-            `register-pubkey:${String(chainId || 43113)}:${String(roomId)}:${address.toLowerCase()}:${pubkeyHex}:${nonce}:${String(timestamp)}`,
+            new SignatureBuilder('register-pubkey', chainId, roomId)
+                .withAddress(address)
+                .withParam(pubkeyHex)
+                .withModern(nonce, timestamp)
+                .build(),
     });
 
     const res = await fetch(`${GM_SERVER_URL}/register-pubkey`, {
@@ -73,7 +78,11 @@ export async function registerSessionOnGm(params: {
     const timestamp = Date.now();
     const nonce = Math.random().toString(36).slice(2) + timestamp.toString(36);
     const effectiveChainId = String(chainId || 43113);
-    const message = `register-session:${effectiveChainId}:${String(roomId)}:${normalizedMain}:${normalizedSession}:${nonce}:${String(timestamp)}`;
+    const message = new SignatureBuilder('register-session', effectiveChainId, roomId)
+        .withAddress(mainWallet)
+        .withAddress(sessionAddress)
+        .withModern(nonce, timestamp)
+        .build();
 
     // Secure: Sign with main wallet to authorize this session Address
     const signature = await walletClient.signMessage({ message });
@@ -120,7 +129,10 @@ export async function submitSraKeyToGm(params: {
         roomId: Number(roomId),
         walletClient,
         buildMessage: ({ nonce, timestamp }) =>
-            `submit-key:${String(chainId || 43113)}:${String(roomId)}:${sraKey}:${nonce}:${String(timestamp)}`,
+            new SignatureBuilder('submit-key', chainId, roomId)
+                .withParam(sraKey)
+                .withModern(nonce, timestamp)
+                .build(),
     });
 
     const res = await fetch(`${GM_SERVER_URL}/submit-sra-key`, {
@@ -160,7 +172,10 @@ export async function fetchMyRoleFromGm(params: {
         roomId: Number(roomId),
         walletClient,
         buildMessage: ({ nonce, timestamp }) =>
-            `my-role:${String(chainId || 43113)}:${String(roomId)}:${address.toLowerCase()}:${nonce}:${String(timestamp)}`,
+            new SignatureBuilder('my-role', chainId, roomId)
+                .withAddress(address)
+                .withModern(nonce, timestamp)
+                .build(),
     });
 
     const query = new URLSearchParams({

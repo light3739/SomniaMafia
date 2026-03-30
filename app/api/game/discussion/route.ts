@@ -190,6 +190,7 @@ export async function POST(request: Request) {
                     signerAddress,
                     nonce,
                     timestamp,
+                    chainId,
                 },
                 requiredFields: ['roomId', 'action', 'dayCount', 'playerAddress', 'signature', 'nonce', 'timestamp'],
                 getRoomId: (body) => body.roomId,
