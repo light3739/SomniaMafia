@@ -202,6 +202,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isTestMode,
         setGameState,
         avatarUrl,
+        currentRoomId,
     });
 
     // Wire up the forward ref

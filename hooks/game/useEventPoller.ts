@@ -107,6 +107,10 @@ export function useEventPoller(deps: PollerDeps) {
                         break;
 
                     case 'GameStarted':
+                        addLog("Game has started!", "phase");
+                        if (roomId) {
+                            dataSync.fetchGameData(roomId);
+                        }
                         break;
 
                     case 'DayStarted':
