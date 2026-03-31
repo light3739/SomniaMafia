@@ -58,7 +58,7 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
         >
             <div className="relative">
                 <VotingTimer />
-                {currentRoomId && myPlayer && (
+                {currentRoomId && myPlayer && myPlayer.isAlive && (
                     <div className="absolute right-[-70px] top-1/2 -translate-y-1/2">
                         <MicButton
                             roomId={`${currentRoomId}-vote`}
