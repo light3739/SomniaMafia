@@ -22,8 +22,7 @@ import { ResponsiveGameContainer } from './layout/ResponsiveGameContainer';
 import { getPlayerPositions } from './layout/playerLayoutUtils';
 export { getPlayerPositions };
 
-const ShufflePhase = dynamic(() => import('./ShufflePhase').then(m => m.ShufflePhase), { ssr: false });
-const RoleReveal = dynamic(() => import('./RoleReveal').then(m => m.RoleReveal), { ssr: false });
+const ShuffleAndReveal = dynamic(() => import('./ShuffleAndReveal').then(m => m.ShuffleAndReveal), { ssr: false });
 const DayPhase = dynamic(() => import('./DayPhase').then(m => m.DayPhase), { ssr: false });
 const NightPhase = dynamic(() => import('./NightPhase').then(m => m.NightPhase), { ssr: false });
 const GameOver = dynamic(() => import('./GameOver').then(m => m.GameOver), { ssr: false });
@@ -138,7 +137,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             <NightAnnouncement show={showNightAnnouncement} onComplete={() => { setShowNightAnnouncement(false); const hints: any = { [Role.MAFIA]: 'night_mafia', [Role.DOCTOR]: 'night_doctor', [Role.DETECTIVE]: 'night_detective' }; showHint(hints[myPlayer?.role || ''] ?? 'night_civilian'); }} />
             <MorningAnnouncement show={showMorningAnnouncement} onComplete={() => { setShowMorningAnnouncement(false); showHint('discussion'); }} />
             <RoleCompositionAnnouncement show={showRoleComposition} onComplete={() => { setShowRoleComposition(false); playMorningTransition(); setShowMorningAnnouncement(true); }} playerCount={gameState.players.filter(p => p.isAlive).length} />
-            <VotingAnnouncement show={showVotingAnnouncement} onComplete={() => { setShowVotingAnnouncement(false); showHint('voting'); }} />
+            <VotingAnnouncement show={showVotingAnnouncement} onComplete={() => { setShowVotingAnnouncement(true); showHint('voting'); }} />
 
             <ResponsiveGameContainer>
                 {playerPositions.map((pos, index) => {
@@ -162,14 +161,14 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
 
             {/* Overlays for Shuffling, Reveal and Game Over */}
             <AnimatePresence>
-                {gameState.phase === GamePhase.SHUFFLING && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[50]">
-                        <ShufflePhase key="shuffle" />
-                    </motion.div>
-                )}
-                {gameState.phase === GamePhase.REVEAL && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[50]">
-                        <RoleReveal key="reveal" />
+                {isOverlayPhase && (gameState.phase === GamePhase.SHUFFLING || gameState.phase === GamePhase.REVEAL) && (
+                    <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        exit={{ opacity: 0 }} 
+                        className="fixed inset-0 z-[50]"
+                    >
+                        <ShuffleAndReveal key="shuffle-reveal" />
                     </motion.div>
                 )}
                 {gameState.phase === GamePhase.ENDED && (
