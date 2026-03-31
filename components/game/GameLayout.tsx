@@ -106,7 +106,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             } catch (e) { console.error(e); }
         };
         fetchState();
-        const iv = setInterval(() => { if (gameState.phase === GamePhase.DAY) fetchState(); }, 1000);
+        const iv = setInterval(() => { if (gameState.phase === GamePhase.DAY) fetchState(); }, 5000);
         return () => clearInterval(iv);
     }, [gameState.phase, currentRoomId, gameState.dayCount, myPlayer?.address, chainId]);
 
