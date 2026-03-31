@@ -437,33 +437,38 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         const deadline = gameState.phaseDeadline;
         if (!deadline || deadline === 0) return;
 
-        // Waterfall Logic: Any alive player can trigger, but staggered by index
-        const sortedSurvivors = [...gameState.players]
-            .filter(p => p.isAlive)
-            .sort((a, b) => a.address.localeCompare(b.address));
-
-        const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
-
-        // If I'm not alive/found, I shouldn't trigger
-        if (myIndex === -1) return;
-
-        // Check if already triggered
-        if (timeoutTriggeredRef.current) return;
-
-        // Don't trigger if transaction is pending
-        if (isProcessing || isTxPending) return;
-
         const checkTimeout = async () => {
             if (timeoutTriggeredRef.current) return;
 
             const now = Math.floor(Date.now() / 1000);
             const secondsPastDeadline = now - deadline;
 
+            // Waterfall Logic: Any alive player can trigger, but staggered by index
+            const sortedSurvivors = [...gameState.players]
+                .filter(p => p.isAlive)
+                .sort((a, b) => a.address.localeCompare(b.address));
+
+            const myIndex = sortedSurvivors.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+
+            // If I'm not alive/found, I shouldn't trigger
+            if (myIndex === -1) return;
+
             // Base buffer 5s, plus 5s per index position
             const myTriggerTime = TIMEOUT_BUFFER_SECONDS + (myIndex * 5);
 
+            // LOG FOR DEBUGGING
+            if (secondsPastDeadline > 0 && secondsPastDeadline % 10 === 0) {
+                 console.log(`[Night Waterfall] Check: Past deadline ${secondsPastDeadline}s, Need ${myTriggerTime}s. Index: ${myIndex}, isTxPending: ${isTxPending}, isProcessing: ${isProcessing}`);
+            }
+
             // If we're past the deadline + buffer + index delay, trigger timeout
             if (secondsPastDeadline >= myTriggerTime) {
+                // STUCK-BYPASS: If we are past deadline + our trigger by more than 10s, 
+                // ignore isTxPending & isProcessing (they might be stuck local state)
+                if ((isProcessing || isTxPending) && secondsPastDeadline < (myTriggerTime + 10)) {
+                    return;
+                }
+
                 // FIX #4: Re-verify phase from contract before triggering
                 if (publicClient && currentRoomId) {
                     try {
@@ -510,7 +515,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         // And poll every 2 seconds
         const interval = setInterval(checkTimeout, 2000);
         return () => clearInterval(interval);
-    }, [gameState.phaseDeadline, gameState.players, gameState.phase, myPlayer?.address, isTestMode, isProcessing, isTxPending, forcePhaseTimeoutOnChain, addLog, publicClient, currentRoomId]);
+    }, [gameState.phaseDeadline, gameState.players, gameState.phase, myPlayer?.address, isTestMode, isProcessing, isTxPending, forcePhaseTimeoutOnChain, addLog, publicClient, currentRoomId, runtimeContractAddress]);
 
     // Reset timeout flag when phase changes (new night phase)
     useEffect(() => {

@@ -77,15 +77,22 @@ export function useVotingActions(deps: VotingDeps) {
         const roomId = refs.currentRoomIdRef.current;
         const pClient = refs.publicClientRef.current;
         if (!roomId || !pClient) return;
+        
+        setIsTxPending(true);
         try {
+            console.log(`[Voting API] Finalizing voting for room ${roomId}...`);
             const hash = await txEngine.sendGameTransaction('finalizeVoting', [roomId]);
-            addLog("Voting finalized!", "success");
+            addLog("Voting finalized! Waiting for confirmation...", "success");
             await pClient.waitForTransactionReceipt({ hash });
+            addLog("Voting results confirmed on-chain.", "success");
         } catch (e: any) {
+            console.error('[Finalize Voting Failed]', e);
             addLog(e.shortMessage || e.message, "danger");
             throw e;
+        } finally {
+            setIsTxPending(false);
         }
-    }, [refs, txEngine, addLog]);
+    }, [refs, txEngine, setIsTxPending, addLog]);
 
     return {
         startVotingOnChain,
