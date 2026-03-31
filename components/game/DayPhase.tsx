@@ -272,11 +272,12 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         playVoteSound();
         const prev = { v: voteState.myVote, h: voteState.hasVoted, t: selectedTarget };
         setVoteState(p => ({ ...p, hasVoted: true, myVote: selectedTarget }));
+        setVoteMap(prev => ({ ...prev, [address.toLowerCase()]: selectedTarget.toLowerCase() }));
         setSelectedTarget(null);
         setIsProcessing(true);
         emitGameSignal({ type: 'OPTIMISTIC_VOTE', voter: address.toLowerCase(), target: selectedTarget.toLowerCase(), roomId: currentRoomId.toString() });
         try { await voteOnChain(selectedTarget); }
-        catch (e: any) { setVoteState(p => ({ ...p, hasVoted: prev.h, myVote: prev.v })); setSelectedTarget(prev.t); addLog(e.shortMessage || "Vote failed", "danger"); }
+        catch (e: any) { setVoteState(p => ({ ...p, hasVoted: prev.h, myVote: prev.v })); setSelectedTarget(prev.t); addLog(e.shortMessage || "Vote failed", "danger"); setVoteMap(m => { const nm = {...m}; delete nm[address.toLowerCase()]; return nm; }); }
         finally { setIsProcessing(false); }
     };
 

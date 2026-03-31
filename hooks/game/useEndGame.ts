@@ -309,7 +309,11 @@ export function useEndGame(deps: EndGameDeps) {
         
         const iv = setInterval(() => {
             // Re-check phase inside interval
-            if (refs.phaseRef.current >= GamePhase.DAY && refs.phaseRef.current !== GamePhase.ENDED) {
+            if (
+                refs.phaseRef.current >= GamePhase.DAY &&
+                refs.phaseRef.current !== GamePhase.ENDED &&
+                refs.phaseRef.current !== GamePhase.NIGHT
+            ) {
                 triggerAutoWinCheck();
             }
         }, 10000); // Check every 10s

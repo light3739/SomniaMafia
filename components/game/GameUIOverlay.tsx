@@ -54,7 +54,7 @@ export const GameUIOverlay: React.FC = () => {
     }, [currentRoomId, gameState.phase, gameState.dayCount, myPlayer?.address]);
 
     // Only show chat button during DAY phase
-    const showChatButton = gameState.phase === GamePhase.DAY;
+    const showChatButton = gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING;
 
     // Can write only during my turn in discussion (DAY phase)
     const canWrite = isMyTurn && gameState.phase === GamePhase.DAY;
