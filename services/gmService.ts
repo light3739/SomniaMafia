@@ -281,9 +281,18 @@ export async function fetchInvestigationProofFromGM(params: {
     const data = await res.json();
     // GM returns { role: Role... } if it has already resolved it
     // Wait, the GM server /investigation-proof currently returns ok: true + proof details.
-    // Let me check what it returns exactly.
+    const rawRole = Number(data.role);
+    let mappedRole: Role;
+    switch (rawRole) {
+        case 1: mappedRole = Role.MAFIA; break;
+        case 2: mappedRole = Role.DOCTOR; break;
+        case 3: mappedRole = Role.DETECTIVE; break;
+        case 4: mappedRole = Role.CIVILIAN; break;
+        default: mappedRole = Role.UNKNOWN; break;
+    }
+
     return { 
-        role: data.role || Role.UNKNOWN, 
+        role: mappedRole, 
         source: data.source 
     };
 }

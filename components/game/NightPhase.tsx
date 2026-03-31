@@ -237,7 +237,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         if (nightState.hasCommitted) return;
 
         // Only auto-skip if this player has no night action (CIVILIAN or UNKNOWN role)
-        const needsAutoSkip = myRole === Role.CIVILIAN || myRole === Role.UNKNOWN;
+        const needsAutoSkip = false; // Disabled: causes metamask popup for civilians
         if (!needsAutoSkip) return;
 
         autoSkippedRef.current = true;
