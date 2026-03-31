@@ -34,7 +34,8 @@ const nightBg = "/assets/game_background.png";
 export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionState?: any }> = ({ initialNightState, initialDiscussionState }) => {
     const {
         gameState, myPlayer, currentRoomId, selectedTarget, handlePlayerAction,
-        canActOnPlayer, playerMarks, setPlayerMark, showVotingResults, voteMap, isTestMode
+        canActOnPlayer, playerMarks, setPlayerMark, showVotingResults, voteMap, 
+        isTestMode, refreshPlayersList
     } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const { showHint } = useGameHints(currentRoomId?.toString());
@@ -141,6 +142,17 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             nightAnnouncementPendingRef.current = false;
         }
     }, [gameState.phase, gameState.dayCount, playNightTransition, showVotingResults]);
+    
+    // === EXPOSE REFRESH FOR FAILSAFE ===
+    useEffect(() => {
+        (window as any).refreshGame = () => {
+             if (currentRoomId) {
+                 console.log('[Manual Sync] Forcing Game Data Refresh...');
+                 refreshPlayersList(currentRoomId);
+             }
+         };
+         return () => { delete (window as any).refreshGame; };
+    }, [currentRoomId, refreshPlayersList]);
 
     const isNightPhase = gameState.phase === GamePhase.NIGHT;
     const isOverlayPhase = [GamePhase.SHUFFLING, GamePhase.REVEAL, GamePhase.ENDED].includes(gameState.phase);
@@ -193,6 +205,15 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     )}
                     {showVotingResults && <PostVotingTransition />}
                     {!showVotingResults && !isOverlayPhase && gameState.phase === GamePhase.NIGHT && (<div className="w-full h-full"><NightPhase initialNightState={initialNightState} /></div>)}
+                </div>
+                {/* Network Status & Manual Sync Failsafe */}
+                <div className="fixed bottom-4 right-4 z-[50] flex flex-col items-end gap-2">
+                    <div className={`px-3 py-1 rounded-full border backdrop-blur-md flex items-center gap-2 transition-all duration-500 ${Number(chainId) === 43113 || Number(chainId) === 50312 ? 'bg-black/40 border-white/10' : 'bg-red-500/20 border-red-500/50'}`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${Number(chainId) === 43113 || Number(chainId) === 50312 ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
+                        <span className="text-[10px] text-white/50 font-mono tracking-tighter">
+                            {chainId === 43113 ? 'FUJI' : chainId === 50312 ? 'SOMNIA' : `CHAIN:${chainId || '??'}`}
+                        </span>
+                    </div>
                 </div>
             </ResponsiveGameContainer>
 
