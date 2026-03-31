@@ -170,6 +170,8 @@ export function useRoleActions(deps: RoleDeps) {
                         }),
                     });
 
+                    /* 
+                    // [Obsolete] GM Server no longer exposes /role-commit-sync. Kept for reference.
                     const res = await fetch(`${GM_SERVER_URL}/role-commit-sync`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -187,6 +189,7 @@ export function useRoleActions(deps: RoleDeps) {
 
                     if (!res.ok) throw new Error(`GM sync failed: ${res.status}`);
                     console.log(`[RoleCommitSync] Synced tx ${txHash} to GM cache`);
+                    */
                     return;
                 } catch (err) {
                     if (attempt < MAX_RETRIES) {
