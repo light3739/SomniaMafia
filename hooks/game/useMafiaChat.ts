@@ -28,10 +28,11 @@ interface ChatDeps {
     gameState: GameState;
     setGameState: React.Dispatch<React.SetStateAction<GameState>>;
     addLog: (message: string, type?: LogEntry['type']) => void;
+    currentRoomId: bigint | null;
 }
 
 export function useMafiaChat(deps: ChatDeps) {
-    const { refs, wallet, txEngine, gameState, setGameState, addLog } = deps;
+    const { refs, wallet, txEngine, gameState, setGameState, addLog, currentRoomId } = deps;
 
     const mafiaKeyRef = useRef<CryptoKey | null>(null);
     const mafiaKeyVerifyingRef = useRef(false);
@@ -321,7 +322,6 @@ export function useMafiaChat(deps: ChatDeps) {
     }, [gameState.players, gameState.phase, refs.stableAddress]);
 
     useEffect(() => {
-        const currentRoomId = refs.currentRoomIdRef.current;
         if (!currentRoomId || !refs.publicClientRef.current) return;
 
         const CHECK_INTERVAL = 3000;
@@ -334,7 +334,7 @@ export function useMafiaChat(deps: ChatDeps) {
         }, CHECK_INTERVAL);
 
         return () => clearInterval(interval);
-    }, [fetchMafiaChat, refs]);
+    }, [fetchMafiaChat, refs, currentRoomId]);
 
     return {
         getMafiaChatKey,

@@ -246,7 +246,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     const chat = useMafiaChat({
-        refs, wallet, txEngine, gameState, setGameState, addLog,
+        refs, wallet, txEngine, gameState, setGameState, addLog, currentRoomId
     });
 
     const tournaments = useTournaments({
@@ -256,7 +256,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const endGame = useEndGame({
         refs, txEngine, dataSync, gameState,
-        setIsTxPending, setGameState, addLog, isTestMode
+        setIsTxPending, setGameState, addLog, isTestMode, currentRoomId
     });
 
     // ==================== LEVEL 4: EVENT POLLING ====================
