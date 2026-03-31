@@ -22,6 +22,7 @@ interface PollerDeps {
     refs: GameRefs;
     dataSync: GameDataSync;
     gameState: GameState;
+    currentRoomId: bigint | null;
     setGameState: React.Dispatch<React.SetStateAction<GameState>>;
     setVoteMap: React.Dispatch<React.SetStateAction<Record<string, string>>>;
     setShowVotingResults: (v: boolean) => void;
@@ -29,7 +30,7 @@ interface PollerDeps {
 }
 
 export function useEventPoller(deps: PollerDeps) {
-    const { refs, dataSync, gameState, setGameState, setVoteMap, setShowVotingResults, addLog } = deps;
+    const { refs, dataSync, gameState, currentRoomId, setGameState, setVoteMap, setShowVotingResults, addLog } = deps;
 
     const processedEventsRef = useRef<Set<string>>(new Set());
     const lastProcessedBlockRef = useRef<bigint | null>(null);
@@ -228,13 +229,13 @@ export function useEventPoller(deps: PollerDeps) {
 
     // === POLL INTERVAL ===
     useEffect(() => {
-        if (!refs.publicClientRef.current || !refs.currentRoomIdRef.current) return;
+        if (!refs.publicClientRef.current || !currentRoomId) return;
         // Only stop if game ENDED AND winner confirmed
         if (gameState.phase === GamePhase.ENDED && gameState.winner) return;
 
         const interval = setInterval(pollEvents, 2000);
         return () => clearInterval(interval);
-    }, [pollEvents, gameState.phase, gameState.winner, refs]);
+    }, [pollEvents, gameState.phase, gameState.winner, refs, currentRoomId]);
 
     return {
         pollEvents,
