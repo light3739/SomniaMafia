@@ -154,7 +154,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
                 tournamentId, aliveCount, maxPlayers
             } = gameData;
 
-            if (!rawPlayers || rawPlayers.length === 0) {
+            if ((!rawPlayers || rawPlayers.length === 0) && phase === GamePhase.LOBBY) {
                 console.warn('[refreshPlayersList] skipping update because rawPlayers is empty (RPC lag?)');
                 return;
             }
@@ -203,7 +203,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
                 const FLAG_HAS_REVEALED = 16;
                 const FLAG_DECK_COMMITTED = 64;
 
-                const formattedPlayers: Player[] = rawPlayers.map((p: any) => {
+                const formattedPlayers: Player[] = rawPlayers.length === 0 ? prev.players : rawPlayers.map((p: any) => {
                     const flags = Number(p.flags);
                     const existingPlayer = prev.players.find(
                         ep => ep.address.toLowerCase() === p.wallet.toLowerCase()
@@ -313,7 +313,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
         const interval = setInterval(() => {
             const roomId = refs.currentRoomIdRef.current;
             if (roomId) refreshPlayersListDebounced(roomId);
-        }, 5000);
+        }, 3000);
         return () => clearInterval(interval);
     }, [isTestMode, refreshPlayersListDebounced, refs]);
 
