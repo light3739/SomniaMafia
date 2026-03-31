@@ -22,7 +22,8 @@ import { ResponsiveGameContainer } from './layout/ResponsiveGameContainer';
 import { getPlayerPositions } from './layout/playerLayoutUtils';
 export { getPlayerPositions };
 
-const ShuffleAndReveal = dynamic(() => import('./ShuffleAndReveal').then(m => m.ShuffleAndReveal), { ssr: false });
+const ShufflePhase = dynamic(() => import('./ShufflePhase').then(m => m.ShufflePhase), { ssr: false });
+const RoleReveal = dynamic(() => import('./RoleReveal').then(m => m.RoleReveal), { ssr: false });
 const DayPhase = dynamic(() => import('./DayPhase').then(m => m.DayPhase), { ssr: false });
 const NightPhase = dynamic(() => import('./NightPhase').then(m => m.NightPhase), { ssr: false });
 const GameOver = dynamic(() => import('./GameOver').then(m => m.GameOver), { ssr: false });
@@ -158,6 +159,12 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     {!showVotingResults && !isOverlayPhase && gameState.phase === GamePhase.NIGHT && (<div className="w-full h-full"><NightPhase initialNightState={initialNightState} /></div>)}
                 </div>
             </ResponsiveGameContainer>
+
+            <AnimatePresence>
+                {gameState.phase === GamePhase.SHUFFLING && <ShufflePhase key="shuffle" />}
+                {gameState.phase === GamePhase.REVEAL && <RoleReveal key="reveal" />}
+                {gameState.phase === GamePhase.ENDED && <GameOver key="gameover" />}
+            </AnimatePresence>
         </div>
     );
 };
