@@ -236,16 +236,28 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
                 transition={{ duration: 2, delay: 3.5 }}
                 className="absolute bottom-8 md:bottom-12 flex flex-col items-center z-10"
             >
-                <p className={`text-[10px] font-sans uppercase tracking-widest ${isSunRising ? 'text-[#B45309]/80 animate-pulse' : 'text-white/40'}`}>
-                    {isSunRising ? 'The sun is rising...' : 'Awaiting Sunrise'}
-                </p>
-                {/* Minimalist timer progress line (optional visual touch) */}
-                <div className="w-[100px] h-[1px] bg-white/5 mt-4 relative overflow-hidden">
-                    <motion.div
-                        className={`absolute top-0 bottom-0 w-1/4 ${config.accent}`}
-                        animate={{ left: ["-25%", "100%"] }}
-                        transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
-                    />
+                <div className="flex flex-col items-center group cursor-pointer" onClick={() => (window as any).refreshGame && (window as any).refreshGame()}>
+                    <p className={`text-[10px] font-sans uppercase tracking-[0.3em] mb-2 transition-all duration-500 ${isSunRising ? 'text-amber-500/80 animate-pulse' : 'text-white/40 group-hover:text-white/70'}`}>
+                        {isSunRising ? 'Daylight is breaking...' : 'Waiting for the Dawn'}
+                    </p>
+                    
+                    {/* Minimalist timer progress line */}
+                    <div className="w-[120px] h-[1px] bg-white/5 relative overflow-hidden">
+                        <motion.div
+                            className={`absolute top-0 bottom-0 w-1/3 ${config.accent}`}
+                            animate={{ left: ["-33%", "100%"] }}
+                            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                        />
+                    </div>
+
+                    <div className="mt-6 flex flex-col items-center opacity-0 group-hover:opacity-100 transition-opacity duration-700">
+                         <div className="flex items-center gap-2 px-3 py-1 border border-white/10 rounded-full bg-white/5 backdrop-blur-md">
+                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                            <span className="text-[9px] text-white/30 font-mono tracking-tighter uppercase">
+                                Sync with network
+                            </span>
+                         </div>
+                    </div>
                 </div>
             </motion.div>
 

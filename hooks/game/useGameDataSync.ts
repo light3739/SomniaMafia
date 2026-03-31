@@ -83,23 +83,27 @@ export function useGameDataSync(deps: DataSyncDeps) {
                     },
                 ],
                 allowFailure: true,
-                blockTag: 'pending',
-            });
+            }); // Default blockTag is 'latest' which is safer for fast testnets
 
             const playersResult = results[0].status === 'success' ? results[0].result as any[] : [];
             const roomResult = results[1].status === 'success' ? results[1].result : null;
             const mafiaResult = results[2].status === 'success' ? results[2].result as [number, number, string] : [0, 0, '0x0000000000000000000000000000000000000000'];
 
             if (results[0].status === 'failure') {
-                console.error(`[FetchGameData] getPlayers failed:`, results[0].error);
+                console.error(`[FetchGameData] getPlayers failed on chain ${refs.runtimeChainRef.current.id}:`, results[0].error);
             }
             if (results[1].status === 'failure') {
-                console.error(`[FetchGameData] getRoom failed:`, results[1].error);
+                console.error(`[FetchGameData] getRoom failed on chain ${refs.runtimeChainRef.current.id}:`, results[1].error);
                 return null;
             }
 
             const data = playersResult;
             const roomData = roomResult as any;
+            
+            if (!roomData || (Array.isArray(roomData) && roomData[0] === 0n)) {
+                console.warn(`[FetchGameData] Room ${roomId} not found or uninitialized on chain ${refs.runtimeChainRef.current.id}`);
+                return null;
+            }
             const [mafiaCommitted, mafiaRevealed] = mafiaResult;
 
             let phase: GamePhase, dayCount: number, aliveCount: number;
@@ -172,7 +176,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
 
             if (isLobby || !hasCache) {
                 try {
-                    const avatarRes = await fetch(`/api/game/avatar?roomId=${roomId.toString()}`);
+                    const avatarRes = await fetch(`/api/game/avatar?roomId=${roomId.toString()}&chainId=${refs.runtimeChainRef.current.id}`);
                     if (avatarRes.ok) {
                         const data = await avatarRes.json();
                         remoteAvatars = data.avatars || {};
