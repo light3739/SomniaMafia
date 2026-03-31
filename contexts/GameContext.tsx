@@ -255,7 +255,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const endGame = useEndGame({
         refs, txEngine, dataSync, gameState,
-        setIsTxPending, setGameState, addLog,
+        setIsTxPending, setGameState, addLog, isTestMode
     });
 
     // ==================== LEVEL 4: EVENT POLLING ====================
