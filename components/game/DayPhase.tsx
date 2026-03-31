@@ -222,7 +222,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
             if (!isDayPhase || !currentRoomId) return;
             await fetchDiscussionState();
             if (!isDayPhase || !currentRoomId || discussionState?.finished) return;
-            setTimeout(poll, (document.hidden ? 10000 : 1500));
+            setTimeout(poll, (document.hidden ? 10000 : 5000));
         };
         poll();
     }, [isDayPhase, currentRoomId, fetchDiscussionState, discussionState?.finished, disablePolling]);

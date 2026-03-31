@@ -49,7 +49,7 @@ export const GameUIOverlay: React.FC = () => {
             if (gameState.phase === GamePhase.DAY && currentRoomId) {
                 fetchDiscussionState();
             }
-        }, 2000);
+        }, 5000);
         return () => clearInterval(interval);
     }, [currentRoomId, gameState.phase, gameState.dayCount, myPlayer?.address]);
 
