@@ -3,18 +3,19 @@ import { GM_SERVER_URL } from '@/contracts/config';
 
 export async function POST(request: Request) {
     try {
-        const { roomId: rawRoomId } = await request.json();
+        const { roomId: rawRoomId, chainId } = await request.json();
 
         if (!rawRoomId) {
             return NextResponse.json({ error: 'Missing roomId' }, { status: 400 });
         }
 
         const roomId = BigInt(rawRoomId).toString();
-        console.log(`[API/CheckWin] Checking Room #${roomId}`);
+        const cid = chainId || 43113;
+        console.log(`[API/CheckWin] Checking Room #${roomId} on chain ${cid}`);
 
 
-        console.log(`[API/CheckWin] Calling GM Server /win-check/${roomId}`);
-        const gmRes = await fetch(`${GM_SERVER_URL}/win-check/${roomId}`);
+        console.log(`[API/CheckWin] Calling GM Server /win-check/${roomId}?chainId=${cid}`);
+        const gmRes = await fetch(`${GM_SERVER_URL}/win-check/${roomId}?chainId=${cid}`);
         let gmData;
         try {
             gmData = await gmRes.json();
@@ -45,6 +46,8 @@ export async function POST(request: Request) {
         try {
             const zkRes = await fetch(`${GM_SERVER_URL}/end-game-zk/${roomId}`, {
                 method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chainId: cid }),
                 signal: controller.signal
             });
             clearTimeout(timeoutId);

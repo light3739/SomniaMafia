@@ -187,11 +187,12 @@ export function useEndGame(deps: EndGameDeps) {
         refs.checkWinInProgressRef.current = true;
 
         try {
+            const chainId = pClient.chain?.id || 50312;
             console.log(`[AutoWin] Checking for victory in Room #${roomId}...`);
             const response = await fetch('/api/game/check-win', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ roomId: roomId.toString() })
+                body: JSON.stringify({ roomId: roomId.toString(), chainId })
             });
 
             if (!response.ok) return;
