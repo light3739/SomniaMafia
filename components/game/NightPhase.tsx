@@ -226,6 +226,37 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         };
     }, [syncWithContract, isTestMode, initialNightState]);
 
+    // === AUTO-SKIP FOR CIVILIANS (and UNKNOWN role — safety net) ===
+    // Citizens have no night action. Notify GM immediately so it doesn't wait
+    // for the full 3-minute timeout before resolving night.
+    const autoSkippedRef = useRef(false);
+    useEffect(() => {
+        if (isTestMode) return;
+        if (!myPlayer?.isAlive) return;
+        if (autoSkippedRef.current) return;
+        if (nightState.hasCommitted) return;
+
+        // Only auto-skip if this player has no night action (CIVILIAN or UNKNOWN role)
+        const needsAutoSkip = myRole === Role.CIVILIAN || myRole === Role.UNKNOWN;
+        if (!needsAutoSkip) return;
+
+        autoSkippedRef.current = true;
+        console.log(`[NightPhase] Auto-skipping night action for ${myRole} player...`);
+        skipNightActionToGM()
+            .then(() => {
+                setNightState(prev => ({
+                    ...prev,
+                    hasCommitted: true,
+                    hasRevealed: true,
+                    committedTarget: '0x0000000000000000000000000000000000000000' as `0x${string}`
+                }));
+                console.log('[NightPhase] Auto-skip sent to GM ✅');
+            })
+            .catch(err => {
+                console.warn('[NightPhase] Auto-skip failed (non-blocking):', err.message);
+                autoSkippedRef.current = false; // allow retry on next render
+            });
+    }, [myRole, myPlayer?.isAlive, nightState.hasCommitted, isTestMode, skipNightActionToGM]);
 
 
     if (isTestMode) {
