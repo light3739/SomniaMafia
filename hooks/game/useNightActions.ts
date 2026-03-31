@@ -289,9 +289,25 @@ export function useNightActions(deps: NightDeps) {
         setIsTxPending(true);
 
         try {
+            // Verify on-chain phase first to avoid relying on potentially stale phaseRef
+            let activePhase = refs.phaseRef.current;
+            try {
+                const { MAFIA_ABI } = await import('../../contracts/config');
+                const roomData = await pClient.readContract({
+                    address: refs.contractAddressRef.current,
+                    abi: MAFIA_ABI,
+                    functionName: 'getRoom',
+                    args: [roomId],
+                }) as any;
+                activePhase = Number(Array.isArray(roomData) ? roomData[3] : roomData.phase);
+                console.log(`[PhaseTimeout] Real on-chain phase: ${activePhase} (Ref says: ${refs.phaseRef.current})`);
+            } catch (err) {
+                console.warn('[GM API] Could not verify on-chain phase, falling back to phaseRef', err);
+            }
+
             // GM Server Night Resolution interception
-            if (refs.phaseRef.current === GamePhase.NIGHT) {
-                console.log(`[GM API] Resolving night manually...`);
+            if (activePhase === GamePhase.NIGHT) {
+                console.log(`[GM API] Resolving night manually via GM...`);
                 if (!myAddr) throw new Error('No wallet for signing');
 
                 const { client: activeWalletClient } = await wallet.getActiveWalletClient();
@@ -342,6 +358,7 @@ export function useNightActions(deps: NightDeps) {
                     }
 
                     if (gmError.includes('Night already resolved')) {
+                        console.log('[GM API] Night already resolved. Refreshing...');
                         await dataSync.refreshPlayersList(roomId);
                         return;
                     }
@@ -354,7 +371,7 @@ export function useNightActions(deps: NightDeps) {
                 return;
             }
 
-            // Normal on-chain timeout for other phases
+            // Normal on-chain timeout for other phases (or if we are already past NIGHT on-chain)
             addLog("Forcing phase timeout on-chain...", "info");
             const hash = await txEngine.sendGameTransaction('forcePhaseTimeout', [roomId]);
             await pClient.waitForTransactionReceipt({ hash });
