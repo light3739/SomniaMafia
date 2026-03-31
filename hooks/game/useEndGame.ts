@@ -26,10 +26,11 @@ interface EndGameDeps {
     setIsTxPending: (v: boolean) => void;
     setGameState: React.Dispatch<React.SetStateAction<GameState>>;
     addLog: (message: string, type?: LogEntry['type']) => void;
+    isTestMode: boolean;
 }
 
 export function useEndGame(deps: EndGameDeps) {
-    const { refs, txEngine, dataSync, gameState, setIsTxPending, setGameState, addLog } = deps;
+    const { refs, txEngine, dataSync, gameState, setIsTxPending, setGameState, addLog, isTestMode } = deps;
 
     // Helper: debug deposit after endGame
     const debugDepositAfterEnd = useCallback(async (roomId: bigint, myAddr: string, label: string) => {
@@ -291,6 +292,30 @@ export function useEndGame(deps: EndGameDeps) {
             refs.checkWinInProgressRef.current = false;
         }
     }, [refs, txEngine, dataSync, setIsTxPending, setGameState, addLog, debugDepositAfterEnd]);
+
+    // === POLLING ===
+    React.useEffect(() => {
+        const roomId = refs.currentRoomIdRef.current;
+        if (!roomId || isTestMode) return;
+        
+        // Stop polling if already ended on-chain (contract phase 6)
+        // Note: refs.phaseRef.current might be 6 locally if triggerAutoWinCheck just succeeded.
+        if (refs.phaseRef.current === GamePhase.ENDED) return;
+
+        // Start polling for auto-win from DAY (3) onwards
+        if (refs.phaseRef.current < GamePhase.DAY) return;
+
+        console.log(`[AutoWin] Starting background win condition polling for Room #${roomId}`);
+        
+        const iv = setInterval(() => {
+            // Re-check phase inside interval
+            if (refs.phaseRef.current >= GamePhase.DAY && refs.phaseRef.current !== GamePhase.ENDED) {
+                triggerAutoWinCheck();
+            }
+        }, 10000); // Check every 10s
+
+        return () => clearInterval(iv);
+    }, [refs, triggerAutoWinCheck, isTestMode]);
 
     return {
         endGameZK,
