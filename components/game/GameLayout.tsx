@@ -54,6 +54,33 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const nightAnnouncementPendingRef = useRef(false);
     const prevShowVotingResultsRef = useRef(false);
 
+    // --- Announcement Callbacks ---
+    const handleMorningComplete = useCallback(() => {
+        setShowMorningAnnouncement(false);
+        showHint('discussion');
+    }, [showHint]);
+
+    const handleNightComplete = useCallback(() => {
+        setShowNightAnnouncement(false);
+        const hints: Record<string, any> = {
+            [Role.MAFIA]: 'night_mafia',
+            [Role.DOCTOR]: 'night_doctor',
+            [Role.DETECTIVE]: 'night_detective'
+        };
+        showHint(hints[myPlayer?.role || ''] ?? 'night_civilian');
+    }, [showHint, myPlayer?.role]);
+
+    const handleRoleCompositionComplete = useCallback(() => {
+        setShowRoleComposition(false);
+        playMorningTransition();
+        setShowMorningAnnouncement(true);
+    }, [playMorningTransition]);
+
+    const handleVotingComplete = useCallback(() => {
+        setShowVotingAnnouncement(false);
+        showHint('voting');
+    }, [showHint]);
+
     // Randomized seating
     const visualPlayers = useMemo(() => {
         if (!gameState.players.length) return [];
@@ -130,14 +157,24 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         <div className="relative w-full h-screen overflow-hidden bg-[#050505] font-['Montserrat'] flex items-center justify-center">
             <GameBackground isNightPhase={isNightPhase} dayBg={dayBg} nightBg={nightBg} />
             
-            {((gameState.phase === GamePhase.DAY && gameState.dayCount > 0 && gameState.dayCount !== lastMorningDayRef.current) || (gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current && !showVotingResults)) && (
-                <div className="fixed inset-0 z-[10000] bg-[#050505] pointer-events-none" />
-            )}
 
-            <NightAnnouncement show={showNightAnnouncement} onComplete={() => { setShowNightAnnouncement(false); const hints: any = { [Role.MAFIA]: 'night_mafia', [Role.DOCTOR]: 'night_doctor', [Role.DETECTIVE]: 'night_detective' }; showHint(hints[myPlayer?.role || ''] ?? 'night_civilian'); }} />
-            <MorningAnnouncement show={showMorningAnnouncement} onComplete={() => { setShowMorningAnnouncement(false); showHint('discussion'); }} />
-            <RoleCompositionAnnouncement show={showRoleComposition} onComplete={() => { setShowRoleComposition(false); playMorningTransition(); setShowMorningAnnouncement(true); }} playerCount={gameState.players.filter(p => p.isAlive).length} />
-            <VotingAnnouncement show={showVotingAnnouncement} onComplete={() => { setShowVotingAnnouncement(true); showHint('voting'); }} />
+            <NightAnnouncement 
+                show={showNightAnnouncement} 
+                onComplete={handleNightComplete} 
+            />
+            <MorningAnnouncement 
+                show={showMorningAnnouncement} 
+                onComplete={handleMorningComplete} 
+            />
+            <RoleCompositionAnnouncement 
+                show={showRoleComposition} 
+                onComplete={handleRoleCompositionComplete} 
+                playerCount={gameState.players.filter(p => p.isAlive).length} 
+            />
+            <VotingAnnouncement 
+                show={showVotingAnnouncement} 
+                onComplete={handleVotingComplete} 
+            />
 
             <ResponsiveGameContainer>
                 {playerPositions.map((pos, index) => {
