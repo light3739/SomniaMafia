@@ -84,26 +84,57 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         } finally { setIsProcessing(false); }
     }, [startVotingOnChain, addLog]);
 
+    // ── Voting Automated Transition logic (Waterfall) ──
+    const { finalizeVotingOnChain } = useGameContext();
+
     useEffect(() => {
         if (!isVotingPhase || isTestMode) return;
         const deadline = gameState.phaseDeadline;
-        if (!deadline) return;
-        const sorted = [...gameState.players].filter(p => p.isAlive).sort((a,b) => a.address.localeCompare(b.address));
-        const myIdx = sorted.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
-        if (myIdx === -1) return;
+        if (!deadline || deadline === 0) return;
 
-        const check = () => {
+        const check = async () => {
             if (votingTimeoutRef.current) return;
-            const past = Math.floor(Date.now() / 1000) - deadline;
-            if (past >= (5 + myIdx * 5)) {
+
+            const now = Math.floor(Date.now() / 1000);
+            const past = now - deadline;
+            const sorted = [...gameState.players].filter(p => p.isAlive).sort((a,b) => a.address.localeCompare(b.address));
+            const myIdx = sorted.findIndex(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
+            
+            // If I'm not alive/found, I shouldn't trigger
+            if (myIdx === -1) return;
+
+            // Wait 5s buffer + 5s per player index
+            const myTriggerTime = (5 + myIdx * 5);
+
+            // LOG FOR DEBUGGING
+            if (past > 0 && past % 10 === 0) {
+                 console.log(`[Voting Waterfall] Check: Past deadline ${past}s, Need ${myTriggerTime}s. Index: ${myIdx}, isTxPending: ${isTxPending}`);
+            }
+
+            if (past >= myTriggerTime) {
+                // FORCE OVERRIDE: If we're past deadline + trigger by more than 10s, ignore local pending flag (stuck case)
+                if (isTxPending && past < (myTriggerTime + 10)) {
+                    return;
+                }
+
                 votingTimeoutRef.current = true;
-                addLog(`Voting time expired. Auto-finalizing...`, "warning");
-                forcePhaseTimeoutOnChain().catch(() => setTimeout(() => { votingTimeoutRef.current = false; }, 10000));
+                addLog(`Voting results ready. Transitioning to night...`, "warning");
+                
+                // Use finalizeVotingOnChain if possible, otherwise generic timeout fallback
+                try {
+                    await finalizeVotingOnChain();
+                } catch (err) {
+                    console.error('[VotingWaterfall] Finalize failed, trying forcePhase:', err);
+                    forcePhaseTimeoutOnChain().catch(() => {
+                        // On failure, allow retry in 10s
+                        setTimeout(() => { votingTimeoutRef.current = false; }, 10000);
+                    });
+                }
             }
         };
         const iv = setInterval(check, 2000);
         return () => clearInterval(iv);
-    }, [isVotingPhase, gameState.phaseDeadline, gameState.players, myPlayer?.address, isTestMode, forcePhaseTimeoutOnChain, addLog]);
+    }, [isVotingPhase, gameState.phaseDeadline, gameState.players, myPlayer?.address, isTestMode, finalizeVotingOnChain, forcePhaseTimeoutOnChain, addLog, isTxPending]);
 
     // ── Discussion logic ──
     const fetchDiscussionState = useCallback(async () => {
@@ -253,7 +284,13 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         <div className="w-full h-full flex flex-col items-center justify-start p-4 md:p-8 pt-5 md:pt-6">
             <div className="max-w-2xl w-full flex flex-col">
                 <div className="text-center mb-4 flex-shrink-0 h-[40px] flex items-center justify-center">
-                    <h2 className="text-2xl font-['Cinzel'] text-white">{hideActions ? 'Voting Results' : isVotingPhase ? 'Elimination Vote' : 'Discussion Phase'}</h2>
+                    <h2 
+                        className="text-2xl font-['Cinzel'] text-white cursor-pointer hover:text-gold/80 transition-colors"
+                        onClick={() => (window as any).refreshGame?.()}
+                        title="Click to manual sync"
+                    >
+                        {hideActions ? 'Voting Results' : isVotingPhase ? 'Elimination Vote' : 'Discussion Phase'}
+                    </h2>
                 </div>
                 <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-md overflow-hidden border-t border-t-white/10 border-x border-x-white/5 border-b-black bg-[#0A0A0A] shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
                     <GameLog liveDiscussion={{ active: discussionState?.active, finished: discussionState?.finished, currentSpeakerName: currentSpeaker?.name || null }} forceVotingActive={isVotingPhase || showVotingResults} />
