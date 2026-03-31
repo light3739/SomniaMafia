@@ -321,6 +321,37 @@ export function useGameDataSync(deps: DataSyncDeps) {
         return () => clearInterval(interval);
     }, [isTestMode, refreshPlayersListDebounced, refs]);
 
+    // === FAST PHASE POLL (night → day) ===
+    // When in NIGHT phase, poll every 1s instead of 3s so the phase change
+    // is detected quickly (Somnia tx can take 30-90s to mine).
+    const fastPollRef = useRef<NodeJS.Timeout | null>(null);
+    useEffect(() => {
+        if (isTestMode) return;
+        const roomId = refs.currentRoomIdRef.current;
+        if (!roomId) return;
+
+        const isNight = refs.phaseRef.current === GamePhase.NIGHT;
+        if (!isNight) {
+            if (fastPollRef.current) { clearInterval(fastPollRef.current); fastPollRef.current = null; }
+            return;
+        }
+
+        if (fastPollRef.current) return; // already running
+
+        fastPollRef.current = setInterval(() => {
+            const rid = refs.currentRoomIdRef.current;
+            if (!rid) return;
+            // stop fast polling once we leave NIGHT phase
+            if (refs.phaseRef.current !== GamePhase.NIGHT) {
+                if (fastPollRef.current) { clearInterval(fastPollRef.current); fastPollRef.current = null; }
+                return;
+            }
+            refreshPlayersList(rid).catch(() => {});
+        }, 1000);
+
+        return () => { if (fastPollRef.current) { clearInterval(fastPollRef.current); fastPollRef.current = null; } };
+    }, [isTestMode, refreshPlayersList, refs]);
+
     return {
         fetchGameData,
         refreshPlayersList,
