@@ -62,17 +62,13 @@ export const POST = withSignedRoute<{
         console.log('[API/Investigate] Verification SUCCESS via GM proof');
 
         // 2. Get target's role from ServerStore
-        const secrets = await ServerStore.getRoomSecrets(roomId.toString(), body.chainId);
-        if (!secrets || !secrets[body.targetAddress.toLowerCase()]) {
-            return NextResponse.json({ error: 'Target role not found in server records' }, { status: 404 });
-        }
 
-        const targetSecret = secrets[body.targetAddress.toLowerCase()];
+        const gmData = await gmProofResponse.json();
 
         return NextResponse.json({
             success: true,
-            role: targetSecret.role,
-            isMafia: targetSecret.role === 1 // MAFIA = 1
+            role: gmData.role,
+            isMafia: gmData.role === 1
         });
 
     } catch (error: any) {
@@ -80,3 +76,4 @@ export const POST = withSignedRoute<{
         return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
     }
 });
+

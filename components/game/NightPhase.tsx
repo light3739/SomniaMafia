@@ -199,33 +199,33 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
     }, [publicClient, currentRoomId, address, isProcessing, isTxPending]);
     // Removed on-chain forceSync (V4: using GM off-chain, chain logs not reliable for ephemeral salts)
 
-    // Optimize Polling: 2s usually, slower if hidden (adaptive)
-    useEffect(() => {
-        if (isTestMode && initialNightState) return;
-
-        let intervalId: NodeJS.Timeout;
-        const tick = () => syncWithContract();
-
-        const startPolling = () => {
-            const delay = typeof document !== 'undefined' && document.hidden ? 5000 : 2000;
-            intervalId = setInterval(tick, delay);
-        };
-
-        tick(); // Initial
-        startPolling();
-
-        const handleVisibilityCode = () => {
-            clearInterval(intervalId);
-            startPolling();
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityCode);
-        return () => {
-            clearInterval(intervalId);
-            document.removeEventListener('visibilitychange', handleVisibilityCode);
-        };
-    }, [syncWithContract, isTestMode, initialNightState]);
-
+//    // Optimize Polling: 2s usually, slower if hidden (adaptive)
+//    useEffect(() => {
+//        if (isTestMode && initialNightState) return;
+//
+//        let intervalId: NodeJS.Timeout;
+//        const tick = () => syncWithContract();
+//
+//        const startPolling = () => {
+//            const delay = typeof document !== 'undefined' && document.hidden ? 5000 : 2000;
+//            intervalId = setInterval(tick, delay);
+//        };
+//
+//        tick(); // Initial
+//        startPolling();
+//
+//        const handleVisibilityCode = () => {
+//            clearInterval(intervalId);
+//            startPolling();
+//        };
+//
+//        document.addEventListener('visibilitychange', handleVisibilityCode);
+//        return () => {
+//            clearInterval(intervalId);
+//            document.removeEventListener('visibilitychange', handleVisibilityCode);
+//        };
+//    }, [syncWithContract, isTestMode, initialNightState]);
+//
     // === AUTO-SKIP FOR CIVILIANS (and UNKNOWN role — safety net) ===
     // Citizens have no night action. Notify GM immediately so it doesn't wait
     // for the full 3-minute timeout before resolving night.
