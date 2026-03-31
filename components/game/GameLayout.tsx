@@ -160,10 +160,21 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 </div>
             </ResponsiveGameContainer>
 
+            {/* Overlays for Shuffling, Reveal and Game Over */}
             <AnimatePresence>
-                {gameState.phase === GamePhase.SHUFFLING && <ShufflePhase key="shuffle" />}
-                {gameState.phase === GamePhase.REVEAL && <RoleReveal key="reveal" />}
-                {gameState.phase === GamePhase.ENDED && <GameOver key="gameover" />}
+                {gameState.phase === GamePhase.SHUFFLING && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[50]">
+                        <ShufflePhase key="shuffle" />
+                    </motion.div>
+                )}
+                {gameState.phase === GamePhase.REVEAL && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[50]">
+                        <RoleReveal key="reveal" />
+                    </motion.div>
+                )}
+                {gameState.phase === GamePhase.ENDED && (
+                    <GameOver key="gameover" />
+                )}
             </AnimatePresence>
         </div>
     );
