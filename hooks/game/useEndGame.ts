@@ -312,8 +312,7 @@ export function useEndGame(deps: EndGameDeps) {
             // Re-check phase inside interval
             if (
                 refs.phaseRef.current >= GamePhase.DAY &&
-                refs.phaseRef.current !== GamePhase.ENDED &&
-                refs.phaseRef.current !== GamePhase.NIGHT
+                refs.phaseRef.current !== GamePhase.ENDED
             ) {
                 triggerAutoWinCheck();
             }
