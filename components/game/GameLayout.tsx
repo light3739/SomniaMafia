@@ -14,6 +14,7 @@ import { RoleCompositionAnnouncement } from './RoleCompositionAnnouncement';
 import { useGameHints } from './GameHints';
 import { BackButton } from '../ui/BackButton';
 import { useSoundEffects } from '../ui/SoundEffects';
+import { GameUIOverlay } from './GameUIOverlay';
 import { GamePhase, Role } from '../../types';
 
 // Layout Components
@@ -48,6 +49,26 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const [showNightAnnouncement, setShowNightAnnouncement] = useState(false);
     const [discussionState, setDiscussionState] = useState<{ currentSpeakerAddress: string | null; timeRemaining: number } | null>(null);
     const [lastPhase, setLastPhase] = useState<GamePhase | null>(null);
+
+    const [activePhase, setActivePhase] = useState(gameState.phase);
+
+    useEffect(() => {
+        if (gameState.phase !== activePhase) {
+            if ((activePhase === GamePhase.REVEAL || activePhase === GamePhase.SHUFFLING) && gameState.phase === GamePhase.NIGHT) {
+                const t = setTimeout(() => setActivePhase(gameState.phase), 4500); // Wait 4.5s so players can see their roles!
+                return () => clearTimeout(t);
+            } else if (activePhase === GamePhase.VOTING && gameState.phase === GamePhase.NIGHT) {
+                // Give event poller time to catch VotingFinalized event.
+                // If it catches it, showVotingResults becomes true, and the Night cinematic 
+                // will correctly wait for the result phase to finish.
+                // Since result phase is now 5s, 2.5s is the perfect delay to prevent flickering.
+                const t = setTimeout(() => setActivePhase(gameState.phase), 2500); 
+                return () => clearTimeout(t);
+            } else {
+                setActivePhase(gameState.phase);
+            }
+        }
+    }, [gameState.phase, activePhase]);
 
     const lastMorningDayRef = useRef<number | null>(null);
     const lastVotingDayRef = useRef<number | null>(null);
@@ -85,13 +106,13 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     // Randomized seating
     const visualPlayers = useMemo(() => {
         if (!gameState.players.length) return [];
-        if (gameState.phase === GamePhase.LOBBY || !currentRoomId) return gameState.players;
+        if (activePhase === GamePhase.LOBBY || !currentRoomId) return gameState.players;
         const shuffled = [...gameState.players];
         let s = Number(currentRoomId % 1000000n), m = shuffled.length, t, i;
         const random = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
         while (m) { i = Math.floor(random() * m--); t = shuffled[m]; shuffled[m] = shuffled[i]; shuffled[i] = t; }
         return shuffled;
-    }, [gameState.players, gameState.phase, currentRoomId]);
+    }, [gameState.players, activePhase, currentRoomId]);
 
     const playerPositions = useMemo(() => getPlayerPositions(visualPlayers.length), [visualPlayers.length]);
 
@@ -112,36 +133,36 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
 
     // Announcements trigger logic
     useEffect(() => {
-        if (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING) {
+        if (activePhase === GamePhase.DAY || activePhase === GamePhase.VOTING) {
             if (gameState.dayCount > 0 && gameState.dayCount !== lastMorningDayRef.current) {
                 lastMorningDayRef.current = gameState.dayCount;
                 if (gameState.dayCount === 1 && !hasShownRoleComposition) { setShowRoleComposition(true); setHasShownRoleComposition(true); }
                 else { playMorningTransition(); setShowMorningAnnouncement(true); }
             }
         }
-    }, [gameState.phase, gameState.dayCount, playMorningTransition, hasShownRoleComposition]);
+    }, [activePhase, gameState.dayCount, playMorningTransition, hasShownRoleComposition]);
 
     useEffect(() => {
-        const isVoting = gameState.phase === GamePhase.VOTING;
+        const isVoting = activePhase === GamePhase.VOTING;
         if ((isVoting && lastPhase !== GamePhase.VOTING) || (isVoting && gameState.dayCount !== lastVotingDayRef.current)) {
             const delay = lastPhase === GamePhase.DAY ? 0 : (gameState.dayCount === lastMorningDayRef.current ? 2000 : 0);
             const t = setTimeout(() => setShowVotingAnnouncement(true), delay);
-            lastVotingDayRef.current = gameState.dayCount; setLastPhase(gameState.phase);
+            lastVotingDayRef.current = gameState.dayCount; setLastPhase(activePhase);
             return () => clearTimeout(t);
         }
-        if (gameState.phase !== lastPhase) setLastPhase(gameState.phase);
-    }, [gameState.phase, gameState.dayCount, lastPhase]);
+        if (activePhase !== lastPhase) setLastPhase(activePhase);
+    }, [activePhase, gameState.dayCount, lastPhase]);
 
     useEffect(() => {
         const wasShowing = prevShowVotingResultsRef.current; prevShowVotingResultsRef.current = showVotingResults;
-        const entry = (wasShowing && !showVotingResults && gameState.phase === GamePhase.NIGHT) || (!showVotingResults && !wasShowing && gameState.phase === GamePhase.NIGHT);
+        const entry = (wasShowing && !showVotingResults && activePhase === GamePhase.NIGHT) || (!showVotingResults && !wasShowing && activePhase === GamePhase.NIGHT);
         if (entry && gameState.dayCount !== lastNightDayRef.current) {
             if (nightAnnouncementPendingRef.current) return;
             nightAnnouncementPendingRef.current = true; lastNightDayRef.current = gameState.dayCount;
             playNightTransition(); setShowNightAnnouncement(true);
             nightAnnouncementPendingRef.current = false;
         }
-    }, [gameState.phase, gameState.dayCount, playNightTransition, showVotingResults]);
+    }, [activePhase, gameState.dayCount, playNightTransition, showVotingResults]);
     
     // === EXPOSE REFRESH FOR FAILSAFE ===
     useEffect(() => {
@@ -154,8 +175,8 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
          return () => { delete (window as any).refreshGame; };
     }, [currentRoomId, refreshPlayersList]);
 
-    const isNightPhase = gameState.phase === GamePhase.NIGHT;
-    const isOverlayPhase = [GamePhase.SHUFFLING, GamePhase.REVEAL, GamePhase.ENDED].includes(gameState.phase);
+    const isNightPhase = activePhase === GamePhase.NIGHT && !showVotingResults;
+    const isOverlayPhase = [GamePhase.SHUFFLING, GamePhase.REVEAL, GamePhase.ENDED].includes(activePhase);
 
     if (gameState.players.length === 0 && !isTestMode) return (
         <div className="w-full h-screen bg-black flex flex-col items-center justify-center gap-4 text-white">
@@ -168,6 +189,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     return (
         <div className="relative w-full h-screen overflow-hidden bg-[#050505] font-['Montserrat'] flex items-center justify-center">
             <GameBackground isNightPhase={isNightPhase} dayBg={dayBg} nightBg={nightBg} />
+            <GameUIOverlay />
             
 
             <NightAnnouncement 
@@ -194,17 +216,17 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     const voters = Object.entries(voteMap).filter(([_, target]) => target === p.address.toLowerCase()).map(([v]) => gameState.players.find(pl => pl.address.toLowerCase() === v)).filter((pl): pl is any => !!pl);
                     return (
                         <div key={p.id} className={`absolute transition-all duration-500 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`} style={{ left: pos.x, top: pos.y }}>
-                            <PlayerSpot player={p} isMe={p.address.toLowerCase() === myPlayer?.address.toLowerCase()} onAction={handlePlayerAction} canAct={canActOnPlayer(p)} isSelected={selectedTarget?.toLowerCase() === p.address.toLowerCase()} isNight={isNightPhase} myRole={myPlayer?.role} mark={playerMarks[p.address.toLowerCase()] || null} onSetMark={setPlayerMark} isSpeaking={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === p.address.toLowerCase()} speechTimeRemaining={gameState.phase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === p.address.toLowerCase() ? discussionState.timeRemaining : 0} voters={voters} />
+                            <PlayerSpot player={p} isMe={p.address.toLowerCase() === myPlayer?.address.toLowerCase()} onAction={handlePlayerAction} canAct={canActOnPlayer(p)} isSelected={selectedTarget?.toLowerCase() === p.address.toLowerCase()} isNight={isNightPhase} myRole={myPlayer?.role} mark={playerMarks[p.address.toLowerCase()] || null} onSetMark={setPlayerMark} isSpeaking={activePhase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === p.address.toLowerCase()} speechTimeRemaining={activePhase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === p.address.toLowerCase() ? discussionState.timeRemaining : 0} voters={voters} />
                         </div>
                     );
                 })}
 
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] flex items-center justify-center z-10">
-                    {!isOverlayPhase && (gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING || showVotingResults) && (
-                        <div className="w-full h-full"><DayPhase initialDiscussionState={initialDiscussionState} hideActions={showVotingResults} disablePolling={showVotingResults && gameState.phase === GamePhase.NIGHT} /></div>
+                    {!isOverlayPhase && (activePhase === GamePhase.DAY || activePhase === GamePhase.VOTING || showVotingResults) && (
+                        <div className="w-full h-full"><DayPhase initialDiscussionState={initialDiscussionState} hideActions={showVotingResults} disablePolling={showVotingResults && activePhase === GamePhase.NIGHT} /></div>
                     )}
                     {showVotingResults && <PostVotingTransition />}
-                    {!showVotingResults && !isOverlayPhase && gameState.phase === GamePhase.NIGHT && (<div className="w-full h-full"><NightPhase initialNightState={initialNightState} /></div>)}
+                    {!showVotingResults && !isOverlayPhase && activePhase === GamePhase.NIGHT && (<div className="w-full h-full"><NightPhase initialNightState={initialNightState} /></div>)}
                 </div>
                 {/* Network Status & Manual Sync Failsafe */}
                 <div className="fixed bottom-4 right-4 z-[50] flex flex-col items-end gap-2">
@@ -219,7 +241,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
 
             {/* Overlays for Shuffling, Reveal and Game Over */}
             <AnimatePresence>
-                {isOverlayPhase && (gameState.phase === GamePhase.SHUFFLING || gameState.phase === GamePhase.REVEAL) && (
+                {isOverlayPhase && (activePhase === GamePhase.SHUFFLING || activePhase === GamePhase.REVEAL) && (
                     <motion.div 
                         initial={{ opacity: 0 }} 
                         animate={{ opacity: 1 }} 
@@ -229,7 +251,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                         <ShuffleAndReveal key="shuffle-reveal" />
                     </motion.div>
                 )}
-                {gameState.phase === GamePhase.ENDED && (
+                {activePhase === GamePhase.ENDED && (
                     <GameOver key="gameover" />
                 )}
             </AnimatePresence>

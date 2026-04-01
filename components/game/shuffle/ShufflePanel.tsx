@@ -33,15 +33,10 @@ export const ShufflePanel: React.FC<ShufflePanelProps> = ({
                 <div className="flex items-center justify-center gap-1.5">
                     <p className={`font-mono text-[16px] tracking-widest uppercase leading-tight ${
                         shuffleState.isFailed ? 'text-[#8B0000]' :
-                        shuffleState.hasRevealed ? 'text-[#c8a84b]' :
                         'text-white/85'
                     }`}>
                         {(() => {
                             if (shuffleState.isFailed) return <TypewriterText text="TX_FAILED_PRESS_RETRY" />;
-                            
-                            if (shuffleState.hasRevealed) {
-                                return <TypewriterText text="PENDING // AWAITING_OPERATIVES" />;
-                            }
 
                             const name = currentShufflerName?.toUpperCase() || 'PLAYER';
                             return (
@@ -52,7 +47,7 @@ export const ShufflePanel: React.FC<ShufflePanelProps> = ({
                             );
                         })()}
                     </p>
-                    {!shuffleState.hasRevealed && !shuffleState.isFailed && (
+                    {!shuffleState.isFailed && (
                         <motion.div
                             className="w-2 h-4 bg-[#c8a84b]"
                             animate={{ opacity: [1, 1, 0, 0, 1] }}
@@ -72,7 +67,7 @@ export const ShufflePanel: React.FC<ShufflePanelProps> = ({
                 <div className="flex gap-3 justify-center">
                     {[...Array(totalPlayers)].map((_, i) => {
                         const isDone = i < shuffleState.currentShufflerIndex;
-                        const isActive = i === shuffleState.currentShufflerIndex && !shuffleState.hasRevealed && !shuffleState.isFailed;
+                        const isActive = i === shuffleState.currentShufflerIndex && !shuffleState.isFailed;
                         return (
                             <div
                                 key={i}

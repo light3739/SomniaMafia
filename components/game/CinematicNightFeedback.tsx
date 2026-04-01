@@ -97,7 +97,7 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 1.5, ease: "easeOut" }} // Медленное, кинематографичное затухание
-            className="fixed inset-0 z-[9000] flex flex-col items-center justify-center p-4 bg-[#050505]"
+            className="fixed inset-0 z-[9000] flex flex-col items-center bg-[#050505] overflow-y-auto overflow-x-hidden custom-scrollbar"
         >
             {/* ОЧЕНЬ тусклый, едва заметный радиальный свет — breathing pulse */}
             <motion.div
@@ -160,7 +160,9 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
                 ))}
             </div>
 
-            <div className="flex flex-col items-center text-center relative z-10 w-full max-w-lg pb-10">
+            <div className="flex-1 w-full min-h-[40px]" />
+
+            <div className="flex flex-col items-center text-center relative z-10 w-full max-w-lg shrink-0 px-4">
 
                 {/* Иконка медленно выплывает из темноты */}
                 <motion.div
@@ -229,37 +231,30 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
 
             </div>
 
-            {/* Awaiting Sunrise */}
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 2, delay: 3.5 }}
-                className="absolute bottom-8 md:bottom-12 flex flex-col items-center z-10"
-            >
-                <div className="flex flex-col items-center group cursor-pointer" onClick={() => (window as any).refreshGame && (window as any).refreshGame()}>
-                    <p className={`text-[10px] font-sans uppercase tracking-[0.3em] mb-2 transition-all duration-500 ${isSunRising ? 'text-amber-500/80 animate-pulse' : 'text-white/40 group-hover:text-white/70'}`}>
-                        {isSunRising ? 'Daylight is breaking...' : 'Waiting for the Dawn'}
-                    </p>
-                    
-                    {/* Minimalist timer progress line */}
-                    <div className="w-[120px] h-[1px] bg-white/5 relative overflow-hidden">
-                        <motion.div
-                            className={`absolute top-0 bottom-0 w-1/3 ${config.accent}`}
-                            animate={{ left: ["-33%", "100%"] }}
-                            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                        />
+            <div className="flex-1 w-full flex flex-col items-center justify-end pb-8 md:pb-12 z-10 min-h-[60px] shrink-0">
+                {/* Awaiting Sunrise */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 2, delay: 3.5 }}
+                    className="flex flex-col items-center"
+                >
+                    <div className="flex flex-col items-center group cursor-pointer" onClick={() => (window as any).refreshGame && (window as any).refreshGame()}>
+                        <p className={`text-[10px] font-sans uppercase tracking-[0.3em] mb-2 transition-all duration-500 ${isSunRising ? 'text-amber-500/80 animate-pulse' : 'text-white/40 group-hover:text-white/70'}`}>
+                            {isSunRising ? 'Daylight is breaking...' : 'Waiting for the Dawn'}
+                        </p>
+                        
+                        {/* Minimalist timer progress line */}
+                        <div className="w-[120px] h-[1px] bg-white/5 relative overflow-hidden">
+                            <motion.div
+                                className={`absolute top-0 bottom-0 w-1/3 ${config.accent}`}
+                                animate={{ left: ["-33%", "100%"] }}
+                                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                            />
+                        </div>
                     </div>
-
-                    <div className="mt-6 flex flex-col items-center opacity-0 group-hover:opacity-100 transition-opacity duration-700">
-                         <div className="flex items-center gap-2 px-3 py-1 border border-white/10 rounded-full bg-white/5 backdrop-blur-md">
-                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-[9px] text-white/30 font-mono tracking-tighter uppercase">
-                                Sync with network
-                            </span>
-                         </div>
-                    </div>
-                </div>
-            </motion.div>
+                </motion.div>
+            </div>
 
         </motion.div>
     );
