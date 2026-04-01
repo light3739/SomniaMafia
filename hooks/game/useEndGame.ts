@@ -249,6 +249,8 @@ export function useEndGame(deps: EndGameDeps) {
                     });
                     console.log(`[AutoWin ZK Debug] Simulation SUCCESS (Session: ${useSessionKey})`);
                 } catch (simErr: any) {
+                    refs.autoWinLockRef.current = false;
+                    refs.autoWinLockRef.current = false;
                     console.error("[AutoWin ZK Debug] Simulation FAILED!");
                     console.error("Reason:", simErr.reason || simErr.shortMessage || "Unknown revert");
                     console.error("Full Error:", simErr);
@@ -298,13 +300,6 @@ export function useEndGame(deps: EndGameDeps) {
     // === POLLING ===
     React.useEffect(() => {
         if (!currentRoomId || isTestMode) return;
-        
-        // Stop polling if already ended on-chain (contract phase 6)
-        // Note: refs.phaseRef.current might be 6 locally if triggerAutoWinCheck just succeeded.
-        if (refs.phaseRef.current === GamePhase.ENDED) return;
-
-        // Start polling for auto-win from DAY (3) onwards
-        if (refs.phaseRef.current < GamePhase.DAY) return;
 
         console.log(`[AutoWin] Starting background win condition polling for Room #${currentRoomId}`);
         

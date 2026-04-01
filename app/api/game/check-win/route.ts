@@ -62,6 +62,7 @@ export async function POST(request: Request) {
             
             // 3. Parse and return for the contract
             const argv = callData.replace(/["\[\]\s]/g, "").split(",");
+console.log("[API/CheckWin] ZK Proof inputs:", argv.slice(8));
             
             return NextResponse.json({
                 winDetected: true,
