@@ -42,7 +42,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         gameState, currentRoomId, myPlayer, startVotingOnChain, voteOnChain,
         forcePhaseTimeoutOnChain, addLog, isTxPending, selectedTarget,
         setSelectedTarget, isTestMode, setVoteMap, runtimeContractAddress,
-        showVotingResults
+        showVotingResults, discussionState, setDiscussionState, fetchDiscussionState
     } = useGameContext();
 
     const { chainId, address } = useAccount();
@@ -52,7 +52,6 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
 
     const [voteState, setVoteState] = useState({ myVote: null as string | null, voteCounts: new Map<string, number>(), hasVoted: false });
     const [isProcessing, setIsProcessing] = useState(false);
-    const [discussionState, setDiscussionState] = useState<Partial<DiscussionState> | null>(initialDiscussionState || null);
     const [smoothTimeRemaining, setSmoothTimeRemaining] = useState<number>(0);
 
     const isVotingPhase = gameState.phase === GamePhase.VOTING;
@@ -137,22 +136,6 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
     }, [isVotingPhase, gameState.phaseDeadline, gameState.players, myPlayer?.address, isTestMode, finalizeVotingOnChain, forcePhaseTimeoutOnChain, addLog, isTxPending]);
 
     // ── Discussion logic ──
-    const fetchDiscussionState = useCallback(async () => {
-        if (!currentRoomId) return;
-        const curDay = latestDayCountRef.current;
-        try {
-            const res = await fetch(`/api/game/discussion?roomId=${currentRoomId}&dayCount=${curDay}&playerAddress=${myPlayer?.address || ''}&chainId=${chainId || ''}&t=${Date.now()}`);
-            const data = await res.json();
-            if (latestDayCountRef.current === curDay) {
-                setDiscussionState(data);
-                if (data.timeRemaining !== undefined && data.timeRemaining !== lastServerTimeRef.current) {
-                    lastServerTimeRef.current = data.timeRemaining;
-                    lastUpdateTsRef.current = Date.now();
-                    setSmoothTimeRemaining(data.timeRemaining);
-                }
-            }
-        } catch (e) { console.error(e); }
-    }, [currentRoomId, myPlayer?.address, chainId]);
 
     const startDiscussion = useCallback(async () => {
         if (!currentRoomId || discussionStartedRef.current) return;
@@ -169,7 +152,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ roomId: currentRoomId.toString(), dayCount: gameState.dayCount, action: 'start', playerAddress: actor, signature: signed.signature, signerAddress: signed.signerAddress, nonce: signed.nonce, timestamp: signed.timestamp, chainId })
                 });
-            } else setDiscussionState({ active: true, finished: false, phase: 'speaking', currentSpeakerAddress: gameState.players[0]?.address, timeRemaining: 60 });
+            } else setDiscussionState({ active: true, finished: false, currentSpeakerAddress: gameState.players[0]?.address, timeRemaining: 60 });
             addLog("Discussion Phase started.", "info");
         } catch (e) { discussionStartedRef.current = false; }
     }, [currentRoomId, myPlayer?.address, addLog, isTestMode, gameState.dayCount, gameState.players, walletClient, chainId]);
@@ -232,16 +215,14 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         return () => clearTimeout(timer);
     }, [isDayPhase, discussionState?.active, gameState.players, myPlayer?.address, startDiscussion]);
 
+    // Update smooth timer when discussionState changes
     useEffect(() => {
-        if (!isDayPhase || !currentRoomId || disablePolling || discussionState?.finished) return;
-        const poll = async () => {
-            if (!isDayPhase || !currentRoomId) return;
-            await fetchDiscussionState();
-            if (!isDayPhase || !currentRoomId || discussionState?.finished) return;
-            setTimeout(poll, (document.hidden ? 10000 : 5000));
-        };
-        poll();
-    }, [isDayPhase, currentRoomId, fetchDiscussionState, discussionState?.finished, disablePolling]);
+        if (discussionState && discussionState.timeRemaining !== undefined && discussionState.timeRemaining !== lastServerTimeRef.current) {
+            lastServerTimeRef.current = discussionState.timeRemaining;
+            lastUpdateTsRef.current = Date.now();
+            setSmoothTimeRemaining(discussionState.timeRemaining);
+        }
+    }, [discussionState]);
 
     useEffect(() => {
         if (!discussionState?.active || discussionState?.finished) return;

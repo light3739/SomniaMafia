@@ -36,7 +36,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const {
         gameState, myPlayer, currentRoomId, selectedTarget, handlePlayerAction,
         canActOnPlayer, playerMarks, setPlayerMark, showVotingResults, voteMap, 
-        isTestMode, refreshPlayersList
+        isTestMode, refreshPlayersList, discussionState, setDiscussionState
     } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const { showHint } = useGameHints(currentRoomId?.toString());
@@ -47,7 +47,6 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const [showRoleComposition, setShowRoleComposition] = useState(false);
     const [hasShownRoleComposition, setHasShownRoleComposition] = useState(false);
     const [showNightAnnouncement, setShowNightAnnouncement] = useState(false);
-    const [discussionState, setDiscussionState] = useState<{ currentSpeakerAddress: string | null; timeRemaining: number } | null>(null);
     const [lastPhase, setLastPhase] = useState<GamePhase | null>(null);
 
     const [activePhase, setActivePhase] = useState(gameState.phase);
@@ -115,21 +114,6 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     }, [gameState.players, activePhase, currentRoomId]);
 
     const playerPositions = useMemo(() => getPlayerPositions(visualPlayers.length), [visualPlayers.length]);
-
-    // Poll discussion state
-    useEffect(() => {
-        if (gameState.phase !== GamePhase.DAY || !currentRoomId) { setDiscussionState(null); return; }
-        const fetchState = async () => {
-            try {
-                const res = await fetch(`/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}&chainId=${chainId || ''}`, { cache: 'no-store' });
-                const data = await res.json();
-                setDiscussionState(data && data.active ? { currentSpeakerAddress: data.currentSpeakerAddress, timeRemaining: data.timeRemaining } : null);
-            } catch (e) { console.error(e); }
-        };
-        fetchState();
-        const iv = setInterval(() => { if (gameState.phase === GamePhase.DAY) fetchState(); }, 5000);
-        return () => clearInterval(iv);
-    }, [gameState.phase, currentRoomId, gameState.dayCount, myPlayer?.address, chainId]);
 
     // Announcements trigger logic
     useEffect(() => {
