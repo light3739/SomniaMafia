@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { ChatToggleButton } from './DiscussionChat';
 import { SessionKeyBanner } from './SessionKeyBanner';
+import { BackgroundMusic } from '@/components/ui/BackgroundMusic';
 import { useGameContext } from '@/contexts/GameContext';
 import { useAccount } from 'wagmi';
 import { GamePhase } from '@/types';
 
 /**
  * GameUIOverlay - Renders game-specific UI elements that need GameContext access
- * Includes: Chat button, SessionKeyBanner, and confirming indicator.
+ * Includes: Chat button (merged with BackgroundMusic), SessionKeyBanner, and confirming indicator.
  */
 export const GameUIOverlay: React.FC = () => {
     const { chainId, address } = useAccount();
@@ -68,6 +69,15 @@ export const GameUIOverlay: React.FC = () => {
         }
     }, [gameState.phase]);
 
+    // Chat toggle button to pass as additionalButtons to BackgroundMusic
+    const chatButton = showChatButton ? (
+        <ChatToggleButton
+            isExpanded={isChatExpanded}
+            onToggle={() => setIsChatExpanded(!isChatExpanded)}
+            canWrite={canWrite}
+        />
+    ) : undefined;
+
     return (
         <>
             {/* Subtle confirming indicator — shows when TXs are being confirmed in background */}
@@ -87,16 +97,11 @@ export const GameUIOverlay: React.FC = () => {
                 </div>
             )}
 
-            {/* Chat Button */}
-            {showChatButton && (
-                <div className="fixed bottom-6 right-[140px] z-[100] pointer-events-auto">
-                    <ChatToggleButton
-                        isExpanded={isChatExpanded}
-                        onToggle={() => setIsChatExpanded(!isChatExpanded)}
-                        canWrite={canWrite}
-                    />
-                </div>
-            )}
+            {/* BackgroundMusic with Chat button integrated for slide animation */}
+            <BackgroundMusic
+                additionalButtons={chatButton}
+                isChatExpanded={isChatExpanded}
+            />
         </>
     );
 };
