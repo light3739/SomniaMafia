@@ -200,12 +200,28 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
     }, [isDayPhase, discussionState?.active, discussionState?.currentSpeakerAddress, gameState.players, addLog]);
 
     useEffect(() => {
+        // Skip phase-change side-effects while voting results are displayed.
+        // At that point gameState.phase is already NIGHT (chain synced ahead),
+        // but DayPhase is still mounted — firing here would pollute the game log.
+        if (showVotingResults) return;
         if (gameState.phase !== lastLoggedPhase.current) {
             if (isDayPhase) { discussionStartedRef.current = false; setDiscussionState(null); addLog("Day Phase started.", "info"); }
             else if (isVotingPhase) { playVotingStart(); addLog("Voting Phase started.", "warning"); }
             lastLoggedPhase.current = gameState.phase;
         }
-    }, [gameState.phase, isDayPhase, isVotingPhase, addLog, playVotingStart]);
+    }, [gameState.phase, isDayPhase, isVotingPhase, addLog, playVotingStart, showVotingResults]);
+
+    // When voting results finish, reset the phase tracker so the logging effect
+    // can fire correctly for the new day transition.
+    const prevShowVotingResultsRef = useRef(false);
+    useEffect(() => {
+        if (prevShowVotingResultsRef.current && !showVotingResults) {
+            // Results just ended — invalidate lastLoggedPhase so the next
+            // phase-change fires cleanly (e.g. "Day Phase started.")
+            lastLoggedPhase.current = null;
+        }
+        prevShowVotingResultsRef.current = showVotingResults;
+    }, [showVotingResults]);
 
     useEffect(() => {
         if (!isDayPhase || discussionState?.active || discussionStartedRef.current) return;
@@ -294,7 +310,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                     </h2>
                 </div>
                 <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-md overflow-hidden border-t border-t-white/10 border-x border-x-white/5 border-b-black bg-[#0A0A0A] shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
-                    <GameLog liveDiscussion={{ active: discussionState?.active, finished: discussionState?.finished, currentSpeakerName: currentSpeaker?.name || null }} forceVotingActive={isVotingPhase || showVotingResults} />
+                    <GameLog liveDiscussion={{ active: discussionState?.active, finished: discussionState?.finished, currentSpeakerName: currentSpeaker?.name || null }} forceVotingActive={isVotingPhase || showVotingResults || !!hideActions} />
                 </div>
                 <div className={`min-h-[140px] flex flex-col justify-start transition-opacity duration-300 ${hideActions ? 'opacity-0 pointer-events-none' : ''}`}>
                     <AnimatePresence mode="wait">

@@ -52,6 +52,9 @@ interface GameLogProps {
 
 export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, forceVotingActive = false }) => {
     const { gameState, showVotingResults, addLog } = useGameContext();
+    // Track the day we were displaying when voting results started,
+    // so we don't lose logs when dayCount jumps ahead before the new marker appears.
+    const votingResultsDayRef = React.useRef<number>(0);
 
     const dayCount = gameState.dayCount;
     const phase = gameState.phase;
@@ -60,6 +63,9 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
 
     const injectedDayRef = useRef<number>(0);
     useEffect(() => {
+        // Don't inject the new day marker while voting results are showing —
+        // it would cause todayLogs to slice to the new (empty) day immediately.
+        if (showVotingResults) return;
         if (dayCount <= 1 || injectedDayRef.current >= dayCount) return;
         const hasCurrentDayMarker = logs.some(l => {
             const match = l.message.match(/Day (\d+) has begun/);
@@ -69,23 +75,70 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             injectedDayRef.current = dayCount;
             addLog(`Day ${dayCount} has begun`, "phase");
         }
-    }, [dayCount, logs, addLog]);
+    }, [dayCount, logs, addLog, showVotingResults]);
+
+    // Track which day to display when voting results are shown.
+    // The chain may have already incremented dayCount to N+1 before the
+    // "Day N+1 has begun" log appears (it's added with a 4s delay).
+    // In that case, fall back to searching for dayCount-1.
+    useEffect(() => {
+        if (showVotingResults && votingResultsDayRef.current === 0) {
+            // Lock in the current dayCount when results phase starts
+            votingResultsDayRef.current = dayCount;
+        } else if (!showVotingResults) {
+            votingResultsDayRef.current = 0;
+        }
+    }, [showVotingResults, dayCount]);
 
     const todayLogs = useMemo(() => {
         let startIndex = 0;
         const dayPattern = /Day \d+ has begun/;
+
+        // During voting results, the chain may report dayCount=N+1 already,
+        // but we need to show logs from the day that just finished voting (N or N-1).
+        // Try to find the exact marker, then fall back to the previous day.
+        const targetDay = (showVotingResults && votingResultsDayRef.current > 0)
+            ? votingResultsDayRef.current
+            : dayCount;
+        const fallbackDay = targetDay - 1;
+
+        let foundExact = false;
+        let fallbackIndex = -1;
+
         for (let i = logs.length - 1; i >= 0; i--) {
             const msg = logs[i].message;
-            if (dayPattern.test(msg) || msg.includes('Game started!')) {
-                startIndex = i;
-                if (i > 0 && logs[i - 1].message.includes('Night Result:')) {
-                    startIndex = i - 1;
+            const dayMatch = msg.match(/Day (\d+) has begun/);
+            if (dayMatch) {
+                const logDay = Number(dayMatch[1]);
+                if (logDay === targetDay) {
+                    startIndex = i;
+                    if (i > 0 && logs[i - 1].message.includes('Night Result:')) {
+                        startIndex = i - 1;
+                    }
+                    foundExact = true;
+                    break;
                 }
+                if (logDay === fallbackDay && fallbackIndex === -1) {
+                    fallbackIndex = i;
+                }
+            } else if (msg.includes('Game started!')) {
+                startIndex = i;
+                foundExact = true;
                 break;
             }
         }
+
+        // If we couldn't find the exact day marker (race condition: marker not yet added)
+        // but found the previous day, use that so we don't fall back to log[0].
+        if (!foundExact && fallbackIndex !== -1) {
+            startIndex = fallbackIndex;
+            if (startIndex > 0 && logs[startIndex - 1].message.includes('Night Result:')) {
+                startIndex = startIndex - 1;
+            }
+        }
+
         return logs.slice(startIndex);
-    }, [logs, dayCount]);
+    }, [logs, dayCount, showVotingResults]);
 
     const dayEvents = useMemo(() => {
         let nightResult: { type: 'safe' | 'killed'; playerName?: string } | null = null;
