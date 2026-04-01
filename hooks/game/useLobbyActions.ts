@@ -175,7 +175,9 @@ export function useLobbyActions(deps: LobbyDeps) {
             storeSession(newSessionObj);
             markSessionRegistered();
 
-            // Non-blocking GM sync
+            // Non-blocking GM sync has been removed to prevent double MetaMask popup.
+            // The GM Server will automatically fetch the session key from the blockchain on the first signature verification.
+            /*
             registerSessionOnGm({
                 roomId: finalRoomId.toString(),
                 mainWallet: myAddr,
@@ -183,6 +185,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                 walletClient: activeWalletClient,
                 chainId: targetChain.id
             }).catch(e => console.warn("[Create] GM session registration failed:", e));
+            */
 
             if (lobbyPassword) {
                 GM.setRoomPassword({
@@ -328,6 +331,8 @@ export function useLobbyActions(deps: LobbyDeps) {
                             storeSession(currentSession);
                             markSessionRegistered();
 
+                            // GM sync removed to eliminate double MetaMask popup.
+                            /*
                             await registerSessionOnGm({
                                 roomId: rId.toString(),
                                 mainWallet: myAddr,
@@ -335,7 +340,8 @@ export function useLobbyActions(deps: LobbyDeps) {
                                 walletClient: walletClient,
                                 chainId: targetChain.id
                             });
-                            console.log("[Join] Session re-synced with GM server ✅");
+                            */
+                            console.log("[Join] Session cached locally ✅");
                         } catch (e) {
                             console.warn("[Join] Failed to register/fund session key during sync:", e);
                         }
@@ -520,7 +526,8 @@ export function useLobbyActions(deps: LobbyDeps) {
 
             markSessionRegistered();
 
-            // Proactive GM sync
+            // GM sync removed to eliminate double MetaMask popup.
+            /*
             if (sessionAddress) {
                 try {
                     const { client: activeWalletClient } = await wallet.getActiveWalletClient();
@@ -533,9 +540,10 @@ export function useLobbyActions(deps: LobbyDeps) {
                     });
                     console.log("[Lobby] Session registered on GM after join ✅");
                 } catch (e) {
-                    console.warn("[Lobby] Proactive session registration on GM failed:", e);
+                    console.warn("[Lobby] Could not sync session to GM server:", e);
                 }
             }
+            */
 
             // Register ECIES pubkey
             setTimeout(async () => {
