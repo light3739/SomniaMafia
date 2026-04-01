@@ -13,10 +13,11 @@ interface DiscussionSectionProps {
     myPlayer: any;
     isProcessing: boolean;
     onSkip: () => void;
+    isHost?: boolean;
 }
 
 export const DiscussionSection: React.FC<DiscussionSectionProps> = ({
-    discussionState, isTestMode, smoothTimeRemaining, currentSpeaker, currentRoomId, myPlayer, isProcessing, onSkip
+    discussionState, isTestMode, smoothTimeRemaining, currentSpeaker, currentRoomId, myPlayer, isProcessing, onSkip, isHost = false
 }) => {
     if (!discussionState?.active && !isTestMode) {
         if (discussionState?.finished) {
@@ -82,7 +83,7 @@ export const DiscussionSection: React.FC<DiscussionSectionProps> = ({
                 </Button>
             )}
 
-            {(!discussionState?.isMyTurn || isTestMode) && (
+            {isHost && (!discussionState?.isMyTurn || isTestMode) && (
                 <Button
                     onClick={onSkip}
                     disabled={isProcessing}

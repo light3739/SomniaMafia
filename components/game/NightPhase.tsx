@@ -148,6 +148,13 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             }));
         }
     }, [initialNightState, isTestMode]);
+
+    // Clear cinematic flag when night phase unmounts
+    useEffect(() => {
+        return () => {
+            sessionStorage.removeItem('mafia_cinematic_shown');
+        };
+    }, []);
     const [isProcessing, setIsProcessing] = useState(false);
     const publicClient = usePublicClient();
 
@@ -279,8 +286,29 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         return gameState.players.find(p => p.address.toLowerCase() === nightState.committedTarget?.toLowerCase())?.name || 'Unknown';
     }, [gameState.players, nightState.committedTarget]);
 
-    // Storage key for night commit data
-    const NIGHT_COMMIT_KEY = `mafia_night_commit_${currentRoomId}_${address ? address.toLowerCase() : ''}`;
+    // Storage key for night commit data (unique per room and day to avoid stale data)
+    const NIGHT_COMMIT_KEY = `mafia_night_commit_${currentRoomId}_${address ? address.toLowerCase() : ''}_day${gameState.dayCount}`;
+
+    // Restore state from localStorage on mount
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const saved = localStorage.getItem(NIGHT_COMMIT_KEY);
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                console.log('[NightPhase] Restoring state from localStorage:', data);
+                setNightState(prev => ({
+                    ...prev,
+                    hasCommitted: data.hasCommitted ?? prev.hasCommitted,
+                    hasRevealed: data.hasRevealed ?? prev.hasRevealed,
+                    committedTarget: data.committedTarget ?? prev.committedTarget,
+                    investigationResult: data.investigationResult ?? prev.investigationResult
+                }));
+            } catch (e) {
+                console.error('[NightPhase] Failed to restore from localStorage:', e);
+            }
+        }
+    }, [NIGHT_COMMIT_KEY]);
 
     // Load mafia teammates: ask GM for all room roles (GM has them after SRA key collection)
     const loadMafiaTeammates = useCallback(async () => {
@@ -604,7 +632,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
                 hasCommitted: true,
                 hasRevealed: true,
-                committedTarget: committedTarget
+                committedTarget: committedTarget,
+                investigationResult: nightState.investigationResult
             }));
 
             addLog("Your decision is sealed.", "success");
@@ -638,7 +667,17 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                             const proof = await fetchInvestigationProofFromGM(committedTarget);
                             if (proof && proof.role !== Role.UNKNOWN) {
                                 console.log(`[Detective] Investigation proof from GM: ${proof.role}`);
-                                setNightState(prev => ({ ...prev, investigationResult: proof.role }));
+                                setNightState(prev => {
+                                    const newState = { ...prev, investigationResult: proof.role };
+                                    // Update localStorage with the result
+                                    localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
+                                        hasCommitted: newState.hasCommitted,
+                                        hasRevealed: newState.hasRevealed,
+                                        committedTarget: newState.committedTarget,
+                                        investigationResult: newState.investigationResult
+                                    }));
+                                    return newState;
+                                });
                                 return;
                             }
                         } catch (e) {
@@ -649,7 +688,17 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                         const result = await getInvestigationResultOnChain(address || '', committedTarget);
                         if (result && result.role !== Role.UNKNOWN) {
                             console.log(`[Detective] Investigation result from chain: ${result.role}`);
-                            setNightState(prev => ({ ...prev, investigationResult: result.role }));
+                            setNightState(prev => {
+                                const newState = { ...prev, investigationResult: result.role };
+                                // Update localStorage with the result
+                                localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
+                                    hasCommitted: newState.hasCommitted,
+                                    hasRevealed: newState.hasRevealed,
+                                    committedTarget: newState.committedTarget,
+                                    investigationResult: newState.investigationResult
+                                }));
+                                return newState;
+                            });
                             return;
                         }
                     }

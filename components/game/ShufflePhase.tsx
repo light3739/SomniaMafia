@@ -728,12 +728,6 @@ export const ShufflePhase: React.FC = React.memo(() => {
                     </div>
                 </div>
 
-                {/* ── FOOTER ─────────────────────────────────────────── */}
-                <div className="px-5 py-2 border-t border-[#916A47]/8 bg-black/30">
-                    <span className="font-mono text-[7px] tracking-[0.3em] text-white/30 uppercase flex justify-center">
-                        // SOMNIA NETWORK //
-                    </span>
-                </div>
             </div>
         </div>
     ), [shuffleState, gameState.players, myPlayer, isProcessing, isTxPending, isSyncing, forceSync, handleMyTurn, handleReveal, handleTimeoutKick, currentShuffler?.name, progress, currentRoomId]);

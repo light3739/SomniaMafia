@@ -362,9 +362,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                         </motion.div>
                     </AnimatePresence>
                 </div>
-                <div className="px-6 py-3 border-t border-white/[0.05] bg-[#0f0e10]">
-                    <span className="font-mono text-[9px] tracking-[0.4em] text-white/20 uppercase flex justify-center">// SOMNIA PROTOCOL // SECURE CHANNEL ACTIVE //</span>
-                </div>
+                {/* Footer removed for branding cleanup */}
             </div>
         </div>
     );

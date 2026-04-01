@@ -196,6 +196,12 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         } else if (!discussionStarted && phase === GamePhase.DAY) {
             discussionStarted = true;
         }
+        // During voting results phase, force discussion to show as completed
+        // so the full log history renders (otherwise empty when phase is NIGHT)
+        if (forceVotingActive && !discussionStarted) {
+            discussionStarted = true;
+            discussionFinished = true;
+        }
         if (!votingStarted && (phase === GamePhase.VOTING || showVotingResults || forceVotingActive)) {
             votingStarted = true;
         }
@@ -279,10 +285,12 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
                                 <TypewriterText text="> NIGHT_RESULT" className={LABEL} />
                                 <span className={VAL_BASE}>
-                                    {dayEvents.nightResult.type === 'safe'
-                                        ? <>No one was eliminated.</>
-                                        : <><span className={PLAYER_NAME}>{dayEvents.nightResult.playerName}</span> was <span className={DANGER}>eliminated</span> last night.</>
-                                    }
+                                    <TypewriterText 
+                                        text={dayEvents.nightResult.type === 'safe'
+                                            ? "No one was eliminated."
+                                            : `${dayEvents.nightResult.playerName} was eliminated last night.`}
+                                        speed={20}
+                                    />
                                 </span>
                             </motion.div>
                         )}
@@ -293,9 +301,9 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                                 <TypewriterText text="> DISCUSSION" className={LABEL} />
                                 <span className={VAL_BASE}>
                                     {dayEvents.discussionFinished ? (
-                                        <span>Discussion concluded. All players have spoken.</span>
+                                        <TypewriterText text="Discussion concluded. All players have spoken." speed={20} />
                                     ) : dayEvents.currentSpeaker ? (
-                                        <>Active speaker: <span className={PLAYER_NAME}>{dayEvents.currentSpeaker}</span></>
+                                        <TypewriterText text={`Active speaker: ${dayEvents.currentSpeaker}`} speed={20} />
                                     ) : (
                                         <span className="animate-pulse">Waiting for discussion to start...</span>
                                     )}
@@ -308,11 +316,10 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
                                 <TypewriterText text="> VOTING" className={LABEL} />
                                 <span className={`${VAL_BASE} flex items-center gap-2 flex-wrap`}>
-                                    <span>Voting phase has started.</span>
-                                    <span>Quorum —</span>
-                                    <span className={`font-bold tabular-nums ${quorumData.current >= quorumData.needed ? 'text-[#8B0000]' : 'text-white/80'}`}>
-                                        {quorumData.needed}
-                                    </span>
+                                    <TypewriterText 
+                                        text={`Voting phase has started. Quorum — ${quorumData.needed}`}
+                                        speed={20}
+                                    />
                                 </span>
                             </motion.div>
                         )}
@@ -322,10 +329,12 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
                                 <TypewriterText text="> VOTING_RESULT" className={LABEL} />
                                 <span className={VAL_BASE}>
-                                    {dayEvents.votingResult.type === 'eliminated'
-                                        ? <><span className={PLAYER_NAME}>{dayEvents.votingResult.playerName || 'A player'}</span> was <span className={DANGER}>eliminated</span> by vote.</>
-                                        : <><span className={PLAYER_NAME}>No one</span> was eliminated.</>
-                                    }
+                                    <TypewriterText 
+                                        text={dayEvents.votingResult.type === 'eliminated'
+                                            ? `${dayEvents.votingResult.playerName || 'A player'} was eliminated by vote.`
+                                            : "No one was eliminated."}
+                                        speed={20}
+                                    />
                                 </span>
                             </motion.div>
                         )}
@@ -334,9 +343,11 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         {(dayEvents.nightFallen || showNightFalls) && (
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 pt-2">
                                 <TypewriterText text="> SYSTEM" className={LABEL} />
-                                <span className="font-mono text-[13px] font-bold uppercase tracking-[0.1em] text-[#916A47] drop-shadow-[0_0_8px_rgba(145,106,71,0.4)]">
-                                    NIGHT HAS FALLEN
-                                </span>
+                                <TypewriterText 
+                                    text="NIGHT HAS FALLEN" 
+                                    className="font-mono text-[13px] font-bold uppercase tracking-[0.1em] text-[#916A47] drop-shadow-[0_0_8px_rgba(145,106,71,0.4)]"
+                                    speed={30}
+                                />
                             </motion.div>
                         )}
 

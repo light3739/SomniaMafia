@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Role } from '../../types';
@@ -25,13 +25,35 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
 }) => {
     const [showDetectiveResult, setShowDetectiveResult] = React.useState(false);
 
+    // Track if this is a remount (from state sync flickering)
+    // so we skip the slow entrance animations and show content immediately
+    const isRemountRef = useRef(false);
+    const [skipAnim, setSkipAnim] = useState(false);
+
+    useEffect(() => {
+        const CINEMATIC_KEY = 'mafia_cinematic_shown';
+        const wasShown = sessionStorage.getItem(CINEMATIC_KEY);
+        if (wasShown) {
+            // Component remounted — skip entrance animations
+            isRemountRef.current = true;
+            setSkipAnim(true);
+        } else {
+            // First mount this night — play animations normally
+            sessionStorage.setItem(CINEMATIC_KEY, '1');
+        }
+        return () => {
+            // Don't clear on unmount — keep flag alive for remount detection
+            // It will be cleared when night phase ends (via NightPhase cleanup)
+        };
+    }, []);
+
     // Delayed detective result reveal for suspense
     React.useEffect(() => {
         if (role === Role.DETECTIVE && investigationResult != null) {
-            const t = setTimeout(() => setShowDetectiveResult(true), 3500);
+            const t = setTimeout(() => setShowDetectiveResult(true), skipAnim ? 500 : 3500);
             return () => clearTimeout(t);
         }
-    }, [role, investigationResult]);
+    }, [role, investigationResult, skipAnim]);
 
     // АБСОЛЮТНО ПЛОСКИЙ И ЖЕСТКИЙ ДИЗАЙН (Minimalist Brutalism / Noir)
     const configs: Record<string, {
@@ -89,14 +111,22 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
     const config = configs[role] || fallbackConfig;
     const isSunRising = timeLeft !== null && timeLeft !== undefined && timeLeft <= 0;
 
+    // Animation durations — skip slow animations on remount
+    const fadeIn = skipAnim ? 0.1 : 1.5;
+    const iconDelay = skipAnim ? 0 : 0.5;
+    const titleDelay = skipAnim ? 0 : 1.5;
+    const lineDelay = skipAnim ? 0 : 2;
+    const descDelay = skipAnim ? 0 : 2.5;
+    const footerDelay = skipAnim ? 0 : 3.5;
+
     const content = (
         // Используем fixed inset-0 z-[9000] (под заставками z-10000).
         // createPortal вытаскивает нас из контейнера GameLayout, поэтому scale не обрезает фон.
         <motion.div
-            initial={{ opacity: 0 }}
+            initial={{ opacity: skipAnim ? 1 : 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 1.5, ease: "easeOut" }} // Медленное, кинематографичное затухание
+            transition={{ duration: fadeIn, ease: "easeOut" }}
             className="fixed inset-0 z-[9000] flex flex-col items-center bg-[#050505] overflow-y-auto overflow-x-hidden custom-scrollbar"
         >
             {/* ОЧЕНЬ тусклый, едва заметный радиальный свет — breathing pulse */}
@@ -166,9 +196,9 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
 
                 {/* Иконка медленно выплывает из темноты */}
                 <motion.div
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: skipAnim ? 1 : 0, y: skipAnim ? 0 : 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 2, ease: "easeOut", delay: 0.5 }}
+                    transition={{ duration: skipAnim ? 0.1 : 2, ease: "easeOut", delay: iconDelay }}
                     className="mb-8 md:mb-10"
                 >
                     {config.icon}
@@ -176,9 +206,9 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
 
                 {/* Жесткая типографика */}
                 <motion.h3
-                    initial={{ opacity: 0 }}
+                    initial={{ opacity: skipAnim ? 1 : 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ duration: 2, delay: 1.5 }}
+                    transition={{ duration: skipAnim ? 0.1 : 2, delay: titleDelay }}
                     className="text-2xl md:text-3xl font-['Cinzel'] font-light tracking-[0.3em] text-white/90 uppercase"
                 >
                     {config.title}
@@ -186,9 +216,9 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
 
                 {/* Резкая линия-разделитель (Ключевой элемент премиального дизайна) */}
                 <motion.div
-                    initial={{ scaleX: 0 }}
+                    initial={{ scaleX: skipAnim ? 1 : 0 }}
                     animate={{ scaleX: 1 }}
-                    transition={{ duration: 1.5, delay: 2, ease: "circOut" }}
+                    transition={{ duration: skipAnim ? 0.1 : 1.5, delay: lineDelay, ease: "circOut" }}
                     className={`w-16 h-[1px] my-6 md:my-8 ${config.accent}`}
                 />
 
@@ -219,9 +249,9 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
                     ) : (
                         <motion.p
                             key="desc"
-                            initial={{ opacity: 0 }}
+                            initial={{ opacity: skipAnim ? 1 : 0 }}
                             animate={{ opacity: 1 }}
-                            transition={{ duration: 2, delay: 2.5 }}
+                            transition={{ duration: skipAnim ? 0.1 : 2, delay: descDelay }}
                             className="text-white/50 text-xs md:text-sm font-sans uppercase tracking-widest max-w-[280px] leading-relaxed"
                         >
                             {config.desc}
@@ -234,9 +264,9 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
             <div className="flex-1 w-full flex flex-col items-center justify-end pb-8 md:pb-12 z-10 min-h-[60px] shrink-0">
                 {/* Awaiting Sunrise */}
                 <motion.div
-                    initial={{ opacity: 0 }}
+                    initial={{ opacity: skipAnim ? 1 : 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ duration: 2, delay: 3.5 }}
+                    transition={{ duration: skipAnim ? 0.1 : 2, delay: footerDelay }}
                     className="flex flex-col items-center"
                 >
                     <div className="flex flex-col items-center group cursor-pointer" onClick={() => (window as any).refreshGame && (window as any).refreshGame()}>
