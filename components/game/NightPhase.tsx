@@ -600,6 +600,13 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 committedTarget: committedTarget
             }));
 
+            // Fix: Persist committed target so cinematic restoration doesn't show "someone"
+            localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
+                hasCommitted: true,
+                hasRevealed: true,
+                committedTarget: committedTarget
+            }));
+
             addLog("Your decision is sealed.", "success");
             setSelectedTarget(null);
 
@@ -678,6 +685,14 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 hasRevealed: true,
                 committedTarget: '0x0000000000000000000000000000000000000000' as `0x${string}`
             }));
+            
+            // Save state so "someone" is not shown on remount
+            localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
+                hasCommitted: true,
+                hasRevealed: true,
+                committedTarget: '0x0000000000000000000000000000000000000000'
+            }));
+            
             setSelectedTarget(null);
         } catch (e: any) {
             addLog(e.message || "Skip failed", "danger");

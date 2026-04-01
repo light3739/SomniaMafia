@@ -115,11 +115,11 @@ export function useEventPoller(deps: PollerDeps) {
                         break;
 
                     case 'DayStarted':
-                        addLog(`Day ${args.dayNumber} has begun`, "phase");
+                        setTimeout(() => addLog(`Day ${args.dayNumber} has begun`, "phase"), 4000);
                         break;
 
                     case 'VotingStarted':
-                        addLog("Voting Phase Started", "phase", 'VOTING_STARTED');
+                        setTimeout(() => addLog("Voting Phase Started", "phase", 'VOTING_STARTED'), 4000);
                         break;
 
                     case 'NightStarted':
@@ -131,17 +131,17 @@ export function useEventPoller(deps: PollerDeps) {
                             const healedStr = args.healed ? (args.healed as string).toLowerCase() : '0x00';
 
                             if (killedStr === healedStr) {
-                                addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true });
+                                setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 4000);
                             } else {
                                 let killedPlayer = refs.playersRef.current.find(p => p.address.toLowerCase() === killedStr);
                                 if (!killedPlayer) {
                                     console.warn("[NightFinalized] Killed player missing locally. Will refresh.");
                                 }
                                 const name = killedPlayer?.name || args.killed.slice(0, 6);
-                                addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name });
+                                setTimeout(() => addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name }), 4000);
                             }
                         } else {
-                            addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true });
+                            setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 4000);
                         }
                         break;
 
@@ -206,12 +206,19 @@ export function useEventPoller(deps: PollerDeps) {
 
                         if (votingFinalizedTimerRef.current) clearTimeout(votingFinalizedTimerRef.current);
                         votingFinalizedTimerRef.current = setTimeout(() => {
-                            console.log("[VotingFinalized] Results phase ended. Proceeding to Night.");
-                            setShowVotingResults(false);
+                            // 1. Сначала печатаем лог в консоли
                             addLog("Night has fallen...", "night", 'NIGHT_FALLS');
-                            setVoteMap({});
+                            
+                            // 2. Ждем 3 секунды, пока он напечатается, и только потом 
+                            // снимаем результаты, что автоматически затриггерит заставку NightFalls!
+                            setTimeout(() => {
+                                console.log("[VotingFinalized] Results phase ended. Proceeding to Night.");
+                                setShowVotingResults(false);
+                                setVoteMap({});
+                            }, 3000);
+
                             votingFinalizedTimerRef.current = null;
-                        }, 10000);
+                        }, 5000);
 
                         break;
                 }

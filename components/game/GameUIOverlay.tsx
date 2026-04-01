@@ -1,18 +1,18 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { BackgroundMusic } from '../ui/BackgroundMusic';
 import { ChatToggleButton } from './DiscussionChat';
+import { SessionKeyBanner } from './SessionKeyBanner';
 import { useGameContext } from '@/contexts/GameContext';
 import { useAccount } from 'wagmi';
 import { GamePhase } from '@/types';
 
 /**
  * GameUIOverlay - Renders game-specific UI elements that need GameContext access
- * Includes: BackgroundMusic with integrated Chat button
+ * Includes: Chat button, SessionKeyBanner, and confirming indicator.
  */
 export const GameUIOverlay: React.FC = () => {
-    const { chainId } = useAccount();
+    const { chainId, address } = useAccount();
     const { gameState, myPlayer, currentRoomId, isTxConfirming } = useGameContext();
     const [isChatExpanded, setIsChatExpanded] = useState(false);
 
@@ -51,7 +51,7 @@ export const GameUIOverlay: React.FC = () => {
             }
         }, 5000);
         return () => clearInterval(interval);
-    }, [currentRoomId, gameState.phase, gameState.dayCount, myPlayer?.address]);
+    }, [currentRoomId, gameState.phase, gameState.dayCount, myPlayer?.address, chainId]);
 
     // Only show chat button during DAY phase
     const showChatButton = gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING;
@@ -77,19 +77,26 @@ export const GameUIOverlay: React.FC = () => {
                     <span className="text-[#916A47]/80 text-[10px] uppercase tracking-widest font-mono">Confirming</span>
                 </div>
             )}
-            {/* Background Music with Chat Button (chat panel is integrated in ChatToggleButton) */}
-            <BackgroundMusic
-                isChatExpanded={isChatExpanded}
-                additionalButtons={
-                    showChatButton ? (
-                        <ChatToggleButton
-                            isExpanded={isChatExpanded}
-                            onToggle={() => setIsChatExpanded(!isChatExpanded)}
-                            canWrite={canWrite}
-                        />
-                    ) : undefined
-                }
-            />
+            
+            {/* Session Key Banner (Sessionic) */}
+            {currentRoomId && gameState.phase !== GamePhase.LOBBY && (
+                <div className="fixed bottom-6 left-6 z-[100]">
+                    <SessionKeyBanner 
+                        roomId={Number(currentRoomId)} 
+                    />
+                </div>
+            )}
+
+            {/* Chat Button */}
+            {showChatButton && (
+                <div className="fixed bottom-6 right-[140px] z-[100] pointer-events-auto">
+                    <ChatToggleButton
+                        isExpanded={isChatExpanded}
+                        onToggle={() => setIsChatExpanded(!isChatExpanded)}
+                        canWrite={canWrite}
+                    />
+                </div>
+            )}
         </>
     );
 };

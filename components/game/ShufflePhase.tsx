@@ -661,9 +661,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                     <div className="flex-1 flex flex-col items-center justify-center p-8 gap-7">
                         {/* Shuffle ASCII Spinner */}
                         <div className="w-10 h-10 flex items-center justify-center opacity-80">
-                            {shuffleState.hasRevealed ? (
-                                <span className="font-mono text-[#916A47] text-2xl">✓</span>
-                            ) : shuffleState.isFailed ? (
+                            {shuffleState.isFailed ? (
                                 <span className="font-mono text-[#8B0000] text-2xl">✗</span>
                             ) : (
                                 <AsciiSpinner className="text-[#916A47] text-3xl" />
@@ -674,17 +672,15 @@ export const ShufflePhase: React.FC = React.memo(() => {
                         <div className="text-center">
                             <p className="font-mono text-[10px] tracking-[0.35em] text-white/50 uppercase mb-2">&gt; STATUS</p>
                             <p className={`font-mono text-[16px] tracking-wide uppercase ${shuffleState.isFailed ? 'text-[#8B0000]' :
-                                shuffleState.hasRevealed ? 'text-[#916A47]' :
                                     'text-white/80'
                                 }`}>
                                 {(() => {
                                     if (shuffleState.isFailed) return '!! CONNECTION_LOST';
-                                    if (shuffleState.hasRevealed) return 'STANDBY // AWAITING_OPERATIVES';
                                     
                                     const name = currentShuffler?.name?.toUpperCase() || 'PLAYER';
                                     return `PENDING // ${name}`;
                                 })()}
-                                {!shuffleState.hasRevealed && !shuffleState.isFailed && (
+                                {!shuffleState.isFailed && (
                                     <span className="animate-pulse ml-1 text-[#916A47]">▌</span>
                                 )}
                             </p>
@@ -703,7 +699,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                                     animate={{ width: `${progress}%` }}
                                     transition={{ duration: 0.8, ease: 'easeOut' }}
                                 />
-                                {!shuffleState.isFailed && !shuffleState.hasRevealed && progress > 0 && (
+                                {!shuffleState.isFailed && progress > 0 && (
                                     <motion.div
                                         className="absolute top-0 h-full w-4 bg-white/20 blur-[2px] rounded-full"
                                         animate={{ left: `${Math.max(progress - 2, 0)}%` }}

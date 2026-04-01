@@ -255,6 +255,10 @@ export function useGameDataSync(deps: DataSyncDeps) {
                     console.log('[Win Condition Calculated Local]', winner);
                     finalPhase = GamePhase.ENDED;
                 }
+                
+                if (prev.phase === GamePhase.ENDED) {
+                    finalPhase = GamePhase.ENDED;
+                }
 
                 if (phase === GamePhase.ENDED && !resolvedWinner) {
                     if (prev.winner) {
