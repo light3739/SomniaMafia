@@ -297,6 +297,11 @@ export function useEndGame(deps: EndGameDeps) {
         }
     }, [refs, txEngine, dataSync, setIsTxPending, setGameState, addLog, debugDepositAfterEnd]);
 
+    const triggerAutoWinCheckRef = React.useRef(triggerAutoWinCheck);
+    React.useEffect(() => {
+        triggerAutoWinCheckRef.current = triggerAutoWinCheck;
+    }, [triggerAutoWinCheck]);
+
     // === POLLING ===
     React.useEffect(() => {
         if (!currentRoomId || isTestMode) return;
@@ -309,12 +314,12 @@ export function useEndGame(deps: EndGameDeps) {
                 refs.phaseRef.current >= GamePhase.DAY &&
                 refs.phaseRef.current !== GamePhase.ENDED
             ) {
-                triggerAutoWinCheck();
+                triggerAutoWinCheckRef.current();
             }
         }, 10000); // Check every 10s
 
         return () => clearInterval(iv);
-    }, [refs, triggerAutoWinCheck, isTestMode, currentRoomId]);
+    }, [refs, isTestMode, currentRoomId]);
 
     return {
         endGameZK,
