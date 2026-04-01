@@ -18,7 +18,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { GamePhase, GameState, Player, Role, LogEntry, type GameEventType, type GameEventData } from '../types';
-import type { GameContextType } from './gameContext.types';
+import type { GameContextType, DiscussionState } from './gameContext.types';
 
 import {
     useGameRefs,
@@ -109,6 +109,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (typeof window !== 'undefined') return localStorage.getItem('mafia_use_embedded_wallet') !== 'false';
         return true;
     });
+    const [discussionState, setDiscussionState] = useState<DiscussionState | null>(null);
 
     // Persist embedded wallet preference
     useEffect(() => {
@@ -265,6 +266,46 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setGameState, setVoteMap, setShowVotingResults, addLog,
     });
 
+    // ==================== SHARED DISCUSSION POLLING ====================
+    const fetchDiscussionState = useCallback(async () => {
+        if (gameState.phase !== GamePhase.DAY || !currentRoomId) return;
+        try {
+            const res = await fetch(`/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${refs.stableAddress || ''}&chainId=${refs.runtimeChain.id || ''}&t=${Date.now()}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            setDiscussionState(data);
+            return data;
+        } catch (e) {
+            console.error('[Discussion Polling] Error:', e);
+            throw e;
+        }
+    }, [gameState.phase, gameState.dayCount, currentRoomId, refs.stableAddress, refs.runtimeChain.id]);
+
+    useEffect(() => {
+        const isDay = gameState.phase === GamePhase.DAY;
+        if (!isDay || !currentRoomId || discussionState?.finished) {
+            if (!isDay && discussionState !== null) setDiscussionState(null);
+            return;
+        }
+
+        let timer: NodeJS.Timeout;
+        const poll = async () => {
+            try {
+                const data = await fetchDiscussionState();
+                if (gameState.phase === GamePhase.DAY && !data?.finished) {
+                    timer = setTimeout(poll, (document.hidden ? 10000 : 5000));
+                }
+            } catch (e) {
+                if (gameState.phase === GamePhase.DAY) {
+                    timer = setTimeout(poll, 10000);
+                }
+            }
+        };
+
+        poll();
+        return () => { if (timer) clearTimeout(timer); };
+    }, [gameState.phase, currentRoomId, discussionState?.finished, fetchDiscussionState]);
+
     // ==================== FETCH ROLE ON PHASE CHANGE ====================
     const prevPhaseForRoleRef = React.useRef<GamePhase>(GamePhase.LOBBY);
     useEffect(() => {
@@ -332,6 +373,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setCurrentRoomId,
         lobbyPassword, setLobbyPassword,
         myPlayer, addLog,
+        discussionState, setDiscussionState, fetchDiscussionState,
 
         // Lobby
         createLobbyOnChain: lobby.createLobbyOnChain,
@@ -387,6 +429,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         playerMarks, voteMap, useEmbeddedWallet,
         refs.runtimeContractAddress, refs.runtimeChain, refs.publicClient, refs.stableAddress,
         lobbyPassword, myPlayer, addLog, setCurrentRoomId,
+        discussionState, setDiscussionState, fetchDiscussionState,
         lobby, shuffle, role, voting, night, chat, tournaments, endGame,
         dataSync.refreshPlayersList,
         kickStalledPlayerOnChain, handlePlayerAction, canActOnPlayer, getActionLabel,

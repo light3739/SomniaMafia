@@ -112,4 +112,15 @@ export interface GameContextType {
     useEmbeddedWallet: boolean;
     setUseEmbeddedWallet: (v: boolean) => void;
     runtimeChain?: any;
+
+    discussionState: DiscussionState | null;
+    setDiscussionState: React.Dispatch<React.SetStateAction<DiscussionState | null>>;
+    fetchDiscussionState: () => Promise<void>;
+}
+
+export interface DiscussionState {
+    active: boolean;
+    currentSpeakerAddress: string | null;
+    timeRemaining: number;
+    finished?: boolean;
 }
