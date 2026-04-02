@@ -256,7 +256,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             setLobbyPassword('');
         }
 
-        const success = await joinLobbyOnChain(BigInt(room.id));
+        const success = await joinLobbyOnChain(BigInt(room.id), pass);
         if (success) {
             setLobbyName(room.name || `Room #${room.id}`);
             router.push('/waiting');
