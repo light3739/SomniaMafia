@@ -39,12 +39,17 @@ export function useEventPoller(deps: PollerDeps) {
 
     // --- Poller Definition ---
 
+    const isPollingRef = useRef(false);
+
     // === POLL EVENTS ===
     const pollEvents = useCallback(async () => {
+        if (isPollingRef.current) return;
+        
         const roomId = refs.currentRoomIdRef.current;
         const pClient = refs.publicClientRef.current;
         if (!pClient || !roomId || !lastProcessedBlockRef.current) return;
 
+        isPollingRef.current = true;
         try {
             const currentBlock = await pClient.getBlockNumber();
             if (currentBlock < lastProcessedBlockRef.current) return;
@@ -129,24 +134,14 @@ export function useEventPoller(deps: PollerDeps) {
                             const healedStr = args.healed ? (args.healed as string).toLowerCase() : '0x00';
 
                             if (killedStr === healedStr) {
-                                if (isHistorical) addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true });
-                                else setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 5000);
+                                addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true });
                             } else {
-                                if (isHistorical) {
-                                    setTimeout(() => {
-                                        const killedPlayer = refs.playersRef.current.find(p => p.address.toLowerCase() === killedStr);
-                                        const name = killedPlayer?.name || (args.killed as string).slice(0, 6);
-                                        addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name });
-                                    }, 1000);
-                                } else {
-                                    const killedPlayer = refs.playersRef.current.find(p => p.address.toLowerCase() === killedStr);
-                                    const name = killedPlayer?.name || (args.killed as string).slice(0, 6);
-                                    setTimeout(() => addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name }), 5000);
-                                }
+                                const killedPlayer = refs.playersRef.current.find(p => p.address.toLowerCase() === killedStr);
+                                const name = killedPlayer?.name || (args.killed as string).slice(0, 6);
+                                addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name });
                             }
                         } else {
-                            if (isHistorical) addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true });
-                            else setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 5000);
+                            addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true });
                         }
                         break;
 
@@ -237,6 +232,8 @@ export function useEventPoller(deps: PollerDeps) {
             lastProcessedBlockRef.current = currentBlock + 1n;
         } catch (e) {
             console.error("[Smart Poller] Error:", e);
+        } finally {
+            isPollingRef.current = false;
         }
     }, [refs, dataSync, setGameState, setVoteMap, setShowVotingResults, addLog, votingFinalizedTimerRef]);
 
