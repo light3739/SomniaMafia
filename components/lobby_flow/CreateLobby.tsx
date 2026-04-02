@@ -168,7 +168,7 @@ export const CreateLobby: React.FC = () => {
 
                                 {/* Анимированный ползунок (Framer Motion) */}
                                 <motion.div
-                                    className="absolute top-[12px] w-[20px] h-[20px] rounded-full bg-white/90 border border-white/10 pointer-events-none z-20"
+                                    className="absolute top-[12px] w-[20px] h-[20px] rounded-full bg-[#C49A3C] border border-white/20 shadow-[0_0_10px_rgba(196,154,60,0.4)] pointer-events-none z-20"
                                     animate={{
                                         left: `calc(${((maxPlayers - 10) / 6) * 100}% - ${((maxPlayers - 10) / 6) * 20}px)`,
                                         scale: sliderActive && !isTxPending ? 1.15 : 1
