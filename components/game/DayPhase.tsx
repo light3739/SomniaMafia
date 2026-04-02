@@ -92,6 +92,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
 
         const check = async () => {
             if (votingTimeoutRef.current) return;
+            if (showVotingResults) return; // Don't trigger transition while results overlay is active
 
             const now = Math.floor(Date.now() / 1000);
             const past = now - deadline;
@@ -169,8 +170,9 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                 body: JSON.stringify({ roomId: currentRoomId.toString(), dayCount: gameState.dayCount, action: 'skip', playerAddress: myPlayer.address, signature: signed.signature, signerAddress: signed.signerAddress, nonce: signed.nonce, timestamp: signed.timestamp, chainId })
             });
             await fetchDiscussionState();
+            emitGameSignal({ type: 'OPTIMISTIC_SPEAKER', playerName: myPlayer.name || 'Unknown', playerAddress: myPlayer.address, roomId: currentRoomId.toString() });
         } catch (e) { console.error(e); } finally { setIsProcessing(false); }
-    }, [currentRoomId, myPlayer?.address, gameState.dayCount, walletClient, chainId, fetchDiscussionState]);
+    }, [currentRoomId, myPlayer?.address, myPlayer?.name, gameState.dayCount, walletClient, chainId, fetchDiscussionState]);
 
     // ── Effects ──
     useEffect(() => {
@@ -180,6 +182,18 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
             lastSpeakerRef.current = discussionState.currentSpeakerAddress || null;
         }
     }, [isDayPhase, discussionState?.active, discussionState?.currentSpeakerAddress, gameState.players, addLog]);
+
+    // Poll fetchDiscussionState every 3 seconds during day phase
+    useEffect(() => {
+        if (!isDayPhase || !currentRoomId || isTestMode) return;
+        
+        // Fetch immediately on enter
+        fetchDiscussionState();
+        
+        // And poll every 3 seconds to keep non-hosts in sync
+        const iv = setInterval(fetchDiscussionState, 3000);
+        return () => clearInterval(iv);
+    }, [isDayPhase, currentRoomId, isTestMode, fetchDiscussionState]);
 
     useEffect(() => {
         // Skip phase-change side-effects while voting results are displayed.

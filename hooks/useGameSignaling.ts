@@ -65,7 +65,7 @@ const decoder = new TextDecoder();
 
 export function useGameSignaling() {
     const room = useRoomContext();
-    const { setVoteMap, setGameState, currentRoomId, handleIncomingMafiaSignal } = useGameContext();
+    const { setVoteMap, setGameState, currentRoomId, handleIncomingMafiaSignal, fetchDiscussionState } = useGameContext();
     const { address } = useAccount();
 
     // Ref to store latest values without re-subscribing DataReceived
@@ -127,9 +127,8 @@ export function useGameSignaling() {
                     }
 
                     case 'OPTIMISTIC_SPEAKER': {
-                        // Speaker is already handled by discussion polling,
-                        // this is just for rooms where polling lags behind.
-                        // No-op for now — handled by liveDiscussion prop in GameLog.
+                        console.log(`[Signaling] ⚡ OPTIMISTIC_SPEAKER from ${data.playerName}`);
+                        fetchDiscussionState();
                         break;
                     }
 

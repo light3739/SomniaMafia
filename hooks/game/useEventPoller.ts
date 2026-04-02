@@ -122,6 +122,8 @@ export function useEventPoller(deps: PollerDeps) {
                         break;
 
                     case 'NightFinalized':
+                        if (roomId) await dataSync.fetchGameData(roomId);
+                        
                         if (args.killed && args.killed !== '0x0000000000000000000000000000000000000000') {
                             const killedStr = (args.killed as string).toLowerCase();
                             const healedStr = args.healed ? (args.healed as string).toLowerCase() : '0x00';
@@ -133,12 +135,12 @@ export function useEventPoller(deps: PollerDeps) {
                                 if (isHistorical) {
                                     setTimeout(() => {
                                         const killedPlayer = refs.playersRef.current.find(p => p.address.toLowerCase() === killedStr);
-                                        const name = killedPlayer?.name || args.killed.slice(0, 6);
+                                        const name = killedPlayer?.name || (args.killed as string).slice(0, 6);
                                         addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name });
                                     }, 1000);
                                 } else {
                                     const killedPlayer = refs.playersRef.current.find(p => p.address.toLowerCase() === killedStr);
-                                    const name = killedPlayer?.name || args.killed.slice(0, 6);
+                                    const name = killedPlayer?.name || (args.killed as string).slice(0, 6);
                                     setTimeout(() => addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name }), 5000);
                                 }
                             }
