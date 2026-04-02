@@ -184,15 +184,20 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
 
     useEffect(() => {
         // Skip phase-change side-effects while voting results are displayed.
-        // At that point gameState.phase is already NIGHT (chain synced ahead),
-        // but DayPhase is still mounted — firing here would pollute the game log.
         if (showVotingResults) return;
         if (gameState.phase !== lastLoggedPhase.current) {
-            if (isDayPhase) { discussionStartedRef.current = false; setDiscussionState(null); addLog("Day Phase started.", "info"); }
-            else if (isVotingPhase) { playVotingStart(); addLog("Voting Phase started.", "warning"); }
+            if (isDayPhase) { 
+                discussionStartedRef.current = false; 
+                setDiscussionState(null);
+                // System log "Day X has begun" is now handled by useEventPoller with delay
+            }
+            else if (isVotingPhase) { 
+                playVotingStart(); 
+                // System log "Voting Phase started" is now handled by useEventPoller with delay
+            }
             lastLoggedPhase.current = gameState.phase;
         }
-    }, [gameState.phase, isDayPhase, isVotingPhase, addLog, playVotingStart, showVotingResults]);
+    }, [gameState.phase, isDayPhase, isVotingPhase, playVotingStart, showVotingResults]);
 
     // When voting results finish, reset the phase tracker so the logging effect
     // can fire correctly for the new day transition.
