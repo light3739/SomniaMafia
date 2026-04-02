@@ -24,7 +24,7 @@ export interface GameContextType {
     setShowVotingResults: (val: boolean) => void;
 
     // Lobby
-    joinLobbyOnChain: (roomId: bigint | number) => Promise<boolean>;
+    joinLobbyOnChain: (roomId: bigint | number, passwordOverride?: string) => Promise<boolean>;
 
     // Shuffle (V4: commit-reveal)
     startGameOnChain: () => Promise<void>;

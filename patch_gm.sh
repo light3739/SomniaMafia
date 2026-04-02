@@ -1,0 +1,1 @@
+sed -i 's/const roles = store.resolvedRoles.get(roomKey);/const roles = store.resolvedRoles.get(roomKey);\n      if (room.phase < 3 || room.phase > 5) return res.json({ winDetected: false, message: "Game not active" });/g' ../gm-server/src/routes/winRoutes.ts

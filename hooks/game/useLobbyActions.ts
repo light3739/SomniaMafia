@@ -226,12 +226,12 @@ export function useLobbyActions(deps: LobbyDeps) {
     }, [refs, wallet, txEngine, dataSync, setKeys, setCurrentRoomId, setIsTxPending, addLog, uploadAvatar]);
 
     // === JOIN LOBBY ===
-    const joinLobbyOnChain = useCallback(async (roomId: bigint | number): Promise<boolean> => {
+    const joinLobbyOnChain = useCallback(async (roomId: bigint | number, passwordOverride?: string): Promise<boolean> => {
         const pClient = refs.publicClientRef.current;
         const targetChain = refs.runtimeChainRef.current;
         const myAddr = refs.addressRef.current;
         const name = refs.playerNameRef.current;
-        const lobbyPassword = refs.lobbyPasswordRef.current;
+        const lobbyPassword = passwordOverride ?? refs.lobbyPasswordRef.current;
         const avatarUrl = refs.avatarUrlRef.current;
 
         if (!name || !myAddr || !pClient || !targetChain) { alert("Connect wallet and set name first!"); return false; }
@@ -437,9 +437,9 @@ export function useLobbyActions(deps: LobbyDeps) {
                     }) as any;
 
                     const buyIn = Array.isArray(tournamentResult) ? BigInt(tournamentResult[3] || 0) : BigInt(tournamentResult.buyIn || 0);
-                    const sessionFee = Array.isArray(tournamentResult) ? BigInt(tournamentResult[7] || 0) : BigInt(tournamentResult.sessionFee || 0);
+                    const sessionFee = Array.isArray(tournamentResult) ? BigInt(tournamentResult[5] || 0) : BigInt(tournamentResult.sessionFee || 0);
 
-                    if (tournamentResult && buyIn > 0n) {
+                    if (tournamentResult) {
                         const isPart = await pClient.readContract({
                             address: refs.contractAddressRef.current,
                             abi: MAFIA_ABI,
