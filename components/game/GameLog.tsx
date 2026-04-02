@@ -47,6 +47,13 @@ interface GameLogProps {
     hideActions?: boolean;
 }
 
+// Known structured eventType values that the server maps from raw blockchain events.
+// Logs with these eventTypes are processed via structured eventData, NOT text parsing.
+const KNOWN_EVENT_TYPES = new Set([
+    'NIGHT_RESULT', 'DISCUSSION_STARTED', 'PLAYER_SPEAKING', 'DISCUSSION_ENDED',
+    'VOTING_STARTED', 'PLAYER_VOTED', 'VOTING_RESULT', 'NIGHT_FALLS', 'SYSTEM_MESSAGE',
+]);
+
 export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, forceVotingActive = false, hideActions = false }) => {
     const { gameState, showVotingResults } = useGameContext();
     const dayCount = gameState.dayCount;
@@ -54,82 +61,44 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     const alivePlayers = gameState.players.filter(p => p.isAlive);
     const logs = gameState.logs;
 
-    // Determine the actual current day based on logs, not smart contract dayCount which might be ahead.
+    // ─── Determine target day ────────────────────────────────────────────
+    // Use server's DayStarted eventData first (structured), then text fallback.
     const actualLoggedDay = useMemo(() => {
         for (let i = logs.length - 1; i >= 0; i--) {
-            const msg = logs[i].message;
-            const match = msg.match(/Day (\d+) has begun/);
-            if (match) return Number(match[1]);
+            const l = logs[i];
+            // Primary: structured eventData from server
+            if (l.eventType === 'DayStarted' && l.eventData?.dayNumber) {
+                return Number(l.eventData.dayNumber);
+            }
+            // Fallback: text match (for client logs or old server format)
+            const m = l.message.match(/Day (\d+) has begun/i);
+            if (m) return Number(m[1]);
         }
         return 1;
     }, [logs]);
 
-    // Lock the day SYNCHRONOUSLY during render (not in useEffect) to avoid timing gaps.
-    // Once locked while showVotingResults is true, we keep the locked value even if actualLoggedDay advances.
+    // Lock the day synchronously during render to avoid the useEffect timing gap.
     const lockedVotingDayRef = React.useRef<number>(0);
-    const prevShowVotingResultsForDayRef = React.useRef(false);
-    if (showVotingResults && !prevShowVotingResultsForDayRef.current) {
-        // Just transitioned to showing results — lock the current day
+    const prevShowVotingResultsRef = React.useRef(false);
+    if (showVotingResults && !prevShowVotingResultsRef.current) {
         lockedVotingDayRef.current = actualLoggedDay;
     } else if (!showVotingResults) {
         lockedVotingDayRef.current = 0;
     }
-    prevShowVotingResultsForDayRef.current = showVotingResults;
+    prevShowVotingResultsRef.current = showVotingResults;
 
     const displayDay = (showVotingResults && lockedVotingDayRef.current > 0)
         ? lockedVotingDayRef.current
         : 0;
 
-    const todayLogs = useMemo(() => {
-        if (!logs.length) return [];
+    const targetDay = (showVotingResults && lockedVotingDayRef.current > 0)
+        ? lockedVotingDayRef.current
+        : actualLoggedDay;
 
-        const targetDay = (showVotingResults && lockedVotingDayRef.current > 0)
-            ? lockedVotingDayRef.current
-            : actualLoggedDay;
-
-        let startIndex = 0;
-        let foundExact = false;
-        let fallbackIndex = -1;
-
-        for (let i = logs.length - 1; i >= 0; i--) {
-            const msg = logs[i].message;
-            const dayMatch = msg.match(/Day (\d+) has begun/i);
-            if (dayMatch) {
-                const logDay = Number(dayMatch[1]);
-                if (logDay === targetDay) {
-                    startIndex = i;
-                    if (i > 0 && logs[i - 1].message.toLowerCase().includes('night result:')) {
-                        startIndex = i - 1;
-                    }
-                    foundExact = true;
-                    break;
-                }
-                if (logDay === targetDay - 1 && fallbackIndex === -1) {
-                    fallbackIndex = i;
-                }
-            } else if (msg.toLowerCase().includes('game started!')) {
-                startIndex = i;
-                foundExact = true;
-                break;
-            }
-        }
-
-        // Special case: Day 1 often lacks a "Day 1 has begun" marker if it started directly from "Game started"
-        if (!foundExact && targetDay === 1) {
-            startIndex = 0;
-            foundExact = true;
-        }
-
-        if (!foundExact && fallbackIndex !== -1) {
-            startIndex = fallbackIndex;
-            if (startIndex > 0 && logs[startIndex - 1].message.includes('Night Result:')) {
-                startIndex = startIndex - 1;
-            }
-        }
-
-        return logs.slice(startIndex);
-    }, [logs, actualLoggedDay, showVotingResults]);
-
+    // ─── dayEvents: single source of truth from eventType/eventData ──────
+    // Scans ALL logs directly instead of relying on todayLogs slice.
+    // Uses eventType as primary discriminator, text parsing only for
+    // client-only logs (discussion) that have no eventType.
     const dayEvents = useMemo(() => {
         let nightResult: { type: 'safe' | 'killed'; playerName?: string } | null = null;
         let discussionStarted = false;
@@ -140,10 +109,65 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         let nightFallen = false;
         let voteCasts: { voter: string; target: string }[] = [];
 
-        for (const log of todayLogs) {
-            if (log.eventType) {
+        // 1. Find the current day's start index in the logs array.
+        //    Uses both eventType and text matching for robustness.
+        let dayStartIdx = 0;
+        for (let i = logs.length - 1; i >= 0; i--) {
+            const l = logs[i];
+            const isDayMatch =
+                (l.eventType === 'DayStarted' && Number(l.eventData?.dayNumber) === targetDay) ||
+                l.message.match(new RegExp(`Day\\s+${targetDay}\\s+has begun`, 'i'));
+            if (isDayMatch) {
+                dayStartIdx = i;
+                break;
+            }
+            // Also match "Game started!" as a fallback for Day 1
+            if (targetDay === 1 && l.message.toLowerCase().includes('game started')) {
+                dayStartIdx = i;
+                // Don't break — keep looking for a more specific "Day 1" marker
+            }
+        }
+
+        // 2. Search BACKWARDS from dayStartIdx for NIGHT_RESULT.
+        //    Night result occurs at the end of the previous night, before the
+        //    current day starts. Search up to 15 entries back to handle
+        //    interleaved PlayerEliminated / other logs.
+        if (targetDay > 1) {
+            for (let i = dayStartIdx - 1; i >= Math.max(0, dayStartIdx - 15); i--) {
+                const l = logs[i];
+                // Structured path (server eventType)
+                if (l.eventType === 'NIGHT_RESULT') {
+                    if (l.eventData?.isSafe) nightResult = { type: 'safe' };
+                    else if (l.eventData?.isEliminated) nightResult = { type: 'killed', playerName: l.eventData.playerName };
+                    break;
+                }
+                // Text fallback (client log or old format)
+                if (!l.eventType || !KNOWN_EVENT_TYPES.has(l.eventType)) {
+                    const msg = l.message.toLowerCase();
+                    if (msg.includes('night result: no one died')) {
+                        nightResult = { type: 'safe' };
+                        break;
+                    }
+                    if (msg.includes('night result:') && msg.includes('was killed')) {
+                        const m = l.message.match(/Night Result: (.+?) was killed/i);
+                        nightResult = { type: 'killed', playerName: m?.[1] || 'Unknown' };
+                        break;
+                    }
+                }
+                // Stop at previous day boundary
+                if (l.eventType === 'DayStarted' || l.message.match(/Day\s+\d+\s+has begun/i)) break;
+            }
+        }
+
+        // 3. Scan from dayStartIdx to end for current day events.
+        for (let i = dayStartIdx; i < logs.length; i++) {
+            const log = logs[i];
+
+            // ── Structured eventType path (PRIMARY — server is source of truth) ──
+            if (log.eventType && KNOWN_EVENT_TYPES.has(log.eventType)) {
                 switch (log.eventType) {
                     case 'NIGHT_RESULT':
+                        // Can also appear after day start in sorted logs
                         if (log.eventData?.isSafe) nightResult = { type: 'safe' };
                         else if (log.eventData?.isEliminated) nightResult = { type: 'killed', playerName: log.eventData.playerName };
                         break;
@@ -173,47 +197,45 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         nightFallen = true;
                         break;
                 }
-            } else {
-                const msg = log.message;
-                if (msg.toLowerCase().includes('night result: no one died')) nightResult = { type: 'safe' };
-                else if (msg.toLowerCase().includes('night result:') && msg.toLowerCase().includes('was killed')) {
-                    const match = msg.match(/Night Result: (.+?) was killed/i);
-                    nightResult = { type: 'killed', playerName: match?.[1] || 'Unknown' };
-                }
-                if (msg.toLowerCase().includes('discussion phase started') || msg.toLowerCase().includes('discussion starting')) {
-                    discussionStarted = true;
-                    discussionFinished = false;
-                }
-                if (msg.toLowerCase().includes('is now speaking')) {
-                    const match = msg.match(/(.+?) is now speaking/i);
-                    currentSpeaker = match?.[1] || null;
-                }
-                if (msg.toLowerCase().includes('all players have spoken') || 
-                    msg.toLowerCase().includes('starting vote') || 
-                    msg.toLowerCase().includes('discussion concluded') ||
-                    msg.toLowerCase().includes('proceeding to vote')) {
-                    discussionFinished = true;
-                }
-                if (msg.toLowerCase().includes('voting phase started')) votingStarted = true;
-                if (msg.toLowerCase().includes('voted for')) {
-                    const match = msg.match(/(.+?) voted for (.+)/i);
-                    if (match) voteCasts.push({ voter: match[1], target: match[2] });
-                }
-                if (msg.toLowerCase().includes('eliminated') && log.type === 'danger' && !msg.toLowerCase().includes('night')) {
-                    // Match "Voting Finalized: PlayerName was eliminated!" or "PlayerName eliminated by vote"
-                    const vfMatch = msg.match(/Voting Finalized:\s*(.+?)\s+was eliminated/i);
-                    if (vfMatch) {
-                        votingResult = { type: 'eliminated', playerName: vfMatch[1] };
-                    } else {
-                        const nameMatch = msg.match(/^(.+?)\s+eliminated/i);
-                        if (nameMatch) votingResult = { type: 'eliminated', playerName: nameMatch[1] };
-                    }
-                }
-                if (msg.toLowerCase().includes('no one was eliminated')) votingResult = { type: 'no_one' };
-                if (msg.toLowerCase().includes('night has fallen')) nightFallen = true;
+                continue; // Skip text parsing for known eventTypes
             }
+
+            // ── Text parsing path (SECONDARY — for client-side logs without eventType) ──
+            const msg = log.message;
+            const lower = msg.toLowerCase();
+            if (lower.includes('night result: no one died')) nightResult = { type: 'safe' };
+            else if (lower.includes('night result:') && lower.includes('was killed')) {
+                const m = msg.match(/Night Result: (.+?) was killed/i);
+                nightResult = { type: 'killed', playerName: m?.[1] || 'Unknown' };
+            }
+            if (lower.includes('discussion phase started') || lower.includes('discussion starting')) {
+                discussionStarted = true;
+                discussionFinished = false;
+            }
+            if (lower.includes('is now speaking')) {
+                const m = msg.match(/(.+?) is now speaking/i);
+                currentSpeaker = m?.[1] || null;
+            }
+            if (lower.includes('all players have spoken') ||
+                lower.includes('starting vote') ||
+                lower.includes('discussion concluded') ||
+                lower.includes('proceeding to vote')) {
+                discussionFinished = true;
+            }
+            if (lower.includes('voting phase started')) votingStarted = true;
+            if (lower.includes('voted for')) {
+                const m = msg.match(/(.+?) voted for (.+)/i);
+                if (m) voteCasts.push({ voter: m[1], target: m[2] });
+            }
+            if (lower.includes('eliminated') && log.type === 'danger' && !lower.includes('night')) {
+                const vf = msg.match(/Voting Finalized:\s*(.+?)\s+was eliminated/i);
+                if (vf) votingResult = { type: 'eliminated', playerName: vf[1] };
+            }
+            if (lower.includes('no one was eliminated')) votingResult = { type: 'no_one' };
+            if (lower.includes('night has fallen')) nightFallen = true;
         }
 
+        // 4. Live discussion state from DayPhase polling (overrides log-based state)
         if (liveDiscussion?.active) {
             discussionStarted = true;
             discussionFinished = false;
@@ -223,21 +245,16 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             discussionFinished = true;
         }
 
-        if ((forceVotingActive || showVotingResults || hideActions) && !discussionStarted) {
+        // 5. Forced states during voting results / post-voting phase.
+        //    ALWAYS set these — no conditional on existing state.
+        if (showVotingResults || hideActions || forceVotingActive) {
             discussionStarted = true;
             discussionFinished = true;
-        } else if (showVotingResults || hideActions) {
-            discussionFinished = true;
-        }
-
-        if (forceVotingActive || showVotingResults || hideActions) {
             votingStarted = true;
         }
 
-        // FALLBACK: if showVotingResults is true but no votingResult found in todayLogs,
-        // scan the FULL logs array backwards for the latest VOTING_RESULT event.
-        // This handles race conditions where todayLogs slicing misses the log due to
-        // day advancement or server log timing.
+        // 6. FALLBACK: if showVotingResults is active but we still found no votingResult,
+        //    scan the entire log array backwards (handles race conditions with server logs).
         if (showVotingResults && !votingResult) {
             for (let i = logs.length - 1; i >= 0; i--) {
                 const l = logs[i];
@@ -246,30 +263,40 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                     else if (l.eventData?.isEliminated) votingResult = { type: 'eliminated', playerName: l.eventData.playerName };
                     break;
                 }
-                // Text fallback for logs without structured eventType
-                if (!l.eventType && l.type === 'danger' && l.message.toLowerCase().includes('eliminated') && !l.message.toLowerCase().includes('night')) {
-                    const vfMatch = l.message.match(/Voting Finalized:\s*(.+?)\s+was eliminated/i);
-                    if (vfMatch) {
-                        votingResult = { type: 'eliminated', playerName: vfMatch[1] };
-                        break;
-                    }
+                // Text fallback
+                const lower = l.message.toLowerCase();
+                if (l.type === 'danger' && lower.includes('eliminated') && !lower.includes('night')) {
+                    const vf = l.message.match(/Voting Finalized:\s*(.+?)\s+was eliminated/i);
+                    if (vf) { votingResult = { type: 'eliminated', playerName: vf[1] }; break; }
                 }
-                if (!l.eventType && l.message.toLowerCase().includes('no one was eliminated')) {
-                    votingResult = { type: 'no_one' };
-                    break;
-                }
+                if (lower.includes('no one was eliminated')) { votingResult = { type: 'no_one' }; break; }
             }
             if (votingResult) {
                 console.log('[GameLog] VOTING_RESULT recovered via full-log fallback:', votingResult);
             } else {
-                console.warn('[GameLog] showVotingResults=true but NO VOTING_RESULT found in any logs!', { logsCount: logs.length, todayLogsCount: todayLogs.length });
+                console.warn('[GameLog] showVotingResults=true but NO VOTING_RESULT found anywhere!',
+                    { logsCount: logs.length, targetDay });
             }
         }
 
-        const voteEntries = todayLogs.filter(l => 
-            l.eventType === 'PLAYER_VOTED' || 
-            (l.message.toLowerCase().includes('voted for') && !l.eventType)
-        );
+        // 7. FALLBACK: if we're past Day 1 but nightResult is still null, scan wider.
+        if (!nightResult && targetDay > 1) {
+            for (let i = logs.length - 1; i >= 0; i--) {
+                const l = logs[i];
+                if (l.eventType === 'NIGHT_RESULT') {
+                    if (l.eventData?.isSafe) nightResult = { type: 'safe' };
+                    else if (l.eventData?.isEliminated) nightResult = { type: 'killed', playerName: l.eventData.playerName };
+                    break;
+                }
+                const lower = l.message.toLowerCase();
+                if (lower.includes('night result: no one died')) { nightResult = { type: 'safe' }; break; }
+                if (lower.includes('night result:') && lower.includes('was killed')) {
+                    const m = l.message.match(/Night Result: (.+?) was killed/i);
+                    nightResult = { type: 'killed', playerName: m?.[1] || 'Unknown' };
+                    break;
+                }
+            }
+        }
 
         return {
             nightResult,
@@ -280,9 +307,8 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             voteCasts,
             votingResult,
             nightFallen,
-            voteEntries
         };
-    }, [todayLogs, logs, phase, showVotingResults, liveDiscussion, forceVotingActive, hideActions]);
+    }, [logs, targetDay, showVotingResults, liveDiscussion, forceVotingActive, hideActions]);
 
     const targetingDay = (showVotingResults && displayDay > 0) ? displayDay : dayCount;
 
@@ -294,20 +320,23 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     const [showNightFalls, setShowNightFalls] = useState(false);
     useEffect(() => {
         if (showVotingResults) {
-            console.log('[GameLog Debug]', { 
-                lockedDay: lockedVotingDayRef.current,
+            console.log('[GameLog Debug]', {
+                targetDay,
                 actualLoggedDay,
-                todayLogsCount: todayLogs.length, 
-                voteEntries: dayEvents.voteEntries.length,
+                logsCount: logs.length,
+                nightResult: dayEvents.nightResult,
+                discussionStarted: dayEvents.discussionStarted,
                 votingResult: dayEvents.votingResult,
-                displayDay, dayCount 
+                nightFallen: dayEvents.nightFallen,
+                displayDay, dayCount,
             });
             const timer = setTimeout(() => setShowNightFalls(true), 5000);
             return () => clearTimeout(timer);
         } else {
             setShowNightFalls(false);
         }
-    }, [showVotingResults, displayDay, dayCount, todayLogs.length, dayEvents.voteEntries.length, dayEvents.votingResult, actualLoggedDay]);
+    }, [showVotingResults, dayEvents.nightResult, dayEvents.discussionStarted, dayEvents.votingResult,
+        dayEvents.nightFallen, displayDay, dayCount, targetDay, actualLoggedDay, logs.length]);
 
     const itemVariants = {
         hidden: { opacity: 0, x: -10 },
@@ -323,7 +352,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         if (scrollRef.current) {
             scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
         }
-    }, [todayLogs, dayEvents.voteEntries.length]);
+    }, [logs.length, dayEvents.votingResult, showNightFalls]);
 
     return (
         <div className="flex flex-col h-full bg-transparent overflow-hidden">

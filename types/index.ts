@@ -58,13 +58,26 @@ export type GameEventType =
   | 'PLAYER_VOTED'
   | 'VOTING_RESULT'
   | 'NIGHT_FALLS'
-  | 'SYSTEM_MESSAGE';
+  | 'SYSTEM_MESSAGE'
+  // Raw blockchain event names sent by the server's logListener
+  | 'DayStarted'
+  | 'PlayerJoined'
+  | 'GameStarted'
+  | 'PlayerEliminated'
+  | 'GameEnded'
+  | 'NightStarted'
+  | 'VotingStarted'
+  | 'VoteCast'
+  | 'VotingFinalized'
+  | 'NightFinalized';
 
 export interface GameEventData {
   playerName?: string;
   targetName?: string;
   isSafe?: boolean;
   isEliminated?: boolean;
+  dayNumber?: number;
+  playerAddress?: string;
 }
 
 export interface LogEntry {
