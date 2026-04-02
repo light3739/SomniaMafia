@@ -127,7 +127,7 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: fadeIn, ease: "easeOut" }}
-            className="fixed inset-0 z-[9000] flex flex-col items-center bg-[#050505] overflow-y-auto overflow-x-hidden custom-scrollbar"
+            className="fixed inset-0 z-[9000] flex flex-col items-center bg-[#050505] overflow-hidden custom-scrollbar"
         >
             {/* ОЧЕНЬ тусклый, едва заметный радиальный свет — breathing pulse */}
             <motion.div

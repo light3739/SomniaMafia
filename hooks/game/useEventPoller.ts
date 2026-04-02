@@ -17,6 +17,7 @@ import type { GameRefs } from './useGameRefs';
 import type { GameDataSync } from './useGameDataSync';
 import type { LogEntry } from '../../types';
 import React from 'react';
+import { GM_SERVER_URL } from '../../contracts/config';
 
 interface PollerDeps {
     refs: GameRefs;
@@ -26,11 +27,12 @@ interface PollerDeps {
     setGameState: React.Dispatch<React.SetStateAction<GameState>>;
     setVoteMap: React.Dispatch<React.SetStateAction<Record<string, string>>>;
     setShowVotingResults: (v: boolean) => void;
-    addLog: (message: string, type?: LogEntry['type'], eventType?: import('../../types').GameEventType, eventData?: import('../../types').GameEventData) => void;
+    addLog: (message: string, type?: LogEntry['type'], eventType?: import('../../types').GameEventType, eventData?: import('../../types').GameEventData, id?: string) => void;
+    addLogs: (logs: LogEntry[]) => void;
 }
 
 export function useEventPoller(deps: PollerDeps) {
-    const { refs, dataSync, gameState, currentRoomId, setGameState, setVoteMap, setShowVotingResults, addLog } = deps;
+    const { refs, dataSync, gameState, currentRoomId, setGameState, setVoteMap, setShowVotingResults, addLog, addLogs } = deps;
 
     const processedEventsRef = useRef<Set<string>>(new Set());
     const lastProcessedBlockRef = useRef<bigint | null>(null);
@@ -40,6 +42,24 @@ export function useEventPoller(deps: PollerDeps) {
     // --- Poller Definition ---
 
     const isPollingRef = useRef(false);
+
+    // === POLL SERVER LOGS ===
+    const pollServerLogs = useCallback(async () => {
+        const roomId = refs.currentRoomIdRef.current;
+        const chainId = refs.runtimeChain.id;
+        if (!roomId || !chainId) return;
+
+        try {
+            const res = await fetch(`${GM_SERVER_URL}/logs/${roomId}?chainId=${chainId}&t=${Date.now()}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.logs && Array.isArray(data.logs)) {
+                addLogs(data.logs);
+            }
+        } catch (e) {
+            console.error("[Server Log Polling] Error:", e);
+        }
+    }, [refs, addLogs]);
 
     // === POLL EVENTS ===
     const pollEvents = useCallback(async () => {
@@ -259,9 +279,12 @@ export function useEventPoller(deps: PollerDeps) {
     useEffect(() => {
         if (!refs.publicClientRef.current || !currentRoomId) return;
         if (gameState.phase === GamePhase.ENDED && gameState.winner) return;
-        const interval = setInterval(pollEvents, 2000);
+        const interval = setInterval(() => {
+            pollEvents();
+            pollServerLogs();
+        }, 2000);
         return () => clearInterval(interval);
-    }, [pollEvents, gameState.phase, gameState.winner, refs, currentRoomId]);
+    }, [pollEvents, pollServerLogs, gameState.phase, gameState.winner, refs, currentRoomId]);
 
     return {
         pollEvents,
