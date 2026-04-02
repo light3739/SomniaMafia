@@ -208,7 +208,42 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             <ResponsiveGameContainer>
                 {playerPositions.map((pos, index) => {
                     const p = visualPlayers[index]; if (!p) return null;
-                    const voters = Object.entries(voteMap).filter(([_, target]) => target === p.address.toLowerCase()).map(([v]) => gameState.players.find(pl => pl.address.toLowerCase() === v)).filter((pl): pl is any => !!pl);
+                    
+                    // Logic to find voters:
+                    // 1. When not showing results, only use local voteMap (optimistic)
+                    // 2. When showing results, scan authoritative logs for all votes
+                    let voters: any[] = [];
+                    if (showVotingResults) {
+                         // Find most recent Day logs
+                         let lastDayStartIdx = -1;
+                         for (let i = gameState.logs.length - 1; i >= 0; i--) {
+                             if (gameState.logs[i].message.includes('has begun')) {
+                                 lastDayStartIdx = i;
+                                 break;
+                             }
+                         }
+                         const dayLogs = lastDayStartIdx >= 0 ? gameState.logs.slice(lastDayStartIdx) : gameState.logs;
+                         const voteMapFromLogs: Record<string, string> = {};
+                         dayLogs.forEach(l => {
+                             if (l.eventType === 'PLAYER_VOTED' && l.eventData) {
+                                 const vName = l.eventData.playerName;
+                                 const tName = l.eventData.targetName;
+                                 
+                                 if (vName && tName) {
+                                     const voter = gameState.players.find(pl => pl.name === vName);
+                                     const target = gameState.players.find(pl => pl.name === tName);
+                                     if (voter && target) {
+                                         voteMapFromLogs[voter.address.toLowerCase()] = target.address.toLowerCase();
+                                     }
+                                 }
+                             }
+                         });
+                         voters = Object.entries(voteMapFromLogs)
+                             .filter(([_, target]) => target === p.address.toLowerCase())
+                             .map(([v]) => gameState.players.find(pl => pl.address.toLowerCase() === v))
+                             .filter((pl): pl is any => !!pl);
+                    }
+
                     return (
                         <div key={p.id} className={`absolute transition-all duration-500 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`} style={{ left: pos.x, top: pos.y }}>
                             <PlayerSpot player={p} isMe={p.address.toLowerCase() === myPlayer?.address.toLowerCase()} onAction={handlePlayerAction} canAct={canActOnPlayer(p)} isSelected={selectedTarget?.toLowerCase() === p.address.toLowerCase()} isNight={isNightPhase} myRole={myPlayer?.role} mark={playerMarks[p.address.toLowerCase()] || null} onSetMark={setPlayerMark} isSpeaking={activePhase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === p.address.toLowerCase()} speechTimeRemaining={activePhase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === p.address.toLowerCase() ? discussionState.timeRemaining : 0} voters={voters} />

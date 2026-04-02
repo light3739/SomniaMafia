@@ -307,25 +307,12 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         )}
 
                         {dayEvents.votingStarted && (
-                            <div className="flex flex-col gap-3 pb-4 border-b border-dashed border-white/5">
-                                <motion.div variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3">
-                                    <TypewriterText text="> VOTING" className={LABEL} />
-                                    <span className={VAL_BASE}>
-                                        <TypewriterText text={`Voting phase started. Quorum: ${quorumData.needed}`} speed={20} />
-                                    </span>
-                                </motion.div>
-                                {dayEvents.voteEntries.map((log) => (
-                                    <motion.div key={log.id} variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3 pl-[120px] opacity-70 scale-95 origin-left">
-                                        <div className="text-[10px] font-mono text-white/20 pt-1 w-12 flex-shrink-0">
-                                            {new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                        </div>
-                                        <span className="text-[12px] font-mono text-white/60">
-                                            <span className="text-white/40 mr-2">»</span>
-                                            {log.message}
-                                        </span>
-                                    </motion.div>
-                                ))}
-                            </div>
+                            <motion.div variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
+                                <TypewriterText text="> VOTING" className={LABEL} />
+                                <span className={VAL_BASE}>
+                                    <TypewriterText text={`Voting phase started. Quorum: ${quorumData.needed}`} speed={20} />
+                                </span>
+                            </motion.div>
                         )}
 
                         {dayEvents.votingResult && (
