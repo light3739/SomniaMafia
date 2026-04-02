@@ -226,12 +226,12 @@ export function useLobbyActions(deps: LobbyDeps) {
     }, [refs, wallet, txEngine, dataSync, setKeys, setCurrentRoomId, setIsTxPending, addLog, uploadAvatar]);
 
     // === JOIN LOBBY ===
-    const joinLobbyOnChain = useCallback(async (roomId: bigint | number): Promise<boolean> => {
+    const joinLobbyOnChain = useCallback(async (roomId: bigint | number, passwordOverride?: string): Promise<boolean> => {
         const pClient = refs.publicClientRef.current;
         const targetChain = refs.runtimeChainRef.current;
         const myAddr = refs.addressRef.current;
         const name = refs.playerNameRef.current;
-        const lobbyPassword = refs.lobbyPasswordRef.current;
+        const lobbyPassword = passwordOverride ?? refs.lobbyPasswordRef.current;
         const avatarUrl = refs.avatarUrlRef.current;
 
         if (!name || !myAddr || !pClient || !targetChain) { alert("Connect wallet and set name first!"); return false; }
