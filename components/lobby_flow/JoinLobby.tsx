@@ -66,7 +66,7 @@ interface TournamentInfo {
 }
 
 function getTournamentInfo(room: any): TournamentInfo {
-    const isTournament = room.tournamentId && room.tournamentId > 0n;
+    const isTournament = room.tournamentId ? room.tournamentId > 0n : false;
     return {
         isTournament,
         prize: isTournament ? "TBD" : undefined,
@@ -256,7 +256,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             setLobbyPassword('');
         }
 
-        const success = await joinLobbyOnChain(BigInt(room.id));
+        const success = await joinLobbyOnChain(BigInt(room.id), pass);
         if (success) {
             setLobbyName(room.name || `Room #${room.id}`);
             router.push('/waiting');
