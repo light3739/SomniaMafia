@@ -130,19 +130,38 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         message: string,
         type: LogEntry['type'] = 'info',
         eventType?: GameEventType,
-        eventData?: GameEventData
+        eventData?: GameEventData,
+        id?: string
     ) => {
-        setGameState(prev => ({
-            ...prev,
-            logs: [...prev.logs.slice(-500), {
-                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                timestamp: new Date().toISOString(),
-                message,
-                type,
-                eventType,
-                eventData,
-            }],
-        }));
+        setGameState(prev => {
+            const entryId = id || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            if (prev.logs.some(l => l.id === entryId)) return prev;
+
+            return {
+                ...prev,
+                logs: [...prev.logs.slice(-500), {
+                    id: entryId,
+                    timestamp: new Date().toISOString(),
+                    message,
+                    type,
+                    eventType,
+                    eventData,
+                }],
+            };
+        });
+    }, []);
+
+    const addLogs = useCallback((newLogs: LogEntry[]) => {
+        setGameState(prev => {
+            const existingIds = new Set(prev.logs.map(l => l.id));
+            const filteredNew = newLogs.filter(l => !existingIds.has(l.id));
+            if (filteredNew.length === 0) return prev;
+
+            return {
+                ...prev,
+                logs: [...prev.logs, ...filteredNew].slice(-1000),
+            };
+        });
     }, []);
 
     // ==================== SET PLAYER MARK ====================
@@ -263,7 +282,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ==================== LEVEL 4: EVENT POLLING ====================
     useEventPoller({
         refs, dataSync, gameState, currentRoomId,
-        setGameState, setVoteMap, setShowVotingResults, addLog,
+        setGameState, setVoteMap, setShowVotingResults, addLog, addLogs
     });
 
     // ==================== SHARED DISCUSSION POLLING ====================
