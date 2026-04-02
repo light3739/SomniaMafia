@@ -195,36 +195,38 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         return () => clearInterval(iv);
     }, [isDayPhase, currentRoomId, isTestMode, fetchDiscussionState]);
 
-    useEffect(() => {
-        // Skip phase-change side-effects while voting results are displayed.
-        if (showVotingResults) return;
-        if (gameState.phase !== lastLoggedPhase.current) {
-            if (isDayPhase) { 
-                discussionStartedRef.current = false; 
-                votingStartedRef.current = false;
-                dayTimeoutRef.current = false;
-                setDiscussionState(null);
-                // System log "Day X has begun" is now handled by useEventPoller with delay
-            }
-            else if (isVotingPhase) { 
-                playVotingStart(); 
-                // System log "Voting Phase started" is now handled by useEventPoller with delay
-            }
-            lastLoggedPhase.current = gameState.phase;
-        }
-    }, [gameState.phase, isDayPhase, isVotingPhase, playVotingStart, showVotingResults]);
-
-    // When voting results finish, reset the phase tracker so the logging effect
-    // can fire correctly for the new day transition.
+    // Clear discussion state when voting results are shown to prevent stale
+    // "Active speaker: X" text bleeding into the next day's GameLog.
     const prevShowVotingResultsRef = useRef(false);
     useEffect(() => {
+        if (!prevShowVotingResultsRef.current && showVotingResults) {
+            // Results just started — clear discussion state so GameLog shows
+            // "Discussion concluded" instead of "Active speaker: X"
+            setDiscussionState(null);
+        }
         if (prevShowVotingResultsRef.current && !showVotingResults) {
             // Results just ended — invalidate lastLoggedPhase so the next
-            // phase-change fires cleanly (e.g. "Day Phase started.")
+            // phase-change fires cleanly (e.g. for new day).
             lastLoggedPhase.current = null;
         }
         prevShowVotingResultsRef.current = showVotingResults;
-    }, [showVotingResults]);
+    }, [showVotingResults, setDiscussionState]);
+
+    useEffect(() => {
+        if (gameState.phase !== lastLoggedPhase.current) {
+            if (isDayPhase) {
+                discussionStartedRef.current = false;
+                votingStartedRef.current = false;
+                dayTimeoutRef.current = false;
+                setDiscussionState(null);
+            } else if (isVotingPhase) {
+                playVotingStart();
+                // Clear discussion too when moving into voting phase
+                setDiscussionState(null);
+            }
+            lastLoggedPhase.current = gameState.phase;
+        }
+    }, [gameState.phase, isDayPhase, isVotingPhase, playVotingStart, setDiscussionState]);
 
     useEffect(() => {
         if (!isDayPhase || discussionState?.active || discussionStartedRef.current) return;
