@@ -49,14 +49,10 @@ interface GameLogProps {
 
 export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, forceVotingActive = false, hideActions = false }) => {
     const { gameState, showVotingResults } = useGameContext();
-    const votingResultsDayRef = React.useRef<number>(0);
-
     const dayCount = gameState.dayCount;
     const phase = gameState.phase;
     const alivePlayers = gameState.players.filter(p => p.isAlive);
     const logs = gameState.logs;
-
-    const [displayDay, setDisplayDay] = useState<number>(0);
 
     // Determine the actual current day based on logs, not smart contract dayCount which might be ahead.
     const actualLoggedDay = useMemo(() => {
@@ -68,22 +64,27 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         return 1;
     }, [logs]);
 
-    // Track which day to display when voting results are shown.
-    useEffect(() => {
-        if (showVotingResults && votingResultsDayRef.current === 0) {
-            votingResultsDayRef.current = actualLoggedDay;
-            setDisplayDay(actualLoggedDay);
-        } else if (!showVotingResults) {
-            votingResultsDayRef.current = 0;
-            setDisplayDay(0);
-        }
-    }, [showVotingResults, actualLoggedDay]);
+    // Lock the day SYNCHRONOUSLY during render (not in useEffect) to avoid timing gaps.
+    // Once locked while showVotingResults is true, we keep the locked value even if actualLoggedDay advances.
+    const lockedVotingDayRef = React.useRef<number>(0);
+    const prevShowVotingResultsForDayRef = React.useRef(false);
+    if (showVotingResults && !prevShowVotingResultsForDayRef.current) {
+        // Just transitioned to showing results — lock the current day
+        lockedVotingDayRef.current = actualLoggedDay;
+    } else if (!showVotingResults) {
+        lockedVotingDayRef.current = 0;
+    }
+    prevShowVotingResultsForDayRef.current = showVotingResults;
+
+    const displayDay = (showVotingResults && lockedVotingDayRef.current > 0)
+        ? lockedVotingDayRef.current
+        : 0;
 
     const todayLogs = useMemo(() => {
         if (!logs.length) return [];
 
-        const targetDay = (showVotingResults && votingResultsDayRef.current > 0)
-            ? votingResultsDayRef.current
+        const targetDay = (showVotingResults && lockedVotingDayRef.current > 0)
+            ? lockedVotingDayRef.current
             : actualLoggedDay;
 
         let startIndex = 0;
@@ -199,8 +200,14 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                     if (match) voteCasts.push({ voter: match[1], target: match[2] });
                 }
                 if (msg.toLowerCase().includes('eliminated') && log.type === 'danger' && !msg.toLowerCase().includes('night')) {
-                    const nameMatch = msg.match(/^(.+?) eliminated/i);
-                    if (nameMatch) votingResult = { type: 'eliminated', playerName: nameMatch[1] };
+                    // Match "Voting Finalized: PlayerName was eliminated!" or "PlayerName eliminated by vote"
+                    const vfMatch = msg.match(/Voting Finalized:\s*(.+?)\s+was eliminated/i);
+                    if (vfMatch) {
+                        votingResult = { type: 'eliminated', playerName: vfMatch[1] };
+                    } else {
+                        const nameMatch = msg.match(/^(.+?)\s+eliminated/i);
+                        if (nameMatch) votingResult = { type: 'eliminated', playerName: nameMatch[1] };
+                    }
                 }
                 if (msg.toLowerCase().includes('no one was eliminated')) votingResult = { type: 'no_one' };
                 if (msg.toLowerCase().includes('night has fallen')) nightFallen = true;
@@ -227,6 +234,38 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             votingStarted = true;
         }
 
+        // FALLBACK: if showVotingResults is true but no votingResult found in todayLogs,
+        // scan the FULL logs array backwards for the latest VOTING_RESULT event.
+        // This handles race conditions where todayLogs slicing misses the log due to
+        // day advancement or server log timing.
+        if (showVotingResults && !votingResult) {
+            for (let i = logs.length - 1; i >= 0; i--) {
+                const l = logs[i];
+                if (l.eventType === 'VOTING_RESULT') {
+                    if (l.eventData?.isSafe) votingResult = { type: 'no_one' };
+                    else if (l.eventData?.isEliminated) votingResult = { type: 'eliminated', playerName: l.eventData.playerName };
+                    break;
+                }
+                // Text fallback for logs without structured eventType
+                if (!l.eventType && l.type === 'danger' && l.message.toLowerCase().includes('eliminated') && !l.message.toLowerCase().includes('night')) {
+                    const vfMatch = l.message.match(/Voting Finalized:\s*(.+?)\s+was eliminated/i);
+                    if (vfMatch) {
+                        votingResult = { type: 'eliminated', playerName: vfMatch[1] };
+                        break;
+                    }
+                }
+                if (!l.eventType && l.message.toLowerCase().includes('no one was eliminated')) {
+                    votingResult = { type: 'no_one' };
+                    break;
+                }
+            }
+            if (votingResult) {
+                console.log('[GameLog] VOTING_RESULT recovered via full-log fallback:', votingResult);
+            } else {
+                console.warn('[GameLog] showVotingResults=true but NO VOTING_RESULT found in any logs!', { logsCount: logs.length, todayLogsCount: todayLogs.length });
+            }
+        }
+
         const voteEntries = todayLogs.filter(l => 
             l.eventType === 'PLAYER_VOTED' || 
             (l.message.toLowerCase().includes('voted for') && !l.eventType)
@@ -243,7 +282,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             nightFallen,
             voteEntries
         };
-    }, [todayLogs, phase, showVotingResults, liveDiscussion, forceVotingActive, hideActions]);
+    }, [todayLogs, logs, phase, showVotingResults, liveDiscussion, forceVotingActive, hideActions]);
 
     const targetingDay = (showVotingResults && displayDay > 0) ? displayDay : dayCount;
 
@@ -256,9 +295,11 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     useEffect(() => {
         if (showVotingResults) {
             console.log('[GameLog Debug]', { 
-                targetDay: votingResultsDayRef.current, 
-                todayLogs: todayLogs.length, 
+                lockedDay: lockedVotingDayRef.current,
+                actualLoggedDay,
+                todayLogsCount: todayLogs.length, 
                 voteEntries: dayEvents.voteEntries.length,
+                votingResult: dayEvents.votingResult,
                 displayDay, dayCount 
             });
             const timer = setTimeout(() => setShowNightFalls(true), 5000);
@@ -266,7 +307,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         } else {
             setShowNightFalls(false);
         }
-    }, [showVotingResults, displayDay, dayCount, todayLogs.length, dayEvents.voteEntries.length]);
+    }, [showVotingResults, displayDay, dayCount, todayLogs.length, dayEvents.voteEntries.length, dayEvents.votingResult, actualLoggedDay]);
 
     const itemVariants = {
         hidden: { opacity: 0, x: -10 },
@@ -288,7 +329,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         <div className="flex flex-col h-full bg-transparent overflow-hidden">
             <div className="flex-shrink-0 flex items-center justify-center px-5 py-3 border-b border-white/5 bg-[#0A0A0A]">
                 <h2 className="text-sm font-mono font-bold text-[#916A47] tracking-[0.3em] uppercase">
-                    [ DAY {displayDay || dayCount || 1} ]
+                    [ DAY {displayDay || dayCount || actualLoggedDay || 1} ]
                 </h2>
             </div>
 
