@@ -11,6 +11,8 @@ import type { GameRefs } from './useGameRefs';
 import type { TransactionEngine } from './useTransactionEngine';
 import type { LogEntry } from '../../types';
 import React from 'react';
+import { decodeEventLog } from 'viem';
+import { MAFIA_ABI } from '../../contracts/config';
 
 interface VotingDeps {
     refs: GameRefs;
@@ -83,8 +85,27 @@ export function useVotingActions(deps: VotingDeps) {
             console.log(`[Voting API] Finalizing voting for room ${roomId}...`);
             const hash = await txEngine.sendGameTransaction('finalizeVoting', [roomId]);
             addLog("Voting finalized! Waiting for confirmation...", "success");
-            await pClient.waitForTransactionReceipt({ hash });
+            const receipt = await pClient.waitForTransactionReceipt({ hash });
             addLog("Voting results confirmed on-chain.", "success");
+
+            // Optimistic parsing of elimination result from the receipt
+            for (const log of receipt.logs) {
+                try {
+                    const decoded = decodeEventLog({
+                        abi: MAFIA_ABI,
+                        data: log.data,
+                        topics: log.topics,
+                    });
+                    if (decoded.eventName === 'PlayerEliminated') {
+                        const args = decoded.args as any;
+                        const player = args.player as string;
+                        const nickname = args.nickname as string;
+                        addLog(`${nickname || player.slice(0, 6)} eliminated by vote.`, "danger");
+                    }
+                } catch (e) {
+                    // Not our event or parse error, skip
+                }
+            }
         } catch (e: any) {
             console.error('[Finalize Voting Failed]', e);
             addLog(e.shortMessage || e.message, "danger");

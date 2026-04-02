@@ -214,7 +214,9 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     // 2. When showing results, scan authoritative logs for all votes
                     let voters: any[] = [];
                     if (showVotingResults) {
-                         // Find most recent Day logs
+                         const voteMapFromLogs: Record<string, string> = {};
+                         
+                         // 1. Authoritative scan (Server logs)
                          let lastDayStartIdx = -1;
                          for (let i = gameState.logs.length - 1; i >= 0; i--) {
                              if (gameState.logs[i].message.includes('has begun')) {
@@ -223,12 +225,11 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                              }
                          }
                          const dayLogs = lastDayStartIdx >= 0 ? gameState.logs.slice(lastDayStartIdx) : gameState.logs;
-                         const voteMapFromLogs: Record<string, string> = {};
+                         
                          dayLogs.forEach(l => {
                              if (l.eventType === 'PLAYER_VOTED' && l.eventData) {
                                  const vName = l.eventData.playerName;
                                  const tName = l.eventData.targetName;
-                                 
                                  if (vName && tName) {
                                      const voter = gameState.players.find(pl => pl.name === vName);
                                      const target = gameState.players.find(pl => pl.name === tName);
@@ -238,6 +239,15 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                                  }
                              }
                          });
+
+                         // 2. Hybrid Merge: Add local optimistic votes if not present in server logs
+                         // This is crucial for the Host who sees results before the server processes the block
+                         Object.entries(voteMap).forEach(([voterAddr, targetAddr]) => {
+                             if (!voteMapFromLogs[voterAddr.toLowerCase()]) {
+                                 voteMapFromLogs[voterAddr.toLowerCase()] = targetAddr.toLowerCase();
+                             }
+                         });
+
                          voters = Object.entries(voteMapFromLogs)
                              .filter(([_, target]) => target === p.address.toLowerCase())
                              .map(([v]) => gameState.players.find(pl => pl.address.toLowerCase() === v))
