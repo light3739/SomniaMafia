@@ -437,9 +437,9 @@ export function useLobbyActions(deps: LobbyDeps) {
                     }) as any;
 
                     const buyIn = Array.isArray(tournamentResult) ? BigInt(tournamentResult[3] || 0) : BigInt(tournamentResult.buyIn || 0);
-                    const sessionFee = Array.isArray(tournamentResult) ? BigInt(tournamentResult[7] || 0) : BigInt(tournamentResult.sessionFee || 0);
+                    const sessionFee = Array.isArray(tournamentResult) ? BigInt(tournamentResult[5] || 0) : BigInt(tournamentResult.sessionFee || 0);
 
-                    if (tournamentResult && buyIn > 0n) {
+                    if (tournamentResult) {
                         const isPart = await pClient.readContract({
                             address: refs.contractAddressRef.current,
                             abi: MAFIA_ABI,

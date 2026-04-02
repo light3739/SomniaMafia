@@ -66,7 +66,7 @@ interface TournamentInfo {
 }
 
 function getTournamentInfo(room: any): TournamentInfo {
-    const isTournament = room.tournamentId && room.tournamentId > 0n;
+    const isTournament = room.tournamentId ? room.tournamentId > 0n : false;
     return {
         isTournament,
         prize: isTournament ? "TBD" : undefined,
