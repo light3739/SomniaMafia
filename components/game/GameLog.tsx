@@ -233,12 +233,18 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     const [showNightFalls, setShowNightFalls] = useState(false);
     useEffect(() => {
         if (showVotingResults) {
+            console.log('[GameLog Debug]', { 
+                targetDay: votingResultsDayRef.current, 
+                todayLogs: todayLogs.length, 
+                voteEntries: dayEvents.voteEntries.length,
+                displayDay, dayCount 
+            });
             const timer = setTimeout(() => setShowNightFalls(true), 5000);
             return () => clearTimeout(timer);
         } else {
             setShowNightFalls(false);
         }
-    }, [showVotingResults]);
+    }, [showVotingResults, displayDay, dayCount, todayLogs.length, dayEvents.voteEntries.length]);
 
     const itemVariants = {
         hidden: { opacity: 0, x: -10 },
