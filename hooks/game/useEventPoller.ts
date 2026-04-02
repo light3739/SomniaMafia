@@ -34,18 +34,10 @@ export function useEventPoller(deps: PollerDeps) {
 
     const processedEventsRef = useRef<Set<string>>(new Set());
     const lastProcessedBlockRef = useRef<bigint | null>(null);
+    const liveStartBlockRef = useRef<bigint | null>(null);
     const votingFinalizedTimerRef = refs.votingFinalizedTimerRef;
 
-    // Initial block fetch
-    useEffect(() => {
-        const roomId = refs.currentRoomIdRef.current;
-        const pClient = refs.publicClientRef.current;
-        if (!pClient || !roomId || lastProcessedBlockRef.current) return;
-        pClient.getBlockNumber().then((b: bigint) => {
-            lastProcessedBlockRef.current = b;
-            console.log(`[Smart Poller] 🚀 Started for Room ${roomId} @ Block ${b}`);
-        });
-    }, [refs]);
+    // --- Poller Definition ---
 
     // === POLL EVENTS ===
     const pollEvents = useCallback(async () => {
@@ -101,7 +93,10 @@ export function useEventPoller(deps: PollerDeps) {
 
                 const eventName = (log as any).eventName;
                 const args = (log as any).args;
-                console.log(`[Event Received] ${eventName}`, args);
+                const blockNumber = (log as any).blockNumber;
+                const isHistorical = liveStartBlockRef.current !== null && blockNumber < liveStartBlockRef.current;
+
+                console.log(`[Event Received ${isHistorical ? '(History)' : '(Live)'}] ${eventName}`, args);
 
                 switch (eventName) {
                     case 'PlayerJoined':
@@ -115,11 +110,13 @@ export function useEventPoller(deps: PollerDeps) {
                         break;
 
                     case 'DayStarted':
-                        setTimeout(() => addLog(`Day ${args.dayNumber} has begun`, "phase"), 7500);
+                        if (isHistorical) addLog(`Day ${args.dayNumber} has begun`, "phase");
+                        else setTimeout(() => addLog(`Day ${args.dayNumber} has begun`, "phase"), 7500);
                         break;
 
                     case 'VotingStarted':
-                        setTimeout(() => addLog("Voting Phase Started", "phase", 'VOTING_STARTED'), 5000);
+                        if (isHistorical) addLog("Voting Phase Started", "phase", 'VOTING_STARTED');
+                        else setTimeout(() => addLog("Voting Phase Started", "phase", 'VOTING_STARTED'), 5000);
                         break;
 
                     case 'NightStarted':
@@ -131,17 +128,17 @@ export function useEventPoller(deps: PollerDeps) {
                             const healedStr = args.healed ? (args.healed as string).toLowerCase() : '0x00';
 
                             if (killedStr === healedStr) {
-                                setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 5000);
+                                if (isHistorical) addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true });
+                                else setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 5000);
                             } else {
                                 let killedPlayer = refs.playersRef.current.find(p => p.address.toLowerCase() === killedStr);
-                                if (!killedPlayer) {
-                                    console.warn("[NightFinalized] Killed player missing locally. Will refresh.");
-                                }
                                 const name = killedPlayer?.name || args.killed.slice(0, 6);
-                                setTimeout(() => addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name }), 5000);
+                                if (isHistorical) addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name });
+                                else setTimeout(() => addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name }), 5000);
                             }
                         } else {
-                            setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 5000);
+                            if (isHistorical) addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true });
+                            else setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 5000);
                         }
                         break;
 
@@ -167,11 +164,13 @@ export function useEventPoller(deps: PollerDeps) {
 
                         console.log(`[Event] GameEnded! Winner: ${gameWinner}, condition: ${winCondition}`);
                         addLog(`Game Over! ${gameWinner === 'MAFIA' ? '🔪 Mafia wins!' : '🏘️ Town wins!'}`, 'phase');
-                        setGameState(prev => ({
-                            ...prev,
-                            phase: GamePhase.ENDED,
-                            winner: gameWinner
-                        }));
+                        if (!isHistorical) {
+                            setGameState(prev => ({
+                                ...prev,
+                                phase: GamePhase.ENDED,
+                                winner: gameWinner
+                            }));
+                        }
                         break;
                     }
 
@@ -201,16 +200,15 @@ export function useEventPoller(deps: PollerDeps) {
                             addLog(`Voting Finalized: No one was eliminated.`, "warning", 'VOTING_RESULT', { isSafe: true });
                         }
 
+                        if (isHistorical) break;
+
                         console.log("[VotingFinalized] Triggering 10s results phase...");
                         setShowVotingResults(true);
 
                         if (votingFinalizedTimerRef.current) clearTimeout(votingFinalizedTimerRef.current);
                         votingFinalizedTimerRef.current = setTimeout(() => {
-                            // 1. Сначала печатаем лог в консоли
                             addLog("Night has fallen...", "night", 'NIGHT_FALLS');
                             
-                            // 2. Ждем 3 секунды, пока он напечатается, и только потом 
-                            // снимаем результаты, что автоматически затриггерит заставку NightFalls!
                             setTimeout(() => {
                                 console.log("[VotingFinalized] Results phase ended. Proceeding to Night.");
                                 setShowVotingResults(false);
@@ -234,12 +232,25 @@ export function useEventPoller(deps: PollerDeps) {
         }
     }, [refs, dataSync, setGameState, setVoteMap, setShowVotingResults, addLog, votingFinalizedTimerRef]);
 
+    // === INITIALIZATION ===
+    useEffect(() => {
+        const roomId = refs.currentRoomIdRef.current;
+        const pClient = refs.publicClientRef.current;
+        if (!pClient || !roomId || lastProcessedBlockRef.current) return;
+        
+        pClient.getBlockNumber().then((b: bigint) => {
+            liveStartBlockRef.current = b;
+            const historyStart = b > 10000n ? b - 10000n : 0n;
+            lastProcessedBlockRef.current = historyStart;
+            console.log(`[Smart Poller] 🚀 Started for Room ${roomId} @ Block ${b} (History from ${historyStart})`);
+            pollEvents();
+        });
+    }, [refs, pollEvents]);
+
     // === POLL INTERVAL ===
     useEffect(() => {
         if (!refs.publicClientRef.current || !currentRoomId) return;
-        // Only stop if game ENDED AND winner confirmed
         if (gameState.phase === GamePhase.ENDED && gameState.winner) return;
-
         const interval = setInterval(pollEvents, 2000);
         return () => clearInterval(interval);
     }, [pollEvents, gameState.phase, gameState.winner, refs, currentRoomId]);

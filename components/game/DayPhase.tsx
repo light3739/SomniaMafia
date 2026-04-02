@@ -66,7 +66,6 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
     const latestDayCountRef = useRef(gameState.dayCount);
     const dayTimeoutRef = useRef(false);
     const votingStartedRef = useRef(false);
-    const [votingAttemptTs, setVotingAttemptTs] = useState<number>(0);
 
     const lastServerTimeRef = useRef<number>(0);
     const lastUpdateTsRef = useRef<number>(0);
@@ -188,6 +187,8 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         if (gameState.phase !== lastLoggedPhase.current) {
             if (isDayPhase) { 
                 discussionStartedRef.current = false; 
+                votingStartedRef.current = false;
+                dayTimeoutRef.current = false;
                 setDiscussionState(null);
                 // System log "Day X has begun" is now handled by useEventPoller with delay
             }
@@ -296,7 +297,15 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                     </h2>
                 </div>
                 <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-md overflow-hidden border-t border-t-white/10 border-x border-x-white/5 border-b-black bg-[#0A0A0A] shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
-                    <GameLog liveDiscussion={{ active: discussionState?.active, finished: discussionState?.finished, currentSpeakerName: currentSpeaker?.name || null }} forceVotingActive={isVotingPhase || showVotingResults || !!hideActions} />
+                    <GameLog 
+                        liveDiscussion={{ 
+                            active: discussionState?.active, 
+                            finished: discussionState?.finished, 
+                            currentSpeakerName: currentSpeaker?.name || null 
+                        }} 
+                        forceVotingActive={isVotingPhase || showVotingResults || !!hideActions} 
+                        hideActions={!!hideActions}
+                    />
                 </div>
                 <div className={`min-h-[140px] flex flex-col justify-start transition-opacity duration-300 ${hideActions ? 'opacity-0 pointer-events-none' : ''}`}>
                     <AnimatePresence mode="wait">

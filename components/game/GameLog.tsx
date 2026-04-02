@@ -4,10 +4,6 @@ import { useGameContext } from '../../contexts/GameContext';
 import { GamePhase } from '../../types';
 
 // ── TypewriterText ────────────────────────────────────────────────────────
-// Безопасно работает внутри AnimatePresence:
-//  • useEffect убирает interval при unmount — нет утечек
-//  • при смене `text` эффект перезапускается с чистого листа
-//  • курсор ▌ исчезает когда печать завершена
 const TypewriterText: React.FC<{ text: string; speed?: number; className?: string }> = ({
     text,
     speed = 28,
@@ -48,12 +44,11 @@ interface GameLogProps {
         currentSpeakerName?: string | null;
     };
     forceVotingActive?: boolean;
+    hideActions?: boolean;
 }
 
-export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, forceVotingActive = false }) => {
-    const { gameState, showVotingResults, addLog } = useGameContext();
-    // Track the day we were displaying when voting results started,
-    // so we don't lose logs when dayCount jumps ahead before the new marker appears.
+export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, forceVotingActive = false, hideActions = false }) => {
+    const { gameState, showVotingResults } = useGameContext();
     const votingResultsDayRef = React.useRef<number>(0);
 
     const dayCount = gameState.dayCount;
@@ -61,35 +56,28 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     const alivePlayers = gameState.players.filter(p => p.isAlive);
     const logs = gameState.logs;
 
-    const injectedDayRef = useRef<number>(0);
-    // Removed automatic Day X log injection from component — 
-    // This is now handled with consistent delays by useEventPoller.ts
+    const [displayDay, setDisplayDay] = useState<number>(0);
 
     // Track which day to display when voting results are shown.
-    // The chain may have already incremented dayCount to N+1 before the
-    // "Day N+1 has begun" log appears (it's added with a 4s delay).
-    // In that case, fall back to searching for dayCount-1.
     useEffect(() => {
         if (showVotingResults && votingResultsDayRef.current === 0) {
-            // Lock in the current dayCount when results phase starts
-            votingResultsDayRef.current = dayCount;
+            const day = dayCount > 0 ? dayCount : 1;
+            votingResultsDayRef.current = day;
+            setDisplayDay(day);
         } else if (!showVotingResults) {
             votingResultsDayRef.current = 0;
+            setDisplayDay(0);
         }
     }, [showVotingResults, dayCount]);
 
     const todayLogs = useMemo(() => {
-        let startIndex = 0;
-        const dayPattern = /Day \d+ has begun/;
+        if (!logs.length) return [];
 
-        // During voting results, the chain may report dayCount=N+1 already,
-        // but we need to show logs from the day that just finished voting (N or N-1).
-        // Try to find the exact marker, then fall back to the previous day.
         const targetDay = (showVotingResults && votingResultsDayRef.current > 0)
             ? votingResultsDayRef.current
-            : dayCount;
-        const fallbackDay = targetDay - 1;
+            : (dayCount > 0 ? dayCount : 1);
 
+        let startIndex = 0;
         let foundExact = false;
         let fallbackIndex = -1;
 
@@ -106,7 +94,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                     foundExact = true;
                     break;
                 }
-                if (logDay === fallbackDay && fallbackIndex === -1) {
+                if (logDay === targetDay - 1 && fallbackIndex === -1) {
                     fallbackIndex = i;
                 }
             } else if (msg.includes('Game started!')) {
@@ -116,8 +104,6 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             }
         }
 
-        // If we couldn't find the exact day marker (race condition: marker not yet added)
-        // but found the previous day, use that so we don't fall back to log[0].
         if (!foundExact && fallbackIndex !== -1) {
             startIndex = fallbackIndex;
             if (startIndex > 0 && logs[startIndex - 1].message.includes('Night Result:')) {
@@ -142,11 +128,8 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             if (log.eventType) {
                 switch (log.eventType) {
                     case 'NIGHT_RESULT':
-                        if (log.eventData?.isSafe) {
-                            nightResult = { type: 'safe' };
-                        } else if (log.eventData?.isEliminated) {
-                            nightResult = { type: 'killed', playerName: log.eventData.playerName };
-                        }
+                        if (log.eventData?.isSafe) nightResult = { type: 'safe' };
+                        else if (log.eventData?.isEliminated) nightResult = { type: 'killed', playerName: log.eventData.playerName };
                         break;
                     case 'DISCUSSION_STARTED':
                         discussionStarted = true;
@@ -167,11 +150,8 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         }
                         break;
                     case 'VOTING_RESULT':
-                        if (log.eventData?.isSafe) {
-                            votingResult = { type: 'no_one' };
-                        } else if (log.eventData?.isEliminated) {
-                            votingResult = { type: 'eliminated', playerName: log.eventData.playerName };
-                        }
+                        if (log.eventData?.isSafe) votingResult = { type: 'no_one' };
+                        else if (log.eventData?.isEliminated) votingResult = { type: 'eliminated', playerName: log.eventData.playerName };
                         break;
                     case 'NIGHT_FALLS':
                         nightFallen = true;
@@ -179,9 +159,8 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 }
             } else {
                 const msg = log.message;
-                if (msg.includes('Night Result: No one died')) {
-                    nightResult = { type: 'safe' };
-                } else if (msg.includes('Night Result:') && msg.includes('was killed')) {
+                if (msg.includes('Night Result: No one died')) nightResult = { type: 'safe' };
+                else if (msg.includes('Night Result:') && msg.includes('was killed')) {
                     const match = msg.match(/Night Result: (.+?) was killed/);
                     nightResult = { type: 'killed', playerName: match?.[1] || 'Unknown' };
                 }
@@ -193,59 +172,45 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                     const match = msg.match(/(.+?) is now speaking/);
                     currentSpeaker = match?.[1] || null;
                 }
-                if (msg.includes('All players have spoken') || msg.includes('Starting Vote')) {
-                    discussionFinished = true;
-                }
-                if (msg === 'Voting Phase Started' || msg.includes('Voting Phase Started')) {
-                    votingStarted = true;
-                }
+                if (msg.includes('All players have spoken') || msg.includes('Starting Vote')) discussionFinished = true;
+                if (msg.includes('Voting Phase Started')) votingStarted = true;
                 if (msg.includes('voted for')) {
                     const match = msg.match(/(.+?) voted for (.+)/);
-                    if (match) {
-                        voteCasts.push({ voter: match[1], target: match[2] });
-                    }
+                    if (match) voteCasts.push({ voter: match[1], target: match[2] });
                 }
-                const votingFinalizedEliminatedMatch = msg.match(/^Voting Finalized:\s+(.+?)\s+was eliminated!?$/i);
-                if (votingFinalizedEliminatedMatch) {
-                    votingResult = { type: 'eliminated', playerName: votingFinalizedEliminatedMatch[1] };
-                } else if (msg.includes('Voting Finalized: Player eliminated')) {
-                    votingResult = { type: 'eliminated' };
-                } else if (msg.includes('eliminated') && log.type === 'danger' && !msg.includes('Night') && !msg.includes('Voting Finalized')) {
-                    const nameMatch = msg.match(/^(.+?) eliminated[:\s]/);
-                    if (nameMatch) {
-                        votingResult = { type: 'eliminated', playerName: nameMatch[1] };
-                    }
+                if (msg.includes('eliminated') && log.type === 'danger' && !msg.includes('Night')) {
+                    const nameMatch = msg.match(/^(.+?) eliminated/);
+                    if (nameMatch) votingResult = { type: 'eliminated', playerName: nameMatch[1] };
                 }
-                if (msg.includes('Voting Finalized: No one was eliminated') || msg.includes('No one was eliminated')) {
-                    votingResult = { type: 'no_one' };
-                }
-                if (msg === 'Night has fallen...' || msg.includes('Night has fallen')) {
-                    nightFallen = true;
-                }
+                if (msg.includes('No one was eliminated')) votingResult = { type: 'no_one' };
+                if (msg.includes('Night has fallen')) nightFallen = true;
             }
         }
 
         if (liveDiscussion?.active) {
             discussionStarted = true;
             discussionFinished = false;
-            if (liveDiscussion.currentSpeakerName) {
-                currentSpeaker = liveDiscussion.currentSpeakerName;
-            }
+            if (liveDiscussion.currentSpeakerName) currentSpeaker = liveDiscussion.currentSpeakerName;
         } else if (liveDiscussion?.finished) {
             discussionStarted = true;
             discussionFinished = true;
-        } else if (!discussionStarted && phase === GamePhase.DAY) {
-            discussionStarted = true;
         }
-        // During voting results phase, force discussion to show as completed
-        // so the full log history renders (otherwise empty when phase is NIGHT)
-        if (forceVotingActive && !discussionStarted) {
+
+        if ((forceVotingActive || showVotingResults || hideActions) && !discussionStarted) {
             discussionStarted = true;
             discussionFinished = true;
+        } else if (showVotingResults || hideActions) {
+            discussionFinished = true;
         }
-        if (!votingStarted && (phase === GamePhase.VOTING || showVotingResults || forceVotingActive)) {
+
+        if (forceVotingActive || showVotingResults || hideActions) {
             votingStarted = true;
         }
+
+        const voteEntries = todayLogs.filter(l => 
+            l.eventType === 'PLAYER_VOTED' || 
+            (l.message.includes('voted for') && !l.eventType)
+        );
 
         return {
             nightResult,
@@ -255,34 +220,21 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             votingStarted,
             voteCasts,
             votingResult,
-            nightFallen
+            nightFallen,
+            voteEntries
         };
-    }, [todayLogs, phase, showVotingResults, liveDiscussion, forceVotingActive]);
+    }, [todayLogs, phase, showVotingResults, liveDiscussion, forceVotingActive, hideActions]);
 
     const quorumData = useMemo(() => {
         const needed = Math.floor(alivePlayers.length / 2) + 1;
-        const voteCounts = new Map<string, number>();
-        for (const vc of dayEvents.voteCasts) {
-            voteCounts.set(vc.target, (voteCounts.get(vc.target) || 0) + 1);
-        }
-        let maxVotes = 0;
-        for (const count of voteCounts.values()) {
-            if (count > maxVotes) maxVotes = count;
-        }
-        return { current: maxVotes, needed };
-    }, [alivePlayers.length, dayEvents.voteCasts]);
+        return { needed };
+    }, [alivePlayers.length]);
 
     const [showNightFalls, setShowNightFalls] = useState(false);
-    const nightFallsTimerRef = useRef<NodeJS.Timeout | null>(null);
-
     useEffect(() => {
         if (showVotingResults) {
-            nightFallsTimerRef.current = setTimeout(() => {
-                setShowNightFalls(true);
-            }, 5000);
-            return () => {
-                if (nightFallsTimerRef.current) clearTimeout(nightFallsTimerRef.current);
-            };
+            const timer = setTimeout(() => setShowNightFalls(true), 5000);
+            return () => clearTimeout(timer);
         } else {
             setShowNightFalls(false);
         }
@@ -291,64 +243,41 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     const itemVariants = {
         hidden: { opacity: 0, x: -10 },
         visible: { opacity: 1, x: 0 },
-        exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } },
+        exit: { opacity: 0, scale: 0.95 },
     };
 
-    // --- НУАРНЫЕ КЛАССЫ ПРОТОКОЛА ---
     const LABEL = "text-white/30 font-mono text-[11px] tracking-widest uppercase w-[120px] shrink-0 pt-0.5 select-none";
     const VAL_BASE = "text-white/80 font-mono text-[13px] leading-relaxed";
-    const PLAYER_NAME = "text-white/90 font-bold"; // Имена выделяем обычным читаемым шрифтом
-    const DANGER = "text-[#8B0000] font-bold";
-    const GOLD = "text-[#916A47] font-bold";
 
     const scrollRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
         }
-    }, [todayLogs]);
+    }, [todayLogs, dayEvents.voteEntries.length]);
 
     return (
         <div className="flex flex-col h-full bg-transparent overflow-hidden">
-            {/* ── ШАПКА АРХИВА ────────────────────────────────── */}
             <div className="flex-shrink-0 flex items-center justify-center px-5 py-3 border-b border-white/5 bg-[#0A0A0A]">
-                <motion.div
-                    key={`day-${dayCount}`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex items-center gap-3 w-full sm:w-auto justify-center"
-                >
-                    <h2 className="text-sm font-mono font-bold text-[#916A47] tracking-[0.3em] uppercase">
-                        [ DAY {dayCount || 1} ]
-                    </h2>
-                </motion.div>
+                <h2 className="text-sm font-mono font-bold text-[#916A47] tracking-[0.3em] uppercase">
+                    [ DAY {displayDay || dayCount || 1} ]
+                </h2>
             </div>
 
-            {/* ── СОБЫТИЯ ───────────────────────────────── */}
-            <div 
-                ref={scrollRef}
-                className="flex-1 flex flex-col p-5 overflow-y-auto custom-scrollbar bg-[#050505]/50"
-            >
+            <div ref={scrollRef} className="flex-1 flex flex-col p-5 overflow-y-auto custom-scrollbar bg-[#050505]/50">
                 <div className="flex flex-col gap-5">
                     <AnimatePresence initial={false}>
-                        {/* 1. Ночной результат */}
                         {dayEvents.nightResult && (
-                            <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
+                            <motion.div variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
                                 <TypewriterText text="> NIGHT_RESULT" className={LABEL} />
                                 <span className={VAL_BASE}>
-                                    <TypewriterText 
-                                        text={dayEvents.nightResult.type === 'safe'
-                                            ? "No one was eliminated."
-                                            : `${dayEvents.nightResult.playerName} was eliminated last night.`}
-                                        speed={20}
-                                    />
+                                    <TypewriterText text={dayEvents.nightResult.type === 'safe' ? "No one was eliminated." : `${dayEvents.nightResult.playerName} was eliminated last night.`} speed={20} />
                                 </span>
                             </motion.div>
                         )}
 
-                        {/* 2. Фаза обсуждения */}
                         {dayEvents.discussionStarted && (
-                            <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
+                            <motion.div variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
                                 <TypewriterText text="> DISCUSSION" className={LABEL} />
                                 <span className={VAL_BASE}>
                                     {dayEvents.discussionFinished ? (
@@ -362,49 +291,46 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                             </motion.div>
                         )}
 
-                        {/* 3. Старт голосования и Кворум */}
                         {dayEvents.votingStarted && (
-                            <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
-                                <TypewriterText text="> VOTING" className={LABEL} />
-                                <span className={`${VAL_BASE} flex items-center gap-2 flex-wrap`}>
-                                    <TypewriterText 
-                                        text={`Voting phase has started. Quorum — ${quorumData.needed}`}
-                                        speed={20}
-                                    />
-                                </span>
-                            </motion.div>
+                            <div className="flex flex-col gap-3 pb-4 border-b border-dashed border-white/5">
+                                <motion.div variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3">
+                                    <TypewriterText text="> VOTING" className={LABEL} />
+                                    <span className={VAL_BASE}>
+                                        <TypewriterText text={`Voting phase started. Quorum: ${quorumData.needed}`} speed={20} />
+                                    </span>
+                                </motion.div>
+                                {dayEvents.voteEntries.map((log) => (
+                                    <motion.div key={log.id} variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3 pl-[120px] opacity-70 scale-95 origin-left">
+                                        <div className="text-[10px] font-mono text-white/20 pt-1 w-12 flex-shrink-0">
+                                            {new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                        </div>
+                                        <span className="text-[12px] font-mono text-white/60">
+                                            <span className="text-white/40 mr-2">»</span>
+                                            {log.message}
+                                        </span>
+                                    </motion.div>
+                                ))}
+                            </div>
                         )}
 
-                        {/* 4. Результат голосования */}
                         {dayEvents.votingResult && (
-                            <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
+                            <motion.div variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
                                 <TypewriterText text="> VOTING_RESULT" className={LABEL} />
                                 <span className={VAL_BASE}>
-                                    <TypewriterText 
-                                        text={dayEvents.votingResult.type === 'eliminated'
-                                            ? `${dayEvents.votingResult.playerName || 'A player'} was eliminated by vote.`
-                                            : "No one was eliminated."}
-                                        speed={20}
-                                    />
+                                    <TypewriterText text={dayEvents.votingResult.type === 'eliminated' ? `${dayEvents.votingResult.playerName || 'A player'} eliminated by vote.` : "No one was eliminated."} speed={20} />
                                 </span>
                             </motion.div>
                         )}
 
-                        {/* 5. Наступление ночи */}
                         {(dayEvents.nightFallen || showNightFalls) && (
-                            <motion.div variants={itemVariants} initial="hidden" animate="visible" exit="exit" className="flex items-start gap-3 pt-2">
+                            <motion.div variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3 pt-2">
                                 <TypewriterText text="> SYSTEM" className={LABEL} />
-                                <TypewriterText 
-                                    text="NIGHT HAS FALLEN" 
-                                    className="font-mono text-[13px] font-bold uppercase tracking-[0.1em] text-[#916A47] drop-shadow-[0_0_8px_rgba(145,106,71,0.4)]"
-                                    speed={30}
-                                />
+                                <TypewriterText text="NIGHT HAS FALLEN" className="font-mono text-[13px] font-bold uppercase tracking-[0.1em] text-[#916A47]" speed={30} />
                             </motion.div>
                         )}
 
-                        {/* Пустое состояние */}
-                        {!dayEvents.nightResult && !dayEvents.discussionStarted && !dayEvents.votingStarted && !dayEvents.votingResult && !dayEvents.nightFallen && !showNightFalls && (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex w-full items-center justify-center text-white/20 py-10">
+                        {!dayEvents.nightResult && !dayEvents.discussionStarted && !dayEvents.votingStarted && !showNightFalls && (
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex w-full items-center justify-center text-white/20 py-10">
                                 <span className="text-[11px] font-mono uppercase tracking-widest animate-pulse">Waiting for events...</span>
                             </motion.div>
                         )}
