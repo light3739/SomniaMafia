@@ -406,7 +406,7 @@ export const DIAMOND_ABI = [
         "type": "address"
       }
     ],
-    "name": "SessionKeyRevoked",
+    "name": "VotingFinalized",
     "type": "event"
   },
   {
@@ -421,17 +421,42 @@ export const DIAMOND_ABI = [
       {
         "indexed": false,
         "internalType": "address",
-        "name": "eliminated",
+        "name": "player",
         "type": "address"
       },
       {
         "indexed": false,
-        "internalType": "uint256",
-        "name": "voteCount",
-        "type": "uint256"
+        "internalType": "string",
+        "name": "nickname",
+        "type": "string"
       }
     ],
-    "name": "VotingFinalized",
+    "name": "PlayerEliminated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "voter",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "target",
+        "type": "address"
+      }
+    ],
+    "name": "VoteCast",
     "type": "event"
   },
   {
