@@ -38,6 +38,11 @@ interface PollerDeps {
 export function useEventPoller(deps: PollerDeps) {
     const { refs, dataSync, gameState, currentRoomId, setGameState, setVoteMap, setShowVotingResults, addLog, addLogs } = deps;
 
+    // Helper: stable event id matching the server's format (txHash-logIndex).
+    // Passing this as `id` to addLog() ensures server logs and client logs
+    // deduplicate correctly — whichever arrives first wins.
+    const stableId = (log: any) => `${log.transactionHash}-${log.logIndex ?? 0}`;
+
     const processedEventsRef = useRef<Set<string>>(new Set());
     const lastProcessedBlockRef = useRef<bigint | null>(null);
     const liveStartBlockRef = useRef<bigint | null>(null);
@@ -71,7 +76,7 @@ export function useEventPoller(deps: PollerDeps) {
     // === POLL EVENTS ===
     const pollEvents = useCallback(async () => {
         if (isPollingRef.current) return;
-        
+
         const roomId = refs.currentRoomIdRef.current;
         const pClient = refs.publicClientRef.current;
         if (!pClient || !roomId || !lastProcessedBlockRef.current) return;
@@ -160,13 +165,31 @@ export function useEventPoller(deps: PollerDeps) {
                         // No reactive state; server writes "Night has fallen..."
                         break;
 
-                    case 'NightFinalized':
+                    case 'NightFinalized': {
                         // Sync player list so isAlive flags update
                         if (roomId) await dataSync.fetchGameData(roomId);
+
+                        // Write night result log immediately with stable id so it deduplicates
+                        // with the server log when it arrives (same txHash-logIndex format).
+                        const nightId = stableId(log);
+                        if (args.killed && args.killed !== '0x0000000000000000000000000000000000000000') {
+                            const killedStr = (args.killed as string).toLowerCase();
+                            const healedStr = args.healed ? (args.healed as string).toLowerCase() : '0x00';
+                            if (killedStr === healedStr) {
+                                addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
+                            } else {
+                                const killedPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === killedStr);
+                                const kname = killedPlayer?.name || (args.killed as string).slice(0, 6);
+                                addLog(`Night Result: ${kname} was killed by Mafia!`, 'danger', 'NIGHT_RESULT', { isEliminated: true, playerName: kname }, nightId);
+                            }
+                        } else {
+                            addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
+                        }
                         break;
+                    }
 
                     case 'PlayerEliminated':
-                        // isAlive flag update handled by fetchGameData above
+                        // isAlive flag update handled by NightFinalized fetchGameData
                         break;
 
                     case 'GameEnded': {
@@ -175,8 +198,8 @@ export function useEventPoller(deps: PollerDeps) {
                             const lower = winCondition.toLowerCase();
                             const gameWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
                                 lower.includes('town') ? 'TOWN' :
-                                lower.includes('mafia') ? 'MAFIA' :
-                                lower.includes('draw') ? 'DRAW' : 'TOWN';
+                                    lower.includes('mafia') ? 'MAFIA' :
+                                        lower.includes('draw') ? 'DRAW' : 'TOWN';
 
                             console.log(`[Event] GameEnded! Winner: ${gameWinner}, condition: ${winCondition}`);
                             setGameState(prev => ({
@@ -189,30 +212,51 @@ export function useEventPoller(deps: PollerDeps) {
                     }
 
                     case 'VoteCast': {
-                        // Update the visual vote-map (arrows on player circles)
-                        // Text log is written by the server
+                        // Update the visual vote-map (arrows on player circles).
+                        // Text log is written by the server. If server ABI doesn't have VoteCast,
+                        // write a fallback client log with stable id.
                         try {
                             const voterStr = (args.voter as string).toLowerCase();
                             const targetStr = (args.target as string).toLowerCase();
                             setVoteMap(prev => ({ ...prev, [voterStr]: targetStr }));
+
+                            // Fallback: write vote log from client in case server doesn't have VoteCast in ABI.
+                            // Stable id → deduplicates with server log if server does write it.
+                            const voter = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === voterStr);
+                            const target = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === targetStr);
+                            const voterName = voter?.name || (args.voter as string).slice(0, 6);
+                            const targetName = target?.name || (args.target as string).slice(0, 6);
+                            addLog(`${voterName} voted for ${targetName}`, 'info', 'PLAYER_VOTED',
+                                { playerName: voterName, targetName }, stableId(log));
                         } catch (e) {
-                            console.error("[VoteCast] Error updating voteMap:", e);
+                            console.error('[VoteCast] Error:', e);
                         }
                         break;
                     }
 
-                    case 'VotingFinalized':
+                    case 'VotingFinalized': {
+                        // Write result log immediately with stable id for deduplication.
+                        const vfId = stableId(log);
+                        if (args.eliminated !== '0x0000000000000000000000000000000000000000') {
+                            const elimStr = (args.eliminated as string).toLowerCase();
+                            const elimPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === elimStr);
+                            const elimName = elimPlayer?.name || (args.eliminated as string).slice(0, 6);
+                            addLog(`Voting Finalized: ${elimName} was eliminated!`, 'danger', 'VOTING_RESULT',
+                                { isEliminated: true, playerName: elimName }, vfId);
+                        } else {
+                            addLog('Voting Finalized: No one was eliminated.', 'warning', 'VOTING_RESULT',
+                                { isSafe: true }, vfId);
+                        }
+
                         // Show voting results overlay (reactive UI state)
                         if (!isHistorical) {
-                            console.log("[VotingFinalized] Triggering results phase...");
+                            console.log('[VotingFinalized] Triggering results phase...');
                             setShowVotingResults(true);
 
                             if (votingFinalizedTimerRef.current) clearTimeout(votingFinalizedTimerRef.current);
                             votingFinalizedTimerRef.current = setTimeout(() => {
-                                // "Night has fallen" text is already written by server (NightStarted event).
-                                // We just close the overlay and clear vote-map.
                                 setTimeout(() => {
-                                    console.log("[VotingFinalized] Results phase ended. Proceeding to Night.");
+                                    console.log('[VotingFinalized] Results phase ended. Proceeding to Night.');
                                     setShowVotingResults(false);
                                     setVoteMap({});
                                 }, 3000);
@@ -220,6 +264,7 @@ export function useEventPoller(deps: PollerDeps) {
                             }, 5000);
                         }
                         break;
+                    }
                 }
             }
 
@@ -233,14 +278,14 @@ export function useEventPoller(deps: PollerDeps) {
         } finally {
             isPollingRef.current = false;
         }
-    }, [refs, dataSync, setGameState, setVoteMap, setShowVotingResults, votingFinalizedTimerRef]);
+    }, [refs, dataSync, setGameState, setVoteMap, setShowVotingResults, addLog, votingFinalizedTimerRef]);
 
     // === INITIALIZATION ===
     useEffect(() => {
         const roomId = refs.currentRoomIdRef.current;
         const pClient = refs.publicClientRef.current;
         if (!pClient || !roomId || lastProcessedBlockRef.current) return;
-        
+
         pClient.getBlockNumber().then((b: bigint) => {
             liveStartBlockRef.current = b;
             const historyStart = b > 10000n ? b - 10000n : 0n;

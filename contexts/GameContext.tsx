@@ -135,32 +135,54 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     ) => {
         setGameState(prev => {
             const entryId = id || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-            if (prev.logs.some(l => l.id === entryId)) return prev;
+            const existingIndex = prev.logs.findIndex(l => l.id === entryId);
+
+            const newEntry: LogEntry = {
+                id: entryId,
+                timestamp: new Date().toISOString(),
+                message,
+                type,
+                eventType,
+                eventData,
+            };
+
+            if (existingIndex >= 0) {
+                // If the message is the same, don't trigger re-render
+                if (prev.logs[existingIndex].message === message && prev.logs[existingIndex].type === type) {
+                    return prev;
+                }
+                const newLogs = [...prev.logs];
+                newLogs[existingIndex] = newEntry;
+                return { ...prev, logs: newLogs };
+            }
 
             return {
                 ...prev,
-                logs: [...prev.logs.slice(-500), {
-                    id: entryId,
-                    timestamp: new Date().toISOString(),
-                    message,
-                    type,
-                    eventType,
-                    eventData,
-                }],
+                logs: [...prev.logs.slice(-499), newEntry],
             };
         });
     }, []);
 
     const addLogs = useCallback((newLogs: LogEntry[]) => {
         setGameState(prev => {
-            const existingIds = new Set(prev.logs.map(l => l.id));
-            const filteredNew = newLogs.filter(l => !existingIds.has(l.id));
-            if (filteredNew.length === 0) return prev;
+            const logMap = new Map(prev.logs.map(l => [l.id, l]));
+            let hasChanges = false;
 
-            return {
-                ...prev,
-                logs: [...prev.logs, ...filteredNew].slice(-1000),
-            };
+            for (const log of newLogs) {
+                const existing = logMap.get(log.id);
+                if (!existing || existing.message !== log.message || existing.type !== log.type) {
+                    logMap.set(log.id, log);
+                    hasChanges = true;
+                }
+            }
+
+            if (!hasChanges) return prev;
+
+            const merged = Array.from(logMap.values())
+                .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                .slice(-500);
+
+            return { ...prev, logs: merged };
         });
     }, []);
 
