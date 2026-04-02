@@ -62,20 +62,8 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     const logs = gameState.logs;
 
     const injectedDayRef = useRef<number>(0);
-    useEffect(() => {
-        // Don't inject the new day marker while voting results are showing —
-        // it would cause todayLogs to slice to the new (empty) day immediately.
-        if (showVotingResults) return;
-        if (dayCount <= 1 || injectedDayRef.current >= dayCount) return;
-        const hasCurrentDayMarker = logs.some(l => {
-            const match = l.message.match(/Day (\d+) has begun/);
-            return match && Number(match[1]) === dayCount;
-        });
-        if (!hasCurrentDayMarker && logs.length > 0) {
-            injectedDayRef.current = dayCount;
-            addLog(`Day ${dayCount} has begun`, "phase");
-        }
-    }, [dayCount, logs, addLog, showVotingResults]);
+    // Removed automatic Day X log injection from component — 
+    // This is now handled with consistent delays by useEventPoller.ts
 
     // Track which day to display when voting results are shown.
     // The chain may have already incremented dayCount to N+1 before the
@@ -313,6 +301,13 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     const DANGER = "text-[#8B0000] font-bold";
     const GOLD = "text-[#916A47] font-bold";
 
+    const scrollRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+        }
+    }, [todayLogs]);
+
     return (
         <div className="flex flex-col h-full bg-transparent overflow-hidden">
             {/* ── ШАПКА АРХИВА ────────────────────────────────── */}
@@ -330,7 +325,10 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             </div>
 
             {/* ── СОБЫТИЯ ───────────────────────────────── */}
-            <div className="flex-1 flex flex-col p-5 overflow-y-auto custom-scrollbar bg-[#050505]/50">
+            <div 
+                ref={scrollRef}
+                className="flex-1 flex flex-col p-5 overflow-y-auto custom-scrollbar bg-[#050505]/50"
+            >
                 <div className="flex flex-col gap-5">
                     <AnimatePresence initial={false}>
                         {/* 1. Ночной результат */}

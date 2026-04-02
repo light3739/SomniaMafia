@@ -35,7 +35,7 @@ const nightBg = "/assets/game_background.png";
 export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionState?: any }> = ({ initialNightState, initialDiscussionState }) => {
     const {
         gameState, myPlayer, currentRoomId, selectedTarget, handlePlayerAction,
-        canActOnPlayer, playerMarks, setPlayerMark, showVotingResults, voteMap, 
+        canActOnPlayer, playerMarks, setPlayerMark, showVotingResults, voteMap,
         isTestMode, refreshPlayersList, discussionState, setDiscussionState
     } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
@@ -61,7 +61,11 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 // If it catches it, showVotingResults becomes true, and the Night cinematic 
                 // will correctly wait for the result phase to finish.
                 // Since result phase is now 5s, 2.5s is the perfect delay to prevent flickering.
-                const t = setTimeout(() => setActivePhase(gameState.phase), 2500); 
+                const t = setTimeout(() => setActivePhase(gameState.phase), 2500);
+                return () => clearTimeout(t);
+            } else if (activePhase === GamePhase.NIGHT && gameState.phase === GamePhase.DAY) {
+                // Smooth transition to morning - let the night fade a bit
+                const t = setTimeout(() => setActivePhase(gameState.phase), 2500);
                 return () => clearTimeout(t);
             } else {
                 setActivePhase(gameState.phase);
@@ -140,23 +144,23 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     useEffect(() => {
         const wasShowing = prevShowVotingResultsRef.current; prevShowVotingResultsRef.current = showVotingResults;
         const entry = (wasShowing && !showVotingResults && activePhase === GamePhase.NIGHT) || (!showVotingResults && !wasShowing && activePhase === GamePhase.NIGHT);
-        if (entry && gameState.dayCount !== lastNightDayRef.current) {
+        if (entry && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current) {
             if (nightAnnouncementPendingRef.current) return;
             nightAnnouncementPendingRef.current = true; lastNightDayRef.current = gameState.dayCount;
             playNightTransition(); setShowNightAnnouncement(true);
             nightAnnouncementPendingRef.current = false;
         }
-    }, [activePhase, gameState.dayCount, playNightTransition, showVotingResults]);
-    
+    }, [activePhase, gameState.phase, gameState.dayCount, playNightTransition, showVotingResults]);
+
     // === EXPOSE REFRESH FOR FAILSAFE ===
     useEffect(() => {
         (window as any).refreshGame = () => {
-             if (currentRoomId) {
-                 console.log('[Manual Sync] Forcing Game Data Refresh...');
-                 refreshPlayersList(currentRoomId);
-             }
-         };
-         return () => { delete (window as any).refreshGame; };
+            if (currentRoomId) {
+                console.log('[Manual Sync] Forcing Game Data Refresh...');
+                refreshPlayersList(currentRoomId);
+            }
+        };
+        return () => { delete (window as any).refreshGame; };
     }, [currentRoomId, refreshPlayersList]);
 
     const isNightPhase = activePhase === GamePhase.NIGHT && !showVotingResults;
@@ -174,24 +178,24 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         <div className="relative w-full h-screen overflow-hidden bg-[#050505] font-['Montserrat'] flex items-center justify-center">
             <GameBackground isNightPhase={isNightPhase} dayBg={dayBg} nightBg={nightBg} />
             <GameUIOverlay />
-            
 
-            <NightAnnouncement 
-                show={showNightAnnouncement} 
-                onComplete={handleNightComplete} 
+
+            <NightAnnouncement
+                show={showNightAnnouncement}
+                onComplete={handleNightComplete}
             />
-            <MorningAnnouncement 
-                show={showMorningAnnouncement} 
-                onComplete={handleMorningComplete} 
+            <MorningAnnouncement
+                show={showMorningAnnouncement}
+                onComplete={handleMorningComplete}
             />
-            <RoleCompositionAnnouncement 
-                show={showRoleComposition} 
-                onComplete={handleRoleCompositionComplete} 
-                playerCount={gameState.players.filter(p => p.isAlive).length} 
+            <RoleCompositionAnnouncement
+                show={showRoleComposition}
+                onComplete={handleRoleCompositionComplete}
+                playerCount={gameState.players.filter(p => p.isAlive).length}
             />
-            <VotingAnnouncement 
-                show={showVotingAnnouncement} 
-                onComplete={handleVotingComplete} 
+            <VotingAnnouncement
+                show={showVotingAnnouncement}
+                onComplete={handleVotingComplete}
             />
 
             <ResponsiveGameContainer>
@@ -226,10 +230,10 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             {/* Overlays for Shuffling, Reveal and Game Over */}
             <AnimatePresence>
                 {isOverlayPhase && (activePhase === GamePhase.SHUFFLING || activePhase === GamePhase.REVEAL) && (
-                    <motion.div 
-                        initial={{ opacity: 0 }} 
-                        animate={{ opacity: 1 }} 
-                        exit={{ opacity: 0 }} 
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
                         className="fixed inset-0 z-[50]"
                     >
                         <ShuffleAndReveal key="shuffle-reveal" />

@@ -115,11 +115,11 @@ export function useEventPoller(deps: PollerDeps) {
                         break;
 
                     case 'DayStarted':
-                        setTimeout(() => addLog(`Day ${args.dayNumber} has begun`, "phase"), 4000);
+                        setTimeout(() => addLog(`Day ${args.dayNumber} has begun`, "phase"), 7500);
                         break;
 
                     case 'VotingStarted':
-                        setTimeout(() => addLog("Voting Phase Started", "phase", 'VOTING_STARTED'), 4000);
+                        setTimeout(() => addLog("Voting Phase Started", "phase", 'VOTING_STARTED'), 5000);
                         break;
 
                     case 'NightStarted':
@@ -131,17 +131,17 @@ export function useEventPoller(deps: PollerDeps) {
                             const healedStr = args.healed ? (args.healed as string).toLowerCase() : '0x00';
 
                             if (killedStr === healedStr) {
-                                setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 4000);
+                                setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 5000);
                             } else {
                                 let killedPlayer = refs.playersRef.current.find(p => p.address.toLowerCase() === killedStr);
                                 if (!killedPlayer) {
                                     console.warn("[NightFinalized] Killed player missing locally. Will refresh.");
                                 }
                                 const name = killedPlayer?.name || args.killed.slice(0, 6);
-                                setTimeout(() => addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name }), 4000);
+                                setTimeout(() => addLog(`Night Result: ${name} was killed by Mafia!`, "danger", 'NIGHT_RESULT', { isEliminated: true, playerName: name }), 5000);
                             }
                         } else {
-                            setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 4000);
+                            setTimeout(() => addLog("Night Result: No one died last night.", "success", 'NIGHT_RESULT', { isSafe: true }), 5000);
                         }
                         break;
 
