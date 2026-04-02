@@ -58,24 +58,33 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
 
     const [displayDay, setDisplayDay] = useState<number>(0);
 
+    // Determine the actual current day based on logs, not smart contract dayCount which might be ahead.
+    const actualLoggedDay = useMemo(() => {
+        for (let i = logs.length - 1; i >= 0; i--) {
+            const msg = logs[i].message;
+            const match = msg.match(/Day (\d+) has begun/);
+            if (match) return Number(match[1]);
+        }
+        return 1;
+    }, [logs]);
+
     // Track which day to display when voting results are shown.
     useEffect(() => {
         if (showVotingResults && votingResultsDayRef.current === 0) {
-            const day = dayCount > 0 ? dayCount : 1;
-            votingResultsDayRef.current = day;
-            setDisplayDay(day);
+            votingResultsDayRef.current = actualLoggedDay;
+            setDisplayDay(actualLoggedDay);
         } else if (!showVotingResults) {
             votingResultsDayRef.current = 0;
             setDisplayDay(0);
         }
-    }, [showVotingResults, dayCount]);
+    }, [showVotingResults, actualLoggedDay]);
 
     const todayLogs = useMemo(() => {
         if (!logs.length) return [];
 
         const targetDay = (showVotingResults && votingResultsDayRef.current > 0)
             ? votingResultsDayRef.current
-            : (dayCount > 0 ? dayCount : 1);
+            : actualLoggedDay;
 
         let startIndex = 0;
         let foundExact = false;
@@ -112,7 +121,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         }
 
         return logs.slice(startIndex);
-    }, [logs, dayCount, showVotingResults]);
+    }, [logs, actualLoggedDay, showVotingResults]);
 
     const dayEvents = useMemo(() => {
         let nightResult: { type: 'safe' | 'killed'; playerName?: string } | null = null;

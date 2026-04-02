@@ -57,12 +57,19 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 const t = setTimeout(() => setActivePhase(gameState.phase), 4500); // Wait 4.5s so players can see their roles!
                 return () => clearTimeout(t);
             } else if (activePhase === GamePhase.VOTING && gameState.phase === GamePhase.NIGHT) {
-                // Give event poller time to catch VotingFinalized event.
-                // If it catches it, showVotingResults becomes true, and the Night cinematic 
-                // will correctly wait for the result phase to finish.
-                // Since result phase is now 5s, 2.5s is the perfect delay to prevent flickering.
-                const t = setTimeout(() => setActivePhase(gameState.phase), 2500);
-                return () => clearTimeout(t);
+                if (showVotingResults) {
+                    // Do nothing while overlay is active. Wait for it to finish.
+                    return;
+                } else if (prevShowVotingResultsRef.current) {
+                    // Instantly transition if the results phase just finished.
+                    setActivePhase(gameState.phase);
+                } else {
+                    // Failsafe: if showVotingResults hasn't fired yet (RPC lag), give it 12 seconds before forcing the night transition
+                    const t = setTimeout(() => {
+                        if (!showVotingResults) setActivePhase(gameState.phase);
+                    }, 12000);
+                    return () => clearTimeout(t);
+                }
             } else if (activePhase === GamePhase.NIGHT && gameState.phase === GamePhase.DAY) {
                 // Smooth transition to morning - let the night fade a bit
                 const t = setTimeout(() => setActivePhase(gameState.phase), 2500);
@@ -71,7 +78,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 setActivePhase(gameState.phase);
             }
         }
-    }, [gameState.phase, activePhase]);
+    }, [gameState.phase, activePhase, showVotingResults]);
 
     const lastMorningDayRef = useRef<number | null>(null);
     const lastVotingDayRef = useRef<number | null>(null);
