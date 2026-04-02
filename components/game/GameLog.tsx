@@ -92,12 +92,12 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
 
         for (let i = logs.length - 1; i >= 0; i--) {
             const msg = logs[i].message;
-            const dayMatch = msg.match(/Day (\d+) has begun/);
+            const dayMatch = msg.match(/Day (\d+) has begun/i);
             if (dayMatch) {
                 const logDay = Number(dayMatch[1]);
                 if (logDay === targetDay) {
                     startIndex = i;
-                    if (i > 0 && logs[i - 1].message.includes('Night Result:')) {
+                    if (i > 0 && logs[i - 1].message.toLowerCase().includes('night result:')) {
                         startIndex = i - 1;
                     }
                     foundExact = true;
@@ -106,11 +106,17 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 if (logDay === targetDay - 1 && fallbackIndex === -1) {
                     fallbackIndex = i;
                 }
-            } else if (msg.includes('Game started!')) {
+            } else if (msg.toLowerCase().includes('game started!')) {
                 startIndex = i;
                 foundExact = true;
                 break;
             }
+        }
+
+        // Special case: Day 1 often lacks a "Day 1 has begun" marker if it started directly from "Game started"
+        if (!foundExact && targetDay === 1) {
+            startIndex = 0;
+            foundExact = true;
         }
 
         if (!foundExact && fallbackIndex !== -1) {
@@ -168,31 +174,36 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 }
             } else {
                 const msg = log.message;
-                if (msg.includes('Night Result: No one died')) nightResult = { type: 'safe' };
-                else if (msg.includes('Night Result:') && msg.includes('was killed')) {
-                    const match = msg.match(/Night Result: (.+?) was killed/);
+                if (msg.toLowerCase().includes('night result: no one died')) nightResult = { type: 'safe' };
+                else if (msg.toLowerCase().includes('night result:') && msg.toLowerCase().includes('was killed')) {
+                    const match = msg.match(/Night Result: (.+?) was killed/i);
                     nightResult = { type: 'killed', playerName: match?.[1] || 'Unknown' };
                 }
-                if (msg.includes('Discussion Phase started') || msg.includes('Discussion starting')) {
+                if (msg.toLowerCase().includes('discussion phase started') || msg.toLowerCase().includes('discussion starting')) {
                     discussionStarted = true;
                     discussionFinished = false;
                 }
-                if (msg.includes('is now speaking')) {
-                    const match = msg.match(/(.+?) is now speaking/);
+                if (msg.toLowerCase().includes('is now speaking')) {
+                    const match = msg.match(/(.+?) is now speaking/i);
                     currentSpeaker = match?.[1] || null;
                 }
-                if (msg.includes('All players have spoken') || msg.includes('Starting Vote')) discussionFinished = true;
-                if (msg.includes('Voting Phase Started')) votingStarted = true;
-                if (msg.includes('voted for')) {
-                    const match = msg.match(/(.+?) voted for (.+)/);
+                if (msg.toLowerCase().includes('all players have spoken') || 
+                    msg.toLowerCase().includes('starting vote') || 
+                    msg.toLowerCase().includes('discussion concluded') ||
+                    msg.toLowerCase().includes('proceeding to vote')) {
+                    discussionFinished = true;
+                }
+                if (msg.toLowerCase().includes('voting phase started')) votingStarted = true;
+                if (msg.toLowerCase().includes('voted for')) {
+                    const match = msg.match(/(.+?) voted for (.+)/i);
                     if (match) voteCasts.push({ voter: match[1], target: match[2] });
                 }
-                if (msg.includes('eliminated') && log.type === 'danger' && !msg.includes('Night')) {
-                    const nameMatch = msg.match(/^(.+?) eliminated/);
+                if (msg.toLowerCase().includes('eliminated') && log.type === 'danger' && !msg.toLowerCase().includes('night')) {
+                    const nameMatch = msg.match(/^(.+?) eliminated/i);
                     if (nameMatch) votingResult = { type: 'eliminated', playerName: nameMatch[1] };
                 }
-                if (msg.includes('No one was eliminated')) votingResult = { type: 'no_one' };
-                if (msg.includes('Night has fallen')) nightFallen = true;
+                if (msg.toLowerCase().includes('no one was eliminated')) votingResult = { type: 'no_one' };
+                if (msg.toLowerCase().includes('night has fallen')) nightFallen = true;
             }
         }
 
@@ -218,7 +229,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
 
         const voteEntries = todayLogs.filter(l => 
             l.eventType === 'PLAYER_VOTED' || 
-            (l.message.includes('voted for') && !l.eventType)
+            (l.message.toLowerCase().includes('voted for') && !l.eventType)
         );
 
         return {
@@ -233,6 +244,8 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             voteEntries
         };
     }, [todayLogs, phase, showVotingResults, liveDiscussion, forceVotingActive, hideActions]);
+
+    const targetingDay = (showVotingResults && displayDay > 0) ? displayDay : dayCount;
 
     const quorumData = useMemo(() => {
         const needed = Math.floor(alivePlayers.length / 2) + 1;
