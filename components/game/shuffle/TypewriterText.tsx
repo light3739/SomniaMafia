@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
  * A reliable typewriter component that only animates once on mount.
  * Prevents "re-typing" glitches when log contents are updated (e.g. addresses to nicknames).
  */
-export const TypewriterText: React.FC<{ text: string; delay?: number; speed?: number }> = ({ text, delay = 0, speed = 30 }) => {
+export const TypewriterText: React.FC<{ text: string; delay?: number; speed?: number; onProgress?: (progress: number) => void }> = ({ text, delay = 0, speed = 30, onProgress }) => {
     const [displayText, setDisplayText] = useState('');
     const [isComplete, setIsComplete] = useState(false);
     const hasStartedRef = useRef(false);
@@ -27,9 +27,11 @@ export const TypewriterText: React.FC<{ text: string; delay?: number; speed?: nu
                 if (i < text.length) {
                     setDisplayText(text.slice(0, i + 1));
                     i++;
+                    onProgress?.((i) / text.length);
                 } else {
                     clearInterval(intervalId);
                     setIsComplete(true);
+                    onProgress?.(1);
                 }
             }, speed);
         };

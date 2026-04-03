@@ -45,6 +45,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     accentColor: '#916A47',
                     logo: '/assets/somniayeal.png',
                 },
+                defaultChain: SOMNIA_TESTNET,
                 embeddedWallets: {
                     createOnLogin: 'users-without-wallets',
                 } as any,

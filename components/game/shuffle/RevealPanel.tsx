@@ -47,11 +47,7 @@ export const RevealPanel: React.FC<RevealPanelProps> = ({
                         <div>
                             <p className="font-mono text-[10px] tracking-[0.35em] text-white/50 uppercase mb-2">&gt; STATUS</p>
                             <p className="font-mono text-[16px] tracking-wide text-white/80 uppercase">
-                                <TypewriterText 
-                                    text={!revealState.eciesRegistered ? 'SECURING_CHANNEL' :
-                                        !revealState.hasSharedKeys ? 'DECRYPTING_DOSSIER' :
-                                            revealState.myRole ? `REVEALING_${revealState.myRole}` : 'VERIFYING_IDENTITY'} 
-                                />
+                                <TypewriterText text="VERIFYING_IDENTITY" />
                                 <motion.span
                                     className="ml-1 text-[#c8a84b]"
                                     animate={{ opacity: [1, 1, 0, 0, 1] }}
@@ -67,13 +63,7 @@ export const RevealPanel: React.FC<RevealPanelProps> = ({
                             </p>
                         </div>
                         <div className="w-full max-w-[220px]">
-                            <div className="h-[2px] bg-black/70 rounded-full overflow-hidden">
-                                <motion.div
-                                    className="h-full bg-[#c8a84b] rounded-full"
-                                    animate={{ width: revealState.hasSharedKeys ? '100%' : '50%' }}
-                                    transition={{ duration: 0.6 }}
-                                />
-                            </div>
+                            <div className="h-[2px] bg-[#c8a84b]/40 rounded-full" />
                         </div>
                     </motion.div>
                 ) : (
