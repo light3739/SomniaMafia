@@ -152,17 +152,30 @@ export function useEventPoller(deps: PollerDeps) {
                         }
                         break;
 
-                    case 'DayStarted':
-                        // State sync handled by fetchGameData after NightFinalized;
-                        // no extra action needed here
+                    case 'DayStarted': {
+                        // Write a client-side day marker log immediately so GameLog
+                        // can target the new day without waiting for pollServerLogs.
+                        const dayNum = args.dayNumber ? Number(args.dayNumber) : 0;
+                        if (dayNum > 0) {
+                            addLog(
+                                `Day ${dayNum} has begun.`,
+                                'phase',
+                                'DayStarted' as any,
+                                { dayNumber: dayNum },
+                                stableId(log)
+                            );
+                        }
                         break;
+                    }
 
                     case 'VotingStarted':
-                        // No reactive state; server writes the text log
+                        // Write client-side log immediately (deduplicates with server log by stable id)
+                        addLog('Voting Phase Started. Cast your votes.', 'warning', 'VOTING_STARTED' as any, {}, stableId(log));
                         break;
 
                     case 'NightStarted':
-                        // No reactive state; server writes "Night has fallen..."
+                        // Write client-side log immediately (deduplicates with server log by stable id)
+                        addLog('Night has fallen...', 'night' as any, 'NIGHT_FALLS' as any, {}, stableId(log));
                         break;
 
                     case 'NightFinalized': {

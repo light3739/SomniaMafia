@@ -326,38 +326,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [gameState.phase, gameState.dayCount, currentRoomId, refs.stableAddress, refs.runtimeChain.id]);
 
+    // Discussion polling is handled by DayPhase (every 3s when mounted).
+    // Only clear stale state here when leaving DAY phase.
     useEffect(() => {
         const isDay = gameState.phase === GamePhase.DAY;
-        if (!isDay || !currentRoomId || discussionState?.finished) {
-            if (!isDay && discussionState !== null) setDiscussionState(null);
-            return;
+        if (!isDay && discussionState !== null) {
+            setDiscussionState(null);
         }
-
-        let timer: NodeJS.Timeout;
-        let backoffMs = 0; // 429 backoff accumulator
-        const poll = async () => {
-            try {
-                const data = await fetchDiscussionState();
-                backoffMs = 0; // Reset backoff on success
-                if (gameState.phase === GamePhase.DAY && !data?.finished) {
-                    timer = setTimeout(poll, (document.hidden ? 10000 : 5000));
-                }
-            } catch (e: any) {
-                if (gameState.phase === GamePhase.DAY) {
-                    const is429 = e?.status === 429 || e?.message?.includes('429');
-                    if (is429) {
-                        backoffMs = Math.min(backoffMs + 5000, 30000); // Escalate: 5s → 10s → ... → 30s max
-                        timer = setTimeout(poll, 15000 + backoffMs);
-                    } else {
-                        timer = setTimeout(poll, 10000);
-                    }
-                }
-            }
-        };
-
-        poll();
-        return () => { if (timer) clearTimeout(timer); };
-    }, [gameState.phase, currentRoomId, discussionState?.finished, fetchDiscussionState]);
+    }, [gameState.phase, discussionState, setDiscussionState]);
 
     // ==================== FETCH ROLE ON PHASE CHANGE ====================
     const prevPhaseForRoleRef = React.useRef<GamePhase>(GamePhase.LOBBY);
