@@ -74,7 +74,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 // Guarantee minimum cinematic display time (5s from commit).
                 // If a player committed last and night resolved immediately,
                 // they'd otherwise see the cinematic for <1s before it vanishes.
-                const MIN_CINEMATIC_MS = 5000;
+                const MIN_CINEMATIC_MS = 8000;
                 const BASE_DELAY = 2500;
                 const commitTs = Number(sessionStorage.getItem('mafia_cinematic_commit_ts') || '0');
                 const elapsed = commitTs > 0 ? Date.now() - commitTs : Infinity;

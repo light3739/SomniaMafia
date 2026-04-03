@@ -658,6 +658,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     if (isTestMode) {
                         const testResult = Math.random() > 0.5 ? Role.MAFIA : Role.CIVILIAN;
                         setNightState(prev => ({ ...prev, investigationResult: testResult }));
+                        // Reset cinematic timer so detective has time to READ the result
+                        sessionStorage.setItem('mafia_cinematic_commit_ts', String(Date.now()));
                         return;
                     }
 
@@ -670,6 +672,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                             const proof = await fetchInvestigationProofFromGM(committedTarget);
                             if (proof && proof.role !== Role.UNKNOWN) {
                                 console.log(`[Detective] Investigation proof from GM: ${proof.role}`);
+                                // Reset cinematic timer so detective has time to READ the result
+                                sessionStorage.setItem('mafia_cinematic_commit_ts', String(Date.now()));
                                 setNightState(prev => {
                                     const newState = { ...prev, investigationResult: proof.role };
                                     // Update localStorage with the result
@@ -691,6 +695,8 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                         const result = await getInvestigationResultOnChain(address || '', committedTarget);
                         if (result && result.role !== Role.UNKNOWN) {
                             console.log(`[Detective] Investigation result from chain: ${result.role}`);
+                            // Reset cinematic timer so detective has time to READ the result
+                            sessionStorage.setItem('mafia_cinematic_commit_ts', String(Date.now()));
                             setNightState(prev => {
                                 const newState = { ...prev, investigationResult: result.role };
                                 // Update localStorage with the result

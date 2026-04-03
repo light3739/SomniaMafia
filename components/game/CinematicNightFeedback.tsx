@@ -69,7 +69,7 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
     // Delayed detective result reveal for suspense
     React.useEffect(() => {
         if (role === Role.DETECTIVE && displayResult != null) {
-            const t = setTimeout(() => setShowDetectiveResult(true), skipAnim ? 500 : 3500);
+            const t = setTimeout(() => setShowDetectiveResult(true), skipAnim ? 300 : 2000);
             return () => clearTimeout(t);
         }
     }, [role, displayResult, skipAnim]);
