@@ -93,7 +93,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
 
     const targetDay = (showVotingResults && lockedVotingDayRef.current > 0)
         ? lockedVotingDayRef.current
-        : actualLoggedDay;
+        : Math.max(actualLoggedDay, dayCount || 1);
 
     // ─── dayEvents: single source of truth from eventType/eventData ──────
     // Scans ALL logs directly instead of relying on todayLogs slice.
@@ -266,6 +266,19 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             discussionStarted = true;
             discussionFinished = true;
             votingStarted = true;
+        }
+
+        // 5b. Monotonic state enforcement — later events imply earlier ones completed.
+        //     This prevents the 1-2s flicker where discussion disappears during
+        //     the gap between log arrival and showVotingResults being set.
+        if (nightFallen || votingResult) {
+            discussionStarted = true;
+            discussionFinished = true;
+            votingStarted = true;
+        }
+        if (votingStarted) {
+            discussionStarted = true;
+            discussionFinished = true;
         }
 
         // 6. FALLBACK: if forward scan missed votingResult, scan the FULL log array.
