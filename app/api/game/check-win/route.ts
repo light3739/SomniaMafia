@@ -10,7 +10,7 @@ export async function POST(request: Request) {
         }
 
         const roomId = BigInt(rawRoomId).toString();
-        const cid = chainId || 43113;
+        const cid = chainId || 50312;
         console.log(`[API/CheckWin] Checking Room #${roomId} on chain ${cid}`);
 
 

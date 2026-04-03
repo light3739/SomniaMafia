@@ -6,7 +6,7 @@ import { useGameContext } from '../../contexts/GameContext';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useBalance } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
-import { SOMNIA_TESTNET, AVALANCHE_FUJI } from '../../contracts/config';
+import { SOMNIA_TESTNET } from '../../contracts/config';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
@@ -91,7 +91,6 @@ export const SetupProfile: React.FC = () => {
     const [editingName, setEditingName] = useState(false);
     const [tempName, setTempName] = useState('');
     const [fundAmount, setFundAmount] = useState('');
-    const [fundingNetwork, setFundingNetwork] = useState<number>(SOMNIA_TESTNET.id);
     const [isFunding, setIsFunding] = useState(false);
 
     // Modal state: null = closed, 'wallet' | 'accounts' = open
@@ -194,29 +193,18 @@ export const SetupProfile: React.FC = () => {
         query: { enabled: !!embeddedWalletAddress }
     });
 
-    const { data: avaxBalance } = useBalance({
-        address: embeddedWalletAddress as `0x${string}`,
-        chainId: AVALANCHE_FUJI.id,
-        query: { enabled: !!embeddedWalletAddress }
-    });
-
     const externalWallet = wallets.find(w => w.walletClientType !== 'privy');
 
     const { data: externalBalance } = useBalance({
         address: externalWallet?.address as `0x${string}` | undefined,
-        chainId: fundingNetwork,
+        chainId: SOMNIA_TESTNET.id,
         query: { enabled: !!externalWallet?.address }
     });
 
     const handleMaxClick = () => {
         if (!externalBalance) return;
         let max = Number(formatEther(externalBalance.value));
-        // Simple gas reservation logic to avoid transaction failure
-        if (fundingNetwork === AVALANCHE_FUJI.id && max > 0.005) {
-            max -= 0.005;
-        } else if (fundingNetwork === SOMNIA_TESTNET.id && max > 0.001) {
-            max -= 0.001;
-        }
+        if (max > 0.001) max -= 0.001;
         setFundAmount(Math.max(0, max).toFixed(3));
     };
 
@@ -224,7 +212,7 @@ export const SetupProfile: React.FC = () => {
         if (!externalWallet || !embeddedWalletAddress) return;
         try {
             setIsFunding(true);
-            await externalWallet.switchChain(fundingNetwork);
+            await externalWallet.switchChain(SOMNIA_TESTNET.id);
             const provider = await externalWallet.getEthereumProvider() as any;
 
             const valueWei = parseEther(fundAmount);
@@ -501,17 +489,7 @@ export const SetupProfile: React.FC = () => {
                                             </span>
                                         </div>
 
-                                        <div className="flex items-center justify-between bg-black/40 rounded-xl p-3 px-4 border border-white/5 group">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-[#19130D] flex items-center justify-center border border-white/10 shadow-inner p-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
-                                                    <img src="/assets/avalanche-avax-logo.png" alt="Avalanche" className="w-full h-full object-contain grayscale-[50%] group-hover:grayscale-0 transition-all" />
-                                                </div>
-                                                <span className="text-white font-montserrat text-sm font-medium tracking-wide">Avalanche <span className="text-white/60 text-[10px] uppercase ml-2 tracking-wider">Fuji</span></span>
-                                            </div>
-                                            <span className="text-white font-mono text-base font-medium tabular-nums">
-                                                {avaxBalance ? Number(formatEther(avaxBalance.value)).toFixed(3) : '0.000'} <span className="text-[#C19A6B]/70 text-xs ml-1 font-bold">AVAX</span>
-                                            </span>
-                                        </div>
+
                                     </div>
 
                                     {/* Fund from External Wallet Section */}
@@ -550,22 +528,12 @@ export const SetupProfile: React.FC = () => {
                                                     <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.15em] font-bold text-white/60 px-1">
                                                         <span>Token</span>
                                                         <span className="text-white/60">
-                                                            Available: <span className="font-mono text-white/80 tabular-nums">{externalBalance ? Number(formatEther(externalBalance.value)).toFixed(3) : '0.000'}</span> {fundingNetwork === SOMNIA_TESTNET.id ? 'STT' : 'AVAX'}
+                                                            Available: <span className="font-mono text-white/80 tabular-nums">{externalBalance ? Number(formatEther(externalBalance.value)).toFixed(3) : '0.000'}</span> STT
                                                         </span>
                                                     </div>
                                                     <div className="flex gap-2 w-full">
-                                                        <div className="relative w-[130px]">
-                                                            <select
-                                                                value={fundingNetwork}
-                                                                onChange={(e) => setFundingNetwork(Number(e.target.value))}
-                                                                className="w-full h-[54px] bg-black/60 border border-white/10 text-white font-montserrat text-sm font-semibold rounded-md outline-none pl-4 pr-11 appearance-none focus:border-[#C19A6B]/50 focus:bg-black/80 transition-colors cursor-pointer"
-                                                            >
-                                                                <option value={SOMNIA_TESTNET.id}>STT</option>
-                                                                <option value={AVALANCHE_FUJI.id}>AVAX</option>
-                                                            </select>
-                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-6 h-6 bg-white/10 rounded-md flex items-center justify-center border border-white/10 shadow-sm">
-                                                                <ChevronRight className="w-3.5 h-3.5 text-white/70 rotate-90" />
-                                                            </div>
+                                                        <div className="relative w-[80px] flex items-center justify-center">
+                                                            <span className="text-white font-montserrat text-sm font-semibold">STT</span>
                                                         </div>
                                                         <div className="relative flex-1 group">
                                                             <button
@@ -599,7 +567,7 @@ export const SetupProfile: React.FC = () => {
                                                         {isFunding ? 'Processing...' : 'Send Tokens'}
                                                     </button>
                                                     <p className="text-center text-white/40 text-[10px] font-semibold uppercase tracking-widest mt-1">
-                                                        Est. Network Fee: <span className="font-mono text-white/50 tabular-nums">~{fundingNetwork === SOMNIA_TESTNET.id ? '0.001 STT' : '0.005 AVAX'}</span>
+                                                        Est. Network Fee: <span className="font-mono text-white/50 tabular-nums">~0.001 STT</span>
                                                     </p>
                                                 </div>
                                             </div>

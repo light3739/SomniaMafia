@@ -16,7 +16,7 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const roomId = searchParams.get('roomId');
         if (!roomId) return NextResponse.json({ error: 'Missing roomId' }, { status: 400 });
-        const chainId = searchParams.get('chainId') || '43113';
+        const chainId = searchParams.get('chainId') || '50312';
 
         const gmUrl = `${GM_SERVER_URL}/avatars/${roomId}?chainId=${chainId}`;
         const gmResp = await fetch(gmUrl, {

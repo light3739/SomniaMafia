@@ -17,7 +17,7 @@ export async function GET(request: Request) {
         const roomId = searchParams.get('roomId');
         const dayCount = searchParams.get('dayCount');
         const playerAddress = searchParams.get('playerAddress');
-        const chainId = searchParams.get('chainId') || '43113';
+        const chainId = searchParams.get('chainId') || '50312';
 
         if (!roomId) return NextResponse.json({ error: 'Missing roomId' }, { status: 400 });
 

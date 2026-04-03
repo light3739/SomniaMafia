@@ -77,7 +77,7 @@ export async function registerSessionOnGm(params: {
 
     const timestamp = Date.now();
     const nonce = Math.random().toString(36).slice(2) + timestamp.toString(36);
-    const effectiveChainId = String(chainId || 43113);
+    const effectiveChainId = String(chainId || 50312);
     const message = new SignatureBuilder('register-session', effectiveChainId, roomId)
         .withAddress(mainWallet)
         .withAddress(sessionAddress)

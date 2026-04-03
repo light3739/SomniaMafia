@@ -7,7 +7,7 @@ import { createConfig } from '@privy-io/wagmi';
 import { PrivyProvider } from '@privy-io/react-auth';
 import { WagmiProvider } from '@privy-io/wagmi';
 
-import { SOMNIA_TESTNET, AVALANCHE_FUJI, ACTIVE_DEPLOYMENT } from '../contracts/config';
+import { SOMNIA_TESTNET, ACTIVE_DEPLOYMENT } from '../contracts/config';
 import { GameProvider } from '../contexts/GameContext';
 import { AudioProvider } from '../contexts/AudioContext';
 import { WalletAutoConnector } from '../components/ui/WalletAutoConnector';
@@ -15,11 +15,9 @@ import { WalletAutoConnector } from '../components/ui/WalletAutoConnector';
 export const config = createConfig({
     chains: [
         SOMNIA_TESTNET,
-        AVALANCHE_FUJI,
     ],
     transports: {
         [SOMNIA_TESTNET.id]: fallback(SOMNIA_TESTNET.rpcUrls.default.http.map((url: string) => http(url))),
-        [AVALANCHE_FUJI.id]: fallback(AVALANCHE_FUJI.rpcUrls.default.http.map((url: string) => http(url))),
     },
     batch: {
         multicall: {
@@ -49,8 +47,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 embeddedWallets: {
                     createOnLogin: 'users-without-wallets',
                 } as any,
-                supportedChains: [SOMNIA_TESTNET, AVALANCHE_FUJI],
-                // 2. Explicitly tell Coinbase Wallet to use only EOA (prevents unsupported chain warnings)
+                supportedChains: [SOMNIA_TESTNET],
                 externalWallets: {
                     coinbaseWallet: {
                         connectionOptions: 'eoaOnly',

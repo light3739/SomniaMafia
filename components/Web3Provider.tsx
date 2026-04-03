@@ -5,12 +5,11 @@ import { createConfig } from '@privy-io/wagmi';
 import { PrivyProvider } from '@privy-io/react-auth';
 import { WagmiProvider } from '@privy-io/wagmi';
 
-import { SOMNIA_TESTNET, AVALANCHE_FUJI } from '@/contracts/config';
+import { SOMNIA_TESTNET } from '@/contracts/config';
 
 export const config = createConfig({
-  chains: [AVALANCHE_FUJI, SOMNIA_TESTNET],
+  chains: [SOMNIA_TESTNET],
   transports: {
-    [AVALANCHE_FUJI.id]: http(),
     [SOMNIA_TESTNET.id]: http(),
   },
 });
@@ -28,9 +27,11 @@ export const Web3Provider = ({ children }: { children: React.ReactNode }) => {
           accentColor: '#916A47',
           logo: '/assets/Icon.png',
         },
+        defaultChain: SOMNIA_TESTNET,
         embeddedWallets: {
           createOnLogin: 'users-without-wallets',
         } as any,
+        supportedChains: [SOMNIA_TESTNET],
       }}
     >
       <QueryClientProvider client={queryClient}>
