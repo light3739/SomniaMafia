@@ -49,6 +49,12 @@ export function useWalletManager(refs: GameRefs, useEmbeddedWallet: boolean) {
                     console.error('[WalletSelect] Wagmi client error:', e);
                 }
 
+                try {
+                    await refs.walletClientRef.current.request({ method: 'eth_requestAccounts' });
+                } catch (e: any) {
+                    console.warn('[WalletSelect] Wagmi requestAccounts failed:', e);
+                }
+
                 if (refs.walletClientRef.current.account) {
                     refs.addressRef.current = refs.walletClientRef.current.account.address;
                 }
@@ -57,8 +63,12 @@ export function useWalletManager(refs: GameRefs, useEmbeddedWallet: boolean) {
         }
 
         if (!selectedWallet && wallets.length > 0) {
-            console.log('[WalletSelect] Preferred wallet not found, falling back to first available Privy wallet');
-            selectedWallet = wallets[0];
+            if (useEmbeddedWallet) {
+                console.log('[WalletSelect] Preferred wallet not found, falling back to first available Privy wallet');
+                selectedWallet = wallets[0];
+            } else {
+                throw new Error("Main wallet is locked or not connected. Please unlock your wallet first.");
+            }
         }
 
         if (selectedWallet) {
@@ -83,6 +93,16 @@ export function useWalletManager(refs: GameRefs, useEmbeddedWallet: boolean) {
             }
 
             const provider = await selectedWallet.getEthereumProvider();
+            
+            // Force unlock prompt if the wallet is locked
+            try {
+                if (selectedWallet.walletClientType !== 'privy') {
+                    await provider.request({ method: 'eth_requestAccounts' });
+                }
+            } catch (err: any) {
+                console.warn('[WalletSelect] eth_requestAccounts failed (user might have rejected):', err);
+            }
+
             return {
                 client: createWalletClient({
                     account: selectedWallet.address as `0x${string}`,
