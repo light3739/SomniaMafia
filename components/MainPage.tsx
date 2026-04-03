@@ -2,11 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { usePrivy } from '@privy-io/react-auth';
-import { useAccount, useSwitchChain } from 'wagmi';
-import { Button } from './ui/Button';
-import { ACTIVE_DEPLOYMENT } from '../contracts/config';
 const somniaLogo = "/assets/somniayeal.png";
-const avalancheLogo = "/assets/avalanche-avax-logo.png";
 
 interface MainPageProps {
     onStart: () => void;
@@ -14,9 +10,7 @@ interface MainPageProps {
 
 export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
 
-    const { login, authenticated, ready, user } = usePrivy();
-    const { chain } = useAccount();
-    const { switchChain } = useSwitchChain();
+    const { login, authenticated, ready } = usePrivy();
 
     return (
         <div className="relative w-full h-[100dvh] overflow-y-auto overflow-x-hidden font-sans flex flex-col items-center custom-scrollbar">
@@ -89,27 +83,6 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                     <span className="relative z-10">LOGIN / CONNECT</span>
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
                                 </button>
-                            );
-                        }
-
-                        const preferredNetwork = typeof window !== 'undefined'
-                            ? localStorage.getItem('mafia_selected_network')
-                            : null;
-                        const preferredChainId = preferredNetwork === 'avalanche_fuji'
-                            ? 43113
-                            : ACTIVE_DEPLOYMENT.chainId; // default to active deployment (Somnia)
-
-                        // Don't show "SWITCH NETWORK" if chain is undefined — the wallet is still
-                        // initialising (embedded wallet case). WalletAutoConnector will handle it.
-                        if (chain && chain.id !== preferredChainId) {
-                            return (
-                                <Button
-                                    onClick={() => switchChain({ chainId: preferredChainId })}
-                                    variant="noir-danger"
-                                    className="px-12 py-4 text-base md:text-lg tracking-[0.2em] font-['Cinzel']"
-                                >
-                                    SWITCH NETWORK
-                                </Button>
                             );
                         }
 

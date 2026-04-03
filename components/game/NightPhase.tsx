@@ -9,7 +9,7 @@ import { MAFIA_ABI } from '../../contracts/config';
 
 import { Role, Player, GamePhase } from '../../types';
 import { buildTeammatesMessage } from '../../services/signingSchema';
-import { NetworkSelector } from '../ui/NetworkSelector';
+
 import { Button } from '../ui/Button';
 import { MafiaChat } from './MafiaChat';
 import { useSoundEffects } from '../ui/SoundEffects';

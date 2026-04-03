@@ -23,15 +23,6 @@ interface StoredSession {
 const STORAGE_KEY = 'somnia_mafia_session';
 
 function getSessionChain() {
-  if (typeof window === 'undefined') {
-    return NETWORKS[ACTIVE_NETWORK];
-  }
-
-  const saved = localStorage.getItem('mafia_selected_network') as SupportedNetwork | null;
-  if (saved && (saved === 'avalanche_fuji' || saved === 'somnia_testnet')) {
-    return NETWORKS[saved];
-  }
-
   return NETWORKS[ACTIVE_NETWORK];
 }
 
