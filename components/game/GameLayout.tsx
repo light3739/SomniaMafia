@@ -71,8 +71,19 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     return () => clearTimeout(t);
                 }
             } else if (activePhase === GamePhase.NIGHT && gameState.phase === GamePhase.DAY) {
-                // Smooth transition to morning - let the night fade a bit
-                const t = setTimeout(() => setActivePhase(gameState.phase), 2500);
+                // Guarantee minimum cinematic display time (5s from commit).
+                // If a player committed last and night resolved immediately,
+                // they'd otherwise see the cinematic for <1s before it vanishes.
+                const MIN_CINEMATIC_MS = 5000;
+                const BASE_DELAY = 2500;
+                const commitTs = Number(sessionStorage.getItem('mafia_cinematic_commit_ts') || '0');
+                const elapsed = commitTs > 0 ? Date.now() - commitTs : Infinity;
+                const delay = Math.max(BASE_DELAY, MIN_CINEMATIC_MS - elapsed);
+
+                const t = setTimeout(() => {
+                    sessionStorage.removeItem('mafia_cinematic_commit_ts');
+                    setActivePhase(gameState.phase);
+                }, delay);
                 return () => clearTimeout(t);
             } else {
                 setActivePhase(gameState.phase);

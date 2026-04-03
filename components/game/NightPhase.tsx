@@ -628,6 +628,9 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 committedTarget: committedTarget
             }));
 
+            // Record commit time so GameLayout can guarantee minimum cinematic display
+            sessionStorage.setItem('mafia_cinematic_commit_ts', String(Date.now()));
+
             // Fix: Persist committed target so cinematic restoration doesn't show "someone"
             localStorage.setItem(NIGHT_COMMIT_KEY, JSON.stringify({
                 hasCommitted: true,
