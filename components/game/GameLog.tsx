@@ -37,6 +37,49 @@ const TypewriterText: React.FC<{ text: string; speed?: number; className?: strin
     );
 };
 
+const HighlightedTypewriterText: React.FC<{
+    parts: { text: string; className?: string }[];
+    speed?: number;
+    className?: string;
+}> = ({ parts, speed = 28, className }) => {
+    const fullText = parts.map(p => p.text).join('');
+    const [displayed, setDisplayed] = useState('');
+    const [done, setDone] = useState(false);
+
+    useEffect(() => {
+        setDisplayed('');
+        setDone(false);
+        let i = 0;
+        const interval = setInterval(() => {
+            i++;
+            setDisplayed(fullText.slice(0, i));
+            if (i >= fullText.length) {
+                clearInterval(interval);
+                setDone(true);
+            }
+        }, speed);
+        return () => clearInterval(interval);
+    }, [fullText, speed]);
+
+    let currentLen = 0;
+
+    return (
+        <span className={className}>
+            {parts.map((p, idx) => {
+                const start = currentLen;
+                const end = start + p.text.length;
+                currentLen = end;
+                if (displayed.length <= start) return null;
+                const partDisplayed = displayed.slice(start, Math.min(displayed.length, end));
+                return <span key={idx} className={p.className}>{partDisplayed}</span>;
+            })}
+            {!done && (
+                <span className="animate-pulse text-[#916A47] opacity-70 ml-[1px]">▌</span>
+            )}
+        </span>
+    );
+};
+
 interface GameLogProps {
     liveDiscussion?: {
         active?: boolean;
@@ -409,7 +452,19 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
                                 <TypewriterText text="> NIGHT_RESULT" className={LABEL} />
                                 <span className={VAL_BASE}>
-                                    <TypewriterText text={dayEvents.nightResult.type === 'safe' ? "No one was eliminated." : `${dayEvents.nightResult.playerName} was eliminated last night.`} speed={20} />
+                                    {dayEvents.nightResult.type === 'safe' ? (
+                                        <HighlightedTypewriterText parts={[
+                                            { text: "NO ONE", className: "text-white font-bold" },
+                                            { text: " was eliminated." }
+                                        ]} speed={20} />
+                                    ) : (
+                                        <HighlightedTypewriterText parts={[
+                                            { text: dayEvents.nightResult.playerName || 'A player', className: "text-white font-bold" },
+                                            { text: " was " },
+                                            { text: "eliminated", className: "text-red-500 font-bold" },
+                                            { text: " last night." }
+                                        ]} speed={20} />
+                                    )}
                                 </span>
                             </motion.div>
                         )}
@@ -421,7 +476,10 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                                     {dayEvents.discussionFinished ? (
                                         <TypewriterText text="Discussion concluded. All players have spoken." speed={20} />
                                     ) : dayEvents.currentSpeaker ? (
-                                        <TypewriterText text={`Active speaker: ${dayEvents.currentSpeaker}`} speed={20} />
+                                        <HighlightedTypewriterText parts={[
+                                            { text: "Active speaker: " },
+                                            { text: dayEvents.currentSpeaker, className: "text-white font-bold" }
+                                        ]} speed={20} />
                                     ) : (
                                         <span className="animate-pulse">Waiting for discussion to start...</span>
                                     )}
@@ -442,7 +500,19 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3 border-b border-dashed border-white/5 pb-4">
                                 <TypewriterText text="> VOTING_RESULT" className={LABEL} />
                                 <span className={VAL_BASE}>
-                                    <TypewriterText text={dayEvents.votingResult.type === 'eliminated' ? `${dayEvents.votingResult.playerName || 'A player'} eliminated by vote.` : "No one was eliminated."} speed={20} />
+                                    {dayEvents.votingResult.type === 'eliminated' ? (
+                                        <HighlightedTypewriterText parts={[
+                                            { text: dayEvents.votingResult.playerName || 'A player', className: "text-white font-bold" },
+                                            { text: " " },
+                                            { text: "eliminated", className: "text-[#916A47] font-bold" },
+                                            { text: " by vote." }
+                                        ]} speed={20} />
+                                    ) : (
+                                        <HighlightedTypewriterText parts={[
+                                            { text: "NO ONE", className: "text-white font-bold" },
+                                            { text: " was eliminated." }
+                                        ]} speed={20} />
+                                    )}
                                 </span>
                             </motion.div>
                         )}
