@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Camera, Upload, Check, Link, Unlink, LogOut, Edit2, X, Wallet, Users, ChevronRight } from 'lucide-react';
+import { Camera, Upload, Check, Link, Unlink, LogOut, Edit2, X, Wallet, Users, ChevronRight, Copy } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
@@ -447,9 +447,18 @@ export const SetupProfile: React.FC = () => {
                                     <div className="flex flex-col gap-1">
                                         <p className="text-white text-base font-montserrat font-medium tracking-wide">Embedded Wallet</p>
                                         {hasEmbeddedWallet && embeddedWalletAddress ? (
-                                            <p className="text-white/60 text-sm font-mono border border-white/10 bg-black/40 px-2.5 py-1 rounded-md inline-block w-fit tracking-wide shadow-inner tabular-nums">
-                                                {embeddedWalletAddress.slice(0, 6)}...{embeddedWalletAddress.slice(-4)}
-                                            </p>
+                                            <div className="flex items-center gap-1.5">
+                                                <p className="text-white/60 text-sm font-mono border border-white/10 bg-black/40 px-2.5 py-1 rounded-md inline-block w-fit tracking-wide shadow-inner tabular-nums">
+                                                    {embeddedWalletAddress.slice(0, 6)}...{embeddedWalletAddress.slice(-4)}
+                                                </p>
+                                                <button
+                                                    onClick={() => navigator.clipboard.writeText(embeddedWalletAddress)}
+                                                    className="p-1 rounded text-white/40 hover:text-white/80 hover:bg-white/10 transition-all"
+                                                    title="Copy address"
+                                                >
+                                                    <Copy className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         ) : (
                                             <p className="text-white/30 text-xs mt-1">Not connected</p>
                                         )}
