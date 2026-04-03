@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { usePrivy } from '@privy-io/react-auth';
 import { useAccount, useSwitchChain } from 'wagmi';
 import { Button } from './ui/Button';
+import { ACTIVE_DEPLOYMENT } from '../contracts/config';
 const somniaLogo = "/assets/somniayeal.png";
 const avalancheLogo = "/assets/avalanche-avax-logo.png";
 
@@ -94,8 +95,12 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         const preferredNetwork = typeof window !== 'undefined'
                             ? localStorage.getItem('mafia_selected_network')
                             : null;
-                        const preferredChainId = preferredNetwork === 'somnia_testnet' ? 50312 : 43113;
+                        const preferredChainId = preferredNetwork === 'avalanche_fuji'
+                            ? 43113
+                            : ACTIVE_DEPLOYMENT.chainId; // default to active deployment (Somnia)
 
+                        // Don't show "SWITCH NETWORK" if chain is undefined — the wallet is still
+                        // initialising (embedded wallet case). WalletAutoConnector will handle it.
                         if (chain && chain.id !== preferredChainId) {
                             return (
                                 <Button
