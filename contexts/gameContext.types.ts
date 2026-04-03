@@ -123,4 +123,6 @@ export interface DiscussionState {
     currentSpeakerAddress: string | null;
     timeRemaining: number;
     finished?: boolean;
+    isMyTurn?: boolean;
+    phase?: string;
 }

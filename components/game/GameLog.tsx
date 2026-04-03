@@ -312,8 +312,8 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 // Stop scanning past previous day boundary to avoid picking up wrong day's result
                 if (l.eventType === 'DayStarted' || l.message.match(/Day\s+\d+\s+has begun/i)) break;
             }
-            if (!votingResult) {
-                console.warn('[GameLog] No VOTING_RESULT found in any logs!',
+            if (!votingResult && votingStarted) {
+                console.warn('[GameLog] No VOTING_RESULT found after voting started!',
                     { logsCount: logs.length, targetDay, showVotingResults,
                       lastFewLogs: logs.slice(-5).map(l => ({ et: l.eventType, msg: l.message.slice(0, 50), ed: l.eventData })) });
             }
@@ -447,7 +447,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                             </motion.div>
                         )}
 
-                        {(dayEvents.nightFallen || showNightFalls) && (
+                        {(dayEvents.nightFallen || showNightFalls) && (!dayEvents.votingStarted || dayEvents.votingResult) && (
                             <motion.div variants={itemVariants} initial="hidden" animate="visible" className="flex items-start gap-3 pt-2">
                                 <TypewriterText text="> SYSTEM" className={LABEL} />
                                 <TypewriterText text="NIGHT HAS FALLEN" className="font-mono text-[13px] font-bold uppercase tracking-[0.1em] text-[#916A47]" speed={30} />
