@@ -25,6 +25,25 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
 }) => {
     const [showDetectiveResult, setShowDetectiveResult] = React.useState(false);
 
+    // Freeze targetName and investigationResult on first valid value.
+    // When night resolves (NightFinalized → fetchGameData), gameState.players
+    // updates and committedTargetName can momentarily revert to "someone"
+    // because the player lookup runs against updated state.
+    // These refs preserve the values shown to the user.
+    const frozenTargetRef = useRef<string>(targetName);
+    const frozenResultRef = useRef<Role | null | undefined>(investigationResult);
+
+    if (targetName && targetName !== 'someone') {
+        frozenTargetRef.current = targetName;
+    }
+    if (investigationResult != null) {
+        frozenResultRef.current = investigationResult;
+    }
+
+    // Use frozen values for display
+    const displayTarget = frozenTargetRef.current;
+    const displayResult = frozenResultRef.current;
+
     // Track if this is a remount (from state sync flickering)
     // so we skip the slow entrance animations and show content immediately
     const isRemountRef = useRef(false);
@@ -49,11 +68,11 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
 
     // Delayed detective result reveal for suspense
     React.useEffect(() => {
-        if (role === Role.DETECTIVE && investigationResult != null) {
+        if (role === Role.DETECTIVE && displayResult != null) {
             const t = setTimeout(() => setShowDetectiveResult(true), skipAnim ? 500 : 3500);
             return () => clearTimeout(t);
         }
-    }, [role, investigationResult, skipAnim]);
+    }, [role, displayResult, skipAnim]);
 
     // АБСОЛЮТНО ПЛОСКИЙ И ЖЕСТКИЙ ДИЗАЙН (Minimalist Brutalism / Noir)
     const configs: Record<string, {
@@ -66,22 +85,22 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
             icon: <Skull strokeWidth={1} className="w-24 h-24 md:w-32 md:h-32 text-[#8B0000]" />, // Цвет засохшей крови
             title: isWaitingConsensus ? 'AWAITING ORDERS' : 'CONTRACT SEALED',
             desc: isWaitingConsensus
-                ? `The family is deciding on ${targetName}... (${consensusCount}/${totalMafia})`
-                : `The hit on ${targetName} is confirmed.`,
+                ? `The family is deciding on ${displayTarget}... (${consensusCount}/${totalMafia})`
+                : `The hit on ${displayTarget} is confirmed.`,
             accent: 'bg-[#8B0000]'
         },
         [Role.DOCTOR]: {
             icon: <Shield strokeWidth={1} className="w-24 h-24 md:w-32 md:h-32 text-[#0D9488]" />, // Темный хирургический тил
             title: 'STANDING WATCH',
-            desc: `You are guarding ${targetName}'s door tonight.`,
+            desc: `You are guarding ${displayTarget}'s door tonight.`,
             accent: 'bg-[#0D9488]'
         },
         [Role.DETECTIVE]: {
             icon: <Search strokeWidth={1} className="w-24 h-24 md:w-32 md:h-32 text-[#B45309]" />, // Ржавый янтарь (виски/лампа)
-            title: investigationResult != null ? 'CASE CLOSED' : 'GATHERING INTEL',
-            desc: investigationResult != null
+            title: displayResult != null ? 'CASE CLOSED' : 'GATHERING INTEL',
+            desc: displayResult != null
                 ? undefined
-                : `The dossier on ${targetName} will be ready by dawn.`,
+                : `The dossier on ${displayTarget} will be ready by dawn.`,
             accent: 'bg-[#B45309]'
         },
         [Role.CIVILIAN]: {
@@ -224,7 +243,7 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
 
                 {/* Строгий текст без лишнего форматирования / Результат расследования */}
                 <AnimatePresence mode="wait">
-                    {role === Role.DETECTIVE && investigationResult != null ? (
+                    {role === Role.DETECTIVE && displayResult != null ? (
                         <motion.div
                             key="result"
                             initial={{ opacity: 0 }}
@@ -240,9 +259,9 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
                                     initial={{ opacity: 0, scale: 0.9 }}
                                     animate={{ opacity: 1, scale: 1 }}
                                     transition={{ duration: 0.8 }}
-                                    className={`text-lg md:text-xl font-sans uppercase tracking-widest ${investigationResult === Role.MAFIA ? 'text-[#8B0000]' : 'text-[#0D9488]'}`}
+                                    className={`text-lg md:text-xl font-sans uppercase tracking-widest ${displayResult === Role.MAFIA ? 'text-[#8B0000]' : 'text-[#0D9488]'}`}
                                 >
-                                    {targetName} IS {investigationResult === Role.MAFIA ? 'GUILTY' : 'CLEAN'}
+                                    {displayTarget} IS {displayResult === Role.MAFIA ? 'GUILTY' : 'CLEAN'}
                                 </motion.span>
                             )}
                         </motion.div>
