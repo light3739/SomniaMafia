@@ -189,10 +189,25 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                             voteCasts.push({ voter: log.eventData.playerName, target: log.eventData.targetName });
                         }
                         break;
-                    case 'VOTING_RESULT':
-                        if (log.eventData?.isSafe) votingResult = { type: 'no_one' };
-                        else if (log.eventData?.isEliminated) votingResult = { type: 'eliminated', playerName: log.eventData.playerName };
+                    case 'VOTING_RESULT': {
+                        // Defensive: eventData might be {} if server switch fell through
+                        if (log.eventData?.isSafe) {
+                            votingResult = { type: 'no_one' };
+                        } else if (log.eventData?.isEliminated) {
+                            votingResult = { type: 'eliminated', playerName: log.eventData.playerName };
+                        } else {
+                            // eventData is empty/malformed — derive from message text
+                            const lower = log.message.toLowerCase();
+                            if (lower.includes('no one was eliminated') || lower.includes('no one')) {
+                                votingResult = { type: 'no_one' };
+                            } else {
+                                const vf = log.message.match(/Voting Finalized:\s*(.+?)\s+was eliminated/i);
+                                votingResult = { type: 'eliminated', playerName: vf?.[1] || 'A player' };
+                            }
+                            console.warn('[GameLog] VOTING_RESULT had empty eventData, derived from text:', votingResult);
+                        }
                         break;
+                    }
                     case 'NIGHT_FALLS':
                         nightFallen = true;
                         break;
@@ -253,29 +268,41 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             votingStarted = true;
         }
 
-        // 6. FALLBACK: if showVotingResults is active but we still found no votingResult,
-        //    scan the entire log array backwards (handles race conditions with server logs).
-        if (showVotingResults && !votingResult) {
+        // 6. FALLBACK: if forward scan missed votingResult, scan the FULL log array.
+        //    Runs UNCONDITIONALLY (not gated by showVotingResults) so it works even
+        //    when VotingFinalized was historical and the overlay didn't appear.
+        if (!votingResult) {
             for (let i = logs.length - 1; i >= 0; i--) {
                 const l = logs[i];
                 if (l.eventType === 'VOTING_RESULT') {
                     if (l.eventData?.isSafe) votingResult = { type: 'no_one' };
                     else if (l.eventData?.isEliminated) votingResult = { type: 'eliminated', playerName: l.eventData.playerName };
+                    else {
+                        // Defensive: derive from message if eventData is empty
+                        const lower = l.message.toLowerCase();
+                        if (lower.includes('no one')) votingResult = { type: 'no_one' };
+                        else {
+                            const vf = l.message.match(/Voting Finalized:\s*(.+?)\s+was eliminated/i);
+                            votingResult = { type: 'eliminated', playerName: vf?.[1] || 'A player' };
+                        }
+                    }
+                    console.log('[GameLog] VOTING_RESULT recovered via full-log fallback:', votingResult, 'eventData:', l.eventData);
                     break;
                 }
-                // Text fallback
+                // Text fallback for logs without eventType
                 const lower = l.message.toLowerCase();
                 if (l.type === 'danger' && lower.includes('eliminated') && !lower.includes('night')) {
                     const vf = l.message.match(/Voting Finalized:\s*(.+?)\s+was eliminated/i);
                     if (vf) { votingResult = { type: 'eliminated', playerName: vf[1] }; break; }
                 }
                 if (lower.includes('no one was eliminated')) { votingResult = { type: 'no_one' }; break; }
+                // Stop scanning past previous day boundary to avoid picking up wrong day's result
+                if (l.eventType === 'DayStarted' || l.message.match(/Day\s+\d+\s+has begun/i)) break;
             }
-            if (votingResult) {
-                console.log('[GameLog] VOTING_RESULT recovered via full-log fallback:', votingResult);
-            } else {
-                console.warn('[GameLog] showVotingResults=true but NO VOTING_RESULT found anywhere!',
-                    { logsCount: logs.length, targetDay });
+            if (!votingResult) {
+                console.warn('[GameLog] No VOTING_RESULT found in any logs!',
+                    { logsCount: logs.length, targetDay, showVotingResults,
+                      lastFewLogs: logs.slice(-5).map(l => ({ et: l.eventType, msg: l.message.slice(0, 50), ed: l.eventData })) });
             }
         }
 
