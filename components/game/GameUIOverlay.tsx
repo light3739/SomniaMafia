@@ -14,45 +14,20 @@ import { GamePhase } from '@/types';
  */
 export const GameUIOverlay: React.FC = () => {
     const { chainId, address } = useAccount();
-    const { gameState, myPlayer, currentRoomId, isTxConfirming } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, isTxConfirming, discussionState } = useGameContext();
     const [isChatExpanded, setIsChatExpanded] = useState(false);
 
-    // Track if it's my turn during discussion
+    // Track if it's my turn during discussion — use shared state from GameContext
     const [isMyTurn, setIsMyTurn] = useState(false);
 
-    // Poll discussion state
+    // Derive isMyTurn from shared discussion state (no extra API calls)
     useEffect(() => {
         if (gameState.phase !== GamePhase.DAY) {
             setIsMyTurn(false);
             return;
         }
-
-        const fetchDiscussionState = async () => {
-            if (!currentRoomId) {
-                setIsMyTurn(false);
-                return;
-            }
-            try {
-                const response = await fetch(
-                    `/api/game/discussion?roomId=${currentRoomId}&dayCount=${gameState.dayCount}&playerAddress=${myPlayer?.address || ''}&chainId=${chainId || ''}`,
-                    { cache: 'no-store' }
-                );
-                const data = await response.json();
-                setIsMyTurn(data?.isMyTurn || false);
-            } catch (e) {
-                console.error('[GameUIOverlay] Failed to fetch discussion state:', e);
-            }
-        };
-
-        fetchDiscussionState();
-        const interval = setInterval(() => {
-            // FIX: Stop polling immediately if phase changes
-            if (gameState.phase === GamePhase.DAY && currentRoomId) {
-                fetchDiscussionState();
-            }
-        }, 5000);
-        return () => clearInterval(interval);
-    }, [currentRoomId, gameState.phase, gameState.dayCount, myPlayer?.address, chainId]);
+        setIsMyTurn(discussionState?.isMyTurn || false);
+    }, [gameState.phase, discussionState?.isMyTurn]);
 
     // Only show chat button during DAY phase
     const showChatButton = gameState.phase === GamePhase.DAY || gameState.phase === GamePhase.VOTING;
