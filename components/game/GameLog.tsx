@@ -134,9 +134,14 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         ? lockedVotingDayRef.current
         : 0;
 
+    // Use actualLoggedDay as primary source — prevents the race where contract
+    // dayCount jumps to N+1 (via refreshPlayersList) before the server's
+    // "Day N+1 has begun" log has arrived.  Without the log marker,
+    // dayStartIdx can't find the new day → nightResult search fails →
+    // "Waiting for events" flash.  Fall back to dayCount only when no logs exist.
     const targetDay = (showVotingResults && lockedVotingDayRef.current > 0)
         ? lockedVotingDayRef.current
-        : Math.max(actualLoggedDay, dayCount || 1);
+        : (actualLoggedDay || dayCount || 1);
 
     // ─── dayEvents: single source of truth from eventType/eventData ──────
     // Scans ALL logs directly instead of relying on todayLogs slice.
@@ -176,7 +181,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         //    current day starts. Search up to 15 entries back to handle
         //    interleaved PlayerEliminated / other logs.
         if (targetDay > 1) {
-            for (let i = dayStartIdx - 1; i >= Math.max(0, dayStartIdx - 15); i--) {
+            for (let i = dayStartIdx - 1; i >= Math.max(0, dayStartIdx - 30); i--) {
                 const l = logs[i];
                 // Structured path (server eventType)
                 if (l.eventType === 'NIGHT_RESULT') {

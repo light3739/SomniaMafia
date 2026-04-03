@@ -1,5 +1,5 @@
 // components/game/DayPhase.tsx
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
@@ -300,11 +300,19 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         finally { setIsProcessing(false); }
     };
 
+    // Memoize to prevent GameLog re-renders (and TypewriterText restarts)
+    // when DayPhase re-renders with identical discussion values.
+    const liveDiscussionMemo = useMemo(() => ({
+        active: discussionState?.active,
+        finished: discussionState?.finished,
+        currentSpeakerName: currentSpeaker?.name || null,
+    }), [discussionState?.active, discussionState?.finished, currentSpeaker?.name]);
+
     return (
         <div className="w-full h-full flex flex-col items-center justify-start p-4 md:p-8 pt-5 md:pt-6">
             <div className="max-w-2xl w-full flex flex-col">
                 <div className="text-center mb-4 flex-shrink-0 h-[40px] flex items-center justify-center">
-                    <h2 
+                    <h2
                         className="text-2xl font-['Cinzel'] text-white cursor-pointer hover:text-gold/80 transition-colors"
                         onClick={() => (window as any).refreshGame?.()}
                         title="Click to manual sync"
@@ -313,13 +321,9 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                     </h2>
                 </div>
                 <div className="mb-4 h-[360px] flex-shrink-0 w-full rounded-md overflow-hidden border-t border-t-white/10 border-x border-x-white/5 border-b-black bg-[#0A0A0A] shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
-                    <GameLog 
-                        liveDiscussion={{ 
-                            active: discussionState?.active, 
-                            finished: discussionState?.finished, 
-                            currentSpeakerName: currentSpeaker?.name || null 
-                        }} 
-                        forceVotingActive={isVotingPhase || showVotingResults || !!hideActions} 
+                    <GameLog
+                        liveDiscussion={liveDiscussionMemo}
+                        forceVotingActive={isVotingPhase || showVotingResults || !!hideActions}
                         hideActions={!!hideActions}
                     />
                 </div>
