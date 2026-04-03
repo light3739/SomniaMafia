@@ -395,15 +395,21 @@ export const DIAMOND_ABI = [
     "inputs": [
       {
         "indexed": true,
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
         "internalType": "address",
-        "name": "mainWallet",
+        "name": "eliminated",
         "type": "address"
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "sessionKey",
-        "type": "address"
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "voteCount",
+        "type": "uint256"
       }
     ],
     "name": "VotingFinalized",
