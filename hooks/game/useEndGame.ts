@@ -270,7 +270,7 @@ export function useEndGame(deps: EndGameDeps) {
                         [BigInt(formatted.b[1][0]), BigInt(formatted.b[1][1])]
                     ],
                     c: [BigInt(formatted.c[0]), BigInt(formatted.c[1])],
-                    inputs: formatted.inputs.map((s: string) => BigInt(s)) as [bigint, bigint, bigint, bigint, bigint]
+                    inputs: formatted.inputs.map((s: string) => BigInt(s)) as [bigint, bigint, bigint, bigint, bigint, bigint]
                 };
 
                 console.log("[AutoWin ZK Debug] === endGameZK via AutoWin ===");
