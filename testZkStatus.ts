@@ -42,6 +42,10 @@ async function main() {
     const verifierAddress = receipt.contractAddress;
     console.log("Deployed new Groth16Verifier to:", verifierAddress);
     
+    if (!verifierAddress) {
+        throw new Error("Failed to get deployed contract address");
+    }
+
     console.log(`Setting zkVerifier(${verifierAddress})...`);
     
     const { request } = await client.simulateContract({
