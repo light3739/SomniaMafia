@@ -19,7 +19,7 @@ import * as GM from '../../services/gmService';
 import type { GameRefs } from './useGameRefs';
 import type { WalletManager } from './useWalletManager';
 import type { TransactionEngine } from './useTransactionEngine';
-import type { LogEntry } from '../../types';
+import { GamePhase, type LogEntry } from '../../types';
 import React from 'react';
 
 interface TournamentDeps {
@@ -269,6 +269,19 @@ export function useTournaments(deps: TournamentDeps) {
         const targetChain = refs.runtimeChainRef.current;
         if (!pClient || !targetChain) return;
         try {
+            // Pre-check: verify room is in ENDED phase on-chain before attempting distribution
+            const roomData = await pClient.readContract({
+                address: refs.contractAddressRef.current,
+                abi: MAFIA_ABI,
+                functionName: 'getRoom',
+                args: [roomId],
+            }) as any;
+            const onChainPhase = Number(Array.isArray(roomData) ? roomData[3] : roomData.phase);
+            if (onChainPhase !== GamePhase.ENDED) {
+                addLog(`Cannot distribute prizes yet — game not finalized on-chain (phase: ${onChainPhase}). Wait for endGameZK to confirm.`, 'danger');
+                return;
+            }
+
             setIsTxPending(true);
             const { client, account } = await wallet.getActiveWalletClient();
             const gasConfig = await txEngine.getSmartGasConfig({ functionName: 'distributeMafiaPrizes', args: [roomId], account });
