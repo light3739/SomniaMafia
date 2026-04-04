@@ -188,12 +188,13 @@ export function useLobbyActions(deps: LobbyDeps) {
             */
 
             if (lobbyPassword) {
+                const activeAddress = (activeAccount as any)?.address || activeAccount || myAddr;
                 GM.setRoomPassword({
                     roomId: finalRoomId.toString(),
-                    address: myAddr,
+                    address: activeAddress,
                     password: lobbyPassword,
                     walletClient: activeWalletClient,
-                    signerAddress: myAddr,
+                    signerAddress: activeAddress,
                     chainId: targetChain.id,
                     maxPlayers: maxPlayers
                 }).catch(e => console.warn("[Create] GM password sync failed:", e));
