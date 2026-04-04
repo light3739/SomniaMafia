@@ -135,11 +135,11 @@ export function useTransactionEngine(deps: TxEngineDeps) {
             }
 
             console.warn(`[Gas] Estimation failed for ${functionName}, using fallback:`, e?.message || e);
-            calculatedGas = knownLimit || (isSomnia ? 14_000_000n : 5_000_000n);
+            calculatedGas = knownLimit || (isSomnia ? 28_000_000n : 10_000_000n);
         }
 
         // 4. Safety Cap (higher for ZK proof verification which needs expensive bn256 pairing)
-        const safetyCap = functionName === 'endGameZK' ? 80_000_000n : 14_800_000n;
+        const safetyCap = functionName === 'endGameZK' ? 160_000_000n : 29_000_000n;
         if (calculatedGas > safetyCap) calculatedGas = safetyCap;
 
         return { gas: calculatedGas, ...feeConfig };

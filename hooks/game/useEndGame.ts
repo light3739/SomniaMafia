@@ -302,6 +302,7 @@ export function useEndGame(deps: EndGameDeps) {
                         functionName: 'endGameZK',
                         args: args as any,
                         account: simulationAccount,
+                        gas: BigInt(25_000_000), // twice as big to fix generic revert
                     });
                     console.log(`[AutoWin ZK Debug] Simulation SUCCESS (Session: ${useSessionKey})`);
                 } catch (simErr: any) {
