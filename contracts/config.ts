@@ -26,7 +26,7 @@ export const DEPLOYMENTS = {
         explorer: 'https://shannon-explorer.somnia.network',
         contracts: {
             MafiaDiamond: (process.env.NEXT_PUBLIC_MAFIA_DIAMOND || '0x0406a14729b0c77c187ac5229c8c2317589e73c0') as string,
-            Groth16Verifier: '0xfb34816ff23a915b21987eff76b336be7a609eb6',
+            Groth16Verifier: '0xe0fb727e1bd7bfcfc8a71d8e3f10d3c8959ff001',
             LobbyFacet: '0xafa5c91404355de38250415c4943eddf3d1e4572',
             ShuffleFacet: '0x145d9e1cf80b8398765de2dfd1e633f5325443e5',
             VotingFacet: '0xe9e52ff5e79dc99489ac510905793b9f0de4bdd7',
