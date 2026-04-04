@@ -404,7 +404,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                     gmSignature = await GM.requestJoinPermit({
                         roomId: roomId.toString(),
                         password: lobbyPassword,
-                        playerAddress: myAddr,
+                        playerAddress: (activeAccount as any)?.address || activeAccount || myAddr,
                         chainId: targetChain.id,
                     });
                     addLog("Join permit received ✅", "success");
