@@ -73,6 +73,21 @@ export function useEndGame(deps: EndGameDeps) {
         }
     }, [refs]);
 
+    // === Helper: check on-chain phase ===
+    const checkOnChainPhase = useCallback(async (roomId: bigint, pClient: any): Promise<number> => {
+        try {
+            const freshRoom = await pClient.readContract({
+                address: refs.contractAddressRef.current,
+                abi: MAFIA_ABI,
+                functionName: 'getRoom',
+                args: [roomId],
+            }) as any;
+            return Number(Array.isArray(freshRoom) ? freshRoom[3] : freshRoom.phase);
+        } catch {
+            return -1;
+        }
+    }, [refs]);
+
     // === endGameZK ===
     const endGameZK = useCallback(async () => {
         const roomId = refs.currentRoomIdRef.current;
@@ -163,7 +178,18 @@ export function useEndGame(deps: EndGameDeps) {
             else if (isMafiaWin) proactiveWinner = 'MAFIA';
 
             const receipt1 = await pClient.waitForTransactionReceipt({ hash });
-            if (receipt1.status === 'reverted') throw new Error('endGameZK transaction reverted on-chain');
+            if (receipt1.status === 'reverted') {
+                // Check if game ended by someone else — treat as success
+                const postPhase = await checkOnChainPhase(roomId, pClient);
+                if (postPhase === GamePhase.ENDED) {
+                    console.log('[ZK] TX reverted but game is ENDED — another player finished it. Syncing.');
+                    setGameState(prev => ({ ...prev, phase: GamePhase.ENDED }));
+                    await dataSync.refreshPlayersList(roomId);
+                    await debugDepositAfterEnd(roomId, myAddr, 'After endGameZK (race-resolved)');
+                    return;
+                }
+                throw new Error('endGameZK transaction reverted on-chain');
+            }
 
             setGameState(prev => ({
                 ...prev,
@@ -176,7 +202,7 @@ export function useEndGame(deps: EndGameDeps) {
         } finally {
             setIsTxPending(false);
         }
-    }, [refs, txEngine, dataSync, gameState, setIsTxPending, setGameState, addLog, debugDepositAfterEnd]);
+    }, [refs, txEngine, dataSync, gameState, setIsTxPending, setGameState, addLog, debugDepositAfterEnd, checkOnChainPhase]);
 
     // === AUTO WIN CHECK ===
     const triggerAutoWinCheck = useCallback(async () => {
@@ -211,6 +237,30 @@ export function useEndGame(deps: EndGameDeps) {
                 if (BigInt(proofRoomId) !== BigInt(roomId)) {
                     console.warn(`[AutoWin] Room ID mismatch: Frontend=${roomId}, Proof=${proofRoomId}`);
                     return;
+                }
+
+                // Waterfall: stagger by player index (same as manual endGameZK)
+                const activePlayers = gameState.players
+                    .filter(p => p.isAlive)
+                    .sort((a, b) => a.address.localeCompare(b.address));
+                const myIndex = myAddr
+                    ? activePlayers.findIndex(p => p.address.toLowerCase() === myAddr.toLowerCase())
+                    : -1;
+                const delayIndex = myIndex >= 0 ? myIndex : 0;
+                const delayMs = delayIndex * 5000; // 5s per player (shorter than manual 15s)
+
+                if (delayMs > 0) {
+                    console.log(`[AutoWin] Waterfall: I am #${delayIndex + 1}/${activePlayers.length}. Waiting ${delayMs / 1000}s...`);
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+
+                    // Re-check phase after waiting — another player may have ended it
+                    const phase = await checkOnChainPhase(roomId, pClient);
+                    if (phase === GamePhase.ENDED) {
+                        console.log('[AutoWin] Game already ended during waterfall wait. Syncing state.');
+                        setGameState(prev => ({ ...prev, phase: GamePhase.ENDED }));
+                        await dataSync.refreshPlayersList(roomId);
+                        return;
+                    }
                 }
 
                 const formattedProof = {
@@ -255,10 +305,29 @@ export function useEndGame(deps: EndGameDeps) {
                     });
                     console.log(`[AutoWin ZK Debug] Simulation SUCCESS (Session: ${useSessionKey})`);
                 } catch (simErr: any) {
+                    refs.autoWinLockRef.current = false;
+                    // Check if game already ended (another player beat us)
+                    const phase = await checkOnChainPhase(roomId, pClient);
+                    if (phase === GamePhase.ENDED) {
+                        console.log('[AutoWin] Simulation failed but game already ended. Syncing state.');
+                        setGameState(prev => ({ ...prev, phase: GamePhase.ENDED }));
+                        await dataSync.refreshPlayersList(roomId);
+                        return;
+                    }
                     console.error("[AutoWin ZK Debug] Simulation FAILED!");
                     console.error("Reason:", simErr.reason || simErr.shortMessage || "Unknown revert");
-                    console.error("Full Error:", simErr);
                     throw new Error(simErr.shortMessage || simErr.message || "Simulation failed");
+                }
+
+                // Final phase re-check right before sending TX
+                const preSubmitPhase = await checkOnChainPhase(roomId, pClient);
+                if (preSubmitPhase === GamePhase.ENDED) {
+                    console.log('[AutoWin] Game ended between simulation and send. Skipping TX.');
+                    refs.autoWinLockRef.current = false;
+                    setIsTxPending(false);
+                    setGameState(prev => ({ ...prev, phase: GamePhase.ENDED }));
+                    await dataSync.refreshPlayersList(roomId);
+                    return;
                 }
 
                 addLog(`Auto-Win: ${data.result} detected! Ending game...`, "success");
@@ -268,7 +337,18 @@ export function useEndGame(deps: EndGameDeps) {
                     const hash = await txEngine.sendGameTransaction('endGameZK', args as any, useSessionKey);
 
                     const receipt2 = await pClient.waitForTransactionReceipt({ hash });
-                    if (receipt2.status === 'reverted') throw new Error('endGameZK transaction reverted on-chain');
+                    if (receipt2.status === 'reverted') {
+                        // Check if game ended by someone else — treat as success, not error
+                        const postPhase = await checkOnChainPhase(roomId, pClient);
+                        if (postPhase === GamePhase.ENDED) {
+                            console.log('[AutoWin] TX reverted but game is ENDED — another player finished it. Syncing.');
+                            setGameState(prev => ({ ...prev, phase: GamePhase.ENDED }));
+                            await dataSync.refreshPlayersList(roomId);
+                            await debugDepositAfterEnd(roomId, myAddr || '', 'After AutoWin (race-resolved)');
+                            return;
+                        }
+                        throw new Error('endGameZK transaction reverted on-chain');
+                    }
 
                     const lowerRes = (data.result || '').toLowerCase();
                     const resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
@@ -300,7 +380,7 @@ export function useEndGame(deps: EndGameDeps) {
         } finally {
             refs.checkWinInProgressRef.current = false;
         }
-    }, [refs, txEngine, dataSync, setIsTxPending, setGameState, addLog, debugDepositAfterEnd]);
+    }, [refs, txEngine, dataSync, gameState, setIsTxPending, setGameState, addLog, debugDepositAfterEnd, checkOnChainPhase]);
 
     const triggerAutoWinCheckRef = React.useRef(triggerAutoWinCheck);
     React.useEffect(() => {
