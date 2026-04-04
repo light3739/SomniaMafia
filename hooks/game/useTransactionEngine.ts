@@ -99,6 +99,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
             joinTournament: 1_500_000n,
             distributeMafiaPrizes: 12_000_000n,
             cancelTournament: 2_000_000n,
+            endGameZK: 25_000_000n, // Groth16 bn256Pairing precompile is very expensive on Somnia
         };
 
         const knownLimit = KNOWN_LIMITS[functionName];
@@ -137,8 +138,8 @@ export function useTransactionEngine(deps: TxEngineDeps) {
             calculatedGas = knownLimit || (isSomnia ? 14_000_000n : 5_000_000n);
         }
 
-        // 4. Safety Cap
-        const safetyCap = 14_800_000n;
+        // 4. Safety Cap (higher for ZK proof verification which needs expensive bn256 pairing)
+        const safetyCap = functionName === 'endGameZK' ? 30_000_000n : 14_800_000n;
         if (calculatedGas > safetyCap) calculatedGas = safetyCap;
 
         return { gas: calculatedGas, ...feeConfig };
