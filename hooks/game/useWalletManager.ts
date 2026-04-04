@@ -35,30 +35,41 @@ export function useWalletManager(refs: GameRefs, useEmbeddedWallet: boolean) {
             selectedWallet = wallets.find(w => w.walletClientType !== 'privy');
 
             if (!selectedWallet && refs.walletClientRef.current && refs.addressRef.current) {
-                console.log('[WalletSelect] Using Wagmi-connected balance/wallet client');
-                try {
-                    const currentChainId = await refs.walletClientRef.current.getChainId();
-                    if (currentChainId !== targetChain.id) {
-                        try {
-                            await refs.walletClientRef.current.switchChain({ id: targetChain.id });
-                        } catch (swErr) {
-                            console.warn('[WalletSelect] Wagmi switchChain failed, continuing...', swErr);
+                // When the user wants an external wallet, verify the Wagmi client is not
+                // the embedded wallet (which could have been set as active by a race in
+                // WalletAutoConnector before MetaMask was detected).
+                const embeddedPrivyWallet = wallets.find(w => w.walletClientType === 'privy');
+                const wagmiIsEmbedded = embeddedPrivyWallet &&
+                    refs.addressRef.current.toLowerCase() === embeddedPrivyWallet.address.toLowerCase();
+
+                if (!useEmbeddedWallet && wagmiIsEmbedded) {
+                    console.log('[WalletSelect] Wagmi client points to embedded wallet but external preferred — skipping this fallback');
+                } else {
+                    console.log('[WalletSelect] Using Wagmi-connected balance/wallet client');
+                    try {
+                        const currentChainId = await refs.walletClientRef.current.getChainId();
+                        if (currentChainId !== targetChain.id) {
+                            try {
+                                await refs.walletClientRef.current.switchChain({ id: targetChain.id });
+                            } catch (swErr) {
+                                console.warn('[WalletSelect] Wagmi switchChain failed, continuing...', swErr);
+                            }
                         }
+                    } catch (e) {
+                        console.error('[WalletSelect] Wagmi client error:', e);
                     }
-                } catch (e) {
-                    console.error('[WalletSelect] Wagmi client error:', e);
-                }
 
-                try {
-                    await refs.walletClientRef.current.request({ method: 'eth_requestAccounts' });
-                } catch (e: any) {
-                    console.warn('[WalletSelect] Wagmi requestAccounts failed:', e);
-                }
+                    try {
+                        await refs.walletClientRef.current.request({ method: 'eth_requestAccounts' });
+                    } catch (e: any) {
+                        console.warn('[WalletSelect] Wagmi requestAccounts failed:', e);
+                    }
 
-                if (refs.walletClientRef.current.account) {
-                    refs.addressRef.current = refs.walletClientRef.current.account.address;
+                    if (refs.walletClientRef.current.account) {
+                        refs.addressRef.current = refs.walletClientRef.current.account.address;
+                    }
+                    return { client: refs.walletClientRef.current, account: refs.addressRef.current as `0x${string}` };
                 }
-                return { client: refs.walletClientRef.current, account: refs.addressRef.current as `0x${string}` };
             }
         }
 
@@ -67,6 +78,37 @@ export function useWalletManager(refs: GameRefs, useEmbeddedWallet: boolean) {
                 console.log('[WalletSelect] Preferred wallet not found, falling back to first available Privy wallet');
                 selectedWallet = wallets[0];
             } else {
+                // External wallet not in Privy list — try window.ethereum directly.
+                // This will prompt MetaMask (or any injected wallet) to unlock.
+                const win = typeof window !== 'undefined' ? (window as any) : null;
+                if (win?.ethereum) {
+                    console.log('[WalletSelect] Trying window.ethereum to prompt external wallet unlock');
+                    try {
+                        const accounts: string[] = await win.ethereum.request({ method: 'eth_requestAccounts' });
+                        if (accounts.length > 0) {
+                            refs.addressRef.current = accounts[0] as `0x${string}`;
+                            try {
+                                await win.ethereum.request({
+                                    method: 'wallet_switchEthereumChain',
+                                    params: [{ chainId: '0x' + targetChain.id.toString(16) }],
+                                });
+                            } catch (swErr: any) {
+                                console.warn('[WalletSelect] Chain switch via window.ethereum failed:', swErr);
+                            }
+                            return {
+                                client: createWalletClient({
+                                    account: accounts[0] as `0x${string}`,
+                                    chain: targetChain,
+                                    transport: custom(win.ethereum)
+                                }),
+                                account: accounts[0] as `0x${string}`
+                            };
+                        }
+                    } catch (e: any) {
+                        console.warn('[WalletSelect] window.ethereum request failed:', e);
+                        throw new Error("Failed to unlock wallet. Please unlock your wallet and try again.");
+                    }
+                }
                 throw new Error("Main wallet is locked or not connected. Please unlock your wallet first.");
             }
         }

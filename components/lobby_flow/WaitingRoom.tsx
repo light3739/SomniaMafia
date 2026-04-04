@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
+import { useNoirDialog } from '../../contexts/NoirDialogContext';
 import { useSessionKey } from '../../hooks/useSessionKey';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
@@ -22,6 +23,7 @@ export const WaitingRoom: React.FC = () => {
         refreshPlayersList,
         cancelTournamentOnChain
     } = useGameContext();
+    const { showConfirm } = useNoirDialog();
 
     const { address, chainId } = useAccount();
     const { data: walletClient } = useWalletClient();
@@ -175,7 +177,7 @@ export const WaitingRoom: React.FC = () => {
                         {gameState.isTournament && (
                             <button
                                 onClick={async () => {
-                                    if (gameState.tournamentId && confirm("Are you sure you want to cancel this tournament? All players will be refunded.")) {
+                                    if (gameState.tournamentId && await showConfirm("Are you sure you want to cancel this tournament? All players will be refunded.", { title: 'Cancel Tournament', variant: 'danger', confirmLabel: 'Cancel Tournament', cancelLabel: 'Keep' })) {
                                         await cancelTournamentOnChain(gameState.tournamentId);
                                     }
                                 }}

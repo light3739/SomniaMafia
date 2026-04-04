@@ -10,6 +10,7 @@ import { WagmiProvider } from '@privy-io/wagmi';
 import { SOMNIA_TESTNET, ACTIVE_DEPLOYMENT } from '../contracts/config';
 import { GameProvider } from '../contexts/GameContext';
 import { AudioProvider } from '../contexts/AudioContext';
+import { NoirDialogProvider } from '../contexts/NoirDialogContext';
 import { WalletAutoConnector } from '../components/ui/WalletAutoConnector';
 
 export const config = createConfig({
@@ -58,10 +59,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <QueryClientProvider client={queryClient}>
                 <WagmiProvider config={config}>
                     <AudioProvider>
-                        <GameProvider>
-                            <WalletAutoConnector />
-                            {children}
-                        </GameProvider>
+                        <NoirDialogProvider>
+                            <GameProvider>
+                                <WalletAutoConnector />
+                                {children}
+                            </GameProvider>
+                        </NoirDialogProvider>
                     </AudioProvider>
                 </WagmiProvider>
             </QueryClientProvider>
