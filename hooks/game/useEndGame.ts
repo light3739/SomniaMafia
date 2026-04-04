@@ -194,7 +194,8 @@ export function useEndGame(deps: EndGameDeps) {
         try {
             const chainId = pClient.chain?.id || 50312;
             console.log(`[AutoWin] Checking for victory in Room #${roomId}...`);
-            const response = await fetch('/api/game/check-win', {
+            if (refs.autoWinLockRef.current) return;
+              const response = await fetch('/api/game/check-win', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ roomId: roomId.toString(), chainId })
@@ -254,8 +255,6 @@ export function useEndGame(deps: EndGameDeps) {
                     });
                     console.log(`[AutoWin ZK Debug] Simulation SUCCESS (Session: ${useSessionKey})`);
                 } catch (simErr: any) {
-                    refs.autoWinLockRef.current = false;
-                    refs.autoWinLockRef.current = false;
                     console.error("[AutoWin ZK Debug] Simulation FAILED!");
                     console.error("Reason:", simErr.reason || simErr.shortMessage || "Unknown revert");
                     console.error("Full Error:", simErr);
