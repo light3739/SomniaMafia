@@ -62,7 +62,11 @@ export function useEndGame(deps: EndGameDeps) {
                 autoRefunded: deposit === 0n,
             });
             if (deposit === 0n && label.includes('endGameZK')) {
-                console.log(`[Deposit Debug] ✅ Contract AUTO-REFUNDED deposit during endGameZK. No manual claimRefund needed.`);
+                if (depositPerPlayer === 0n) {
+                    console.log(`[Deposit Debug] ℹ️ No deposit (freeroll). Nothing to refund.`);
+                } else {
+                    console.log(`[Deposit Debug] ✅ Contract AUTO-REFUNDED deposit during endGameZK. No manual claimRefund needed.`);
+                }
             }
         } catch (depErr) {
             console.warn(`[Deposit Debug] Failed to check deposit after ${label}:`, depErr);
@@ -158,7 +162,8 @@ export function useEndGame(deps: EndGameDeps) {
             if (isTownWin) proactiveWinner = 'TOWN';
             else if (isMafiaWin) proactiveWinner = 'MAFIA';
 
-            await pClient.waitForTransactionReceipt({ hash });
+            const receipt1 = await pClient.waitForTransactionReceipt({ hash });
+            if (receipt1.status === 'reverted') throw new Error('endGameZK transaction reverted on-chain');
 
             setGameState(prev => ({
                 ...prev,
@@ -263,7 +268,8 @@ export function useEndGame(deps: EndGameDeps) {
                     console.log(`[AutoWin] Sending endGameZK (Session: ${useSessionKey})...`);
                     const hash = await txEngine.sendGameTransaction('endGameZK', args as any, useSessionKey);
 
-                    await pClient.waitForTransactionReceipt({ hash });
+                    const receipt2 = await pClient.waitForTransactionReceipt({ hash });
+                    if (receipt2.status === 'reverted') throw new Error('endGameZK transaction reverted on-chain');
 
                     const lowerRes = (data.result || '').toLowerCase();
                     const resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
