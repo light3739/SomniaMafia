@@ -108,6 +108,7 @@ export interface GameContextType {
     cancelTournamentOnChain: (tournamentId: bigint) => Promise<void>;
     publicClient: any;
     address: `0x${string}` | undefined;
+    isWalletReady: boolean;
     createLobbyOnChain: (maxPlayers?: number, tournamentId?: bigint, nonce?: number) => Promise<boolean>;
     useEmbeddedWallet: boolean;
     setUseEmbeddedWallet: (v: boolean) => void;

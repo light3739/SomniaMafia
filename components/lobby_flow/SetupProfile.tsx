@@ -84,7 +84,7 @@ const SocialCard: React.FC<SocialCardProps> = ({ icon, name, linked, username, o
 // --- Main Component ---
 export const SetupProfile: React.FC = () => {
     const { showAlert } = useNoirDialog();
-    const { playerName, setPlayerName, avatarUrl, setAvatarUrl, useEmbeddedWallet, setUseEmbeddedWallet } = useGameContext();
+    const { playerName, setPlayerName, avatarUrl, setAvatarUrl, useEmbeddedWallet, setUseEmbeddedWallet, isWalletReady } = useGameContext();
     const { user, logout, linkGoogle, linkTwitter, linkDiscord, unlinkGoogle, unlinkTwitter, unlinkDiscord, createWallet, linkWallet } = usePrivy();
     const { wallets } = useWallets();
     const router = useRouter();
@@ -363,19 +363,19 @@ export const SetupProfile: React.FC = () => {
             <div className="w-full flex flex-col gap-3 mt-4">
                 <Button
                     onClick={() => router.push('/create')}
-                    disabled={!hydrated || !playerName.trim()}
+                    disabled={!hydrated || !playerName.trim() || !isWalletReady}
                     variant="primary-lobby"
                     className="w-full h-[54px] md:h-[60px] text-lg md:text-xl tracking-[0.1em]"
                 >
-                    Create Game
+                    {!hydrated || !isWalletReady ? 'Connecting...' : 'Create Game'}
                 </Button>
                 <Button
                     onClick={() => router.push('/join')}
-                    disabled={!hydrated || !playerName.trim()}
+                    disabled={!hydrated || !playerName.trim() || !isWalletReady}
                     variant="outline-gold-lobby"
                     className="w-full h-[54px] md:h-[60px] text-lg md:text-xl tracking-[0.1em]"
                 >
-                    Connect to Lobby
+                    {!hydrated || !isWalletReady ? 'Connecting...' : 'Connect to Lobby'}
                 </Button>
             </div>
 

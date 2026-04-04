@@ -19,6 +19,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { GamePhase, GameState, Player, Role, LogEntry, type GameEventType, type GameEventData } from '../types';
 import type { GameContextType, DiscussionState } from './gameContext.types';
+import { useAccount } from 'wagmi';
+import { usePrivy } from '@privy-io/react-auth';
 
 import {
     useGameRefs,
@@ -220,6 +222,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         refs.lastPhaseKeyRef.current = '';
     }, [currentRoomId]);
 
+    // ==================== WALLET READY STATE ====================
+    const { isConnecting, isReconnecting } = useAccount();
+    const { ready, authenticated } = usePrivy();
+
+    // True once Privy is initialised + Wagmi has finished reconnecting + address is set.
+    // Used to disable action buttons during the brief reconnection window on page load.
+    const isWalletReady = useMemo(
+        () => ready && authenticated && !isConnecting && !isReconnecting && !!refs.stableAddress,
+        [ready, authenticated, isConnecting, isReconnecting, refs.stableAddress]
+    );
+
     // ==================== LEVEL 1: INFRASTRUCTURE ====================
     const wallet = useWalletManager(refs, useEmbeddedWallet);
 
@@ -397,6 +410,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         currencySymbol: refs.runtimeChain.name.toLowerCase().includes('somnia') ? 'SOMI' : refs.runtimeChain.nativeCurrency.symbol,
         publicClient: refs.publicClient,
         address: refs.stableAddress,
+        isWalletReady,
         useEmbeddedWallet, setUseEmbeddedWallet,
         runtimeChain: refs.runtimeChain,
         setCurrentRoomId,
@@ -455,7 +469,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, isTxConfirming,
         currentRoomId, selectedTarget, showVotingResults, isTestMode,
-        playerMarks, voteMap, useEmbeddedWallet,
+        playerMarks, voteMap, useEmbeddedWallet, isWalletReady,
         refs.runtimeContractAddress, refs.runtimeChain, refs.publicClient, refs.stableAddress,
         lobbyPassword, myPlayer, addLog, setCurrentRoomId,
         discussionState, setDiscussionState, fetchDiscussionState,
