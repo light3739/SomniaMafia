@@ -189,15 +189,35 @@ export function useLobbyActions(deps: LobbyDeps) {
 
             if (lobbyPassword) {
                 const activeAddress = (activeAccount as any)?.address || activeAccount || myAddr;
-                GM.setRoomPassword({
-                    roomId: finalRoomId.toString(),
-                    address: activeAddress,
-                    password: lobbyPassword,
-                    walletClient: activeWalletClient,
-                    signerAddress: activeAddress,
-                    chainId: targetChain.id,
-                    maxPlayers: maxPlayers
-                }).catch(e => console.warn("[Create] GM password sync failed:", e));
+                let passwordSynced = false;
+                let lastPasswordErr: any;
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        await GM.setRoomPassword({
+                            roomId: finalRoomId.toString(),
+                            address: activeAddress,
+                            password: lobbyPassword,
+                            walletClient: activeWalletClient,
+                            signerAddress: activeAddress,
+                            forceWallet: true,
+                            chainId: targetChain.id,
+                            maxPlayers: maxPlayers
+                        });
+                        passwordSynced = true;
+                        break;
+                    } catch (e) {
+                        lastPasswordErr = e;
+                        console.warn(`[Create] GM password sync attempt ${attempt + 1} failed:`, e);
+                        if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+                    }
+                }
+                if (!passwordSynced) {
+                    console.error("[Create] GM password sync failed after 3 attempts:", lastPasswordErr);
+                    addLog("Room created, but password sync failed — players won't be able to join. Try recreating the room.", "danger");
+                    alert(`Room created but password could not be set on GM server: ${lastPasswordErr?.message || 'Unknown error'}.\nThe room is private but inaccessible. Please recreate it.`);
+                    setIsTxPending(false);
+                    return false;
+                }
             }
 
             // Register ECIES pubkey
