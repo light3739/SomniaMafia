@@ -47,6 +47,7 @@ jobs:
           NEXT_PUBLIC_GM_SERVER_URL: https://gm-test.mafiaonchain.live
           NEXT_PUBLIC_LIVEKIT_URL: wss://livekit.mafiaonchain.live
           NEXT_PUBLIC_ACTIVE_NETWORK: avalanche_fuji
+          NEXT_PUBLIC_MAFIA_DIAMOND: ${{ vars.NEXT_PUBLIC_MAFIA_DIAMOND }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
