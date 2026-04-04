@@ -99,7 +99,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
             joinTournament: 1_500_000n,
             distributeMafiaPrizes: 12_000_000n,
             cancelTournament: 2_000_000n,
-            endGameZK: 25_000_000n, // Groth16 bn256Pairing precompile is very expensive on Somnia
+            endGameZK: 75_000_000n, // Groth16 bn256Pairing precompile costs ~69M gas on Somnia
         };
 
         const knownLimit = KNOWN_LIMITS[functionName];
@@ -139,7 +139,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
         }
 
         // 4. Safety Cap (higher for ZK proof verification which needs expensive bn256 pairing)
-        const safetyCap = functionName === 'endGameZK' ? 30_000_000n : 14_800_000n;
+        const safetyCap = functionName === 'endGameZK' ? 80_000_000n : 14_800_000n;
         if (calculatedGas > safetyCap) calculatedGas = safetyCap;
 
         return { gas: calculatedGas, ...feeConfig };
