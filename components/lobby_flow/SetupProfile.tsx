@@ -3,6 +3,7 @@ import { Camera, Upload, Check, Link, Unlink, LogOut, Edit2, X, Wallet, Users, C
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
+import { useNoirDialog } from '../../contexts/NoirDialogContext';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useBalance } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
@@ -82,6 +83,7 @@ const SocialCard: React.FC<SocialCardProps> = ({ icon, name, linked, username, o
 
 // --- Main Component ---
 export const SetupProfile: React.FC = () => {
+    const { showAlert } = useNoirDialog();
     const { playerName, setPlayerName, avatarUrl, setAvatarUrl, useEmbeddedWallet, setUseEmbeddedWallet } = useGameContext();
     const { user, logout, linkGoogle, linkTwitter, linkDiscord, unlinkGoogle, unlinkTwitter, unlinkDiscord, createWallet, linkWallet } = usePrivy();
     const { wallets } = useWallets();
@@ -155,7 +157,7 @@ export const SetupProfile: React.FC = () => {
                 setAvatarUrl(base64);
             };
             img.onerror = () => {
-                alert('Oops! This file is not a valid image or is corrupted.');
+                showAlert('Oops! This file is not a valid image or is corrupted.');
             };
             img.src = event.target?.result as string;
         };
@@ -224,10 +226,10 @@ export const SetupProfile: React.FC = () => {
                     value: '0x' + valueWei.toString(16),
                 }],
             });
-            alert('Transaction successfully sent from main wallet!');
+            await showAlert('Transaction successfully sent from main wallet!', { variant: 'success', title: 'Transaction Sent' });
         } catch (err: any) {
             console.error('Funding failed:', err);
-            alert('Funding failed: ' + (err.message || 'Unknown error'));
+            await showAlert('Funding failed: ' + (err.message || 'Unknown error'), { variant: 'danger', title: 'Transaction Failed' });
         } finally {
             setIsFunding(false);
         }

@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePrivy } from '@privy-io/react-auth';
 import { useGameContext } from '../../contexts/GameContext';
+import { useNoirDialog } from '../../contexts/NoirDialogContext';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { useAccount, useChainId } from 'wagmi';
@@ -239,6 +240,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     }, [fetchRooms, publicClient, runtimeContractAddress]);
 
     const { setLobbyPassword } = useGameContext();
+    const { showPrompt } = useNoirDialog();
 
     const handleJoin = async (room: any) => {
         if (!isConnected || !authenticated) {
@@ -248,7 +250,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
         let pass = '';
         if (room.isPrivate) {
-            const inputPass = prompt("Enter room password:");
+            const inputPass = await showPrompt("Enter room password:", { title: 'Private Room', placeholder: 'Password...' });
             if (!inputPass) return;
             pass = inputPass;
             setLobbyPassword(pass);

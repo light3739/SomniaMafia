@@ -33,10 +33,19 @@ export function WalletAutoConnector() {
             ? wallets.find(w => w.walletClientType === 'privy')
             : wallets.find(w => w.walletClientType !== 'privy');
 
-        // Fallback if preferred not available
-        const targetWallet = preferredWallet || wallets[0];
+        // When user wants external wallet: never fall back to embedded.
+        // If MetaMask is locked/not yet detected, do nothing — the wallet manager
+        // will prompt the user to unlock it via window.ethereum when they take action.
+        if (!preferredWallet) {
+            if (!useEmbeddedWallet) {
+                console.log('[WalletAutoConnector] External wallet preferred but not yet available — skipping active wallet switch');
+            }
+            return;
+        }
 
-        if (targetWallet && targetWallet.address.toLowerCase() !== activeAddress?.toLowerCase()) {
+        const targetWallet = preferredWallet;
+
+        if (targetWallet.address.toLowerCase() !== activeAddress?.toLowerCase()) {
             // Don't force setActiveWallet for external wallets if wagmi has no active address yet
             if (!activeAddress && targetWallet.walletClientType !== 'privy') {
                 return;

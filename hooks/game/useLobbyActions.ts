@@ -11,6 +11,7 @@
  * - ECIES key registration
  */
 import { useCallback } from 'react';
+import { useNoirDialog } from '../../contexts/NoirDialogContext';
 import { parseEther, formatEther, parseEventLogs } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { MAFIA_ABI } from '../../contracts/config';
@@ -40,6 +41,7 @@ interface LobbyDeps {
 
 export function useLobbyActions(deps: LobbyDeps) {
     const { refs, wallet, txEngine, dataSync, setKeys, setCurrentRoomId, setIsTxPending, addLog } = deps;
+    const { showAlert } = useNoirDialog();
 
     // === Helper: Upload avatar to server ===
     const uploadAvatar = useCallback(async (
@@ -92,7 +94,7 @@ export function useLobbyActions(deps: LobbyDeps) {
         const lobbyPassword = refs.lobbyPasswordRef.current;
         const avatarUrl = refs.avatarUrlRef.current;
 
-        if (!name || !myAddr || !lobbyName || !pClient) { alert("Enter details and connect wallet!"); return false; }
+        if (!name || !myAddr || !lobbyName || !pClient) { await showAlert("Enter details and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
             const nextId = await pClient.readContract({
@@ -117,7 +119,7 @@ export function useLobbyActions(deps: LobbyDeps) {
 
             const { client: activeWalletClient, account: activeAccount } = await wallet.getActiveWalletClient();
 
-            if (!pClient || !targetChain || !myAddr) { alert("Public client or chain/address not ready!"); return false; }
+            if (!pClient || !targetChain || !myAddr) { await showAlert("Public client or chain/address not ready!"); return false; }
 
             const txValue = wallet.LOBBY_FUNDING_VALUE;
 
@@ -126,7 +128,7 @@ export function useLobbyActions(deps: LobbyDeps) {
             if (balance < txValue) {
                 const required = formatEther(txValue);
                 const current = formatEther(balance);
-                alert(`Insufficient balance to fund session. You have ${current} STT but need at least ${required} STT. Please use a Faucet.`);
+                await showAlert(`Insufficient balance to fund session. You have ${current} STT but need at least ${required} STT. Please use a Faucet.`, { variant: 'danger', title: 'Insufficient Balance' });
                 setIsTxPending(false);
                 return false;
             }
@@ -214,7 +216,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                 if (!passwordSynced) {
                     console.error("[Create] GM password sync failed after 3 attempts:", lastPasswordErr);
                     addLog("Room created, but password sync failed — players won't be able to join. Try recreating the room.", "danger");
-                    alert(`Room created but password could not be set on GM server: ${lastPasswordErr?.message || 'Unknown error'}.\nThe room is private but inaccessible. Please recreate it.`);
+                    await showAlert(`Room created but password could not be set on GM server: ${lastPasswordErr?.message || 'Unknown error'}. The room is private but inaccessible. Please recreate it.`, { variant: 'danger', title: 'Password Sync Failed' });
                     setIsTxPending(false);
                     return false;
                 }
@@ -255,7 +257,7 @@ export function useLobbyActions(deps: LobbyDeps) {
         const lobbyPassword = passwordOverride ?? refs.lobbyPasswordRef.current;
         const avatarUrl = refs.avatarUrlRef.current;
 
-        if (!name || !myAddr || !pClient || !targetChain) { alert("Connect wallet and set name first!"); return false; }
+        if (!name || !myAddr || !pClient || !targetChain) { await showAlert("Connect wallet and set name first!"); return false; }
 
         const rId = BigInt(roomId);
         setIsTxPending(true);
@@ -332,7 +334,7 @@ export function useLobbyActions(deps: LobbyDeps) {
 
                             const balance = await pClient.getBalance({ address: myAddr as `0x${string}` });
                             if (balance < wallet.LOBBY_FUNDING_VALUE) {
-                                alert(`Insufficient balance to re-sync session. You need at least ${formatEther(wallet.LOBBY_FUNDING_VALUE)} STT.`);
+                                await showAlert(`Insufficient balance to re-sync session. You need at least ${formatEther(wallet.LOBBY_FUNDING_VALUE)} STT.`, { variant: 'danger', title: 'Insufficient Balance' });
                                 return false;
                             }
 
@@ -418,7 +420,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                 const isPrivate = Array.isArray(roomData) ? Boolean(roomData[18]) : Boolean(roomData.isPrivate);
                 if (roomData && isPrivate) {
                     if (!lobbyPassword) {
-                        alert("This room is private. Please enter the password.");
+                        await showAlert("This room is private. Please enter the password.", { title: 'Private Room' });
                         return false;
                     }
                     addLog("Requesting join permit (private room)...", "info");
@@ -436,7 +438,7 @@ export function useLobbyActions(deps: LobbyDeps) {
 
                 const isPrivateData = Array.isArray(roomData) ? Boolean(roomData[18]) : Boolean(roomData?.isPrivate);
                 if (roomData && isPrivateData) {
-                    alert(`Failed to get join permit: ${e.message}`);
+                    await showAlert(`Failed to get join permit: ${e.message}`, { variant: 'danger', title: 'Join Failed' });
                     return false;
                 }
             }
@@ -484,7 +486,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                 if (balance < txValue) {
                     const required = formatEther(txValue);
                     const current = formatEther(balance);
-                    alert(`Insufficient balance. You need at least ${required} STT to join and fund your session. You have ${current} STT.`);
+                    await showAlert(`Insufficient balance. You need at least ${required} STT to join and fund your session. You have ${current} STT.`, { variant: 'danger', title: 'Insufficient Balance' });
                     return false;
                 }
             }
