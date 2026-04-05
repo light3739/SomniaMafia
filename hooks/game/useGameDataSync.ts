@@ -255,7 +255,13 @@ export function useGameDataSync(deps: DataSyncDeps) {
                     };
                 });
 
-                console.log('[DEBUG setGameState] prev.players:', prev.players.length, 'formattedPlayers:', formattedPlayers.length, formattedPlayers.map(p => p.address));
+                // In LOBBY phase, filter out players who forfeited (FLAG_ACTIVE cleared)
+                // In active game phases, keep them visible (shown as eliminated)
+                const visiblePlayers = phase === GamePhase.LOBBY
+                    ? formattedPlayers.filter(p => p.isAlive)
+                    : formattedPlayers;
+
+                console.log('[DEBUG setGameState] prev.players:', prev.players.length, 'formattedPlayers:', visiblePlayers.length, visiblePlayers.map(p => p.address));
 
                 const winner = checkWinCondition(formattedPlayers, phase);
                 let finalPhase = phase;
@@ -278,7 +284,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
 
                 return {
                     ...prev,
-                    players: formattedPlayers,
+                    players: visiblePlayers,
                     phase: finalPhase,
                     dayCount,
                     revealedCount,
