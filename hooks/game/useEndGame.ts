@@ -419,6 +419,159 @@ export function useEndGame(deps: EndGameDeps) {
         return () => clearInterval(iv);
     }, [refs, isTestMode, currentRoomId]);
 
+    // === AUTO-DISTRIBUTE PRIZES + AUTO-DRAIN SESSION WALLET ON GAME END ===
+    const endGameCleanupDoneRef = React.useRef(false);
+
+    React.useEffect(() => {
+        if (gameState.phase !== GamePhase.ENDED || endGameCleanupDoneRef.current) return;
+        if (!refs.publicClientRef.current || !refs.addressRef.current) return;
+
+        const runEndGameCleanup = async () => {
+            const pClient = refs.publicClientRef.current!;
+            const session = loadSession();
+            const chain = refs.runtimeChainRef.current;
+
+            // --- Step 1: Auto-distribute tournament prizes ---
+            if (gameState.isTournament && currentRoomId) {
+                try {
+                    // Check if prizes already claimed via getTournament
+                    const roomData = await pClient.readContract({
+                        address: refs.contractAddressRef.current,
+                        abi: MAFIA_ABI,
+                        functionName: 'getRoom',
+                        args: [currentRoomId],
+                    }) as any;
+                    const tournamentId = Array.isArray(roomData) ? BigInt(roomData[19] || 0) : BigInt(roomData.tournamentId || 0);
+
+                    let alreadyClaimed = false;
+                    if (tournamentId > 0n) {
+                        const tData = await pClient.readContract({
+                            address: refs.contractAddressRef.current,
+                            abi: MAFIA_ABI,
+                            functionName: 'getTournament',
+                            args: [tournamentId],
+                        }) as any;
+                        alreadyClaimed = Array.isArray(tData) ? Boolean(tData[13]) : Boolean(tData.prizesClaimed);
+                    }
+
+                    if (alreadyClaimed) {
+                        console.log('[AutoDistribute] Prizes already claimed');
+                    } else {
+                        // Waterfall: stagger by player index to avoid simultaneous calls
+                        const myAddr = refs.addressRef.current!.toLowerCase();
+                        const alivePlayers = gameState.players
+                            .filter(p => p.isAlive)
+                            .sort((a, b) => a.address.localeCompare(b.address));
+                        const myIndex = alivePlayers.findIndex(p => p.address.toLowerCase() === myAddr);
+                        const delayMs = myIndex >= 0 ? myIndex * 5000 : 0;
+
+                        if (delayMs > 0) {
+                            console.log(`[AutoDistribute] Waterfall: waiting ${delayMs / 1000}s (position ${myIndex + 1}/${alivePlayers.length})`);
+                            await new Promise(r => setTimeout(r, delayMs));
+
+                            // Re-check after wait
+                            if (tournamentId > 0n) {
+                                const tDataAfter = await pClient.readContract({
+                                    address: refs.contractAddressRef.current,
+                                    abi: MAFIA_ABI,
+                                    functionName: 'getTournament',
+                                    args: [tournamentId],
+                                }) as any;
+                                const claimedAfterWait = Array.isArray(tDataAfter) ? Boolean(tDataAfter[13]) : Boolean(tDataAfter.prizesClaimed);
+                                if (claimedAfterWait) {
+                                    console.log('[AutoDistribute] Prizes claimed by another player during wait');
+                                    // Skip to session drain
+                                    throw new Error('ALREADY_CLAIMED');
+                                }
+                            }
+                        }
+
+                        if (session?.registeredOnChain && session.privateKey) {
+                            console.log('[AutoDistribute] Submitting distributeMafiaPrizes via session key...');
+                            const { createWalletClient, http: viemHttp } = await import('viem');
+                            const { privateKeyToAccount } = await import('viem/accounts');
+                            const account = privateKeyToAccount(session.privateKey as `0x${string}`);
+
+                            const sessionClient = createWalletClient({
+                                account, chain,
+                                transport: viemHttp(chain.rpcUrls.default.http[0]),
+                            });
+
+                            const hash = await sessionClient.writeContract({
+                                address: refs.contractAddressRef.current,
+                                abi: MAFIA_ABI,
+                                functionName: 'distributeMafiaPrizes',
+                                args: [currentRoomId],
+                                account,
+                                chain,
+                            });
+
+                            await pClient.waitForTransactionReceipt({ hash });
+                            console.log('[AutoDistribute] Prizes distributed successfully!');
+                            addLog('Prizes distributed automatically', 'success');
+                        }
+                    }
+                } catch (e: any) {
+                    const msg = e.shortMessage || e.message || '';
+                    if (msg.includes('AlreadyClaimed')) {
+                        console.log('[AutoDistribute] Prizes already claimed (race)');
+                    } else {
+                        console.warn('[AutoDistribute] Failed:', msg);
+                        // Manual button in GameOver is the fallback
+                    }
+                }
+            }
+
+            // --- Step 2: Drain session wallet gas back to main wallet ---
+            try {
+                if (!session?.registeredOnChain || !session.privateKey || !session.address) return;
+
+                const bal = await pClient.getBalance({ address: session.address as `0x${string}` });
+                if (bal === 0n) {
+                    console.log('[SessionDrain] Session wallet already empty');
+                    return;
+                }
+
+                const gasPrice = await pClient.getGasPrice();
+                const gasCost = 21000n * gasPrice * 2n;
+
+                if (bal <= gasCost) {
+                    console.log('[SessionDrain] Balance too low to cover transfer gas');
+                    return;
+                }
+
+                const sendAmount = bal - gasCost;
+                const mainWallet = refs.addressRef.current!;
+
+                const { createWalletClient, http: viemHttp } = await import('viem');
+                const { privateKeyToAccount } = await import('viem/accounts');
+                const account = privateKeyToAccount(session.privateKey as `0x${string}`);
+
+                const sessionClient = createWalletClient({
+                    account, chain,
+                    transport: viemHttp(chain.rpcUrls.default.http[0]),
+                });
+
+                const hash = await sessionClient.sendTransaction({
+                    to: mainWallet,
+                    value: sendAmount,
+                    chain,
+                });
+
+                await pClient.waitForTransactionReceipt({ hash });
+                console.log(`[SessionDrain] Returned ${sendAmount} wei to ${mainWallet}`);
+                addLog('Session gas refunded', 'success');
+            } catch (e) {
+                console.warn('[SessionDrain] Failed to drain session wallet:', e);
+            }
+        };
+
+        endGameCleanupDoneRef.current = true;
+        // Delay to let endGame settle and roles load
+        const t = setTimeout(runEndGameCleanup, 3000);
+        return () => clearTimeout(t);
+    }, [gameState.phase, gameState.isTournament, currentRoomId, refs, addLog]);
+
     return {
         endGameZK,
         triggerAutoWinCheck,
