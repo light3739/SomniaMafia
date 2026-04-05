@@ -79,8 +79,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (!abandoned.includes(urlRoomId)) return BigInt(urlRoomId);
             }
             const path = window.location.pathname;
-            const isGamePage = ['/game', '/lobby', '/waiting', '/join', '/create', '/setup'].some(p => path.startsWith(p));
-            if (!isGamePage) return null;
+            // Only restore saved roomId on pages that need it (active game / waiting room).
+            // /create and /setup should NOT restore old room data — it causes stale
+            // players from the previous room to appear briefly in the new lobby.
+            const shouldRestoreRoom = ['/game', '/lobby', '/waiting'].some(p => path.startsWith(p));
+            if (!shouldRestoreRoom) return null;
             const saved = sessionStorage.getItem('currentRoomId');
             if (saved) return BigInt(saved);
             const lsSaved = localStorage.getItem('currentRoomId');
@@ -266,15 +269,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [dataSync.refreshPlayersList]);
 
     // ==================== DERIVED STATE ====================
-    // ==================== DERIVED STATE ====================
     const myPlayer = useMemo(() => {
         // Fallback to myPlayerId if in test mode (for local testing without wallet)
         const currentAddr = (isTestMode && gameState.myPlayerId) ? (gameState.myPlayerId as `0x${string}`) : refs.stableAddress;
-        
-        return gameState.players.find(p =>
+
+        const found = gameState.players.find(p =>
             p.address.toLowerCase() === currentAddr?.toLowerCase()
         );
-    }, [gameState.players, refs.stableAddress, isTestMode, gameState.myPlayerId]);
+
+        // Fallback: if stableAddress (from useAccount) doesn't match any player,
+        // try addressRef which tracks the wallet that actually signed the transaction.
+        // This handles the case where Privy/Wagmi active wallet differs from the tx signer.
+        if (!found && refs.addressRef.current && refs.addressRef.current.toLowerCase() !== currentAddr?.toLowerCase()) {
+            return gameState.players.find(p =>
+                p.address.toLowerCase() === refs.addressRef.current!.toLowerCase()
+            );
+        }
+
+        return found;
+    }, [gameState.players, refs.stableAddress, refs.addressRef, isTestMode, gameState.myPlayerId]);
 
     // ==================== LEVEL 3: DOMAIN ACTIONS ====================
     const lobby = useLobbyActions({
