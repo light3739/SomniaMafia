@@ -501,7 +501,7 @@ export function useLobbyActions(deps: LobbyDeps) {
 
             const fnName = needsTournamentJoin ? 'joinTournamentAndRoom' : 'joinRoom';
             const callArgs = needsTournamentJoin
-                ? [tournamentIdFromRoom, "", BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature]
+                ? [tournamentIdFromRoom, lobbyPassword || "", BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature]
                 : [BigInt(roomId), safeName, pubKeyHex as `0x${string}`, sessionAddress as `0x${string}`, gmSignature];
 
             console.log(`[Join] Tournament status: ${isTournamentRoom}, needsJoin: ${needsTournamentJoin}, sending value: ${txValue}`);
