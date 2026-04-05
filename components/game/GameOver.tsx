@@ -1,7 +1,7 @@
 // components/game/GameOver.tsx
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
@@ -68,6 +68,9 @@ export const GameOver: React.FC = React.memo(() => {
     const [refundAutomatic, setRefundAutomatic] = useState(false);
     const [depositAmount, setDepositAmount] = useState<string>('0');
     const [prizesClaimed, setPrizesClaimed] = useState(false);
+    const [showPrizePopup, setShowPrizePopup] = useState(false);
+    const [prizeDistributionFailed, setPrizeDistributionFailed] = useState(false);
+    const prevPrizesClaimedRef = useRef(false);
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
     const hasPlayedSound = useRef(false);
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -189,6 +192,24 @@ export const GameOver: React.FC = React.memo(() => {
         const iv = setInterval(checkPrizes, 5000);
         return () => clearInterval(iv);
     }, [publicClient, currentRoomId, gameState.isTournament, runtimeContractAddress, prizesClaimed]);
+
+    // Show prize popup when prizes transition from unclaimed → claimed
+    useEffect(() => {
+        if (prizesClaimed && !prevPrizesClaimedRef.current) {
+            prevPrizesClaimedRef.current = true;
+            setShowPrizePopup(true);
+            setPrizeDistributionFailed(false);
+        }
+    }, [prizesClaimed]);
+
+    // Fallback: if tournament prizes not claimed after 20s, show manual button
+    useEffect(() => {
+        if (!gameState.isTournament || prizesClaimed) return;
+        const t = setTimeout(() => {
+            if (!prizesClaimed) setPrizeDistributionFailed(true);
+        }, 20000);
+        return () => clearTimeout(t);
+    }, [gameState.isTournament, prizesClaimed]);
 
     // Check player deposit amount
     useEffect(() => {
@@ -739,7 +760,8 @@ export const GameOver: React.FC = React.memo(() => {
                         transition={{ delay: 2 }}
                         className="flex flex-col gap-4 w-full"
                     >
-                        {gameState.isTournament && (
+                        {/* Tournament: Fallback distribute button (only if auto-distribute failed) */}
+                        {gameState.isTournament && prizeDistributionFailed && !prizesClaimed && (
                             <Button
                                 onClick={async () => {
                                     if (currentRoomId) {
@@ -747,16 +769,21 @@ export const GameOver: React.FC = React.memo(() => {
                                     }
                                 }}
                                 isLoading={isTxPending}
-                                disabled={prizesClaimed}
-                                className={`w-full h-[60px] text-lg font-bold border transition-colors shadow-[0_10px_20px_rgba(0,0,0,0.5)] ${
-                                    prizesClaimed
-                                        ? 'bg-[#2a2a2a] text-[#6B6B6B] border-[#3a3a3a] cursor-not-allowed'
-                                        : 'bg-[#916A47] hover:bg-[#A87B51] text-[#050505] border-[#C5A059]/30'
-                                }`}
+                                className="w-full h-[60px] text-lg bg-[#916A47] hover:bg-[#A87B51] text-[#050505] font-bold border border-[#C5A059]/30 transition-colors shadow-[0_10px_20px_rgba(0,0,0,0.5)]"
                             >
                                 <Trophy className="w-5 h-5 mr-2" />
-                                {prizesClaimed ? 'Prizes Distributed' : 'Distribute Prize Pool'}
+                                Distribute Prize Pool
                             </Button>
+                        )}
+
+                        {/* Tournament: Confirmed distribution badge */}
+                        {gameState.isTournament && prizesClaimed && (
+                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-sm bg-[#4caf82]/8 border border-[#4caf82]/25">
+                                <Coins className="w-4 h-4 text-[#4caf82]" />
+                                <span className="text-[#4caf82] text-sm font-['Cinzel'] uppercase tracking-wider">
+                                    Prizes Distributed
+                                </span>
+                            </div>
                         )}
 
                         <div className="flex gap-4">
@@ -780,6 +807,83 @@ export const GameOver: React.FC = React.memo(() => {
 
                 </motion.div>
             </div>
+            {/* Prize Distribution Popup */}
+            <AnimatePresence>
+                {showPrizePopup && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="fixed inset-0 z-[9999] flex items-center justify-center"
+                        style={{ backgroundColor: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)' }}
+                        onClick={() => setShowPrizePopup(false)}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.94, y: 12 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.94, y: 12 }}
+                            transition={{ type: 'spring', damping: 28, stiffness: 380 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="relative w-[380px] max-w-[90vw] bg-[#0D0D0D] border border-[#C5A059]/25 rounded-sm overflow-hidden"
+                            style={{
+                                boxShadow: '0 0 60px rgba(197,160,89,0.08), 0 20px 60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.03)',
+                            }}
+                        >
+                            {/* Top accent line */}
+                            <div className="h-[1px] w-full" style={{ background: 'linear-gradient(90deg, transparent, rgba(197,160,89,0.33), transparent)' }} />
+
+                            <div className="p-6 flex flex-col items-center text-center">
+                                {/* Trophy icon */}
+                                <motion.div
+                                    initial={{ rotate: -180, scale: 0 }}
+                                    animate={{ rotate: 0, scale: 1 }}
+                                    transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
+                                    className="w-14 h-14 rounded-full bg-[#C5A059]/10 border border-[#C5A059]/30 flex items-center justify-center mb-4"
+                                >
+                                    <Coins className="w-7 h-7 text-[#C5A059]" />
+                                </motion.div>
+
+                                {/* Title */}
+                                <h3 className="text-[#C5A059] text-[11px] font-['Cinzel'] font-semibold uppercase tracking-[0.18em] mb-2">
+                                    Prizes Distributed
+                                </h3>
+
+                                {/* Description */}
+                                <p className="text-white/60 text-[13px] font-['Montserrat'] leading-relaxed mb-1">
+                                    The prize pool has been distributed to the winning team.
+                                </p>
+                                <p className="text-white/35 text-[11px] font-['Montserrat'] mb-6">
+                                    Check your wallet for the reward.
+                                </p>
+
+                                {/* Close button */}
+                                <button
+                                    onClick={() => setShowPrizePopup(false)}
+                                    className="w-full h-10 rounded-sm text-[11px] font-['Cinzel'] uppercase tracking-[0.12em] transition-all cursor-pointer"
+                                    style={{
+                                        border: '1px solid rgba(197,160,89,0.33)',
+                                        color: '#C5A059',
+                                        backgroundColor: 'rgba(197,160,89,0.05)',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor = 'rgba(197,160,89,0.6)';
+                                        e.currentTarget.style.backgroundColor = 'rgba(197,160,89,0.12)';
+                                        e.currentTarget.style.boxShadow = '0 0 18px rgba(197,160,89,0.12)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = 'rgba(197,160,89,0.33)';
+                                        e.currentTarget.style.backgroundColor = 'rgba(197,160,89,0.05)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
+                                >
+                                    Continue
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 });
