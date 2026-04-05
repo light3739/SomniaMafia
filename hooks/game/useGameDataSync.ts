@@ -165,6 +165,8 @@ export function useGameDataSync(deps: DataSyncDeps) {
                 tournamentId, aliveCount, maxPlayers
             } = gameData;
 
+            console.log('[DEBUG refreshPlayersList] rawPlayers count:', rawPlayers.length, 'wallets:', rawPlayers.map((p: any) => p.wallet));
+
             if ((!rawPlayers || rawPlayers.length === 0) && phase === GamePhase.LOBBY) {
                 console.warn('[refreshPlayersList] skipping update because rawPlayers is empty (RPC lag?)');
                 return;
@@ -252,6 +254,8 @@ export function useGameDataSync(deps: DataSyncDeps) {
                         status: (flags & FLAG_ACTIVE) !== 0 ? 'connected' : 'slashed'
                     };
                 });
+
+                console.log('[DEBUG setGameState] prev.players:', prev.players.length, 'formattedPlayers:', formattedPlayers.length, formattedPlayers.map(p => p.address));
 
                 const winner = checkWinCondition(formattedPlayers, phase);
                 let finalPhase = phase;
