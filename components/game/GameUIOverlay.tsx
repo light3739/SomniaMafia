@@ -63,7 +63,7 @@ export const GameUIOverlay: React.FC = () => {
             {showExitButton && (
                 <div className="fixed top-4 left-4 z-[100]">
                     <BackButton
-                        to="/lobby"
+                        to="/setup"
                         label=""
                         exitGame
                         onExitGame={async () => { await forfeitGameOnChain(); }}
