@@ -99,8 +99,12 @@ export function useVotingActions(deps: VotingDeps) {
                     if (decoded.eventName === 'PlayerEliminated') {
                         const args = decoded.args as any;
                         const player = args.player as string;
-                        const nickname = args.nickname as string;
-                        addLog(`${nickname || player.slice(0, 6)} eliminated by vote.`, "danger");
+                        const reason = args.reason as string;
+                        if (reason === 'forfeit' || reason === 'left') {
+                            addLog(`${player.slice(0, 6)} ${reason === 'left' ? 'left the room' : 'forfeited the game'}.`, "warning");
+                        } else {
+                            addLog(`${player.slice(0, 6)} was eliminated.`, "danger");
+                        }
                     }
                 } catch (e) {
                     // Not our event or parse error, skip

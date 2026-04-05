@@ -433,7 +433,7 @@ export const DIAMOND_ABI = [
       {
         "indexed": false,
         "internalType": "string",
-        "name": "nickname",
+        "name": "reason",
         "type": "string"
       }
     ],
@@ -551,6 +551,19 @@ export const DIAMOND_ABI = [
     "name": "forcePhaseTimeout",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "roomId",
+        "type": "uint256"
+      }
+    ],
+    "name": "forfeitGame",
+    "outputs": [],
+    "stateMutability": "payable",
     "type": "function"
   },
   {
