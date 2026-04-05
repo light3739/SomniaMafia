@@ -93,20 +93,30 @@ export const GameOver: React.FC = React.memo(() => {
             if (winner) return;
             try {
                 const currentBlock = await publicClient.getBlockNumber();
-                const fromBlock = currentBlock > 2000n ? currentBlock - 2000n : 0n;
-
-                const logs = await publicClient.getLogs({
-                    address: runtimeContractAddress,
-                    fromBlock,
-                    toBlock: currentBlock,
-                } as any);
+                // Somnia RPC limits getLogs to 1000 blocks per request.
+                // Scan last 2000 blocks in two 1000-block chunks (newest first).
+                const chunkSize = 999n;
+                const totalLookback = 2000n;
+                const earliestBlock = currentBlock > totalLookback ? currentBlock - totalLookback : 0n;
 
                 const { parseEventLogs } = await import('viem');
-                const parsed = parseEventLogs({ abi: MAFIA_ABI as any, logs });
+                let allParsed: any[] = [];
+
+                for (let toBlock = currentBlock; toBlock > earliestBlock; ) {
+                    const fromBlock = toBlock - chunkSize > earliestBlock ? toBlock - chunkSize : earliestBlock;
+                    const logs = await publicClient.getLogs({
+                        address: runtimeContractAddress,
+                        fromBlock,
+                        toBlock,
+                    } as any);
+                    const parsed = parseEventLogs({ abi: MAFIA_ABI as any, logs });
+                    allParsed = allParsed.concat(parsed);
+                    toBlock = fromBlock - 1n;
+                }
 
                 // Find the GameEnded event (last one wins in case of multiple)
-                for (let i = parsed.length - 1; i >= 0; i--) {
-                    const log = parsed[i] as any;
+                for (let i = allParsed.length - 1; i >= 0; i--) {
+                    const log = allParsed[i] as any;
                     if (log.eventName === 'GameEnded') {
                         const winCondition = (log.args?.winCondition as string) || '';
                         const lower = winCondition.toLowerCase();
