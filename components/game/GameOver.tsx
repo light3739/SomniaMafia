@@ -41,7 +41,7 @@ const RoleBgColors: Record<Role, string> = {
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = React.memo(() => {
-    const { gameState, myPlayer, currentRoomId, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain, runtimeChain, revealedRoles, onChainRoles, isRevealingRoles, revealTimedOut, fetchOnChainRoles, fetchGMRoles } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain, runtimeChain, isRevealingRoles, revealTimedOut, fetchOnChainRoles, fetchGMRoles } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const router = useRouter();
@@ -202,7 +202,7 @@ export const GameOver: React.FC = React.memo(() => {
         return () => stopVictoryMusic();
     }, [winner, playMafiaWin, playTownWin, stopVictoryMusic]);
 
-    const myRole = revealedRoles.get(myPlayer?.address.toLowerCase() || '') || myPlayer?.role || Role.UNKNOWN;
+    const myRole = myPlayer?.role || Role.UNKNOWN;
 
     const didIWin =
         (winner === 'MAFIA' && myRole === Role.MAFIA) ||
@@ -371,16 +371,10 @@ export const GameOver: React.FC = React.memo(() => {
                             {gameState.players.map((player, index) => {
                                 const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
                                 const isDead = !player.isAlive;
-                                const onChainRole = onChainRoles.get(player.address.toLowerCase());
-                                const localRole = revealedRoles.get(player.address.toLowerCase());
-                                // Priority: on-chain > GM cache > previous gameState role
-                                let role = Role.UNKNOWN;
-                                if (onChainRole && onChainRole !== Role.UNKNOWN) role = onChainRole;
-                                else if (localRole && localRole !== Role.UNKNOWN) role = localRole;
-                                else if (player.role !== Role.UNKNOWN) role = player.role;
-
+                                // Roles are synced into gameState.players by useEndGame hook
+                                const role = player.role;
                                 const roleKnown = role !== Role.UNKNOWN;
-                                const isOnChain = !!onChainRole && onChainRole !== Role.UNKNOWN;
+                                const isOnChain = roleKnown;
 
                                 return (
                                     <motion.div

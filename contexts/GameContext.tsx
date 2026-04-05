@@ -468,8 +468,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // End Game
         endGameZK: endGame.endGameZK,
-        revealedRoles: endGame.revealedRoles,
-        onChainRoles: endGame.onChainRoles,
         isRevealingRoles: endGame.isRevealingRoles,
         revealTimedOut: endGame.revealTimedOut,
         fetchOnChainRoles: endGame.fetchOnChainRoles,
@@ -493,7 +491,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         refs.runtimeContractAddress, refs.runtimeChain, refs.publicClient, refs.stableAddress,
         lobbyPassword, myPlayer, addLog, setCurrentRoomId,
         discussionState, setDiscussionState, fetchDiscussionState,
-        lobby, shuffle, role, voting, night, chat, tournaments, endGame,
+        lobby, shuffle, role, voting, night, chat, tournaments,
+        endGame.endGameZK, endGame.isRevealingRoles, endGame.revealTimedOut,
+        endGame.fetchOnChainRoles, endGame.fetchGMRoles,
         dataSync.refreshPlayersList,
         kickStalledPlayerOnChain, handlePlayerAction, canActOnPlayer, getActionLabel,
         setPlayerMark,
