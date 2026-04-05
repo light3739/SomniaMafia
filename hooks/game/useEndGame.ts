@@ -759,6 +759,39 @@ export function useEndGame(deps: EndGameDeps) {
         // Reveal timeout (30s → show "Unknown")
         const tTimeout = setTimeout(() => setRevealTimedOut(true), 30000);
 
+        // Winner fallback: if gameState.winner is null after 3s, scan logs
+        const tWinner = setTimeout(async () => {
+            if (gameState.winner) return;
+            const pClient = refs.publicClientRef.current;
+            if (!pClient || !rid) return;
+            try {
+                const currentBlock = await pClient.getBlockNumber();
+                const chunkSize = 999n;
+                const totalLookback = 2000n;
+                const earliestBlock = currentBlock > totalLookback ? currentBlock - totalLookback : 0n;
+                const { parseEventLogs } = await import('viem');
+                let allParsed: any[] = [];
+                for (let toBlock = currentBlock; toBlock > earliestBlock; ) {
+                    const fromBlock = toBlock - chunkSize > earliestBlock ? toBlock - chunkSize : earliestBlock;
+                    const logs = await pClient.getLogs({ address: refs.contractAddressRef.current, fromBlock, toBlock } as any);
+                    allParsed = allParsed.concat(parseEventLogs({ abi: MAFIA_ABI as any, logs }));
+                    toBlock = fromBlock - 1n;
+                }
+                for (let i = allParsed.length - 1; i >= 0; i--) {
+                    const log = allParsed[i] as any;
+                    if (log.eventName === 'GameEnded') {
+                        const wc = ((log.args?.winCondition as string) || '').toLowerCase();
+                        const resolved = wc.includes('town') ? 'TOWN' : wc.includes('mafia') ? 'MAFIA' : wc.includes('draw') ? 'DRAW' : 'TOWN';
+                        console.log(`[WinnerFallback] Resolved: ${resolved}`);
+                        setGameState(prev => ({ ...prev, phase: GamePhase.ENDED, winner: resolved }));
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('[WinnerFallback] Failed:', e);
+            }
+        }, 3000);
+
         // Polling loop: every 3s, max 100 polls
         let pollCount = 0;
         pollIntervalRef.current = setInterval(async () => {
@@ -775,7 +808,7 @@ export function useEndGame(deps: EndGameDeps) {
 
         return () => {
             clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4);
-            clearTimeout(tTimeout);
+            clearTimeout(tTimeout); clearTimeout(tWinner);
             if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
         };
     }, [gameState.phase, refs, currentRoomId, isTestMode, fetchOnChainRoles, fetchGMRoles, allRolesKnown]);
