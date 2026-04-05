@@ -168,7 +168,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
                 const sessionBalance = await refs.publicClientRef.current.getBalance({
                     address: session.address as `0x${string}`
                 });
-                const MIN_BALANCE_FOR_HEAVY_TX = parseEther('0.01');
+                const MIN_BALANCE_FOR_HEAVY_TX = parseEther('0.85');
                 if (sessionBalance < MIN_BALANCE_FOR_HEAVY_TX) {
                     console.warn(`[Session TX] Session key balance low: ${formatEther(sessionBalance)}. Falling back to main wallet.`);
                     canUseSession = false;
