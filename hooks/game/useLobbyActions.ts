@@ -230,7 +230,10 @@ export function useLobbyActions(deps: LobbyDeps) {
             }, 1000);
 
             setCurrentRoomId(finalRoomId);
-            dataSync.refreshPlayersList(finalRoomId).catch(console.error);
+            // Don't call refreshPlayersList here — setCurrentRoomId triggers a
+            // useEffect that resets gameState to INITIAL, which would race with
+            // the data we fetch and potentially wipe it. The continuous polling in
+            // useGameDataSync will pick up the new room automatically.
 
             // Upload avatar
             if (avatarUrl && myAddr) {
@@ -374,7 +377,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                 }
 
                 setCurrentRoomId(rId);
-                await dataSync.refreshPlayersList(rId);
+                // Polling in useGameDataSync will auto-fetch player data.
                 return true;
             }
 
@@ -580,7 +583,7 @@ export function useLobbyActions(deps: LobbyDeps) {
             }, 1500);
 
             setCurrentRoomId(BigInt(roomId));
-            await dataSync.refreshPlayersList(BigInt(roomId));
+            // Polling in useGameDataSync will auto-fetch player data for the new room.
 
             // Upload avatar
             if (avatarUrl && myAddr) {

@@ -153,6 +153,12 @@ export function useGameDataSync(deps: DataSyncDeps) {
             const gameData = await fetchGameData(roomId);
             if (!gameData) return;
 
+            // Guard: if currentRoomId changed while we were fetching, discard stale data
+            if (currentRoomId !== null && roomId !== currentRoomId) {
+                console.warn(`[refreshPlayersList] Discarding stale data for room ${roomId} (current: ${currentRoomId})`);
+                return;
+            }
+
             const {
                 rawPlayers, phase, dayCount, revealedCount,
                 mafiaCommittedCount, mafiaRevealedCount, phaseDeadline,
