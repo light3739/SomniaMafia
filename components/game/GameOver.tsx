@@ -41,15 +41,11 @@ const RoleBgColors: Record<Role, string> = {
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = React.memo(() => {
-    const { gameState, myPlayer, currentRoomId, setGameState, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain, runtimeChain, revealedRoles, onChainRoles, isRevealingRoles, revealTimedOut, fetchOnChainRoles, fetchGMRoles } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain, runtimeChain, revealedRoles, onChainRoles, isRevealingRoles, revealTimedOut, fetchOnChainRoles, fetchGMRoles } = useGameContext();
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const router = useRouter();
-    const contractWinnerRef = useRef<string | null>(gameState.winner); // ← Winner priority fix
-
-    useEffect(() => {
-        contractWinnerRef.current = gameState.winner;
-    }, [gameState.winner]);
+    // Winner state is managed by useEndGame hook
     const [refundClaimed, setRefundClaimed] = useState(false);
     const [refundAutomatic, setRefundAutomatic] = useState(false);
     const [depositAmount, setDepositAmount] = useState<string>('0');
@@ -70,68 +66,7 @@ export const GameOver: React.FC = React.memo(() => {
         }
     }, [gameState.winner]);
 
-    // FALLBACK: If winner is still null after 3s on GameOver screen,
-    // scan the last 2000 blocks for a GameEnded event to extract winCondition.
-    // This fires for clients who missed the event due to the phase=ENDED race in pollEvents.
-    useEffect(() => {
-        if (winner) return;
-        if (!publicClient || !currentRoomId) return;
-
-        const resolve = async () => {
-            if (winner) return;
-            try {
-                const currentBlock = await publicClient.getBlockNumber();
-                // Somnia RPC limits getLogs to 1000 blocks per request.
-                // Scan last 2000 blocks in two 1000-block chunks (newest first).
-                const chunkSize = 999n;
-                const totalLookback = 2000n;
-                const earliestBlock = currentBlock > totalLookback ? currentBlock - totalLookback : 0n;
-
-                const { parseEventLogs } = await import('viem');
-                let allParsed: any[] = [];
-
-                for (let toBlock = currentBlock; toBlock > earliestBlock; ) {
-                    const fromBlock = toBlock - chunkSize > earliestBlock ? toBlock - chunkSize : earliestBlock;
-                    const logs = await publicClient.getLogs({
-                        address: runtimeContractAddress,
-                        fromBlock,
-                        toBlock,
-                    } as any);
-                    const parsed = parseEventLogs({ abi: MAFIA_ABI as any, logs });
-                    allParsed = allParsed.concat(parsed);
-                    toBlock = fromBlock - 1n;
-                }
-
-                // Find the GameEnded event (last one wins in case of multiple)
-                for (let i = allParsed.length - 1; i >= 0; i--) {
-                    const log = allParsed[i] as any;
-                    if (log.eventName === 'GameEnded') {
-                        const winCondition = (log.args?.winCondition as string) || '';
-                        const lower = winCondition.toLowerCase();
-                        const resolved: Winner =
-                            lower.includes('town') ? 'TOWN' :
-                            lower.includes('mafia') ? 'MAFIA' :
-                            lower.includes('draw') ? 'DRAW' :
-                            'TOWN';
-                        console.log(`[GameOver Fallback] Resolved winner from GameEnded log: ${resolved} ("${winCondition}")`);
-                        setWinner(resolved);
-                        setGameState(prev => ({
-                            ...prev,
-                            phase: GamePhase.ENDED,
-                            winner: resolved,
-                        }));
-                        return;
-                    }
-                }
-                console.warn('[GameOver Fallback] No GameEnded event found in last 2000 blocks.');
-            } catch (e) {
-                console.error('[GameOver Fallback] Error scanning for GameEnded:', e);
-            }
-        };
-
-        const t = setTimeout(resolve, 3000);
-        return () => clearTimeout(t);
-    }, [winner, publicClient, currentRoomId, runtimeContractAddress, setGameState]);
+    // Winner fallback logic moved to useEndGame hook
 
     // revealTimedOut and role fetching now handled by useEndGame hook
 
