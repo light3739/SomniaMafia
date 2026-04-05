@@ -256,8 +256,12 @@ export function useEndGame(deps: EndGameDeps) {
                     // Re-check phase after waiting — another player may have ended it
                     const phase = await checkOnChainPhase(roomId, pClient);
                     if (phase === GamePhase.ENDED) {
-                        console.log('[AutoWin] Game already ended during waterfall wait. Syncing state.');
-                        setGameState(prev => ({ ...prev, phase: GamePhase.ENDED }));
+                        const lowerWf = (data.result || '').toLowerCase();
+                        const wfWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
+                            lowerWf.includes('town') ? 'TOWN' :
+                            lowerWf.includes('mafia') ? 'MAFIA' : 'TOWN';
+                        console.log(`[AutoWin] Game already ended during waterfall wait. Winner: ${wfWinner}`);
+                        setGameState(prev => ({ ...prev, phase: GamePhase.ENDED, winner: wfWinner }));
                         await dataSync.refreshPlayersList(roomId);
                         return;
                     }
@@ -310,8 +314,12 @@ export function useEndGame(deps: EndGameDeps) {
                     // Check if game already ended (another player beat us)
                     const phase = await checkOnChainPhase(roomId, pClient);
                     if (phase === GamePhase.ENDED) {
-                        console.log('[AutoWin] Simulation failed but game already ended. Syncing state.');
-                        setGameState(prev => ({ ...prev, phase: GamePhase.ENDED }));
+                        const lowerSim = (data.result || '').toLowerCase();
+                        const simWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
+                            lowerSim.includes('town') ? 'TOWN' :
+                            lowerSim.includes('mafia') ? 'MAFIA' : 'TOWN';
+                        console.log(`[AutoWin] Simulation failed but game already ended. Winner: ${simWinner}`);
+                        setGameState(prev => ({ ...prev, phase: GamePhase.ENDED, winner: simWinner }));
                         await dataSync.refreshPlayersList(roomId);
                         return;
                     }
@@ -323,10 +331,14 @@ export function useEndGame(deps: EndGameDeps) {
                 // Final phase re-check right before sending TX
                 const preSubmitPhase = await checkOnChainPhase(roomId, pClient);
                 if (preSubmitPhase === GamePhase.ENDED) {
-                    console.log('[AutoWin] Game ended between simulation and send. Skipping TX.');
+                    const lowerSkip = (data.result || '').toLowerCase();
+                    const skipWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
+                        lowerSkip.includes('town') ? 'TOWN' :
+                        lowerSkip.includes('mafia') ? 'MAFIA' : 'TOWN';
+                    console.log(`[AutoWin] Game ended between simulation and send. Skipping TX. Winner: ${skipWinner}`);
                     refs.autoWinLockRef.current = false;
                     setIsTxPending(false);
-                    setGameState(prev => ({ ...prev, phase: GamePhase.ENDED }));
+                    setGameState(prev => ({ ...prev, phase: GamePhase.ENDED, winner: skipWinner }));
                     await dataSync.refreshPlayersList(roomId);
                     return;
                 }
