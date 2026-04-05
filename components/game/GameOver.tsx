@@ -71,6 +71,7 @@ export const GameOver: React.FC = React.memo(() => {
     const hasPlayedSound = useRef(false);
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const [isRevealing, setIsRevealing] = useState(false);
+    const isRevealingRef = useRef(false);
     const [revealTimedOut, setRevealTimedOut] = useState(false);
     const roomIdRef = useRef<bigint | null>(currentRoomId);
     const playersRef = useRef(gameState.players);
@@ -217,7 +218,7 @@ export const GameOver: React.FC = React.memo(() => {
 
     // Расшифровать все роли в конце игры
     const revealAllRoles = useCallback(async () => {
-        if (!publicClient || !currentRoomId || isRevealing || !address) return;
+        if (!publicClient || !currentRoomId || isRevealingRef.current || !address) return;
 
         if (isTestMode) {
             console.log('[GameOver] Test mode role reveal');
@@ -229,15 +230,17 @@ export const GameOver: React.FC = React.memo(() => {
             return;
         }
 
+        isRevealingRef.current = true;
         setIsRevealing(true);
         try {
             await fetchOnChainRoles(new Map());
         } catch (e) {
             console.error("Failed to reveal roles:", e);
         } finally {
+            isRevealingRef.current = false;
             setIsRevealing(false);
         }
-    }, [publicClient, currentRoomId, isRevealing, address, isTestMode]); 
+    }, [publicClient, currentRoomId, address, isTestMode]); 
 
     // Fetch roles revealed on-chain (trustless source)
     const fetchOnChainRoles = useCallback(async (localRoles: Map<string, Role>) => {
