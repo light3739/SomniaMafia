@@ -73,6 +73,8 @@ export const GameOver: React.FC = React.memo(() => {
     const [isRevealing, setIsRevealing] = useState(false);
     const [revealTimedOut, setRevealTimedOut] = useState(false);
     const roomIdRef = useRef<bigint | null>(currentRoomId);
+    const playersRef = useRef(gameState.players);
+    useEffect(() => { playersRef.current = gameState.players; }, [gameState.players]);
     const [winner, setWinner] = useState<Winner | null>((gameState.winner as Winner) || null);
 
     // Sync local winner state when gameState.winner changes
@@ -220,7 +222,7 @@ export const GameOver: React.FC = React.memo(() => {
         if (isTestMode) {
             console.log('[GameOver] Test mode role reveal');
             const roles = new Map<string, Role>();
-            gameState.players.forEach(p => {
+            playersRef.current.forEach(p => {
                 roles.set(p.address.toLowerCase(), p.role);
             });
             setRevealedRoles(roles);
@@ -229,27 +231,24 @@ export const GameOver: React.FC = React.memo(() => {
 
         setIsRevealing(true);
         try {
-            // Roles come from on-chain playerRoles storage (fetchOnChainRoles)
-            // and from GM cache (fetchGMRoles, called separately after 3s).
-            // Local SRA deck decryption is intentionally removed: on-chain keys
-            // are all dummy 0x00 bytes since the real keys go to the GM off-chain.
             await fetchOnChainRoles(new Map());
         } catch (e) {
             console.error("Failed to reveal roles:", e);
         } finally {
             setIsRevealing(false);
         }
-    }, [publicClient, currentRoomId, isRevealing, address, isTestMode, gameState.players]); 
+    }, [publicClient, currentRoomId, isRevealing, address, isTestMode]); 
 
     // Fetch roles revealed on-chain (trustless source)
     const fetchOnChainRoles = useCallback(async (localRoles: Map<string, Role>) => {
         if (!publicClient || !currentRoomId) return;
 
         try {
+            const players = playersRef.current;
             const roles = new Map<string, Role>();
 
             const roleResults = await publicClient.multicall({
-                contracts: gameState.players.map(player => ({
+                contracts: players.map(player => ({
                     address: runtimeContractAddress,
                     abi: MAFIA_ABI as any,
                     functionName: 'playerRoles' as const,
@@ -258,12 +257,12 @@ export const GameOver: React.FC = React.memo(() => {
                 allowFailure: true,
             });
 
-            for (let i = 0; i < gameState.players.length; i++) {
+            for (let i = 0; i < players.length; i++) {
                 const result = roleResults[i];
                 if (result.status === 'success') {
                     const role = contractRoleToRole(Number(result.result));
                     if (role !== Role.UNKNOWN) {
-                        roles.set(gameState.players[i].address.toLowerCase(), role);
+                        roles.set(players[i].address.toLowerCase(), role);
                     }
                 }
             }
@@ -272,7 +271,7 @@ export const GameOver: React.FC = React.memo(() => {
             onChainRolesRef.current = roles;
 
             const merged = new Map<string, Role>();
-            for (const player of gameState.players) {
+            for (const player of players) {
                 const addr = player.address.toLowerCase();
                 const onChain = roles.get(addr);
                 const local = localRoles.get(addr);
@@ -289,7 +288,7 @@ export const GameOver: React.FC = React.memo(() => {
         } catch (e) {
             console.error("Failed to fetch on-chain roles:", e);
         }
-    }, [publicClient, currentRoomId, gameState.players, setGameState]);
+    }, [publicClient, currentRoomId, setGameState]);
 
     // Poll for late on-chain reveals (other players may reveal after us)
     const revealedRolesRef = useRef<Map<string, Role>>(revealedRoles);
@@ -298,14 +297,15 @@ export const GameOver: React.FC = React.memo(() => {
     }, [revealedRoles]);
 
     const allRolesKnown = useCallback(() => {
-        return gameState.players.length > 0 && gameState.players.every(p => {
+        const players = playersRef.current;
+        return players.length > 0 && players.every(p => {
             const addr = p.address.toLowerCase();
             const r = onChainRolesRef.current.get(addr)
                 || revealedRolesRef.current.get(addr)
                 || p.role;
             return r !== Role.UNKNOWN;
         });
-    }, [gameState.players]);
+    }, []);
 
     const fetchGMRoles = useCallback(async () => {
         if (allRolesKnown()) return;
@@ -359,7 +359,7 @@ export const GameOver: React.FC = React.memo(() => {
         } catch (e) {
             console.error("Failed to fetch GM roles:", e);
         }
-    }, [currentRoomId, setGameState, gameState.players, allRolesKnown]);
+    }, [currentRoomId, setGameState, allRolesKnown]);
 
     // Reveal on монтирование
     useEffect(() => {
