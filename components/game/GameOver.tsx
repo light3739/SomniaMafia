@@ -364,9 +364,10 @@ export const GameOver: React.FC = React.memo(() => {
         }
     }, [currentRoomId, setGameState, allRolesKnown]);
 
-    // Reveal on монтирование
+    // Reveal on монтирование (delayed to avoid setState-during-render)
     useEffect(() => {
-        revealAllRoles();
+        const t = setTimeout(() => revealAllRoles(), 200);
+        return () => clearTimeout(t);
     }, [revealAllRoles]);
 
     // Snapshot roomId for page reload persistence (survives GameContext cleanup)
@@ -379,14 +380,15 @@ export const GameOver: React.FC = React.memo(() => {
 
     // After on-chain reveals settle, fetch missing roles from GM (fills in dead players etc.)
     useEffect(() => {
-        // Try immediately — GM may already have roles cached from previous SRA key collection
-        fetchGMRoles();
+        // Slight delay to avoid setState-during-render on mount
+        const t0 = setTimeout(() => fetchGMRoles(), 500);
         // Retry with backoff to handle chain lag
         const t1 = setTimeout(() => fetchGMRoles(), 3000);
         const t2 = setTimeout(() => fetchGMRoles(), 8000);
         const t3 = setTimeout(() => fetchGMRoles(), 15000);
 
         return () => {
+            clearTimeout(t0);
             clearTimeout(t1);
             clearTimeout(t2);
             clearTimeout(t3);
