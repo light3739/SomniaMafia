@@ -600,9 +600,71 @@ export function useLobbyActions(deps: LobbyDeps) {
         }
     }, [refs, wallet, txEngine, dataSync, setKeys, setCurrentRoomId, setIsTxPending, addLog, uploadAvatar]);
 
+    // === FORFEIT (LEAVE LOBBY / GAME) ===
+    const forfeitGameOnChain = useCallback(async (): Promise<boolean> => {
+        const roomId = refs.currentRoomIdRef.current;
+        if (!roomId) { addLog("No active room to leave", "danger"); return false; }
+
+        setIsTxPending(true);
+        try {
+            const { client: activeWalletClient, account: activeAccount } = await wallet.getActiveWalletClient();
+            const targetChain = refs.runtimeChainRef.current;
+
+            // Session wallet may have remaining balance — let it forward via msg.value
+            let sessionBalance = 0n;
+            const session = (await import('../../services/sessionKeyService')).loadSession();
+            if (session?.registeredOnChain && session.address) {
+                try {
+                    const bal = await refs.publicClientRef.current!.getBalance({
+                        address: session.address as `0x${string}`
+                    });
+                    // Keep a tiny amount for gas, forward the rest
+                    const gasReserve = 50000n * 1000000000n; // ~0.00005 ETH
+                    if (bal > gasReserve) {
+                        sessionBalance = bal - gasReserve;
+                    }
+                } catch (e) {
+                    console.warn('[Forfeit] Could not read session balance:', e);
+                }
+            }
+
+            const gasConfig = await txEngine.getSmartGasConfig({
+                functionName: 'forfeitGame',
+                args: [roomId],
+                account: activeAccount,
+                value: sessionBalance,
+            });
+
+            const hash = await activeWalletClient.writeContract({
+                address: refs.contractAddressRef.current,
+                abi: MAFIA_ABI,
+                functionName: 'forfeitGame',
+                args: [roomId],
+                account: activeAccount,
+                chain: targetChain,
+                value: sessionBalance,
+                ...gasConfig,
+            });
+
+            const receipt = await refs.publicClientRef.current!.waitForTransactionReceipt({ hash });
+            if (receipt.status === 'reverted') throw new Error("Forfeit transaction reverted");
+
+            addLog("Left the game successfully", "success");
+            setCurrentRoomId(null);
+            return true;
+        } catch (e: any) {
+            console.error('[Forfeit]', e);
+            addLog(e.shortMessage || e.message, "danger");
+            return false;
+        } finally {
+            setIsTxPending(false);
+        }
+    }, [refs, wallet, txEngine, setCurrentRoomId, setIsTxPending, addLog]);
+
     return {
         createLobbyOnChain,
         joinLobbyOnChain,
+        forfeitGameOnChain,
     };
 }
 

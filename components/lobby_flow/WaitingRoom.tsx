@@ -21,7 +21,8 @@ export const WaitingRoom: React.FC = () => {
         currentRoomId,
         myPlayer,
         refreshPlayersList,
-        cancelTournamentOnChain
+        cancelTournamentOnChain,
+        forfeitGameOnChain
     } = useGameContext();
     const { showConfirm } = useNoirDialog();
 
@@ -88,7 +89,13 @@ export const WaitingRoom: React.FC = () => {
                 className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10"
             >
                 <div className="w-full flex items-center justify-start">
-                    <BackButton to="/setup" label="Exit to Menu" />
+                    <BackButton
+                        to="/setup"
+                        label="Exit to Menu"
+                        exitGame
+                        onExitGame={async () => { await forfeitGameOnChain(); }}
+                        isLoading={isTxPending}
+                    />
                 </div>
 
                 <div className="flex flex-col items-center text-center">
