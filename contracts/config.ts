@@ -27,7 +27,7 @@ export const DEPLOYMENTS = {
         contracts: {
             MafiaDiamond: (process.env.NEXT_PUBLIC_MAFIA_DIAMOND || '0x0406a14729b0c77c187ac5229c8c2317589e73c0') as string,
             Groth16Verifier: '0xc5ece9781099a959626ca26529472af19cbc166f',
-            LobbyFacet: '0xafa5c91404355de38250415c4943eddf3d1e4572',
+            LobbyFacet: '0x84610227737791e51d60c4724c06404a451f6f0c',
             ShuffleFacet: '0x145d9e1cf80b8398765de2dfd1e633f5325443e5',
             VotingFacet: '0xe9e52ff5e79dc99489ac510905793b9f0de4bdd7',
             NightFacet: '0xd922ad1aa14817ddf84bf86eaab66d614cbe0e5b',
