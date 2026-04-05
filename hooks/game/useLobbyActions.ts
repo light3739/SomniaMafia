@@ -621,8 +621,8 @@ export function useLobbyActions(deps: LobbyDeps) {
             if (sessionClient) {
                 const sessionAddr = sessionClient.account!.address;
                 const bal = await pClient.getBalance({ address: sessionAddr });
-                // Reserve gas for the forfeit tx itself
-                const gasReserve = 200000n * 1000000000n; // ~0.0002 STT
+                // Reserve enough for gas (forfeit tx can be expensive with refund logic)
+                const gasReserve = 500000n * 10000000000n; // ~0.005 STT
                 const forwardValue = bal > gasReserve ? bal - gasReserve : 0n;
 
                 console.log(`[Forfeit] Using session wallet ${sessionAddr}, forwarding ${forwardValue} wei`);
