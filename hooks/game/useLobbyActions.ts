@@ -277,16 +277,21 @@ export function useLobbyActions(deps: LobbyDeps) {
                 return false;
             }
 
-            // 1. Check if already in room
+            // 1. Check if already in room (must be active — forfeited players have FLAG_ACTIVE cleared)
             let isJoined = false;
             try {
+                const FLAG_ACTIVE = 2;
                 const currentPlayers = await pClient.readContract({
                     address: refs.contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: 'getPlayers',
                     args: [rId],
                 }) as any[];
-                isJoined = currentPlayers.some((p: any) => (p.wallet || p[0]).toLowerCase() === myAddr.toLowerCase());
+                isJoined = currentPlayers.some((p: any) => {
+                    const wallet = (p.wallet || p[0]).toLowerCase();
+                    const flags = Number(p.flags ?? p[3] ?? 0);
+                    return wallet === myAddr.toLowerCase() && (flags & FLAG_ACTIVE) !== 0;
+                });
             } catch (e) {
                 console.warn("[Join] Failed to verify if player is already joined:", e);
             }
@@ -654,7 +659,15 @@ export function useLobbyActions(deps: LobbyDeps) {
             return true;
         } catch (e: any) {
             console.error('[Forfeit]', e);
-            addLog(e.shortMessage || e.message, "danger");
+            // If player is already not in the room (NotParticipant / PlayerInactive),
+            // treat as success — they're already out, just clean up locally.
+            const errMsg = e.shortMessage || e.message || '';
+            if (errMsg.includes('NotParticipant') || errMsg.includes('PlayerInactive')) {
+                console.log('[Forfeit] Player already removed from room, cleaning up locally');
+                setCurrentRoomId(null);
+                return true;
+            }
+            addLog(errMsg, "danger");
             return false;
         } finally {
             setIsTxPending(false);
