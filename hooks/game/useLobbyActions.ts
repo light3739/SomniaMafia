@@ -621,11 +621,26 @@ export function useLobbyActions(deps: LobbyDeps) {
             if (sessionClient) {
                 const sessionAddr = sessionClient.account!.address;
                 const bal = await pClient.getBalance({ address: sessionAddr });
-                // Reserve enough for gas (forfeit tx can be expensive with refund logic)
-                const gasReserve = 500000n * 10000000000n; // ~0.005 STT
-                const forwardValue = bal > gasReserve ? bal - gasReserve : 0n;
 
-                console.log(`[Forfeit] Using session wallet ${sessionAddr}, forwarding ${forwardValue} wei`);
+                // Estimate gas cost first, then forward whatever remains
+                let gasEstimate = 300000n;
+                try {
+                    gasEstimate = await pClient.estimateGas({
+                        account: sessionAddr,
+                        to: refs.contractAddressRef.current,
+                        data: '0x98be22f7' + roomId.toString(16).padStart(64, '0') as `0x${string}`,
+                        value: 0n,
+                    });
+                    gasEstimate = gasEstimate * 150n / 100n; // 1.5x safety margin
+                } catch (e) {
+                    console.warn('[Forfeit] Gas estimation failed, using default:', e);
+                }
+
+                const gasPrice = await pClient.getGasPrice();
+                const gasCost = gasEstimate * gasPrice * 2n; // 2x buffer for price fluctuation
+                const forwardValue = bal > gasCost ? bal - gasCost : 0n;
+
+                console.log(`[Forfeit] Using session wallet ${sessionAddr}, balance: ${bal}, gasCost: ${gasCost}, forwarding: ${forwardValue}`);
 
                 const hash = await sessionClient.writeContract({
                     address: refs.contractAddressRef.current,

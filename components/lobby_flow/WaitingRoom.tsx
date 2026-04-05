@@ -80,11 +80,11 @@ export const WaitingRoom: React.FC = () => {
     };
 
     return (
-        <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden custom-scrollbar">
+        <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
 
             {/* Sticky header — always visible at top */}
-            <div className="w-full sticky top-0 z-50 shrink-0 px-4 pt-4 pb-2">
+            <div className="fixed top-0 left-0 w-full z-50 px-4 pt-4 pb-2">
                 <div className="max-w-[600px] mx-auto">
                     <BackButton
                         to="/setup"
@@ -99,7 +99,7 @@ export const WaitingRoom: React.FC = () => {
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 px-4 pb-6 md:pb-10"
+                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10"
             >
 
                 <div className="flex flex-col items-center text-center">
