@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChatToggleButton } from './DiscussionChat';
 import { SessionKeyBanner } from './SessionKeyBanner';
+import { BackButton } from '@/components/ui/BackButton';
 import { BackgroundMusic } from '@/components/ui/BackgroundMusic';
 import { useGameContext } from '@/contexts/GameContext';
 import { useAccount } from 'wagmi';
@@ -14,7 +15,7 @@ import { GamePhase } from '@/types';
  */
 export const GameUIOverlay: React.FC = () => {
     const { chainId, address } = useAccount();
-    const { gameState, myPlayer, currentRoomId, isTxConfirming, discussionState } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, isTxConfirming, isTxPending, discussionState, forfeitGameOnChain } = useGameContext();
     const [isChatExpanded, setIsChatExpanded] = useState(false);
 
     // Track if it's my turn during discussion — use shared state from GameContext
@@ -53,8 +54,24 @@ export const GameUIOverlay: React.FC = () => {
         />
     ) : undefined;
 
+    // Show exit button during active game phases (not during shuffle/reveal overlays or ended)
+    const showExitButton = [GamePhase.DAY, GamePhase.VOTING, GamePhase.NIGHT].includes(gameState.phase);
+
     return (
         <>
+            {/* Exit Game button — top left */}
+            {showExitButton && (
+                <div className="fixed top-4 left-4 z-[100]">
+                    <BackButton
+                        to="/lobby"
+                        label=""
+                        exitGame
+                        onExitGame={async () => { await forfeitGameOnChain(); }}
+                        isLoading={isTxPending}
+                    />
+                </div>
+            )}
+
             {/* Subtle confirming indicator — shows when TXs are being confirmed in background */}
             {isTxConfirming && gameState.phase !== GamePhase.SHUFFLING && gameState.phase !== GamePhase.REVEAL && gameState.phase !== GamePhase.LOBBY && (
                 <div className="fixed top-2 right-2 z-[200] flex items-center gap-2 px-3 py-1.5 bg-[#050505] border border-[#916A47]/30 rounded-md shadow-[0_5px_15px_rgba(0,0,0,0.9)]">
