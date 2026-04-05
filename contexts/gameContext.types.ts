@@ -80,6 +80,14 @@ export interface GameContextType {
     lobbyPassword: string;
     setLobbyPassword: (pass: string) => void;
 
+    // Role reveal (from useEndGame)
+    revealedRoles: Map<string, import('../types').Role>;
+    onChainRoles: Map<string, import('../types').Role>;
+    isRevealingRoles: boolean;
+    revealTimedOut: boolean;
+    fetchOnChainRoles: () => Promise<void>;
+    fetchGMRoles: () => Promise<void>;
+
     // Tournaments
     createTournamentOnChain: (params: {
         name: string;
