@@ -612,47 +612,59 @@ export function useLobbyActions(deps: LobbyDeps) {
 
         setIsTxPending(true);
         try {
-            const { client: activeWalletClient, account: activeAccount } = await wallet.getActiveWalletClient();
             const targetChain = refs.runtimeChainRef.current;
+            const pClient = refs.publicClientRef.current!;
 
-            // Session wallet may have remaining balance — let it forward via msg.value
-            let sessionBalance = 0n;
-            const session = (await import('../../services/sessionKeyService')).loadSession();
-            if (session?.registeredOnChain && session.address) {
-                try {
-                    const bal = await refs.publicClientRef.current!.getBalance({
-                        address: session.address as `0x${string}`
-                    });
-                    // Keep a tiny amount for gas, forward the rest
-                    const gasReserve = 50000n * 1000000000n; // ~0.00005 ETH
-                    if (bal > gasReserve) {
-                        sessionBalance = bal - gasReserve;
-                    }
-                } catch (e) {
-                    console.warn('[Forfeit] Could not read session balance:', e);
-                }
+            // Try to use session wallet — it can drain its own balance via msg.value,
+            // and resolvePlayer() in the contract maps session → main wallet.
+            const sessionClient = wallet.getSessionWalletClient();
+            if (sessionClient) {
+                const sessionAddr = sessionClient.account!.address;
+                const bal = await pClient.getBalance({ address: sessionAddr });
+                // Reserve gas for the forfeit tx itself
+                const gasReserve = 200000n * 1000000000n; // ~0.0002 STT
+                const forwardValue = bal > gasReserve ? bal - gasReserve : 0n;
+
+                console.log(`[Forfeit] Using session wallet ${sessionAddr}, forwarding ${forwardValue} wei`);
+
+                const hash = await sessionClient.writeContract({
+                    address: refs.contractAddressRef.current,
+                    abi: MAFIA_ABI,
+                    functionName: 'forfeitGame',
+                    args: [roomId],
+                    account: sessionClient.account!,
+                    chain: targetChain,
+                    value: forwardValue,
+                });
+
+                const receipt = await pClient.waitForTransactionReceipt({ hash });
+                if (receipt.status === 'reverted') throw new Error("Forfeit transaction reverted");
+            } else {
+                // Fallback: no session wallet, use main wallet (no gas drain)
+                console.log('[Forfeit] No session wallet, using main wallet');
+                const { client: activeWalletClient, account: activeAccount } = await wallet.getActiveWalletClient();
+
+                const gasConfig = await txEngine.getSmartGasConfig({
+                    functionName: 'forfeitGame',
+                    args: [roomId],
+                    account: activeAccount,
+                    value: 0n,
+                });
+
+                const hash = await activeWalletClient.writeContract({
+                    address: refs.contractAddressRef.current,
+                    abi: MAFIA_ABI,
+                    functionName: 'forfeitGame',
+                    args: [roomId],
+                    account: activeAccount,
+                    chain: targetChain,
+                    value: 0n,
+                    ...gasConfig,
+                });
+
+                const receipt = await pClient.waitForTransactionReceipt({ hash });
+                if (receipt.status === 'reverted') throw new Error("Forfeit transaction reverted");
             }
-
-            const gasConfig = await txEngine.getSmartGasConfig({
-                functionName: 'forfeitGame',
-                args: [roomId],
-                account: activeAccount,
-                value: sessionBalance,
-            });
-
-            const hash = await activeWalletClient.writeContract({
-                address: refs.contractAddressRef.current,
-                abi: MAFIA_ABI,
-                functionName: 'forfeitGame',
-                args: [roomId],
-                account: activeAccount,
-                chain: targetChain,
-                value: sessionBalance,
-                ...gasConfig,
-            });
-
-            const receipt = await refs.publicClientRef.current!.waitForTransactionReceipt({ hash });
-            if (receipt.status === 'reverted') throw new Error("Forfeit transaction reverted");
 
             addLog("Left the game successfully", "success");
             setCurrentRoomId(null);
