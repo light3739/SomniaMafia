@@ -1,12 +1,14 @@
 /**
- * useEndGame — ZK-proof based game ending + auto-win detection.
+ * useEndGame — ZK-proof based game ending + auto-win detection + role reveal.
  *
  * Handles:
  * - endGameZK (client-driven ZK proof submission with waterfall coordination)
  * - triggerAutoWinCheck (server-driven periodic check)
  * - Prize deposit debugging
+ * - Role reveal (on-chain + GM server) after game ends
+ * - Auto-distribute prizes + session wallet drain
  */
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { formatEther } from 'viem';
 import { MAFIA_ABI } from '../../contracts/config';
 import { generateEndGameProof } from '../../services/zkProof';
@@ -17,6 +19,17 @@ import type { TransactionEngine } from './useTransactionEngine';
 import type { GameDataSync } from './useGameDataSync';
 import type { LogEntry } from '../../types';
 import React from 'react';
+
+// Convert contract Role enum (0-4) to frontend Role
+const contractRoleToRole = (contractRole: number): Role => {
+    switch (contractRole) {
+        case 1: return Role.MAFIA;
+        case 2: return Role.DOCTOR;
+        case 3: return Role.DETECTIVE;
+        case 4: return Role.CIVILIAN;
+        default: return Role.UNKNOWN;
+    }
+};
 
 interface EndGameDeps {
     refs: GameRefs;
@@ -32,6 +45,23 @@ interface EndGameDeps {
 
 export function useEndGame(deps: EndGameDeps) {
     const { refs, txEngine, dataSync, gameState, setIsTxPending, setGameState, addLog, isTestMode, currentRoomId } = deps;
+
+    // === ROLE REVEAL STATE ===
+    const [revealedRoles, setRevealedRoles] = useState<Map<string, Role>>(new Map());
+    const [onChainRoles, setOnChainRoles] = useState<Map<string, Role>>(new Map());
+    const [isRevealingRoles, setIsRevealingRoles] = useState(false);
+    const [revealTimedOut, setRevealTimedOut] = useState(false);
+    const onChainRolesRef = React.useRef<Map<string, Role>>(new Map());
+    const revealedRolesRef = React.useRef<Map<string, Role>>(new Map());
+    const isRevealingRef = React.useRef(false);
+    const playersRef = React.useRef(gameState.players);
+    const roomIdRef = React.useRef<bigint | null>(currentRoomId);
+    const pollIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+    const roleRevealStartedRef = React.useRef(false);
+
+    React.useEffect(() => { playersRef.current = gameState.players; }, [gameState.players]);
+    React.useEffect(() => { revealedRolesRef.current = revealedRoles; }, [revealedRoles]);
+    React.useEffect(() => { if (currentRoomId) roomIdRef.current = currentRoomId; }, [currentRoomId]);
 
     // Helper: debug deposit after endGame
     const debugDepositAfterEnd = useCallback(async (roomId: bigint, myAddr: string, label: string) => {
@@ -572,9 +602,194 @@ export function useEndGame(deps: EndGameDeps) {
         return () => clearTimeout(t);
     }, [gameState.phase, gameState.isTournament, currentRoomId, refs, addLog]);
 
+    // === ROLE REVEAL LOGIC ===
+
+    const allRolesKnown = useCallback(() => {
+        const players = playersRef.current;
+        return players.length > 0 && players.every(p => {
+            const addr = p.address.toLowerCase();
+            const r = onChainRolesRef.current.get(addr)
+                || revealedRolesRef.current.get(addr)
+                || p.role;
+            return r !== Role.UNKNOWN;
+        });
+    }, []);
+
+    const fetchOnChainRoles = useCallback(async () => {
+        const pClient = refs.publicClientRef.current;
+        const roomId = roomIdRef.current || currentRoomId;
+        if (!pClient || !roomId) return;
+
+        try {
+            const players = playersRef.current;
+            if (players.length === 0) return;
+            const roles = new Map<string, Role>();
+
+            const roleResults = await pClient.multicall({
+                contracts: players.map(player => ({
+                    address: refs.contractAddressRef.current,
+                    abi: MAFIA_ABI as any,
+                    functionName: 'playerRoles' as const,
+                    args: [roomId, player.address],
+                })),
+                allowFailure: true,
+            });
+
+            for (let i = 0; i < players.length; i++) {
+                const result = roleResults[i];
+                if (result.status === 'success') {
+                    const role = contractRoleToRole(Number(result.result));
+                    if (role !== Role.UNKNOWN) {
+                        roles.set(players[i].address.toLowerCase(), role);
+                    }
+                }
+            }
+
+            setOnChainRoles(roles);
+            onChainRolesRef.current = roles;
+
+            const merged = new Map<string, Role>();
+            for (const player of players) {
+                const addr = player.address.toLowerCase();
+                merged.set(addr, roles.get(addr) || revealedRolesRef.current.get(addr) || player.role);
+            }
+
+            setGameState(prev => ({
+                ...prev,
+                players: prev.players.map(p => ({
+                    ...p,
+                    role: merged.get(p.address.toLowerCase()) || p.role
+                }))
+            }));
+        } catch (e) {
+            console.error("[RoleReveal] Failed to fetch on-chain roles:", e);
+        }
+    }, [refs, currentRoomId, setGameState]);
+
+    const fetchGMRoles = useCallback(async () => {
+        if (allRolesKnown()) return;
+
+        const roomId = roomIdRef.current || currentRoomId
+            || (() => { const s = sessionStorage.getItem('gameOver_roomId'); return s ? BigInt(s) : null; })();
+        if (!roomId) return;
+
+        try {
+            const chainId = refs.runtimeChainRef.current.id;
+            const res = await fetch(`/api/game/room-roles?roomId=${roomId.toString()}&chainId=${chainId}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.roles || typeof data.roles !== 'object') return;
+
+            const roleMap: Record<string, Role> = {
+                'MAFIA': Role.MAFIA, 'DOCTOR': Role.DOCTOR,
+                'DETECTIVE': Role.DETECTIVE, 'CIVILIAN': Role.CIVILIAN,
+            };
+            const gmRoles = new Map<string, Role>();
+            for (const [addr, roleStr] of Object.entries(data.roles as Record<string, string>)) {
+                const role = roleMap[roleStr];
+                if (role) gmRoles.set(addr.toLowerCase(), role);
+            }
+            if (gmRoles.size === 0) return;
+
+            setRevealedRoles(prev => {
+                const merged = new Map(prev);
+                for (const [addr, role] of gmRoles) {
+                    if (!merged.has(addr) || merged.get(addr) === Role.UNKNOWN) merged.set(addr, role);
+                }
+                return merged;
+            });
+
+            setGameState(prev => ({
+                ...prev,
+                players: prev.players.map(p => {
+                    const gmRole = gmRoles.get(p.address.toLowerCase());
+                    if (gmRole && p.role === Role.UNKNOWN) return { ...p, role: gmRole };
+                    return p;
+                })
+            }));
+        } catch (e) {
+            console.error("[RoleReveal] Failed to fetch GM roles:", e);
+        }
+    }, [currentRoomId, refs, setGameState, allRolesKnown]);
+
+    // === ROLE REVEAL TRIGGER (on phase → ENDED) ===
+    React.useEffect(() => {
+        if (gameState.phase !== GamePhase.ENDED || roleRevealStartedRef.current) return;
+        if (!refs.publicClientRef.current) return;
+        roleRevealStartedRef.current = true;
+
+        // Snapshot roomId
+        const rid = currentRoomId || roomIdRef.current;
+        if (rid) sessionStorage.setItem('gameOver_roomId', rid.toString());
+
+        // Start reveal process
+        const startReveal = async () => {
+            if (isRevealingRef.current) return;
+            isRevealingRef.current = true;
+            setIsRevealingRoles(true);
+
+            if (isTestMode) {
+                const roles = new Map<string, Role>();
+                playersRef.current.forEach(p => roles.set(p.address.toLowerCase(), p.role));
+                setRevealedRoles(roles);
+                isRevealingRef.current = false;
+                setIsRevealingRoles(false);
+                return;
+            }
+
+            try {
+                await fetchOnChainRoles();
+            } catch (e) {
+                console.error("[RoleReveal] Initial reveal failed:", e);
+            } finally {
+                isRevealingRef.current = false;
+                setIsRevealingRoles(false);
+            }
+        };
+
+        // Delayed start — avoid setState during parent render
+        const t0 = setTimeout(startReveal, 500);
+
+        // GM roles with backoff
+        const t1 = setTimeout(() => fetchGMRoles(), 1000);
+        const t2 = setTimeout(() => fetchGMRoles(), 4000);
+        const t3 = setTimeout(() => fetchGMRoles(), 10000);
+        const t4 = setTimeout(() => fetchGMRoles(), 18000);
+
+        // Reveal timeout (30s → show "Unknown")
+        const tTimeout = setTimeout(() => setRevealTimedOut(true), 30000);
+
+        // Polling loop: every 3s, max 100 polls
+        let pollCount = 0;
+        pollIntervalRef.current = setInterval(async () => {
+            pollCount++;
+            if (pollCount > 100 || allRolesKnown()) {
+                if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+                return;
+            }
+            await Promise.all([fetchOnChainRoles(), fetchGMRoles()]);
+            if (allRolesKnown()) {
+                if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+            }
+        }, 3000);
+
+        return () => {
+            clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4);
+            clearTimeout(tTimeout);
+            if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+        };
+    }, [gameState.phase, refs, currentRoomId, isTestMode, fetchOnChainRoles, fetchGMRoles, allRolesKnown]);
+
     return {
         endGameZK,
         triggerAutoWinCheck,
+        // Role reveal state (consumed by GameOver)
+        revealedRoles,
+        onChainRoles,
+        isRevealingRoles,
+        revealTimedOut,
+        fetchOnChainRoles,
+        fetchGMRoles,
     };
 }
 

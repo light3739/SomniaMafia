@@ -468,6 +468,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // End Game
         endGameZK: endGame.endGameZK,
+        revealedRoles: endGame.revealedRoles,
+        onChainRoles: endGame.onChainRoles,
+        isRevealingRoles: endGame.isRevealingRoles,
+        revealTimedOut: endGame.revealTimedOut,
+        fetchOnChainRoles: endGame.fetchOnChainRoles,
+        fetchGMRoles: endGame.fetchGMRoles,
 
         // Tournaments
         createTournamentOnChain: tournaments.createTournamentOnChain,
