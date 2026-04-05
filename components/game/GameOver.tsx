@@ -67,6 +67,7 @@ export const GameOver: React.FC = React.memo(() => {
     const [refundClaimed, setRefundClaimed] = useState(false);
     const [refundAutomatic, setRefundAutomatic] = useState(false);
     const [depositAmount, setDepositAmount] = useState<string>('0');
+    const [prizesClaimed, setPrizesClaimed] = useState(false);
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
     const hasPlayedSound = useRef(false);
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -154,6 +155,40 @@ export const GameOver: React.FC = React.memo(() => {
         return () => clearTimeout(t);
     }, []);
 
+
+    // Poll prizesClaimed status for tournaments
+    useEffect(() => {
+        if (!publicClient || !currentRoomId || !gameState.isTournament) return;
+        if (prizesClaimed) return;
+
+        const checkPrizes = async () => {
+            try {
+                const roomData = await publicClient.readContract({
+                    address: runtimeContractAddress,
+                    abi: MAFIA_ABI,
+                    functionName: 'getRoom',
+                    args: [currentRoomId],
+                }) as any;
+                const tournamentId = Array.isArray(roomData) ? BigInt(roomData[19] || 0) : BigInt(roomData.tournamentId || 0);
+                if (tournamentId === 0n) return;
+
+                const tData = await publicClient.readContract({
+                    address: runtimeContractAddress,
+                    abi: MAFIA_ABI,
+                    functionName: 'getTournament',
+                    args: [tournamentId],
+                }) as any;
+                const claimed = Array.isArray(tData) ? Boolean(tData[13]) : Boolean(tData.prizesClaimed);
+                if (claimed) setPrizesClaimed(true);
+            } catch (e) {
+                console.warn('[GameOver] Failed to check prizesClaimed:', e);
+            }
+        };
+
+        checkPrizes();
+        const iv = setInterval(checkPrizes, 5000);
+        return () => clearInterval(iv);
+    }, [publicClient, currentRoomId, gameState.isTournament, runtimeContractAddress, prizesClaimed]);
 
     // Check player deposit amount
     useEffect(() => {
@@ -712,10 +747,15 @@ export const GameOver: React.FC = React.memo(() => {
                                     }
                                 }}
                                 isLoading={isTxPending}
-                                className="w-full h-[60px] text-lg bg-[#916A47] hover:bg-[#A87B51] text-[#050505] font-bold border border-[#C5A059]/30 transition-colors shadow-[0_10px_20px_rgba(0,0,0,0.5)]"
+                                disabled={prizesClaimed}
+                                className={`w-full h-[60px] text-lg font-bold border transition-colors shadow-[0_10px_20px_rgba(0,0,0,0.5)] ${
+                                    prizesClaimed
+                                        ? 'bg-[#2a2a2a] text-[#6B6B6B] border-[#3a3a3a] cursor-not-allowed'
+                                        : 'bg-[#916A47] hover:bg-[#A87B51] text-[#050505] border-[#C5A059]/30'
+                                }`}
                             >
                                 <Trophy className="w-5 h-5 mr-2" />
-                                Distribute Prize Pool
+                                {prizesClaimed ? 'Prizes Distributed' : 'Distribute Prize Pool'}
                             </Button>
                         )}
 
