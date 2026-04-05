@@ -434,6 +434,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Lobby
         createLobbyOnChain: lobby.createLobbyOnChain,
         joinLobbyOnChain: lobby.joinLobbyOnChain,
+        forfeitGameOnChain: lobby.forfeitGameOnChain,
 
         // Shuffle
         startGameOnChain: shuffle.startGameOnChain,
