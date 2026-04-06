@@ -536,9 +536,14 @@ export function useEndGame(deps: EndGameDeps) {
                                 chain,
                             });
 
-                            await pClient.waitForTransactionReceipt({ hash });
+                            const receipt = await pClient.waitForTransactionReceipt({ hash });
                             console.log('[AutoDistribute] Prizes distributed successfully!');
                             addLog('Prizes distributed automatically', 'success');
+
+                            // Store tx hash for GameOver popup
+                            if (currentRoomId) {
+                                localStorage.setItem(`prize_tx_${currentRoomId}`, hash);
+                            }
                         }
                     }
                 } catch (e: any) {

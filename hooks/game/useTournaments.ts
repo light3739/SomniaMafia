@@ -296,6 +296,9 @@ export function useTournaments(deps: TournamentDeps) {
             setIsTxConfirming(true);
             await pClient.waitForTransactionReceipt({ hash });
             setIsTxConfirming(false);
+
+            // Store tx hash for GameOver popup
+            localStorage.setItem(`prize_tx_${roomId}`, hash);
         } catch (error) {
             console.error('Failed to distribute prizes:', error);
             const msg = (error as any).message || 'Unknown error';
