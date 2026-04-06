@@ -81,8 +81,6 @@ export interface GameContextType {
     setLobbyPassword: (pass: string) => void;
 
     // Role reveal (from useEndGame)
-    isRevealingRoles: boolean;
-    revealTimedOut: boolean;
     fetchOnChainRoles: () => Promise<void>;
     fetchGMRoles: () => Promise<void>;
 
