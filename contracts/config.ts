@@ -32,7 +32,7 @@ export const DEPLOYMENTS = {
             VotingFacet: '0xe9e52ff5e79dc99489ac510905793b9f0de4bdd7',
             NightFacet: '0xd922ad1aa14817ddf84bf86eaab66d614cbe0e5b',
             GameEndFacet: '0x482388e3d8798f9491ee549bfecd05d31bc0779d',
-            TournamentFacet: '0xd4f53e0e9fb191b9321646ce78441ad343762bbc',
+            TournamentFacet: '0x70890262e06c90ab828c67c9b56be5955aef62ee',
         },
     },
 } as const;
