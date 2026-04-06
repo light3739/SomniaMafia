@@ -128,12 +128,12 @@ export function useNightActions(deps: NightDeps) {
 
                     if (attempt < 2) {
                         console.warn(`[GM API] Attempt ${attempt + 1} failed (${response.status}: ${lastError}). Retrying...`);
-                        await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
+                        await new Promise(r => setTimeout(r, (attempt + 1) * 500));
                     }
                 } catch (e: any) {
                     lastError = e.message || 'Network error';
                     if (attempt < 2) {
-                        await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
+                        await new Promise(r => setTimeout(r, (attempt + 1) * 500));
                     } else {
                         throw e;
                     }

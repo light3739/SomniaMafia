@@ -134,39 +134,13 @@ export function useGameDataSync(deps: DataSyncDeps) {
                 tournamentId = BigInt(roomData.tournamentId || 0);
             }
 
-            // Fetch tournament prize pool if this is a tournament room
-            let prizePool: bigint = depositPool;
-            let buyIn: bigint = 0n;
-            let paymentToken: `0x${string}` = '0x0000000000000000000000000000000000000000';
-
-            if (tournamentId > 0n) {
-                try {
-                    const tData = await refs.publicClientRef.current!.readContract({
-                        address: refs.contractAddressRef.current,
-                        abi: MAFIA_ABI,
-                        functionName: 'getTournament',
-                        args: [tournamentId],
-                    }) as any;
-
-                    const tPrize = Array.isArray(tData) ? BigInt(tData[4] || 0) : BigInt(tData.prizePool || 0);
-                    const tBuyIn = Array.isArray(tData) ? BigInt(tData[3] || 0) : BigInt(tData.buyIn || 0);
-                    const tToken = Array.isArray(tData) ? (tData[9] || paymentToken) : (tData.paymentToken || paymentToken);
-
-                    prizePool = tPrize + depositPool;
-                    buyIn = tBuyIn;
-                    paymentToken = tToken as `0x${string}`;
-                } catch (e) {
-                    console.warn('[FetchGameData] getTournament failed:', e);
-                }
-            }
-
             return {
                 rawPlayers: data,
                 phase, dayCount, aliveCount, committedCount, revealedCount,
                 phaseDeadline,
                 mafiaCommittedCount: Number(mafiaCommitted),
                 mafiaRevealedCount: Number(mafiaRevealed),
-                tournamentId, maxPlayers, prizePool, buyIn, paymentToken,
+                tournamentId, maxPlayers, depositPool,
             };
         } catch (e: any) {
             console.error("[FetchGameData] Error:", e);
@@ -191,7 +165,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
             const {
                 rawPlayers, phase, dayCount, revealedCount,
                 mafiaCommittedCount, mafiaRevealedCount, phaseDeadline,
-                tournamentId, aliveCount, maxPlayers, prizePool, buyIn, paymentToken,
+                tournamentId, aliveCount, maxPlayers, depositPool,
             } = gameData;
 
             console.log('[DEBUG refreshPlayersList] rawPlayers count:', rawPlayers.length, 'wallets:', rawPlayers.map((p: any) => p.wallet));
@@ -207,27 +181,42 @@ export function useGameDataSync(deps: DataSyncDeps) {
                 refs.lastPhaseKeyRef.current = phaseKey;
             }
 
-            // Fetch remote avatars
-            let remoteAvatars: Record<string, string> = {};
+            // Fetch tournament data + avatars in parallel
             const isLobby = refs.phaseRef.current === GamePhase.LOBBY;
             const hasCache = Object.keys(refs.avatarCacheRef.current).length > 0;
 
+            const avatarPromise = (isLobby || !hasCache)
+                ? fetch(`/api/game/avatar?roomId=${roomId.toString()}&chainId=${refs.runtimeChainRef.current.id}`)
+                    .then(res => res.ok ? res.json() : null)
+                    .then(data => data?.avatars || refs.avatarCacheRef.current)
+                    .catch(() => refs.avatarCacheRef.current)
+                : Promise.resolve(refs.avatarCacheRef.current);
+
+            const tournamentPromise = tournamentId > 0n
+                ? refs.publicClientRef.current!.readContract({
+                    address: refs.contractAddressRef.current,
+                    abi: MAFIA_ABI,
+                    functionName: 'getTournament',
+                    args: [tournamentId],
+                }).catch(() => null)
+                : Promise.resolve(null);
+
+            const [remoteAvatars, tData] = await Promise.all([avatarPromise, tournamentPromise]);
+
             if (isLobby || !hasCache) {
-                try {
-                    const avatarRes = await fetch(`/api/game/avatar?roomId=${roomId.toString()}&chainId=${refs.runtimeChainRef.current.id}`);
-                    if (avatarRes.ok) {
-                        const data = await avatarRes.json();
-                        remoteAvatars = data.avatars || {};
-                        refs.avatarCacheRef.current = remoteAvatars;
-                    } else {
-                        remoteAvatars = refs.avatarCacheRef.current;
-                    }
-                } catch (e) {
-                    console.warn('[Avatar Sync] Failed to fetch avatars:', e);
-                    remoteAvatars = refs.avatarCacheRef.current;
-                }
-            } else {
-                remoteAvatars = refs.avatarCacheRef.current;
+                refs.avatarCacheRef.current = remoteAvatars;
+            }
+
+            let prizePool: bigint = depositPool;
+            let buyIn: bigint = 0n;
+            let paymentToken: `0x${string}` = '0x0000000000000000000000000000000000000000';
+            if (tData) {
+                const tPrize = Array.isArray(tData) ? BigInt((tData as any)[4] || 0) : BigInt((tData as any).prizePool || 0);
+                const tBuyIn = Array.isArray(tData) ? BigInt((tData as any)[3] || 0) : BigInt((tData as any).buyIn || 0);
+                const tToken = Array.isArray(tData) ? ((tData as any)[9] || paymentToken) : ((tData as any).paymentToken || paymentToken);
+                prizePool = tPrize + depositPool;
+                buyIn = tBuyIn;
+                paymentToken = tToken as `0x${string}`;
             }
 
             setGameState(prev => {
@@ -343,7 +332,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
 
         const now = Date.now();
         const timeSinceLastRefresh = now - lastRefreshTimeRef.current;
-        const MIN_INTERVAL = 2000;
+        const MIN_INTERVAL = 800;
 
         const delay = timeSinceLastRefresh < MIN_INTERVAL
             ? MIN_INTERVAL - timeSinceLastRefresh
