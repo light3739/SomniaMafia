@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  experimental: {
+    optimizePackageImports: ['@privy-io/react-auth', '@privy-io/wagmi', 'wagmi', 'lucide-react', 'framer-motion'],
+  },
   logging: {
     fetches: {
       fullUrl: true,
