@@ -41,7 +41,14 @@ const RoleBgColors: Record<Role, string> = {
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = React.memo(() => {
-    const { gameState, myPlayer, currentRoomId, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain, runtimeChain, isRevealingRoles, revealTimedOut, fetchOnChainRoles, fetchGMRoles } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain, runtimeChain, fetchOnChainRoles, fetchGMRoles } = useGameContext();
+
+    // Local reveal timeout — shows "Unknown" instead of "revealing..." after 30s
+    const [revealTimedOut, setRevealTimedOut] = useState(false);
+    useEffect(() => {
+        const t = setTimeout(() => setRevealTimedOut(true), 30000);
+        return () => clearTimeout(t);
+    }, []);
     const publicClient = usePublicClient();
     const { address } = useAccount();
     const router = useRouter();
@@ -349,7 +356,7 @@ export const GameOver: React.FC = React.memo(() => {
                         <div className="flex items-center justify-between gap-2 mb-4">
                             <div className="flex items-center gap-2">
                                 <h3 className="text-white/50 text-sm uppercase tracking-wider">All Roles Revealed</h3>
-                                {isRevealingRoles && <span className="text-xs text-white/30">(loading...)</span>}
+                                {!revealTimedOut && gameState.players.some(p => p.role === Role.UNKNOWN) && <span className="text-xs text-white/30">(loading...)</span>}
                             </div>
                             {/* Manual refresh — useful when GM was slow to cache roles */}
                             <button
