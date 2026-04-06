@@ -1,6 +1,5 @@
 import React from 'react';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
 import { usePrivy } from '@privy-io/react-auth';
 const somniaLogo = "/assets/somniayeal.png";
 
@@ -19,17 +18,11 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
             {/* Content Container */}
             <div className="relative z-10 w-full flex flex-col items-center justify-center p-4 my-auto min-h-full">
 
-                {/* Main Title */}
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
-                    animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                    transition={{ duration: 1.5, ease: "easeOut" }}
-                    className="w-full flex items-center justify-center"
-                >
+                {/* Main Title — CSS animation for fast LCP (no JS needed) */}
+                <div className="w-full flex items-center justify-center animate-landing-title">
                     <h1
-                        className="text-center font-bold italic text-[#ffffff] whitespace-nowrap"
+                        className="text-center font-bold italic text-[#ffffff] whitespace-nowrap font-serif"
                         style={{
-                            fontFamily: '"Cinzel", serif',
                             fontSize: 'clamp(2.5rem, 8vw, 6.5rem)',
                             letterSpacing: '0.05em',
                             paddingLeft: '0.05em',
@@ -42,14 +35,11 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     >
                         Onchain Mafia
                     </h1>
-                </motion.div>
+                </div>
 
-                {/* Subtitle Row - Vertical Scroll Slot Machine */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5, duration: 1 }}
-                    className="mt-[-10px] relative overflow-hidden bg-black/40 px-2 rounded-full backdrop-blur-md border border-white/10 shadow-xl h-[40px] md:h-[50px] lg:h-[60px] flex items-center justify-center w-[220px] md:w-[300px] lg:w-[380px]"
+                {/* Subtitle Row */}
+                <div
+                    className="animate-landing-subtitle mt-[-10px] relative overflow-hidden bg-black/40 px-2 rounded-full backdrop-blur-md border border-white/10 shadow-xl h-[40px] md:h-[50px] lg:h-[60px] flex items-center justify-center w-[220px] md:w-[300px] lg:w-[380px]"
                 >
                     <div className="flex flex-row items-center justify-center gap-3 h-full">
                         <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
@@ -57,15 +47,10 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         </p>
                         <Image src={somniaLogo} alt="Somnia" width={45} height={40} className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md" />
                     </div>
-                </motion.div>
+                </div>
 
                 {/* CONNECT / ENTER Button */}
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 1.0, duration: 0.5 }}
-                    className="mt-32 relative z-20"
-                >
+                <div className="animate-landing-button mt-32 relative z-20">
                     {(() => {
                         if (!ready) {
                             return <div style={{ opacity: 0 }}>Loading...</div>;
@@ -99,7 +84,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                             </button>
                         );
                     })()}
-                </motion.div>
+                </div>
 
             </div>
         </div >

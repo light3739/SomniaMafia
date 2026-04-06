@@ -111,7 +111,7 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
 
     return (
         <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-3 pointer-events-none">
-            <audio ref={audioRef} src="/assets/Main_Music.mp3" loop />
+            <audio ref={audioRef} src="/assets/Main_Music.mp3" loop preload="none" />
 
             {/* Expanded Settings Panel */}
             <AnimatePresence>

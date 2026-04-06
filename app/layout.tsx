@@ -67,6 +67,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://auth.privy.io" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://explorer-api.walletconnect.com" crossOrigin="anonymous" />
+      </head>
       <body className={`${cinzel.variable} ${montserrat.variable} ${rajdhani.variable} ${shareTechMono.variable} antialiased bg-black text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden`}>
         <Providers>
           <BackgroundMusic />

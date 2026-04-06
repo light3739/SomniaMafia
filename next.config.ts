@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: ['snarkjs'],
   images: {
+    formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       { protocol: 'https', hostname: 'picsum.photos', pathname: '**' },
       { protocol: 'https', hostname: 'placehold.co', pathname: '**' },
