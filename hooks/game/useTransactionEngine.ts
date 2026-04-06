@@ -267,15 +267,23 @@ export function useTransactionEngine(deps: TxEngineDeps) {
             const totalTime = Math.round(performance.now() - txStartTime);
             console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas} (prep took ${totalTime}ms)`);
             toast.loading(`Confirm ${functionName} in wallet...`, { id: `tx-${functionName}` });
-            return activeWalletClient.writeContract({
-                address: refs.contractAddressRef.current,
-                abi: MAFIA_ABI,
-                functionName: functionName as any,
-                args: args as any,
-                account: activeAccount,
-                chain: refs.runtimeChainRef.current,
-                ...gasConfig
-            });
+            try {
+                const hash = await activeWalletClient.writeContract({
+                    address: refs.contractAddressRef.current,
+                    abi: MAFIA_ABI,
+                    functionName: functionName as any,
+                    args: args as any,
+                    account: activeAccount,
+                    chain: refs.runtimeChainRef.current,
+                    ...gasConfig
+                });
+                toast.success(`${functionName} submitted`, { id: `tx-${functionName}`, duration: 3000 });
+                return hash;
+            } catch (err: any) {
+                const msg = err?.shortMessage || err?.message || 'Transaction rejected';
+                toast.error(msg.slice(0, 120), { id: `tx-${functionName}`, duration: 5000 });
+                throw err;
+            }
         }
     }, [refs, wallet, isTestMode, getSmartGasConfig, enqueueTx]);
 

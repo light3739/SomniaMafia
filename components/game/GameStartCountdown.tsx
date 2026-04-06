@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface GameStartCountdownProps {
@@ -13,13 +13,13 @@ const FINAL_HOLD = 1000;   // ms to hold "THE GAME BEGINS"
 export const GameStartCountdown = React.memo(({ show, onComplete }: GameStartCountdownProps) => {
     const [step, setStep] = useState<number | null>(null);
 
-    const reset = useCallback(() => {
-        setStep(null);
-    }, []);
+    // Stable ref for onComplete to avoid effect re-runs (loop bug)
+    const onCompleteRef = useRef(onComplete);
+    useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
 
     useEffect(() => {
         if (!show) {
-            reset();
+            setStep(null);
             return;
         }
 
@@ -35,13 +35,13 @@ export const GameStartCountdown = React.memo(({ show, onComplete }: GameStartCou
         // After the last step ("THE GAME BEGINS") holds for FINAL_HOLD, call onComplete
         const totalDuration = COUNTDOWN_VALUES.length * STEP_DURATION + FINAL_HOLD;
         timers.push(setTimeout(() => {
-            onComplete();
+            onCompleteRef.current();
         }, totalDuration));
 
         return () => {
             timers.forEach(clearTimeout);
         };
-    }, [show, onComplete, reset]);
+    }, [show]);
 
     if (!show || step === null) return null;
 

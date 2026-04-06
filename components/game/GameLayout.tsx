@@ -13,6 +13,7 @@ import { MorningAnnouncement } from './MorningAnnouncement';
 import { RoleCompositionAnnouncement } from './RoleCompositionAnnouncement';
 import { PhaseTransitionOverlay } from './PhaseTransitionOverlay';
 import { EliminationCeremony } from './EliminationCeremony';
+import { GameStartCountdown } from './GameStartCountdown';
 import { useGameHints } from './GameHints';
 import { BackButton } from '../ui/BackButton';
 import { useSoundEffects } from '../ui/SoundEffects';
@@ -58,6 +59,17 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     // Elimination ceremony
     const [eliminationData, setEliminationData] = useState<{ name: string; role: string } | null>(null);
     const lastEliminationDayRef = useRef<number>(0);
+
+    // Game start countdown — read flag set by WaitingRoom on phase transition
+    const [showStartCountdown, setShowStartCountdown] = useState(false);
+    useEffect(() => {
+        try {
+            if (sessionStorage.getItem('mafia_show_start_countdown') === '1') {
+                sessionStorage.removeItem('mafia_show_start_countdown');
+                setShowStartCountdown(true);
+            }
+        } catch { /* ignore */ }
+    }, []);
 
     const [activePhase, setActivePhase] = useState(gameState.phase);
 
@@ -249,6 +261,12 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 playerName={eliminationData?.name || ''}
                 playerRole={eliminationData?.role || 'UNKNOWN'}
                 onComplete={() => setEliminationData(null)}
+            />
+
+            {/* Game start countdown — non-blocking, plays over the loading game */}
+            <GameStartCountdown
+                show={showStartCountdown}
+                onComplete={() => setShowStartCountdown(false)}
             />
 
             <NightAnnouncement
