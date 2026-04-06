@@ -139,25 +139,21 @@ check_load() {
   fi
 }
 
-# ── PROD ─────────────────────────────────────────────────────────────────────
-check_http      "site_apex"            "https://mafiaonchain.live/"          "Frontend apex"
-check_http      "site_www"             "https://www.mafiaonchain.live/"      "Frontend www"
-check_http      "gm_health"            "https://gm.mafiaonchain.live/health" "GM API"
-check_http      "livekit"              "https://livekit.mafiaonchain.live/"  "LiveKit"
-
-check_container "caddy_container"      "livekit-prod-caddy-1"
-check_container "livekit_container"    "livekit-prod-livekit-1"
-check_container "front_container"      "somnia-frontend"
-check_container "front_redis_container" "somnia-redis"
-check_pm2       "gm_pm2"              "gm-server"
-
-# ── TEST ──────────────────────────────────────────────────────────────────────
+# ── TEST (primary environment on mafiatest) ──────────────────────────────────
 check_http      "site_test"            "https://test.mafiaonchain.live/"          "Frontend TEST"
 check_http      "gm_test_health"       "https://gm-test.mafiaonchain.live/health" "GM TEST API"
+check_http      "livekit"              "https://livekit.mafiaonchain.live/"        "LiveKit"
 
-check_container "front_test_container"       "somnia-frontend-test"
-check_container "front_test_redis_container" "somnia-redis-test"
-check_pm2       "gm_test_pm2"               "gm-server-test"
+check_container "front_dev_container"       "mafia-frontend-dev"
+check_container "gm_dev_container"          "mafia-gm-dev"
+check_container "redis_dev_container"       "mafia-redis-dev"
+check_container "livekit_container"         "livekit-server"
+
+# ── PROD (uncomment when prod is deployed on a separate server) ──────────────
+# check_http      "site_apex"            "https://mafiaonchain.live/"          "Frontend apex"
+# check_http      "gm_health"            "https://gm.mafiaonchain.live/health" "GM API"
+# check_container "front_container"      "somnia-frontend"
+# check_container "front_redis_container" "somnia-redis"
 
 # ── SYSTEM ────────────────────────────────────────────────────────────────────
 check_disk
