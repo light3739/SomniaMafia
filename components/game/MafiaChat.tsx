@@ -100,19 +100,19 @@ export const MafiaChat = memo<MafiaChatProps>(function MafiaChat({
             case 'suggest':
                 return (
                     <span>
-                        <span className="text-white/50 font-medium">{msg.playerName}</span>
-                        <span className="text-white/40 italic"> suggests terminating </span>
+                        <span className="text-white/70 font-medium">{msg.playerName}</span>
+                        <span className="text-white/60 italic"> suggests terminating </span>
                         <span className="text-red-900/80 font-bold">{msg.content.targetName}</span>
                     </span>
                 );
             case 'agree':
                 return (
                     <span>
-                        <span className="text-white/50 font-medium">{msg.playerName}</span>
+                        <span className="text-white/70 font-medium">{msg.playerName}</span>
                         {msg.content.targetName ? (
-                            <span className="text-white/40 italic"> concurs: {msg.content.targetName} </span>
+                            <span className="text-white/60 italic"> concurs: {msg.content.targetName} </span>
                         ) : (
-                            <span className="text-white/40 italic"> concurs </span>
+                            <span className="text-white/60 italic"> concurs </span>
                         )}
                         <Plus className="inline w-3 h-3 text-white/70" />
                     </span>
@@ -120,11 +120,11 @@ export const MafiaChat = memo<MafiaChatProps>(function MafiaChat({
             case 'disagree':
                 return (
                     <span>
-                        <span className="text-white/50 font-medium">{msg.playerName}</span>
+                        <span className="text-white/70 font-medium">{msg.playerName}</span>
                         {msg.content.targetName ? (
-                            <span className="text-white/40 italic"> disputes: {msg.content.targetName} </span>
+                            <span className="text-white/60 italic"> disputes: {msg.content.targetName} </span>
                         ) : (
-                            <span className="text-white/40 italic"> disputes </span>
+                            <span className="text-white/60 italic"> disputes </span>
                         )}
                         <Minus className="inline w-3 h-3 text-white/70" />
                     </span>
@@ -132,12 +132,12 @@ export const MafiaChat = memo<MafiaChatProps>(function MafiaChat({
             case 'text':
                 return (
                     <span>
-                        <span className="text-white/50 font-medium">{msg.playerName}: </span>
+                        <span className="text-white/70 font-medium">{msg.playerName}: </span>
                         <span className="text-white/70">{msg.content.text}</span>
                     </span>
                 );
             default:
-                return <span className="text-white/30">Unknown message</span>;
+                return <span className="text-white/60">Unknown message</span>;
         }
     };
 
@@ -150,8 +150,8 @@ export const MafiaChat = memo<MafiaChatProps>(function MafiaChat({
             {/* Header with action buttons */}
             <div className="flex items-center justify-between p-3 border-b border-[#1a1a1a]/50 bg-[#080808]">
                 <div className="flex items-center gap-2">
-                    <span className="text-white/40 text-[10px] font-['Cinzel'] tracking-[0.2em] uppercase">Private Feed</span>
-                    {isSending && <span className="text-[10px] text-white/10 animate-pulse ml-2">Transmitting...</span>}
+                    <span className="text-white/60 text-[10px] font-['Cinzel'] tracking-[0.2em] uppercase">Private Feed</span>
+                    {isSending && <span className="text-[10px] text-white/50 animate-pulse ml-2">Transmitting...</span>}
                 </div>
 
                 {/* Action buttons */}
@@ -163,7 +163,7 @@ export const MafiaChat = memo<MafiaChatProps>(function MafiaChat({
                         data-custom-sound
                         className={`p-2 rounded-lg transition-all ${(lastSuggestion || selectedTarget)
                             ? 'bg-white/5 text-white/80 hover:bg-white/10'
-                            : 'bg-white/5 text-white/20 cursor-not-allowed'
+                            : 'bg-white/5 text-white/50 cursor-not-allowed'
                             }`}
                         title="Agree / Vote to Kill"
                     >
@@ -177,7 +177,7 @@ export const MafiaChat = memo<MafiaChatProps>(function MafiaChat({
                         data-custom-sound
                         className={`p-2 rounded-lg transition-all ${(lastSuggestion || selectedTarget)
                             ? 'bg-white/5 text-white/80 hover:bg-white/10'
-                            : 'bg-white/5 text-white/20 cursor-not-allowed'
+                            : 'bg-white/5 text-white/50 cursor-not-allowed'
                             }`}
                         title="Disagree / Against"
                     >
@@ -192,7 +192,7 @@ export const MafiaChat = memo<MafiaChatProps>(function MafiaChat({
                 className="h-[160px] overflow-y-auto p-3 space-y-2 mafia-chat-scroll"
             >
                 {messages.length === 0 ? (
-                    <p className="text-white/20 text-xs text-center py-8">
+                    <p className="text-white/50 text-xs text-center py-8">
                         Select a player to suggest a target, or use +/- to vote.
                     </p>
                 ) : (

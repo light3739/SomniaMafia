@@ -14,12 +14,12 @@ export const Input: React.FC<InputProps> = ({
     return (
         <div className={`flex flex-col gap-2 ${containerClassName}`}>
             {label && (
-                <label className="text-white/40 text-sm font-sans italic">
+                <label className="text-white/60 text-sm font-sans italic">
                     {label}
                 </label>
             )}
             <input
-                className={`w-full h-[50px] bg-[#19130D]/60 rounded-[10px] border border-white/10 text-center text-white text-xl placeholder:text-white/20 focus:outline-none focus:border-[#916A47] transition-all font-sans ${className}`}
+                className={`w-full h-[50px] bg-[#19130D]/60 rounded-[10px] border border-white/10 text-center text-white text-xl placeholder:text-white/40 focus:outline-none focus:border-[#916A47] transition-all font-sans ${className}`}
                 {...props}
             />
         </div>

@@ -823,7 +823,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                             {nightState.teammates.map(addr => {
                                 const teammate = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
                                 return (
-                                    <span key={addr} className={`px-3 py-1 rounded-full text-sm border ${teammate?.isAlive ? 'bg-[#8B0000]/15 text-[#8B0000]/70 border-[#8B0000]/30' : 'bg-white/5 text-white/20 border-white/10 line-through'}`}>
+                                    <span key={addr} className={`px-3 py-1 rounded-full text-sm border ${teammate?.isAlive ? 'bg-[#8B0000]/15 text-[#8B0000]/70 border-[#8B0000]/30' : 'bg-white/5 text-white/50 border-white/10 line-through'}`}>
                                         {teammate?.name || addr.slice(0, 8)}
                                     </span>
                                 );
@@ -898,7 +898,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                                             <Image src={selectedPlayer.avatarUrl} alt={selectedPlayer.name} fill sizes="40px" className="object-cover" />
                                                         ) : (
                                                             <div className="w-full h-full flex items-center justify-center bg-[#19130D]">
-                                                                <User className="w-5 h-5 text-white/20" />
+                                                                <User className="w-5 h-5 text-white/50" />
                                                             </div>
                                                         )}
                                                     </div>

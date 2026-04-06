@@ -219,10 +219,10 @@ export const SessionKeyBanner = React.memo(({
               {hasSession ? (
                 <div className={`flex items-center gap-1.5 text-[10px] font-mono ${theme.label}`}>
                   <span>{shortenAddress(sessionAddress || '')}</span>
-                  <span className="text-white/20">·</span>
+                  <span className="text-white/40">·</span>
                   <Wallet className="w-2.5 h-2.5" />
                   <span className={isLowBalance ? 'text-[#D4724A]' : ''}>{formatBalance(sessionBalance)} STT</span>
-                  <span className="text-white/20">·</span>
+                  <span className="text-white/40">·</span>
                   <Clock className="w-2.5 h-2.5" />
                   <span>{formatTimeLeft(expiresAt)}</span>
                 </div>

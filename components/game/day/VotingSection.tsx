@@ -40,7 +40,7 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
                             Voting Results
                         </span>
                     </div>
-                    <div className="text-[10px] text-white/30 font-mono mt-1 pt-1 border-t border-[#916A47]/30 animate-pulse uppercase tracking-widest px-4">
+                    <div className="text-[10px] text-white/70 font-mono mt-1 pt-1 border-t border-[#916A47]/30 animate-pulse uppercase tracking-widest px-4">
                         Review the logs above...
                     </div>
                 </div>

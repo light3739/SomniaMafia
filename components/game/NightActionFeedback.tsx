@@ -113,7 +113,7 @@ export const NightActionFeedback: React.FC<NightActionFeedbackProps> = ({ myRole
                                     Kill order sealed
                                 </span>
                             </div>
-                            <p className="text-white/20 text-xs mt-2">
+                            <p className="text-white/50 text-xs mt-2">
                                 The target will be eliminated at dawn unless protected.
                             </p>
                         </div>

@@ -353,7 +353,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     </h2>
                     <div className="flex items-center gap-3">
                         {lastUpdate > 0 && !isInitialLoad && (
-                            <span className="text-white/30 text-[10px] md:text-xs font-mono">
+                            <span className="text-white/50 text-[10px] md:text-xs font-mono">
                                 {new Date(lastUpdate).toLocaleTimeString()}
                             </span>
                         )}
@@ -399,7 +399,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                                     <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
                                                 </svg>
                                             </div>
-                                            <span className="text-white/40 font-medium tracking-wide text-sm animate-pulse">
+                                            <span className="text-white/60 font-medium tracking-wide text-sm animate-pulse">
                                                 Scanning Network...
                                             </span>
                                         </motion.div>
@@ -415,7 +415,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                             <span className="text-[#C49A3C]/30 mb-3">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                             </span>
-                                            <span className="text-white/40 text-center leading-relaxed">
+                                            <span className="text-white/60 text-center leading-relaxed">
                                                 No active lobbies found.<br />Be the first to create one!
                                             </span>
                                         </motion.div>
@@ -467,7 +467,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                                         {tournament.hasPassword && <LockIcon />}
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-white/40 text-[10px] font-mono uppercase">HOST: {room.host.slice(0, 8)}...</span>
+                                                        <span className="text-white/60 text-[10px] font-mono uppercase">HOST: {room.host.slice(0, 8)}...</span>
                                                         {tournament.isTournament && (
                                                             <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#C49A3C]/10 text-[#C49A3C] border border-[#C49A3C]/20">
                                                                 Tournament
@@ -494,9 +494,9 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                                     )}
                                                     <div className="text-right">
                                                         <span className={`font-bold text-lg block leading-none ${tournament.isTournament ? 'text-[#C49A3C]' : 'text-white/80'}`}>
-                                                            {room.players}<span className="text-white/30 text-sm">/{room.max}</span>
+                                                            {room.players}<span className="text-white/50 text-sm">/{room.max}</span>
                                                         </span>
-                                                        <span className="text-white/30 text-[9px] uppercase tracking-widest mt-1 block">Players</span>
+                                                        <span className="text-white/50 text-[9px] uppercase tracking-widest mt-1 block">Players</span>
                                                     </div>
 
                                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300
@@ -518,7 +518,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 </div>
 
                 {(!isConnected || !authenticated) && rooms.length > 0 && !initialRoomId && (
-                    <div className="mt-2 text-white/40 text-xs italic">
+                    <div className="mt-2 text-white/60 text-xs italic">
                         * Wallet connection required to enter a session
                     </div>
                 )}

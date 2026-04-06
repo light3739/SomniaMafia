@@ -328,8 +328,8 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
             <div className="w-full max-w-[820px] bg-[#09080b] rounded-sm border border-white/5 shadow-[0_45px_100px_rgba(0,0,0,0.95)] flex flex-col overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.05] bg-[#0f0e10]">
                     <div className="flex items-center gap-3">
-                        <span className="font-mono text-[11px] tracking-[0.4em] text-white/30 uppercase">CASE FILE</span>
-                        <span className="text-white/10">//</span>
+                        <span className="font-mono text-[11px] tracking-[0.4em] text-white/50 uppercase">CASE FILE</span>
+                        <span className="text-white/50">//</span>
                         <span className="font-mono text-[11px] tracking-[0.3em] text-[#c8a84b] uppercase font-bold">ROOM_{currentRoomId?.toString() || '???'}</span>
                     </div>
                     <div className="flex items-center gap-4">
@@ -338,16 +338,16 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
                             <span className="font-mono text-[11px] tracking-[0.3em] text-[#c8a84b] uppercase font-semibold">{isReveal ? 'ROLE REVEAL' : 'SHUFFLE PHASE'}</span>
                         </div>
                         {isReveal ? (
-                            <span className="font-mono text-[11px] tracking-[0.2em] text-white/40"><span className="text-[#c8a84b]">{keysCollected}</span>/{totalPlayers} CONFIRMED</span>
+                            <span className="font-mono text-[11px] tracking-[0.2em] text-white/60"><span className="text-[#c8a84b]">{keysCollected}</span>/{totalPlayers} CONFIRMED</span>
                         ) : (
-                            <button onClick={forceSync} disabled={isSyncing} className="text-white/20 hover:text-[#c8a84b] transition-colors"><RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} /></button>
+                            <button onClick={forceSync} disabled={isSyncing} className="text-white/50 hover:text-[#c8a84b] transition-colors"><RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} /></button>
                         )}
                     </div>
                 </div>
                 <div className="flex min-h-[460px] bg-[#09080a]">
                     <div className="w-[220px] shrink-0 border-r border-white/[0.05] flex flex-col bg-[#0f0e10]/50">
                         <div className="px-5 py-3.5 border-b border-white/[0.05] flex items-center justify-between">
-                            <span className="font-mono text-[10px] tracking-[0.3em] text-white/30 uppercase">SUSPECTS</span>
+                            <span className="font-mono text-[10px] tracking-[0.3em] text-white/50 uppercase">SUSPECTS</span>
                         </div>
                         <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
                             {gameState.players.map((player, index) => (

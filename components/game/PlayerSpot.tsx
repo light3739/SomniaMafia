@@ -243,7 +243,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                                             transition={{ duration: 0.1 }}
                                             className="flex items-center justify-center"
                                         >
-                                            {currentMark ? renderMarkIcon(currentMark, 4) : <div className="w-1 h-1 rounded-full bg-white/40" />}
+                                            {currentMark ? renderMarkIcon(currentMark, 4) : <div className="w-1 h-1 rounded-full bg-white/50" />}
                                         </motion.div>
                                     )}
                                 </AnimatePresence>
@@ -428,7 +428,7 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                             </div>
                         )}
                     </div>
-                    <div className="text-[12px] md:text-[10px] text-white/30 font-mono">
+                    <div className="text-[12px] md:text-[10px] text-white/50 font-mono">
                         {player.address ? `${player.address.slice(0, 4)}...${player.address.slice(-4)}` : '0x...'}
                     </div>
 

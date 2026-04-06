@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { ChatToggleButton } from './DiscussionChat';
 import { SessionKeyBanner } from './SessionKeyBanner';
+import { GameHUD } from './GameHUD';
+import HowToPlayModal from './HowToPlayModal';
 import { BackButton } from '@/components/ui/BackButton';
 import { BackgroundMusic } from '@/components/ui/BackgroundMusic';
 import { useGameContext } from '@/contexts/GameContext';
@@ -59,6 +61,10 @@ export const GameUIOverlay: React.FC = () => {
 
     return (
         <>
+            {/* Persistent HUD */}
+            <GameHUD />
+            <HowToPlayModal />
+
             {/* Exit Game button — top left */}
             {showExitButton && (
                 <div className="fixed top-4 left-4 z-[100]">

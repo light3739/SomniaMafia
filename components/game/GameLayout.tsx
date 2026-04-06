@@ -11,6 +11,8 @@ import { VotingAnnouncement } from './VotingAnnouncement';
 import { NightAnnouncement } from './NightAnnouncement';
 import { MorningAnnouncement } from './MorningAnnouncement';
 import { RoleCompositionAnnouncement } from './RoleCompositionAnnouncement';
+import { PhaseTransitionOverlay } from './PhaseTransitionOverlay';
+import { EliminationCeremony } from './EliminationCeremony';
 import { useGameHints } from './GameHints';
 import { BackButton } from '../ui/BackButton';
 import { useSoundEffects } from '../ui/SoundEffects';
@@ -20,6 +22,7 @@ import { GamePhase, Role } from '../../types';
 // Layout Components
 import { GameBackground } from './layout/GameBackground';
 import { ResponsiveGameContainer } from './layout/ResponsiveGameContainer';
+import { MobilePlayerList } from './layout/MobilePlayerList';
 import { getPlayerPositions } from './layout/playerLayoutUtils';
 export { getPlayerPositions };
 
@@ -48,6 +51,13 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const [hasShownRoleComposition, setHasShownRoleComposition] = useState(false);
     const [showNightAnnouncement, setShowNightAnnouncement] = useState(false);
     const [lastPhase, setLastPhase] = useState<GamePhase | null>(null);
+
+    // Dramatic phase transition overlays
+    const [dramaticTransition, setDramaticTransition] = useState<'night' | 'morning' | 'voting' | null>(null);
+
+    // Elimination ceremony
+    const [eliminationData, setEliminationData] = useState<{ name: string; role: string } | null>(null);
+    const lastEliminationDayRef = useRef<number>(0);
 
     const [activePhase, setActivePhase] = useState(gameState.phase);
 
@@ -113,6 +123,23 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         showHint(hints[myPlayer?.role || ''] ?? 'night_civilian');
     }, [showHint, myPlayer?.role]);
 
+    // Detect elimination from voting results logs
+    useEffect(() => {
+        if (!showVotingResults || lastEliminationDayRef.current === gameState.dayCount) return;
+        for (let i = gameState.logs.length - 1; i >= 0; i--) {
+            const l = gameState.logs[i];
+            if (l.eventType === 'VOTING_RESULT' && l.eventData?.isEliminated && l.eventData?.playerName) {
+                const eliminated = gameState.players.find(p => p.name === l.eventData!.playerName);
+                lastEliminationDayRef.current = gameState.dayCount;
+                setEliminationData({
+                    name: l.eventData.playerName,
+                    role: eliminated?.role || 'UNKNOWN',
+                });
+                break;
+            }
+        }
+    }, [showVotingResults, gameState.logs, gameState.dayCount, gameState.players]);
+
     const handleRoleCompositionComplete = useCallback(() => {
         setShowRoleComposition(false);
         playMorningTransition();
@@ -143,16 +170,19 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             if (gameState.dayCount > 0 && gameState.dayCount !== lastMorningDayRef.current) {
                 lastMorningDayRef.current = gameState.dayCount;
                 if (gameState.dayCount === 1 && !hasShownRoleComposition) { setShowRoleComposition(true); setHasShownRoleComposition(true); }
-                else { playMorningTransition(); setShowMorningAnnouncement(true); }
+                else {
+                    // Fire dramatic transition first, then ambient on complete
+                    setDramaticTransition('morning');
+                }
             }
         }
-    }, [activePhase, gameState.dayCount, playMorningTransition, hasShownRoleComposition]);
+    }, [activePhase, gameState.dayCount, hasShownRoleComposition]);
 
     useEffect(() => {
         const isVoting = activePhase === GamePhase.VOTING;
         if ((isVoting && lastPhase !== GamePhase.VOTING) || (isVoting && gameState.dayCount !== lastVotingDayRef.current)) {
             const delay = lastPhase === GamePhase.DAY ? 0 : (gameState.dayCount === lastMorningDayRef.current ? 2000 : 0);
-            const t = setTimeout(() => setShowVotingAnnouncement(true), delay);
+            const t = setTimeout(() => { setDramaticTransition('voting'); }, delay);
             lastVotingDayRef.current = gameState.dayCount; setLastPhase(activePhase);
             return () => clearTimeout(t);
         }
@@ -165,7 +195,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         if (entry && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current) {
             if (nightAnnouncementPendingRef.current) return;
             nightAnnouncementPendingRef.current = true; lastNightDayRef.current = gameState.dayCount;
-            playNightTransition(); setShowNightAnnouncement(true);
+            setDramaticTransition('night');
             nightAnnouncementPendingRef.current = false;
         }
     }, [activePhase, gameState.phase, gameState.dayCount, playNightTransition, showVotingResults]);
@@ -198,6 +228,29 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             <GameUIOverlay />
 
 
+            {/* Dramatic phase transition overlays */}
+            <PhaseTransitionOverlay
+                type={dramaticTransition || 'night'}
+                show={!!dramaticTransition}
+                dayCount={gameState.dayCount}
+                onComplete={() => {
+                    const t = dramaticTransition;
+                    setDramaticTransition(null);
+                    // Chain to existing ambient announcements
+                    if (t === 'night') { playNightTransition(); setShowNightAnnouncement(true); }
+                    else if (t === 'morning') { playMorningTransition(); setShowMorningAnnouncement(true); }
+                    else if (t === 'voting') { setShowVotingAnnouncement(true); }
+                }}
+            />
+
+            {/* Elimination ceremony */}
+            <EliminationCeremony
+                show={!!eliminationData}
+                playerName={eliminationData?.name || ''}
+                playerRole={eliminationData?.role || 'UNKNOWN'}
+                onComplete={() => setEliminationData(null)}
+            />
+
             <NightAnnouncement
                 show={showNightAnnouncement}
                 onComplete={handleNightComplete}
@@ -216,7 +269,37 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 onComplete={handleVotingComplete}
             />
 
-            <ResponsiveGameContainer>
+            <ResponsiveGameContainer
+                mobileChildren={
+                    <div className="flex flex-col h-full">
+                        {/* Mobile player list — top half */}
+                        <div className="flex-1 min-h-0">
+                            <MobilePlayerList
+                                players={visualPlayers}
+                                myAddress={myPlayer?.address}
+                                myRole={myPlayer?.role}
+                                selectedTarget={selectedTarget}
+                                onAction={handlePlayerAction}
+                                canAct={canActOnPlayer}
+                                isNight={isNightPhase}
+                                playerMarks={playerMarks}
+                                onSetMark={setPlayerMark}
+                                speakingAddress={discussionState?.currentSpeakerAddress}
+                            />
+                        </div>
+                        {/* Mobile action panel — bottom half */}
+                        <div className="shrink-0 max-h-[45vh] overflow-y-auto border-t border-white/5 bg-[#050505]/95 backdrop-blur-md">
+                            {!isOverlayPhase && (activePhase === GamePhase.DAY || activePhase === GamePhase.VOTING || showVotingResults) && (
+                                <DayPhase initialDiscussionState={initialDiscussionState} hideActions={showVotingResults} disablePolling={showVotingResults && activePhase === GamePhase.NIGHT} />
+                            )}
+                            {showVotingResults && <PostVotingTransition />}
+                            {!showVotingResults && !isOverlayPhase && activePhase === GamePhase.NIGHT && (
+                                <NightPhase initialNightState={initialNightState} />
+                            )}
+                        </div>
+                    </div>
+                }
+            >
                 {playerPositions.map((pos, index) => {
                     const p = visualPlayers[index]; if (!p) return null;
                     

@@ -369,7 +369,7 @@ export const ChatToggleButton: React.FC<{
                         {/* Messages Area */}
                         <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
                             {messages.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-white/30 text-sm">
+                                <div className="h-full flex items-center justify-center text-white/60 text-sm">
                                     {isConnecting ? 'Connecting...' : 'No messages yet'}
                                 </div>
                             ) : (
@@ -380,7 +380,7 @@ export const ChatToggleButton: React.FC<{
                                             key={msg.id}
                                             className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                                         >
-                                            <span className="text-[10px] text-white/40 mb-0.5 px-2">
+                                            <span className="text-[10px] text-white/60 mb-0.5 px-2">
                                                 {msg.sender}
                                             </span>
                                             <div
@@ -411,7 +411,7 @@ export const ChatToggleButton: React.FC<{
                                         placeholder={isConnected ? "Type a message..." : "Connecting..."}
                                         disabled={!isConnected}
                                         maxLength={200}
-                                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#916A47]/50 transition-all disabled:opacity-50"
+                                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-white/50 focus:outline-none focus:border-[#916A47]/50 transition-all disabled:opacity-50"
                                     />
                                     <button
                                         onClick={handleSend}
@@ -422,7 +422,7 @@ export const ChatToggleButton: React.FC<{
                                     </button>
                                 </div>
                             ) : (
-                                <div className="flex items-center justify-center gap-2 py-2 text-white/40 text-sm">
+                                <div className="flex items-center justify-center gap-2 py-2 text-white/60 text-sm">
                                     <Lock className="w-4 h-4" />
                                     <span>Wait for your turn to speak</span>
                                 </div>

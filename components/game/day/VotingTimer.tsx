@@ -105,7 +105,7 @@ export const VotingTimer: React.FC = React.memo(() => {
             </div>
 
             {timerMode === 'hard' && (
-                <div className="text-[10px] text-white/30 font-mono mt-1 pt-1 border-t border-white/5 animate-pulse uppercase tracking-widest mx-4">
+                <div className="text-[10px] text-white/60 font-mono mt-1 pt-1 border-t border-white/5 animate-pulse uppercase tracking-widest mx-4">
                     Some players are AFK...
                 </div>
             )}

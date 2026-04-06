@@ -11,6 +11,7 @@
  */
 import { useCallback, useRef } from 'react';
 import { parseEther, formatEther } from 'viem';
+import { toast } from 'sonner';
 import { loadSession } from '../../services/sessionKeyService';
 import { MAFIA_ABI } from '../../contracts/config';
 import type { GameRefs } from './useGameRefs';
@@ -171,6 +172,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
                 const MIN_BALANCE_FOR_HEAVY_TX = parseEther('0.85');
                 if (sessionBalance < MIN_BALANCE_FOR_HEAVY_TX) {
                     console.warn(`[Session TX] Session key balance low: ${formatEther(sessionBalance)}. Falling back to main wallet.`);
+                    toast.warning('Session key low on gas — confirming with your wallet', { duration: 4000 });
                     canUseSession = false;
                 }
             } catch (balErr) {
@@ -199,6 +201,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
         // === SESSION KEY PATH ===
         if (canUseSession && sessionClient) {
             console.log(`[Session TX] Sending ${functionName} with gas ${calculatedGas}...`);
+            toast.loading(`Submitting ${functionName}...`, { id: `tx-${functionName}` });
 
             const attemptSend = async (retryCount: number = 0): Promise<`0x${string}`> => {
                 const MAX_NONCE_RETRIES = 3;
@@ -216,12 +219,14 @@ export function useTransactionEngine(deps: TxEngineDeps) {
                     const sendTime = Math.round(performance.now() - sendStart);
                     const totalTime = Math.round(performance.now() - txStartTime);
                     console.log(`[Session TX] ✅ ${functionName} sent! Hash: ${hash} (send: ${sendTime}ms, total: ${totalTime}ms)`);
+                    toast.success(`${functionName} submitted`, { id: `tx-${functionName}`, duration: 3000 });
                     return hash;
                 } catch (err: any) {
                     const errMsg = err.message || '';
                     if (err.message?.includes('reverted') || err.message?.includes('failed') || err.code === -32000) {
                         const revertMsg = err.shortMessage || err.message || "Unknown revert";
                         console.warn(`[Session TX] Contract revert: ${revertMsg}`, err);
+                        toast.error(`Transaction failed: ${revertMsg.slice(0, 80)}`, { id: `tx-${functionName}`, duration: 5000 });
 
                         if (canUseSession && session) {
                             try {
@@ -251,6 +256,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
                         return attemptSend(retryCount + 1);
                     }
                     console.error('[Session TX] Failed:', err.message || err);
+                    toast.error(`Transaction failed: ${(err.message || 'Unknown error').slice(0, 80)}`, { id: `tx-${functionName}`, duration: 5000 });
                     throw err;
                 }
             };
@@ -260,6 +266,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
             // === MAIN WALLET PATH ===
             const totalTime = Math.round(performance.now() - txStartTime);
             console.log(`[Main Wallet TX] ${functionName} - requires signature | Gas: ${calculatedGas} (prep took ${totalTime}ms)`);
+            toast.loading(`Confirm ${functionName} in wallet...`, { id: `tx-${functionName}` });
             return activeWalletClient.writeContract({
                 address: refs.contractAddressRef.current,
                 abi: MAFIA_ABI,
@@ -286,6 +293,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
                 if (receipt?.status === 'reverted') {
                     console.error(`[Optimistic] ❌ ${functionName} REVERTED! Rolling back...`);
                     addLog(`${functionName} reverted on-chain. Reverting...`, 'danger');
+                    toast.error(`${functionName} reverted on-chain`, { duration: 5000 });
                     onReverted?.();
                 } else {
                     console.log(`[Optimistic] ✅ ${functionName} confirmed (block ${receipt?.blockNumber})`);

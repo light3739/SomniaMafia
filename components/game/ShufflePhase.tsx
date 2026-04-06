@@ -645,7 +645,7 @@ export const ShufflePhase: React.FC = React.memo(() => {
                                         </div>
                                         <span className={`font-mono text-[10px] tracking-wider shrink-0 ml-1 ${isDone ? 'text-[#916A47]' :
                                             isCurrentTurn ? 'text-[#916A47]' :
-                                                'text-white/30'
+                                                'text-white/50'
                                             }`}>
                                             {isDone ? 'DONE' :
                                                 isCurrentTurn ? (isProcessing ? '●●●' : 'ACTIVE') :

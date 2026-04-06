@@ -8,9 +8,12 @@ import { PrivyProvider } from '@privy-io/react-auth';
 import { WagmiProvider } from '@privy-io/wagmi';
 
 import { SOMNIA_TESTNET, ACTIVE_DEPLOYMENT } from '../contracts/config';
+import { MotionConfig } from 'framer-motion';
+import { Toaster } from 'sonner';
 import { AudioProvider } from '../contexts/AudioContext';
 import { NoirDialogProvider } from '../contexts/NoirDialogContext';
 import { WalletAutoConnector } from '../components/ui/WalletAutoConnector';
+import { ChainGate } from '../components/ui/ChainGate';
 
 export const config = createConfig({
     chains: [
@@ -57,12 +60,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
         >
             <QueryClientProvider client={queryClient}>
                 <WagmiProvider config={config}>
+                    <MotionConfig reducedMotion="user">
                     <AudioProvider>
                         <NoirDialogProvider>
                             <WalletAutoConnector />
+                            <ChainGate>
                             {children}
+                            </ChainGate>
+                            <Toaster
+                                theme="dark"
+                                position="bottom-right"
+                                toastOptions={{
+                                    style: {
+                                        background: '#0D0D0D',
+                                        border: '1px solid rgba(145, 106, 71, 0.3)',
+                                        color: '#fff',
+                                        fontFamily: 'var(--font-sans)',
+                                    },
+                                }}
+                            />
                         </NoirDialogProvider>
                     </AudioProvider>
+                    </MotionConfig>
                 </WagmiProvider>
             </QueryClientProvider>
         </PrivyProvider>
