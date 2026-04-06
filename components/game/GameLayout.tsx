@@ -23,7 +23,6 @@ import { GamePhase, Role } from '../../types';
 // Layout Components
 import { GameBackground } from './layout/GameBackground';
 import { ResponsiveGameContainer } from './layout/ResponsiveGameContainer';
-import { MobilePlayerList } from './layout/MobilePlayerList';
 import { getPlayerPositions } from './layout/playerLayoutUtils';
 export { getPlayerPositions };
 
@@ -240,7 +239,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             <GameUIOverlay />
 
 
-            {/* Dramatic phase transition overlays */}
+            {/* Dramatic phase transition overlays (replace old ambient announcements) */}
             <PhaseTransitionOverlay
                 type={dramaticTransition || 'night'}
                 show={!!dramaticTransition}
@@ -248,10 +247,9 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 onComplete={() => {
                     const t = dramaticTransition;
                     setDramaticTransition(null);
-                    // Chain to existing ambient announcements
-                    if (t === 'night') { playNightTransition(); setShowNightAnnouncement(true); }
-                    else if (t === 'morning') { playMorningTransition(); setShowMorningAnnouncement(true); }
-                    else if (t === 'voting') { setShowVotingAnnouncement(true); }
+                    // Play sound only — no chain to old ambient overlays
+                    if (t === 'night') playNightTransition();
+                    else if (t === 'morning') playMorningTransition();
                 }}
             />
 
@@ -269,55 +267,14 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 onComplete={() => setShowStartCountdown(false)}
             />
 
-            <NightAnnouncement
-                show={showNightAnnouncement}
-                onComplete={handleNightComplete}
-            />
-            <MorningAnnouncement
-                show={showMorningAnnouncement}
-                onComplete={handleMorningComplete}
-            />
+            {/* Day 1 role composition (kept — special intro) */}
             <RoleCompositionAnnouncement
                 show={showRoleComposition}
                 onComplete={handleRoleCompositionComplete}
                 playerCount={gameState.players.filter(p => p.isAlive).length}
             />
-            <VotingAnnouncement
-                show={showVotingAnnouncement}
-                onComplete={handleVotingComplete}
-            />
 
-            <ResponsiveGameContainer
-                mobileChildren={
-                    <div className="flex flex-col h-full">
-                        {/* Mobile player list — top half */}
-                        <div className="flex-1 min-h-0">
-                            <MobilePlayerList
-                                players={visualPlayers}
-                                myAddress={myPlayer?.address}
-                                myRole={myPlayer?.role}
-                                selectedTarget={selectedTarget}
-                                onAction={handlePlayerAction}
-                                canAct={canActOnPlayer}
-                                isNight={isNightPhase}
-                                playerMarks={playerMarks}
-                                onSetMark={setPlayerMark}
-                                speakingAddress={discussionState?.currentSpeakerAddress}
-                            />
-                        </div>
-                        {/* Mobile action panel — bottom half */}
-                        <div className="shrink-0 max-h-[45vh] overflow-y-auto border-t border-white/5 bg-[#050505]/95 backdrop-blur-md">
-                            {!isOverlayPhase && (activePhase === GamePhase.DAY || activePhase === GamePhase.VOTING || showVotingResults) && (
-                                <DayPhase initialDiscussionState={initialDiscussionState} hideActions={showVotingResults} disablePolling={showVotingResults && activePhase === GamePhase.NIGHT} />
-                            )}
-                            {showVotingResults && <PostVotingTransition />}
-                            {!showVotingResults && !isOverlayPhase && activePhase === GamePhase.NIGHT && (
-                                <NightPhase initialNightState={initialNightState} />
-                            )}
-                        </div>
-                    </div>
-                }
-            >
+            <ResponsiveGameContainer>
                 {playerPositions.map((pos, index) => {
                     const p = visualPlayers[index]; if (!p) return null;
                     

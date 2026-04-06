@@ -52,14 +52,11 @@ export const GameStartCountdown = React.memo(({ show, onComplete }: GameStartCou
         <AnimatePresence mode="wait">
             {show && (
                 <motion.div
-                    className="fixed inset-0 z-[300] flex items-center justify-center"
+                    className="fixed inset-0 z-[300] flex items-center justify-center bg-black"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.4, ease: 'easeInOut' }}
-                    style={{
-                        background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.95) 50%, #000000 100%)',
-                    }}
                 >
                     {/* Noir vignette overlay */}
                     <div
