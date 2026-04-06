@@ -121,13 +121,47 @@ export const GameOver: React.FC = React.memo(() => {
             setShowPrizePopup(true);
             setPrizeDistributionFailed(false);
 
-            // Try to find tx hash for explorer link
-            if (currentRoomId) {
+            // Find distribute tx hash for explorer link (all clients)
+            if (currentRoomId && publicClient) {
+                // 1. Check localStorage first (fast — works for the client that distributed)
                 const storedHash = localStorage.getItem(`prize_tx_${currentRoomId}`);
-                if (storedHash) setPrizeTxHash(storedHash);
+                if (storedHash) {
+                    setPrizeTxHash(storedHash);
+                } else {
+                    // 2. Search on-chain: paginated getLogs in 900-block chunks (RPC limit = 1000)
+                    (async () => {
+                        try {
+                            const { parseAbiItem } = await import('viem');
+                            const prizeEvent = parseAbiItem('event PrizeDistributed(uint256 indexed roomId, address indexed winner, uint128 amount)');
+                            const currentBlock = await publicClient.getBlockNumber();
+
+                            // Search backwards in 900-block chunks, up to ~5 minutes
+                            for (let offset = 0n; offset < 30000n; offset += 900n) {
+                                const to = currentBlock - offset;
+                                const from = to > 900n ? to - 900n : 0n;
+                                if (to <= 0n) break;
+
+                                const logs = await publicClient.getLogs({
+                                    address: runtimeContractAddress,
+                                    event: prizeEvent,
+                                    args: { roomId: currentRoomId },
+                                    fromBlock: from,
+                                    toBlock: to,
+                                });
+
+                                if (logs.length > 0) {
+                                    setPrizeTxHash(logs[0].transactionHash);
+                                    break;
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('[GameOver] Prize tx search failed:', e);
+                        }
+                    })();
+                }
             }
         }
-    }, [prizesClaimed, currentRoomId]);
+    }, [prizesClaimed, currentRoomId, publicClient, runtimeContractAddress]);
 
     // Calculate payouts reactively from game state — recalculates as roles/prizePool load in
     const prizePayouts = React.useMemo(() => {
