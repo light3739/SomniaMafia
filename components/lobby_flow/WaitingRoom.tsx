@@ -7,6 +7,7 @@ import { useSessionKey } from '../../hooks/useSessionKey';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { GamePhase } from '../../types';
+import { formatEther } from 'viem';
 import { Loader2 } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { SessionKeyBanner } from '../game/SessionKeyBanner';
@@ -22,7 +23,8 @@ export const WaitingRoom: React.FC = () => {
         myPlayer,
         refreshPlayersList,
         cancelTournamentOnChain,
-        forfeitGameOnChain
+        forfeitGameOnChain,
+        currencySymbol,
     } = useGameContext();
     const { showConfirm } = useNoirDialog();
 
@@ -38,6 +40,7 @@ export const WaitingRoom: React.FC = () => {
 
     const mountedRef = useRef(false);
     const [eciesRegistered, setEciesRegistered] = useState(false);
+    const eciesRegisteringRef = useRef(false);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -47,8 +50,13 @@ export const WaitingRoom: React.FC = () => {
     }, []);
 
     // Register ECIES pubkey with GM so it can encrypt our role privately
+    // Uses refs to avoid re-triggering on walletClient reference changes
     useEffect(() => {
-        if (!currentRoomId || !address || !walletClient || !chainId) return;
+        if (!currentRoomId || !address || !chainId || eciesRegistered || eciesRegisteringRef.current) return;
+        // walletClient may not be ready on first render — skip without it
+        if (!walletClient) return;
+
+        eciesRegisteringRef.current = true;
         const roomId = String(currentRoomId);
 
         GM.registerEciesPubkey(roomId, address, walletClient, chainId)
@@ -56,8 +64,10 @@ export const WaitingRoom: React.FC = () => {
                 if (mountedRef.current) setEciesRegistered(true);
                 console.log('[ECIES] Public key registered with GM server');
             })
-            .catch(e => console.warn('[ECIES] register-pubkey error:', e));
-    }, [currentRoomId, address, walletClient, chainId]);
+            .catch(e => console.warn('[ECIES] register-pubkey error:', e))
+            .finally(() => { eciesRegisteringRef.current = false; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentRoomId, address, chainId, eciesRegistered]);
 
     // 1. Авто-переход при смене фазы в блокчейне
     useEffect(() => {
@@ -109,6 +119,30 @@ export const WaitingRoom: React.FC = () => {
                     </h1>
 
                 </div>
+
+                {/* Prize Pool Banner */}
+                {gameState.prizePool && gameState.prizePool > 0n && (
+                    <div className="w-full bg-gradient-to-r from-[#2A1F0A]/90 to-[#19130D]/90 backdrop-blur-xl rounded-2xl px-5 py-4 border border-[#C49A3C]/25 shadow-[0_4px_20px_rgba(196,154,60,0.1)] flex items-center justify-between">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-[#C49A3C]/60 text-[10px] uppercase tracking-widest font-bold font-['Montserrat']">
+                                {gameState.isTournament ? 'Tournament Prize Pool' : 'Prize Pool'}
+                            </span>
+                            {gameState.buyIn && gameState.buyIn > 0n && (
+                                <span className="text-white/30 text-[10px] font-mono">
+                                    Buy-in: {parseFloat(formatEther(gameState.buyIn)).toFixed(2)} {currencySymbol}
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex items-baseline gap-1.5">
+                            <span className="text-[#C49A3C] text-2xl md:text-3xl font-bold font-['Montserrat'] tabular-nums">
+                                {parseFloat(formatEther(gameState.prizePool)).toFixed(2)}
+                            </span>
+                            <span className="text-[#C49A3C]/50 text-sm font-bold">
+                                {currencySymbol}
+                            </span>
+                        </div>
+                    </div>
+                )}
 
                 <div className="w-full bg-[rgba(15,10,5,0.85)] backdrop-blur-xl rounded-[32px] p-4 md:p-6 border border-white/5 shadow-2xl flex flex-col">
                     <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2 h-[250px] md:h-[350px]">

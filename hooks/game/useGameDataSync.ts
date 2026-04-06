@@ -110,6 +110,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
             let phase: GamePhase, dayCount: number, aliveCount: number;
             let committedCount: number, revealedCount: number, phaseDeadline: number, maxPlayers: number;
             let tournamentId: bigint = 0n;
+            let depositPool: bigint = 0n;
 
             if (Array.isArray(roomData)) {
                 phase = Number(roomData[3]) as GamePhase;
@@ -119,6 +120,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
                 revealedCount = Number(roomData[14]);
                 phaseDeadline = Number(roomData[10]);
                 maxPlayers = Number(roomData[4]);
+                depositPool = BigInt(roomData[16] || 0);
                 tournamentId = BigInt(roomData[19] || 0);
             } else {
                 phase = Number(roomData.phase) as GamePhase;
@@ -128,7 +130,34 @@ export function useGameDataSync(deps: DataSyncDeps) {
                 revealedCount = Number(roomData.revealedCount);
                 phaseDeadline = Number(roomData.phaseDeadline);
                 maxPlayers = Number(roomData.maxPlayers);
+                depositPool = BigInt(roomData.depositPool || 0);
                 tournamentId = BigInt(roomData.tournamentId || 0);
+            }
+
+            // Fetch tournament prize pool if this is a tournament room
+            let prizePool: bigint = depositPool;
+            let buyIn: bigint = 0n;
+            let paymentToken: `0x${string}` = '0x0000000000000000000000000000000000000000';
+
+            if (tournamentId > 0n) {
+                try {
+                    const tData = await refs.publicClientRef.current!.readContract({
+                        address: refs.contractAddressRef.current,
+                        abi: MAFIA_ABI,
+                        functionName: 'getTournament',
+                        args: [tournamentId],
+                    }) as any;
+
+                    const tPrize = Array.isArray(tData) ? BigInt(tData[4] || 0) : BigInt(tData.prizePool || 0);
+                    const tBuyIn = Array.isArray(tData) ? BigInt(tData[3] || 0) : BigInt(tData.buyIn || 0);
+                    const tToken = Array.isArray(tData) ? (tData[9] || paymentToken) : (tData.paymentToken || paymentToken);
+
+                    prizePool = tPrize + depositPool;
+                    buyIn = tBuyIn;
+                    paymentToken = tToken as `0x${string}`;
+                } catch (e) {
+                    console.warn('[FetchGameData] getTournament failed:', e);
+                }
             }
 
             return {
@@ -137,7 +166,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
                 phaseDeadline,
                 mafiaCommittedCount: Number(mafiaCommitted),
                 mafiaRevealedCount: Number(mafiaRevealed),
-                tournamentId, maxPlayers,
+                tournamentId, maxPlayers, prizePool, buyIn, paymentToken,
             };
         } catch (e: any) {
             console.error("[FetchGameData] Error:", e);
@@ -162,7 +191,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
             const {
                 rawPlayers, phase, dayCount, revealedCount,
                 mafiaCommittedCount, mafiaRevealedCount, phaseDeadline,
-                tournamentId, aliveCount, maxPlayers
+                tournamentId, aliveCount, maxPlayers, prizePool, buyIn, paymentToken,
             } = gameData;
 
             console.log('[DEBUG refreshPlayersList] rawPlayers count:', rawPlayers.length, 'wallets:', rawPlayers.map((p: any) => p.wallet));
@@ -294,6 +323,9 @@ export function useGameDataSync(deps: DataSyncDeps) {
                     aliveCount,
                     tournamentId,
                     isTournament: tournamentId > 0n,
+                    prizePool,
+                    buyIn,
+                    paymentToken,
                     maxPlayers,
                     winner: prev.winner || resolvedWinner
                 };
