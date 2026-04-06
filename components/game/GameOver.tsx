@@ -59,6 +59,8 @@ export const GameOver: React.FC = React.memo(() => {
     const [prizesClaimed, setPrizesClaimed] = useState(false);
     const [showPrizePopup, setShowPrizePopup] = useState(false);
     const [prizeDistributionFailed, setPrizeDistributionFailed] = useState(false);
+    const [prizePayouts, setPrizePayouts] = useState<{ winner: string; amount: bigint }[]>([]);
+    const [prizeTxHash, setPrizeTxHash] = useState<string | null>(null);
     const prevPrizesClaimedRef = useRef(false);
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
     const hasPlayedSound = useRef(false);
@@ -118,8 +120,35 @@ export const GameOver: React.FC = React.memo(() => {
             prevPrizesClaimedRef.current = true;
             setShowPrizePopup(true);
             setPrizeDistributionFailed(false);
+
+            // Load tx hash and parse PrizeDistributed events
+            if (currentRoomId && publicClient) {
+                const storedHash = localStorage.getItem(`prize_tx_${currentRoomId}`);
+                if (storedHash) {
+                    setPrizeTxHash(storedHash);
+                    publicClient.getTransactionReceipt({ hash: storedHash as `0x${string}` })
+                        .then(receipt => {
+                            try {
+                                const { parseEventLogs } = require('viem');
+                                const logs = parseEventLogs({
+                                    abi: MAFIA_ABI,
+                                    eventName: 'PrizeDistributed',
+                                    logs: receipt.logs,
+                                });
+                                const payouts = logs.map((l: any) => ({
+                                    winner: l.args.winner as string,
+                                    amount: BigInt(l.args.amount),
+                                }));
+                                setPrizePayouts(payouts);
+                            } catch (e) {
+                                console.warn('[GameOver] Failed to parse prize events:', e);
+                            }
+                        })
+                        .catch(e => console.warn('[GameOver] Failed to get prize receipt:', e));
+                }
+            }
         }
-    }, [prizesClaimed]);
+    }, [prizesClaimed, currentRoomId, publicClient]);
 
     // Fallback: if tournament prizes not claimed after 20s, show manual button
     useEffect(() => {
@@ -473,12 +502,15 @@ export const GameOver: React.FC = React.memo(() => {
 
                         {/* Tournament: Confirmed distribution badge */}
                         {gameState.isTournament && prizesClaimed && (
-                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-sm bg-[#4caf82]/8 border border-[#4caf82]/25">
+                            <button
+                                onClick={() => setShowPrizePopup(true)}
+                                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-[#4caf82]/8 border border-[#4caf82]/25 hover:bg-[#4caf82]/15 hover:border-[#4caf82]/40 transition-all cursor-pointer"
+                            >
                                 <Coins className="w-4 h-4 text-[#4caf82]" />
-                                <span className="text-[#4caf82] text-sm font-['Cinzel'] uppercase tracking-wider">
+                                <span className="text-[#4caf82] text-sm font-['Montserrat'] font-bold uppercase tracking-wider">
                                     Prizes Distributed
                                 </span>
-                            </div>
+                            </button>
                         )}
 
                         <div className="flex gap-4">
@@ -520,7 +552,7 @@ export const GameOver: React.FC = React.memo(() => {
                             exit={{ opacity: 0, scale: 0.94, y: 12 }}
                             transition={{ type: 'spring', damping: 28, stiffness: 380 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="relative w-[380px] max-w-[90vw] bg-[#0D0D0D] border border-[#C5A059]/25 rounded-sm overflow-hidden"
+                            className="relative w-[420px] max-w-[90vw] bg-[#0D0D0D] border border-[#C5A059]/25 rounded-xl overflow-hidden"
                             style={{
                                 boxShadow: '0 0 60px rgba(197,160,89,0.08), 0 20px 60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.03)',
                             }}
@@ -540,22 +572,55 @@ export const GameOver: React.FC = React.memo(() => {
                                 </motion.div>
 
                                 {/* Title */}
-                                <h3 className="text-[#C5A059] text-[11px] font-['Cinzel'] font-semibold uppercase tracking-[0.18em] mb-2">
+                                <h3 className="text-[#C5A059] text-[12px] font-['Montserrat'] font-bold uppercase tracking-[0.15em] mb-2">
                                     Prizes Distributed
                                 </h3>
 
-                                {/* Description */}
-                                <p className="text-white/60 text-[13px] font-['Montserrat'] leading-relaxed mb-1">
-                                    The prize pool has been distributed to the winning team.
-                                </p>
-                                <p className="text-white/35 text-[11px] font-['Montserrat'] mb-6">
-                                    Check your wallet for the reward.
-                                </p>
+                                {/* Payouts list */}
+                                {prizePayouts.length > 0 ? (
+                                    <div className="w-full mb-4 max-h-[200px] overflow-y-auto custom-scrollbar">
+                                        <div className="flex flex-col gap-1.5">
+                                            {prizePayouts.map((p, i) => {
+                                                const name = gameState.players.find(
+                                                    pl => pl.address.toLowerCase() === p.winner.toLowerCase()
+                                                )?.name || `${p.winner.slice(0, 6)}...${p.winner.slice(-4)}`;
+                                                const isMe = p.winner.toLowerCase() === myPlayer?.address.toLowerCase();
+                                                return (
+                                                    <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg ${isMe ? 'bg-[#C5A059]/10 border border-[#C5A059]/20' : 'bg-white/[0.02]'}`}>
+                                                        <span className={`text-[12px] font-['Montserrat'] font-medium ${isMe ? 'text-[#C5A059]' : 'text-white/70'}`}>
+                                                            {name} {isMe && '(You)'}
+                                                        </span>
+                                                        <span className={`text-[12px] font-['Montserrat'] font-bold tabular-nums ${isMe ? 'text-[#C5A059]' : 'text-white/50'}`}>
+                                                            +{parseFloat(formatEther(p.amount)).toFixed(4)} {currencySymbol}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-white/60 text-[13px] font-['Montserrat'] leading-relaxed mb-4">
+                                        The prize pool has been distributed to the winning team.
+                                    </p>
+                                )}
+
+                                {/* Explorer link */}
+                                {prizeTxHash && (
+                                    <a
+                                        href={`${runtimeChain.blockExplorers?.default?.url || 'https://shannon-explorer.somnia.network'}/tx/${prizeTxHash}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[11px] font-['Montserrat'] text-white/30 hover:text-[#C5A059] transition-colors mb-4 flex items-center gap-1.5"
+                                    >
+                                        <span>View transaction</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                    </a>
+                                )}
 
                                 {/* Close button */}
                                 <button
                                     onClick={() => setShowPrizePopup(false)}
-                                    className="w-full h-10 rounded-sm text-[11px] font-['Cinzel'] uppercase tracking-[0.12em] transition-all cursor-pointer"
+                                    className="w-full h-10 rounded-lg text-[11px] font-['Montserrat'] font-bold uppercase tracking-[0.1em] transition-all cursor-pointer"
                                     style={{
                                         border: '1px solid rgba(197,160,89,0.33)',
                                         color: '#C5A059',
