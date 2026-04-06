@@ -10,7 +10,7 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import { formatEther } from 'viem';
-import { MAFIA_ABI } from '../../contracts/config';
+import { MAFIA_ABI, GM_SERVER_URL } from '../../contracts/config';
 import { generateEndGameProof } from '../../services/zkProof';
 import { loadSession } from '../../services/sessionKeyService';
 import { GamePhase, GameState, Role } from '../../types';
@@ -517,6 +517,25 @@ export function useEndGame(deps: EndGameDeps) {
                         }
 
                         if (session?.registeredOnChain && session.privateKey) {
+                            // Step 1a: Ask GM to reveal roles on-chain (required for prize distribution)
+                            try {
+                                const chainId = chain.id || 50312;
+                                console.log('[AutoDistribute] Requesting GM to reveal roles on-chain...');
+                                const revealRes = await fetch(`${GM_SERVER_URL}/reveal-roles/${currentRoomId}`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ chainId }),
+                                });
+                                const revealData = await revealRes.json();
+                                if (revealRes.ok) {
+                                    console.log('[AutoDistribute] Roles revealed on-chain:', revealData.hash);
+                                } else {
+                                    console.warn('[AutoDistribute] Role reveal failed (may already be done):', revealData.error);
+                                }
+                            } catch (revealErr: unknown) {
+                                console.warn('[AutoDistribute] Role reveal request failed (continuing anyway):', revealErr);
+                            }
+
                             console.log('[AutoDistribute] Submitting distributeMafiaPrizes via session key...');
                             const { createWalletClient, http: viemHttp } = await import('viem');
                             const { privateKeyToAccount } = await import('viem/accounts');
