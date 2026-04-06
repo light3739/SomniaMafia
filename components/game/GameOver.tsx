@@ -239,6 +239,20 @@ export const GameOver: React.FC = React.memo(() => {
         }
     }), []);
 
+    const handlePlayAgain = useCallback(() => {
+        stopVictoryMusic();
+        sessionStorage.removeItem('currentRoomId');
+        localStorage.removeItem('currentRoomId');
+        router.push('/setup');
+    }, [stopVictoryMusic, router]);
+
+    const handleHome = useCallback(() => {
+        stopVictoryMusic();
+        sessionStorage.removeItem('currentRoomId');
+        localStorage.removeItem('currentRoomId');
+        router.push('/');
+    }, [stopVictoryMusic, router]);
+
     if (!winner) {
         return (
             <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
@@ -254,20 +268,6 @@ export const GameOver: React.FC = React.memo(() => {
     }
 
     const config = winnerConfig[winner];
-
-    const handlePlayAgain = useCallback(() => {
-        stopVictoryMusic();
-        sessionStorage.removeItem('currentRoomId');
-        localStorage.removeItem('currentRoomId');
-        router.push('/setup');
-    }, [stopVictoryMusic, router]);
-
-    const handleHome = useCallback(() => {
-        stopVictoryMusic();
-        sessionStorage.removeItem('currentRoomId');
-        localStorage.removeItem('currentRoomId');
-        router.push('/');
-    }, [stopVictoryMusic, router]);
 
     return (
         <motion.div
