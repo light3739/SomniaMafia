@@ -11,7 +11,7 @@
 import { useCallback } from 'react';
 import { parseEther, formatEther, parseEventLogs, keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { MAFIA_ABI } from '../../contracts/config';
+import { MAFIA_ABI, GM_SERVER_URL } from '../../contracts/config';
 import { generateKeyPair, stringToHex } from '../../services/cryptoUtils';
 import { createNewSession, markSessionRegistered } from '../../services/sessionKeyService';
 import { loadOrCreateKeypair } from '../../services/eciesService';
@@ -278,6 +278,24 @@ export function useTournaments(deps: TournamentDeps) {
             if (onChainPhase !== GamePhase.ENDED) {
                 addLog(`Cannot distribute prizes yet — game not finalized on-chain (phase: ${onChainPhase}). Wait for endGameZK to confirm.`, 'danger');
                 return;
+            }
+
+            // Ask GM to reveal roles on-chain first (required for correct prize distribution)
+            try {
+                const chainId = targetChain.id || 50312;
+                const revealRes = await fetch(`${GM_SERVER_URL}/reveal-roles/${roomId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chainId }),
+                });
+                const revealData = await revealRes.json();
+                if (revealRes.ok) {
+                    addLog('Roles revealed on-chain by GM', 'success');
+                } else {
+                    console.warn('[distributePrizes] Role reveal failed (may already be done):', revealData.error);
+                }
+            } catch (revealErr) {
+                console.warn('[distributePrizes] Role reveal request failed (continuing):', revealErr);
             }
 
             setIsTxPending(true);
