@@ -66,6 +66,7 @@ export const GameUIOverlay: React.FC = () => {
                         to="/setup"
                         label=""
                         exitGame
+                        exitContext={gameState.isTournament ? 'tournament-game' : 'game'}
                         onExitGame={async () => { await forfeitGameOnChain(); }}
                         isLoading={isTxPending}
                     />

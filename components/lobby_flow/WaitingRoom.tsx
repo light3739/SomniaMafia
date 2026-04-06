@@ -100,6 +100,7 @@ export const WaitingRoom: React.FC = () => {
                         to="/setup"
                         label="Leave Lobby"
                         exitGame
+                        exitContext="lobby"
                         onExitGame={async () => { await forfeitGameOnChain(); }}
                         isLoading={isTxPending}
                     />
