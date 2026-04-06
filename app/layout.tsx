@@ -2,8 +2,7 @@ import { DynamicBackground } from '@/components/ui/DynamicBackground';
 import { Cinzel, Montserrat } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
-import { BackgroundMusic } from "@/components/ui/BackgroundMusic";
-import { SoundEffects } from "@/components/ui/SoundEffects";
+import { LazyAudio } from "@/components/ui/LazyAudio";
 
 const cinzel = Cinzel({
   subsets: ["latin", "latin-ext"],
@@ -73,8 +72,7 @@ export default function RootLayout({
       </head>
       <body className={`${cinzel.variable} ${montserrat.variable} ${rajdhani.variable} ${shareTechMono.variable} antialiased bg-black text-white selection:bg-green-500 selection:text-black font-sans overflow-hidden`}>
         <Providers>
-          <BackgroundMusic />
-          <SoundEffects />
+          <LazyAudio />
           <DynamicBackground />
           {children}
         </Providers>
