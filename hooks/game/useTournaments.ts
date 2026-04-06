@@ -226,10 +226,8 @@ export function useTournaments(deps: TournamentDeps) {
                     addLog(`Tournament and Room #${roomId} created!`, 'success');
 
                     try {
-                        const kpResult = await GM.registerEciesPubkey(roomId.toString(), account, client, targetChain.id);
-                        refs.eciesPrivKeyRef.current = kpResult.privateKey;
-                        console.log('[ECIES] Atomic registration and ref update ✅');
-
+                        // ECIES pubkey registration is handled by WaitingRoom on mount.
+                        // Only do password sync here (if needed).
                         const results = await Promise.allSettled([
                             params.isPrivate && params.joinPassword
                                 ? GM.setRoomPassword({

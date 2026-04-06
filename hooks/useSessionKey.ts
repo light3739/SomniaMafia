@@ -42,7 +42,7 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
 
   const { writeContractAsync } = useWriteContract();
 
-  // Check session status on mount and when roomId/wallet changes
+  // Check session status on mount and when roomId/wallet/chain changes
   // Poll every second until session is valid (covers timing issues with markSessionRegistered)
   useEffect(() => {
     if (!roomId || !mainWallet) {
@@ -55,7 +55,7 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
     const checkSession = () => {
       const valid = hasValidSession(roomId, mainWallet, chainId);
       setHasSession(valid);
-      
+
       if (valid) {
         const info = getSessionInfo();
         if (info) {
@@ -71,7 +71,7 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
 
     // If not valid yet, poll every second until it becomes valid
     // This handles the race condition where markSessionRegistered() updates localStorage
-    // but the useEffect deps [roomId, mainWallet] haven't changed to trigger a re-check
+    // but the useEffect deps haven't changed to trigger a re-check
     if (!isValid) {
       const interval = setInterval(() => {
         const nowValid = checkSession();
@@ -81,7 +81,7 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [roomId, mainWallet]);
+  }, [roomId, mainWallet, chainId]);
 
   /**
    * NOTE: In V4 contract, session key is registered automatically during joinRoom.

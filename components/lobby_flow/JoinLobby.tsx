@@ -7,6 +7,7 @@ import { useNoirDialog } from '../../contexts/NoirDialogContext';
 import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { useAccount, useChainId } from 'wagmi';
+import { formatEther } from 'viem';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { NetworkSelector } from '../ui/NetworkSelector';
 import { FlowLayout } from '../layout/FlowLayout';
@@ -35,24 +36,27 @@ interface JoinLobbyProps {
 function parseRoom(id: bigint, data: any): {
     id: number; host: string; name: string; players: number; max: number;
     phase: number; timestamp: number; isPrivate: boolean; tournamentId: bigint;
+    depositPool: bigint;
 } | null {
     try {
-        let phase: number, timestamp: number, host: string, name: string, playersCount: number, maxPlayers: number, isPrivate: boolean, tournamentId: bigint;
+        let phase: number, timestamp: number, host: string, name: string, playersCount: number, maxPlayers: number, isPrivate: boolean, tournamentId: bigint, depositPool: bigint;
         if (Array.isArray(data)) {
             phase = Number(data[3]); timestamp = Number(data[9]); host = data[1];
             name = data[2]; playersCount = Number(data[5]); maxPlayers = Number(data[4]);
             isPrivate = Boolean(data[18]);
             tournamentId = BigInt(data[19] || 0);
+            depositPool = BigInt(data[16] || 0);
         } else {
             phase = Number(data.phase); timestamp = Number(data.lastActionTimestamp);
             host = data.host; name = data.name;
             playersCount = Number(data.playersCount); maxPlayers = Number(data.maxPlayers);
             isPrivate = Boolean(data.isPrivate);
             tournamentId = BigInt(data.tournamentId || 0);
+            depositPool = BigInt(data.depositPool || 0);
         }
         return {
             id: Number(data.id ?? id), host, name, players: playersCount,
-            max: maxPlayers, phase, timestamp, isPrivate, tournamentId
+            max: maxPlayers, phase, timestamp, isPrivate, tournamentId, depositPool
         };
     } catch (e) {
         console.error("[JoinLobby] parseRoom error:", e);
@@ -60,23 +64,21 @@ function parseRoom(id: bigint, data: any): {
     }
 }
 
-interface TournamentInfo {
-    isTournament: boolean;
-    prize?: string;
-    hasPassword?: boolean;
+function getTournamentInfo(room: any): { isTournament: boolean; hasPassword?: boolean } {
+    const isTournament = room.tournamentId ? room.tournamentId > 0n : false;
+    return { isTournament, hasPassword: room.isPrivate };
 }
 
-function getTournamentInfo(room: any): TournamentInfo {
-    const isTournament = room.tournamentId ? room.tournamentId > 0n : false;
-    return {
-        isTournament,
-        prize: isTournament ? "TBD" : undefined,
-        hasPassword: room.isPrivate
-    };
+function formatPrizePool(amount: bigint): string {
+    const val = parseFloat(formatEther(amount));
+    if (val >= 1000) return `${(val / 1000).toFixed(1)}K`;
+    if (val >= 1) return val.toFixed(2);
+    if (val > 0) return val.toFixed(4);
+    return '0';
 }
 
 export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
-    const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress, publicClient: ctxPublicClient } = useGameContext();
+    const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress, publicClient: ctxPublicClient, currencySymbol } = useGameContext();
     const { login, authenticated } = usePrivy();
     const { isConnected } = useAccount();
 
@@ -152,8 +154,41 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 const isRecent = parsed.timestamp === 0 || (nowSec - parsed.timestamp) < MAX_LOBBY_AGE_SEC;
                 const isValid = parsed.host !== '0x0000000000000000000000000000000000000000' && parsed.max > 0;
 
-                if (isLobby && isRecent && isValid) {
+                if (isLobby && isRecent && isValid && parsed.players > 0) {
                     roomList.push(parsed);
+                }
+            }
+
+            // Fetch tournament prize pools for tournament rooms
+            const tournamentRooms = roomList.filter(r => r.tournamentId > 0n);
+            if (tournamentRooms.length > 0 && publicClient) {
+                const uniqueTournamentIds = [...new Set(tournamentRooms.map(r => r.tournamentId))];
+                const tResults = await Promise.allSettled(
+                    uniqueTournamentIds.map(tId =>
+                        publicClient.readContract({
+                            address: runtimeContractAddress, abi: MAFIA_ABI,
+                            functionName: 'getTournament', args: [tId],
+                        }).then((data: any) => ({ tId, data }))
+                    )
+                );
+
+                const tMap = new Map<string, { prizePool: bigint; buyIn: bigint }>();
+                for (const res of tResults) {
+                    if (res.status !== 'fulfilled') continue;
+                    const { tId, data } = res.value;
+                    const prizePool = Array.isArray(data) ? BigInt(data[4] || 0) : BigInt(data.prizePool || 0);
+                    const buyIn = Array.isArray(data) ? BigInt(data[3] || 0) : BigInt(data.buyIn || 0);
+                    tMap.set(tId.toString(), { prizePool, buyIn });
+                }
+
+                for (const room of roomList) {
+                    if (room.tournamentId > 0n) {
+                        const tInfo = tMap.get(room.tournamentId.toString());
+                        if (tInfo) {
+                            (room as any).prizePool = tInfo.prizePool + room.depositPool;
+                            (room as any).buyIn = tInfo.buyIn;
+                        }
+                    }
                 }
             }
 
@@ -442,10 +477,12 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                                 </div>
 
                                                 <div className="flex items-center gap-5">
-                                                    {tournament.isTournament && tournament.prize && (
+                                                    {tournament.isTournament && (room as any).prizePool > 0n && (
                                                         <div className="text-right hidden sm:block">
-                                                            <span className="text-[#C49A3C] font-bold text-sm block">{tournament.prize}</span>
-                                                            <span className="text-[#C49A3C]/50 text-[9px] uppercase tracking-widest">Prize Pool</span>
+                                                            <span className="text-[#C49A3C] font-bold text-sm block">{formatPrizePool((room as any).prizePool)} {currencySymbol}</span>
+                                                            <span className="text-[#C49A3C]/50 text-[9px] uppercase tracking-widest">
+                                                                {(room as any).buyIn > 0n ? 'Buy-in' : 'Free Roll'}
+                                                            </span>
                                                         </div>
                                                     )}
                                                     <div className="text-right">

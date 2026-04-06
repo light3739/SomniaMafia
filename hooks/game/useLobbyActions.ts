@@ -222,12 +222,8 @@ export function useLobbyActions(deps: LobbyDeps) {
                 }
             }
 
-            // Register ECIES pubkey
-            setTimeout(() => {
-                GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id)
-                    .then(kp => { refs.eciesPrivKeyRef.current = kp.privateKey; })
-                    .catch(e => console.warn('[ECIES] GM registration failed:', e));
-            }, 1000);
+            // ECIES pubkey registration is handled by WaitingRoom on mount —
+            // no need to duplicate it here (was causing extra MetaMask popup).
 
             setCurrentRoomId(finalRoomId);
             // Don't call refreshPlayersList here — setCurrentRoomId triggers a
@@ -576,16 +572,8 @@ export function useLobbyActions(deps: LobbyDeps) {
             }
             */
 
-            // Register ECIES pubkey
-            setTimeout(async () => {
-                try {
-                    const kp = await GM.registerEciesPubkey(roomId.toString(), myAddr, activeWalletClient, targetChain.id);
-                    refs.eciesPrivKeyRef.current = kp.privateKey;
-                    console.log('[ECIES] Public key registered and ref updated ✅');
-                } catch (e) {
-                    console.warn('[ECIES] Failed to register pubkey with GM (non-blocking):', e);
-                }
-            }, 1500);
+            // ECIES pubkey registration is handled by WaitingRoom on mount —
+            // no need to duplicate it here (was causing extra MetaMask popup).
 
             setCurrentRoomId(BigInt(roomId));
             // Polling in useGameDataSync will auto-fetch player data for the new room.

@@ -117,6 +117,7 @@ export interface GameState {
   tournamentId?: bigint;
   isTournament?: boolean;
   prizePool?: bigint;
+  buyIn?: bigint;
   paymentToken?: `0x${string}`;
   maxPlayers: number;
 }
