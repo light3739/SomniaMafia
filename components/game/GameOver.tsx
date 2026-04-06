@@ -121,34 +121,45 @@ export const GameOver: React.FC = React.memo(() => {
             setShowPrizePopup(true);
             setPrizeDistributionFailed(false);
 
-            // Load tx hash and parse PrizeDistributed events
+            // Find PrizeDistributed events on-chain (works for all clients, not just the one that submitted tx)
             if (currentRoomId && publicClient) {
-                const storedHash = localStorage.getItem(`prize_tx_${currentRoomId}`);
-                if (storedHash) {
-                    setPrizeTxHash(storedHash);
-                    publicClient.getTransactionReceipt({ hash: storedHash as `0x${string}` })
-                        .then(receipt => {
-                            try {
-                                const { parseEventLogs } = require('viem');
-                                const logs = parseEventLogs({
-                                    abi: MAFIA_ABI,
-                                    eventName: 'PrizeDistributed',
-                                    logs: receipt.logs,
-                                });
-                                const payouts = logs.map((l: any) => ({
-                                    winner: l.args.winner as string,
-                                    amount: BigInt(l.args.amount),
-                                }));
-                                setPrizePayouts(payouts);
-                            } catch (e) {
-                                console.warn('[GameOver] Failed to parse prize events:', e);
-                            }
-                        })
-                        .catch(e => console.warn('[GameOver] Failed to get prize receipt:', e));
-                }
+                (async () => {
+                    try {
+                        // Search recent blocks for PrizeDistributed events for this room
+                        const currentBlock = await publicClient.getBlockNumber();
+                        const fromBlock = currentBlock > 5000n ? currentBlock - 5000n : 0n;
+
+                        const logs = await publicClient.getLogs({
+                            address: runtimeContractAddress,
+                            event: {
+                                type: 'event',
+                                name: 'PrizeDistributed',
+                                inputs: [
+                                    { type: 'uint256', name: 'roomId', indexed: true },
+                                    { type: 'address', name: 'winner', indexed: true },
+                                    { type: 'uint128', name: 'amount', indexed: false },
+                                ],
+                            },
+                            args: { roomId: currentRoomId },
+                            fromBlock,
+                            toBlock: 'latest',
+                        });
+
+                        if (logs.length > 0) {
+                            const payouts = logs.map((l: any) => ({
+                                winner: l.args.winner as string,
+                                amount: BigInt(l.args.amount),
+                            }));
+                            setPrizePayouts(payouts);
+                            setPrizeTxHash(logs[0].transactionHash);
+                        }
+                    } catch (e) {
+                        console.warn('[GameOver] Failed to fetch PrizeDistributed events:', e);
+                    }
+                })();
             }
         }
-    }, [prizesClaimed, currentRoomId, publicClient]);
+    }, [prizesClaimed, currentRoomId, publicClient, runtimeContractAddress]);
 
     // Fallback: if tournament prizes not claimed after 20s, show manual button
     useEffect(() => {
