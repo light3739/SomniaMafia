@@ -290,8 +290,11 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
         const iv = setInterval(() => {
             const now = Math.floor(Date.now() / 1000);
             if (now > gameState.phaseDeadline + 5 && !isShuffleProcessing && !isRevealProcessing && !isTxPending) {
+                // Stagger by player index to avoid simultaneous calls, but ANY player can kick
                 const sorted = [...gameState.players].filter(p => p.isAlive).sort((a,b) => a.address.localeCompare(b.address));
-                if (sorted[0]?.address.toLowerCase() === address?.toLowerCase()) {
+                const myIndex = sorted.findIndex(p => p.address.toLowerCase() === address?.toLowerCase());
+                const staggerDelay = myIndex >= 0 ? myIndex * 3 : 0; // 3s between each player's attempt
+                if (myIndex >= 0 && now > gameState.phaseDeadline + 5 + staggerDelay) {
                     const marker = `${currentRoomId}:${gameState.phaseDeadline}`;
                     if (autoKickMarkerRef.current !== marker) {
                         autoKickMarkerRef.current = marker;
