@@ -11,7 +11,6 @@ import { formatEther } from 'viem';
 import { Loader2 } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { SessionKeyBanner } from '../game/SessionKeyBanner';
-import { GameStartCountdown } from '../game/GameStartCountdown';
 import * as GM from '../../services/gmService';
 
 export const WaitingRoom: React.FC = () => {
@@ -42,7 +41,6 @@ export const WaitingRoom: React.FC = () => {
     const mountedRef = useRef(false);
     const [eciesRegistered, setEciesRegistered] = useState(false);
     const eciesRegisteringRef = useRef(false);
-    const [showCountdown, setShowCountdown] = useState(false);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -71,12 +69,14 @@ export const WaitingRoom: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentRoomId, address, chainId, eciesRegistered]);
 
-    // 1. Авто-переход при смене фазы в блокчейне — через countdown
+    // 1. Авто-переход при смене фазы в блокчейне
+    //    Set a flag so /game can show the countdown overlay (non-blocking)
     useEffect(() => {
         if (gameState.phase === GamePhase.SHUFFLING || gameState.phase === GamePhase.REVEAL) {
-            setShowCountdown(true);
+            try { sessionStorage.setItem('mafia_show_start_countdown', '1'); } catch { /* ignore */ }
+            router.push('/game');
         }
-    }, [gameState.phase]);
+    }, [gameState.phase, router]);
 
     // 2. Room creator (first player) can start the game
     const isRoomCreator = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
@@ -93,9 +93,6 @@ export const WaitingRoom: React.FC = () => {
 
     return (
         <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
-            {/* Game Starting Countdown */}
-            <GameStartCountdown show={showCountdown} onComplete={() => router.push('/game')} />
-
             {/* Background is provided by RootLayout/DynamicBackground */}
 
             {/* Sticky header — always visible at top */}
