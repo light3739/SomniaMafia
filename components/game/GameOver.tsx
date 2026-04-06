@@ -115,60 +115,52 @@ export const GameOver: React.FC = React.memo(() => {
     }, [publicClient, currentRoomId, gameState.isTournament, runtimeContractAddress, prizesClaimed]);
 
     // Show prize popup when prizes transition from unclaimed → claimed
+    // Calculate payouts from game state (deterministic — same logic as contract)
     useEffect(() => {
         if (prizesClaimed && !prevPrizesClaimedRef.current) {
             prevPrizesClaimedRef.current = true;
             setShowPrizePopup(true);
             setPrizeDistributionFailed(false);
 
-            // Find PrizeDistributed events on-chain (works for all clients, not just the one that submitted tx)
-            if (currentRoomId && publicClient) {
-                (async () => {
-                    try {
-                        const currentBlock = await publicClient.getBlockNumber();
-                        const fromBlock = currentBlock > 900n ? currentBlock - 900n : 0n;
+            // Calculate payouts from game state — mirrors distributeMafiaPrizes contract logic
+            const mafiaWon = winner === 'MAFIA';
+            const players = gameState.players;
+            const pool = gameState.prizePool || 0n;
 
-                        // Use parseAbiItem for proper event signature
-                        const { parseAbiItem } = await import('viem');
-                        const prizeEvent = parseAbiItem('event PrizeDistributed(uint256 indexed roomId, address indexed winner, uint128 amount)');
+            if (pool > 0n && players.length > 0) {
+                const fee = pool / 10n;
+                const distributable = pool - fee;
 
-                        const logs = await publicClient.getLogs({
-                            address: runtimeContractAddress,
-                            event: prizeEvent,
-                            args: { roomId: currentRoomId },
-                            fromBlock,
-                            toBlock: 'latest',
-                        });
+                let totalShares = 0n;
+                const shares: { winner: string; multiplier: bigint }[] = [];
 
-                        console.log('[GameOver] PrizeDistributed logs found:', logs.length);
-
-                        if (logs.length > 0) {
-                            const payouts = logs.map((l: any) => ({
-                                winner: l.args.winner as string,
-                                amount: BigInt(l.args.amount),
-                            }));
-                            setPrizePayouts(payouts);
-                            setPrizeTxHash(logs[0].transactionHash);
-                        } else {
-                            // Fallback: try localStorage (works if this client distributed)
-                            const storedHash = localStorage.getItem(`prize_tx_${currentRoomId}`);
-                            if (storedHash) {
-                                setPrizeTxHash(storedHash);
-                                const receipt = await publicClient.getTransactionReceipt({ hash: storedHash as `0x${string}` });
-                                const { parseEventLogs } = await import('viem');
-                                const parsed = parseEventLogs({ abi: MAFIA_ABI, eventName: 'PrizeDistributed', logs: receipt.logs });
-                                if (parsed.length > 0) {
-                                    setPrizePayouts(parsed.map((l: any) => ({ winner: l.args.winner, amount: BigInt(l.args.amount) })));
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('[GameOver] Failed to fetch PrizeDistributed events:', e);
+                for (const p of players) {
+                    const isMafia = p.role === Role.MAFIA;
+                    const isWinnerPlayer = mafiaWon ? isMafia : (!isMafia && p.role !== Role.UNKNOWN);
+                    if (isWinnerPlayer) {
+                        const m = p.isAlive ? 2n : 1n;
+                        shares.push({ winner: p.address, multiplier: m });
+                        totalShares += m;
                     }
-                })();
+                }
+
+                if (totalShares > 0n) {
+                    const perShare = distributable / totalShares;
+                    const payouts = shares.map(s => ({
+                        winner: s.winner,
+                        amount: perShare * s.multiplier,
+                    }));
+                    setPrizePayouts(payouts);
+                }
+            }
+
+            // Try to find tx hash for explorer link
+            if (currentRoomId) {
+                const storedHash = localStorage.getItem(`prize_tx_${currentRoomId}`);
+                if (storedHash) setPrizeTxHash(storedHash);
             }
         }
-    }, [prizesClaimed, currentRoomId, publicClient, runtimeContractAddress]);
+    }, [prizesClaimed, currentRoomId, winner, gameState.players, gameState.prizePool]);
 
     // Fallback: if tournament prizes not claimed after 20s, show manual button
     useEffect(() => {
