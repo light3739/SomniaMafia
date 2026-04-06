@@ -59,7 +59,6 @@ export const GameOver: React.FC = React.memo(() => {
     const [prizesClaimed, setPrizesClaimed] = useState(false);
     const [showPrizePopup, setShowPrizePopup] = useState(false);
     const [prizeDistributionFailed, setPrizeDistributionFailed] = useState(false);
-    const [prizePayouts, setPrizePayouts] = useState<{ winner: string; amount: bigint }[]>([]);
     const [prizeTxHash, setPrizeTxHash] = useState<string | null>(null);
     const prevPrizesClaimedRef = useRef(false);
     const { playTownWin, playMafiaWin, stopVictoryMusic } = useSoundEffects();
@@ -115,44 +114,12 @@ export const GameOver: React.FC = React.memo(() => {
     }, [publicClient, currentRoomId, gameState.isTournament, runtimeContractAddress, prizesClaimed]);
 
     // Show prize popup when prizes transition from unclaimed → claimed
-    // Calculate payouts from game state (deterministic — same logic as contract)
+    // Show prize popup when prizes transition from unclaimed → claimed
     useEffect(() => {
         if (prizesClaimed && !prevPrizesClaimedRef.current) {
             prevPrizesClaimedRef.current = true;
             setShowPrizePopup(true);
             setPrizeDistributionFailed(false);
-
-            // Calculate payouts from game state — mirrors distributeMafiaPrizes contract logic
-            const mafiaWon = winner === 'MAFIA';
-            const players = gameState.players;
-            const pool = gameState.prizePool || 0n;
-
-            if (pool > 0n && players.length > 0) {
-                const fee = pool / 10n;
-                const distributable = pool - fee;
-
-                let totalShares = 0n;
-                const shares: { winner: string; multiplier: bigint }[] = [];
-
-                for (const p of players) {
-                    const isMafia = p.role === Role.MAFIA;
-                    const isWinnerPlayer = mafiaWon ? isMafia : (!isMafia && p.role !== Role.UNKNOWN);
-                    if (isWinnerPlayer) {
-                        const m = p.isAlive ? 2n : 1n;
-                        shares.push({ winner: p.address, multiplier: m });
-                        totalShares += m;
-                    }
-                }
-
-                if (totalShares > 0n) {
-                    const perShare = distributable / totalShares;
-                    const payouts = shares.map(s => ({
-                        winner: s.winner,
-                        amount: perShare * s.multiplier,
-                    }));
-                    setPrizePayouts(payouts);
-                }
-            }
 
             // Try to find tx hash for explorer link
             if (currentRoomId) {
@@ -160,7 +127,42 @@ export const GameOver: React.FC = React.memo(() => {
                 if (storedHash) setPrizeTxHash(storedHash);
             }
         }
-    }, [prizesClaimed, currentRoomId, winner, gameState.players, gameState.prizePool]);
+    }, [prizesClaimed, currentRoomId]);
+
+    // Calculate payouts reactively from game state — recalculates as roles/prizePool load in
+    const prizePayouts = React.useMemo(() => {
+        if (!prizesClaimed || !winner) return [];
+
+        const mafiaWon = winner === 'MAFIA';
+        const players = gameState.players;
+        const pool = gameState.prizePool || 0n;
+
+        if (pool <= 0n || players.length === 0) return [];
+
+        const fee = pool / 10n;
+        const distributable = pool - fee;
+
+        let totalShares = 0n;
+        const shares: { address: string; multiplier: bigint }[] = [];
+
+        for (const p of players) {
+            const isMafia = p.role === Role.MAFIA;
+            const isWinnerPlayer = mafiaWon ? isMafia : (!isMafia && p.role !== Role.UNKNOWN);
+            if (isWinnerPlayer) {
+                const m = p.isAlive ? 2n : 1n;
+                shares.push({ address: p.address, multiplier: m });
+                totalShares += m;
+            }
+        }
+
+        if (totalShares === 0n) return [];
+
+        const perShare = distributable / totalShares;
+        return shares.map(s => ({
+            winner: s.address,
+            amount: perShare * s.multiplier,
+        }));
+    }, [prizesClaimed, winner, gameState.players, gameState.prizePool]);
 
     // Fallback: if tournament prizes not claimed after 20s, show manual button
     useEffect(() => {
