@@ -13,6 +13,8 @@ interface BackButtonProps {
     onExitGame?: () => Promise<void>;
     /** Whether a transaction is currently pending */
     isLoading?: boolean;
+    /** Context for the exit confirmation message */
+    exitContext?: 'lobby' | 'game' | 'tournament-game';
 }
 
 export const BackButton: React.FC<BackButtonProps> = ({
@@ -22,6 +24,7 @@ export const BackButton: React.FC<BackButtonProps> = ({
     exitGame = false,
     onExitGame,
     isLoading = false,
+    exitContext = 'game',
 }) => {
     const router = useRouter();
     const [showConfirm, setShowConfirm] = useState(false);
@@ -137,14 +140,23 @@ export const BackButton: React.FC<BackButtonProps> = ({
 
                                 {/* Title */}
                                 <h3 className="text-white text-lg font-['Cinzel'] font-bold tracking-wide mb-2">
-                                    Leave Game?
+                                    {exitContext === 'lobby' ? 'Leave Lobby?' : 'Leave Game?'}
                                 </h3>
 
-                                {/* Description */}
-                                <p className="text-white/50 text-sm leading-relaxed mb-6 max-w-[280px]">
-                                    Your character will be <span className="text-[#C94040] font-semibold">eliminated</span> from the game.
-                                    Your deposit will be <span className="text-[#4CAF50] font-semibold">refunded</span>.
-                                </p>
+                                {/* Description — context-dependent */}
+                                {exitContext === 'lobby' ? (
+                                    <p className="text-white/50 text-sm leading-relaxed mb-6 max-w-[280px]">
+                                        You will leave the lobby. Your session gas will be <span className="text-[#4CAF50] font-semibold">refunded</span>.
+                                    </p>
+                                ) : exitContext === 'tournament-game' ? (
+                                    <p className="text-white/50 text-sm leading-relaxed mb-6 max-w-[280px]">
+                                        Your character will be <span className="text-[#C94040] font-semibold">eliminated</span>. You will <span className="text-[#C94040] font-semibold">lose your session gas</span> and be <span className="text-[#C94040] font-semibold">excluded from prizes</span>.
+                                    </p>
+                                ) : (
+                                    <p className="text-white/50 text-sm leading-relaxed mb-6 max-w-[280px]">
+                                        Your character will be <span className="text-[#C94040] font-semibold">eliminated</span>. You will <span className="text-[#C94040] font-semibold">lose your session gas</span>.
+                                    </p>
+                                )}
 
                                 {/* Buttons */}
                                 <div className="flex gap-3 w-full">
