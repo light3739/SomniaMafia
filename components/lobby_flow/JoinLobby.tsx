@@ -477,12 +477,19 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                                 </div>
 
                                                 <div className="flex items-center gap-5">
-                                                    {tournament.isTournament && (room as any).prizePool > 0n && (
+                                                    {tournament.isTournament && (
                                                         <div className="text-right hidden sm:block">
-                                                            <span className="text-[#C49A3C] font-bold text-sm block">{formatPrizePool((room as any).prizePool)} {currencySymbol}</span>
-                                                            <span className="text-[#C49A3C]/50 text-[9px] uppercase tracking-widest">
-                                                                {(room as any).buyIn > 0n ? 'Buy-in' : 'Free Roll'}
-                                                            </span>
+                                                            {(room as any).buyIn > 0n ? (
+                                                                <>
+                                                                    <span className="text-[#C49A3C] font-bold text-sm block">{formatPrizePool((room as any).buyIn)} {currencySymbol}</span>
+                                                                    <span className="text-[#C49A3C]/50 text-[9px] uppercase tracking-widest">Buy-in</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <span className="text-[#4caf82] font-bold text-sm block">Free</span>
+                                                                    <span className="text-[#4caf82]/50 text-[9px] uppercase tracking-widest">Free Roll</span>
+                                                                </>
+                                                            )}
                                                         </div>
                                                     )}
                                                     <div className="text-right">
