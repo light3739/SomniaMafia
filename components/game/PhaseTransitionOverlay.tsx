@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface PhaseTransitionOverlayProps {
@@ -37,12 +37,16 @@ export const PhaseTransitionOverlay: React.FC<PhaseTransitionOverlayProps> = ({
 }) => {
     const config = phaseConfig[type];
 
+    // Stable ref for onComplete to avoid effect re-runs on parent re-render
+    const onCompleteRef = useRef(onComplete);
+    useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+
     useEffect(() => {
         if (show) {
-            const timer = setTimeout(() => onComplete(), config.duration);
+            const timer = setTimeout(() => onCompleteRef.current(), config.duration);
             return () => clearTimeout(timer);
         }
-    }, [show, onComplete, config.duration]);
+    }, [show, config.duration]);
 
     return (
         <AnimatePresence>

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface EliminationCeremonyProps {
@@ -25,12 +25,16 @@ export const EliminationCeremony: React.FC<EliminationCeremonyProps> = ({
 }) => {
     const roleColor = ROLE_COLORS[playerRole] ?? '#916A47';
 
+    // Stable ref for onComplete to avoid effect re-runs on parent re-render
+    const onCompleteRef = useRef(onComplete);
+    useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+
     useEffect(() => {
         if (show) {
-            const timer = setTimeout(() => onComplete(), TOTAL_DURATION);
+            const timer = setTimeout(() => onCompleteRef.current(), TOTAL_DURATION);
             return () => clearTimeout(timer);
         }
-    }, [show, onComplete]);
+    }, [show]);
 
     return (
         <AnimatePresence>
