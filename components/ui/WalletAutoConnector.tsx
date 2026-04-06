@@ -1,22 +1,32 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useAccount } from 'wagmi';
 import { useSetActiveWallet } from '@privy-io/wagmi';
-import { useGameContext } from '../../contexts/GameContext';
+
+/** Read useEmbeddedWallet preference directly from localStorage (same key as GameContext) */
+function getEmbeddedWalletPref(): boolean {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('mafia_use_embedded_wallet') !== 'false';
+}
+
+const subscribe = (cb: () => void) => {
+    window.addEventListener('storage', cb);
+    return () => window.removeEventListener('storage', cb);
+};
 
 /**
  * WalletAutoConnector — officially recommended pattern by Privy.
- * 
+ *
  * Ensures the correct wallet (embedded vs external) is set as active
  * based on user's "Use In-Game Wallet" preference.
- * 
+ *
  * Chain switching is NOT needed here because Privy is configured with
  * defaultChain: SOMNIA_TESTNET and supportedChains: [SOMNIA_TESTNET] only,
  * so both embedded and external wallets will be on Somnia by default.
  */
 export function WalletAutoConnector() {
-    const { useEmbeddedWallet } = useGameContext();
+    const useEmbeddedWallet = useSyncExternalStore(subscribe, getEmbeddedWalletPref, () => true);
     const { ready, authenticated } = usePrivy();
     const { wallets } = useWallets();
     const { setActiveWallet } = useSetActiveWallet();

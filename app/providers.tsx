@@ -8,7 +8,6 @@ import { PrivyProvider } from '@privy-io/react-auth';
 import { WagmiProvider } from '@privy-io/wagmi';
 
 import { SOMNIA_TESTNET, ACTIVE_DEPLOYMENT } from '../contracts/config';
-import { GameProvider } from '../contexts/GameContext';
 import { AudioProvider } from '../contexts/AudioContext';
 import { NoirDialogProvider } from '../contexts/NoirDialogContext';
 import { WalletAutoConnector } from '../components/ui/WalletAutoConnector';
@@ -60,10 +59,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 <WagmiProvider config={config}>
                     <AudioProvider>
                         <NoirDialogProvider>
-                            <GameProvider>
-                                <WalletAutoConnector />
-                                {children}
-                            </GameProvider>
+                            <WalletAutoConnector />
+                            {children}
                         </NoirDialogProvider>
                     </AudioProvider>
                 </WagmiProvider>
