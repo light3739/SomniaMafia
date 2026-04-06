@@ -125,25 +125,22 @@ export const GameOver: React.FC = React.memo(() => {
             if (currentRoomId && publicClient) {
                 (async () => {
                     try {
-                        // Search recent blocks for PrizeDistributed events for this room
                         const currentBlock = await publicClient.getBlockNumber();
-                        const fromBlock = currentBlock > 5000n ? currentBlock - 5000n : 0n;
+                        const fromBlock = currentBlock > 900n ? currentBlock - 900n : 0n;
+
+                        // Use parseAbiItem for proper event signature
+                        const { parseAbiItem } = await import('viem');
+                        const prizeEvent = parseAbiItem('event PrizeDistributed(uint256 indexed roomId, address indexed winner, uint128 amount)');
 
                         const logs = await publicClient.getLogs({
                             address: runtimeContractAddress,
-                            event: {
-                                type: 'event',
-                                name: 'PrizeDistributed',
-                                inputs: [
-                                    { type: 'uint256', name: 'roomId', indexed: true },
-                                    { type: 'address', name: 'winner', indexed: true },
-                                    { type: 'uint128', name: 'amount', indexed: false },
-                                ],
-                            },
+                            event: prizeEvent,
                             args: { roomId: currentRoomId },
                             fromBlock,
                             toBlock: 'latest',
                         });
+
+                        console.log('[GameOver] PrizeDistributed logs found:', logs.length);
 
                         if (logs.length > 0) {
                             const payouts = logs.map((l: any) => ({
@@ -152,6 +149,18 @@ export const GameOver: React.FC = React.memo(() => {
                             }));
                             setPrizePayouts(payouts);
                             setPrizeTxHash(logs[0].transactionHash);
+                        } else {
+                            // Fallback: try localStorage (works if this client distributed)
+                            const storedHash = localStorage.getItem(`prize_tx_${currentRoomId}`);
+                            if (storedHash) {
+                                setPrizeTxHash(storedHash);
+                                const receipt = await publicClient.getTransactionReceipt({ hash: storedHash as `0x${string}` });
+                                const { parseEventLogs } = await import('viem');
+                                const parsed = parseEventLogs({ abi: MAFIA_ABI, eventName: 'PrizeDistributed', logs: receipt.logs });
+                                if (parsed.length > 0) {
+                                    setPrizePayouts(parsed.map((l: any) => ({ winner: l.args.winner, amount: BigInt(l.args.amount) })));
+                                }
+                            }
                         }
                     } catch (e) {
                         console.warn('[GameOver] Failed to fetch PrizeDistributed events:', e);
