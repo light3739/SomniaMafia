@@ -11,6 +11,7 @@ import { formatEther } from 'viem';
 import { Loader2 } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { SessionKeyBanner } from '../game/SessionKeyBanner';
+import { GameStartCountdown } from '../game/GameStartCountdown';
 import * as GM from '../../services/gmService';
 
 export const WaitingRoom: React.FC = () => {
@@ -41,6 +42,7 @@ export const WaitingRoom: React.FC = () => {
     const mountedRef = useRef(false);
     const [eciesRegistered, setEciesRegistered] = useState(false);
     const eciesRegisteringRef = useRef(false);
+    const [showCountdown, setShowCountdown] = useState(false);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -69,12 +71,12 @@ export const WaitingRoom: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentRoomId, address, chainId, eciesRegistered]);
 
-    // 1. Авто-переход при смене фазы в блокчейне
+    // 1. Авто-переход при смене фазы в блокчейне — через countdown
     useEffect(() => {
         if (gameState.phase === GamePhase.SHUFFLING || gameState.phase === GamePhase.REVEAL) {
-            router.push('/game');
+            setShowCountdown(true);
         }
-    }, [gameState.phase, router]);
+    }, [gameState.phase]);
 
     // 2. Room creator (first player) can start the game
     const isRoomCreator = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
@@ -91,6 +93,9 @@ export const WaitingRoom: React.FC = () => {
 
     return (
         <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
+            {/* Game Starting Countdown */}
+            <GameStartCountdown show={showCountdown} onComplete={() => router.push('/game')} />
+
             {/* Background is provided by RootLayout/DynamicBackground */}
 
             {/* Sticky header — always visible at top */}
@@ -129,7 +134,7 @@ export const WaitingRoom: React.FC = () => {
                                 {gameState.isTournament ? 'Tournament Prize Pool' : 'Prize Pool'}
                             </span>
                             {gameState.buyIn && gameState.buyIn > 0n && (
-                                <span className="text-white/30 text-[10px] font-mono">
+                                <span className="text-white/50 text-[10px] font-mono">
                                     Buy-in: {parseFloat(formatEther(gameState.buyIn)).toFixed(2)} {currencySymbol}
                                 </span>
                             )}
@@ -167,7 +172,7 @@ export const WaitingRoom: React.FC = () => {
                                             <span className={`font-medium ${isMe ? 'text-[#916A47]' : 'text-white'}`}>
                                                 {player.name} {isMe && '(You)'}
                                             </span>
-                                            <span className="text-[10px] font-mono text-white/20">
+                                            <span className="text-[10px] font-mono text-white/50">
                                                 {player.address.slice(0, 6)}...{player.address.slice(-4)}
                                             </span>
                                         </div>
@@ -182,14 +187,14 @@ export const WaitingRoom: React.FC = () => {
                         })}
 
                         {gameState.players.length === 0 && !isTxPending && (
-                            <div className="py-20 text-center text-white/20 italic">
+                            <div className="py-20 text-center text-white/50 italic">
                                 Connecting to network...
                             </div>
                         )}
                     </div>
 
                     <div className="pt-4 mt-4 border-t border-white/5 flex items-center justify-between">
-                        <div className="text-white/40 text-[10px] uppercase tracking-tighter font-mono flex items-center gap-2">
+                        <div className="text-white/60 text-[10px] uppercase tracking-tighter font-mono flex items-center gap-2">
                             {/* Refresh button removed per user request */}
                         </div>
                         <div className="text-white/60 text-sm">
@@ -236,7 +241,7 @@ export const WaitingRoom: React.FC = () => {
                     </div>
                 ) : isParticipant ? (
                     <div className="w-full p-6 rounded-2xl bg-white/[0.02] border border-white/5 text-center backdrop-blur-sm">
-                        <p className="text-white/30 text-sm italic">
+                        <p className="text-white/60 text-sm italic">
                             {!isRoomCreator && gameState.players.length >= minPlayers
                                 ? "Waiting for Host to start the game..."
                                 : `Waiting for more players (${gameState.players.length}/${minPlayers} minimum)...`}
@@ -244,7 +249,7 @@ export const WaitingRoom: React.FC = () => {
                     </div>
                 ) : (
                     <div className="w-full p-6 rounded-2xl bg-white/[0.02] border border-white/5 text-center backdrop-blur-sm">
-                        <p className="text-white/30 text-sm italic">
+                        <p className="text-white/60 text-sm italic">
                             Connecting to room...
                         </p>
                     </div>

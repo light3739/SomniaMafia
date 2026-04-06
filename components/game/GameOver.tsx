@@ -424,7 +424,7 @@ export const GameOver: React.FC = React.memo(() => {
                             ) : (
                                 <span className="font-medium">You Lost</span>
                             )}
-                            <span className="text-white/40">as {myRole}</span>
+                            <span className="text-white/60">as {myRole}</span>
                         </motion.div>
                     </motion.div>
 
@@ -438,7 +438,7 @@ export const GameOver: React.FC = React.memo(() => {
                         <div className="flex items-center justify-between gap-2 mb-4">
                             <div className="flex items-center gap-2">
                                 <h3 className="text-white/50 text-sm uppercase tracking-wider">All Roles Revealed</h3>
-                                {!revealTimedOut && gameState.players.some(p => p.role === Role.UNKNOWN) && <span className="text-xs text-white/30">(loading...)</span>}
+                                {!revealTimedOut && gameState.players.some(p => p.role === Role.UNKNOWN) && <span className="text-xs text-white/60">(loading...)</span>}
                             </div>
                             {/* Manual refresh — useful when GM was slow to cache roles */}
                             <button
@@ -448,7 +448,7 @@ export const GameOver: React.FC = React.memo(() => {
                                         fetchGMRoles(),
                                     ]);
                                 }}
-                                className="flex items-center gap-1 text-xs text-white/30 hover:text-white/60 transition-colors"
+                                className="flex items-center gap-1 text-xs text-white/50 hover:text-white/80 transition-colors"
                                 title="Refresh roles"
                             >
                                 <Eye className="w-3 h-3" />
@@ -495,7 +495,7 @@ export const GameOver: React.FC = React.memo(() => {
                                                     <div className="w-full h-full flex items-center justify-center">
                                                         {roleKnown
                                                             ? RoleIcons[role]
-                                                            : <Users className="w-5 h-5 text-white/20 animate-pulse" />
+                                                            : <Users className="w-5 h-5 text-white/50 animate-pulse" />
                                                         }
                                                     </div>
                                                 )}
@@ -508,12 +508,12 @@ export const GameOver: React.FC = React.memo(() => {
                                                     {roleKnown ? (
                                                         <>
                                                             <p className={`text-xs font-semibold ${RoleColors[role]}`}>{role}</p>
-                                                            {isOnChain && <span className="text-[10px] text-white/40">✓</span>}
+                                                            {isOnChain && <span className="text-[10px] text-white/60">✓</span>}
                                                         </>
                                                     ) : revealTimedOut ? (
-                                                        <p className="text-xs text-white/30">Unknown</p>
+                                                        <p className="text-xs text-white/60">Unknown</p>
                                                     ) : (
-                                                        <p className="text-xs text-white/20 animate-pulse">revealing...</p>
+                                                        <p className="text-xs text-white/50 animate-pulse">revealing...</p>
                                                     )}
                                                 </div>
                                             </div>
@@ -663,7 +663,7 @@ export const GameOver: React.FC = React.memo(() => {
                                         href={`${runtimeChain.blockExplorers?.default?.url || 'https://shannon-explorer.somnia.network'}/tx/${prizeTxHash}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-[11px] font-['Montserrat'] text-white/30 hover:text-[#C5A059] transition-colors mb-4 flex items-center gap-1.5"
+                                        className="text-[11px] font-['Montserrat'] text-white/50 hover:text-[#C5A059] transition-colors mb-4 flex items-center gap-1.5"
                                     >
                                         <span>View transaction</span>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>

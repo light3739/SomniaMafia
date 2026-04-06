@@ -56,7 +56,7 @@ export const NetworkSelector: React.FC<NetworkSelectorProps> = ({
                 <span className="text-[11px] md:text-xs font-bold text-white/80 group-hover:text-white transition-colors hidden sm:block">
                   {user?.wallet?.address ? `${user.wallet.address.slice(0, 4)}...${user.wallet.address.slice(-4)}` : 'Connected'}
                 </span>
-                <ChevronDown className="w-3 h-3 text-white/30 group-hover:text-white/50 transition-colors" />
+                <ChevronDown className="w-3 h-3 text-white/50 group-hover:text-white/70 transition-colors" />
               </button>
             )}
           </>

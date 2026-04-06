@@ -27,7 +27,7 @@ export default function GlobalError({
                             {error.message || 'Unknown Error'}
                         </p>
                         {error.digest && (
-                            <p className="text-white/30 font-mono textxs mt-2">ID: {error.digest}</p>
+                            <p className="text-white/50 font-mono text-xs mt-2">ID: {error.digest}</p>
                         )}
                     </div>
                     <div className="flex gap-4 justify-center">

@@ -20,13 +20,13 @@ export const PhaseIndicator = React.memo(({ phase, dayCount }: PhaseIndicatorPro
             case GamePhase.VOTING:
                 return { icon: <Vote className="w-5 h-5" />, label: "Voting Session", color: "text-[#916A47] border-[#916A47]/40" };
             case GamePhase.ENDED:
-                return { icon: <Skull className="w-5 h-5" />, label: "Game Over", color: "text-white/30 border-white/10" }; // Пепел
+                return { icon: <Skull className="w-5 h-5" />, label: "Game Over", color: "text-white/50 border-white/10" }; // Пепел
             case GamePhase.SHUFFLING:
                 return { icon: <div className="w-5 h-5 rounded-full border-2 border-current border-dashed animate-spin" />, label: "Shuffling Deck", color: "text-white/40 border-white/10" };
             case GamePhase.REVEAL:
                 return { icon: <div className="w-5 h-5 rounded-full border-2 border-current" />, label: "Revealing Roles", color: "text-[#B45309] border-[#B45309]/40" }; // Ржавый янтарь
             default:
-                return { icon: <div className="w-5 h-5 rounded-full border-2 border-current border-dashed animate-spin" />, label: "Syncing...", color: "text-white/30 border-white/10" };
+                return { icon: <div className="w-5 h-5 rounded-full border-2 border-current border-dashed animate-spin" />, label: "Syncing...", color: "text-white/50 border-white/10" };
         }
     };
 

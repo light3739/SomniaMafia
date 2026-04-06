@@ -21,7 +21,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                 {/* Main Title — CSS animation for fast LCP (no JS needed) */}
                 <div className="w-full flex items-center justify-center animate-landing-title">
                     <h1
-                        className="text-center font-bold italic text-[#ffffff] whitespace-nowrap font-serif"
+                        className="text-center font-bold text-[#ffffff] whitespace-nowrap font-serif"
                         style={{
                             fontSize: 'clamp(2.5rem, 8vw, 6.5rem)',
                             letterSpacing: '0.05em',

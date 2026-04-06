@@ -149,7 +149,7 @@ function NoirModal({ dialog, onResolve }: ModalProps) {
                     {dialog.type !== 'confirm' && (
                         <button
                             onClick={handleCancel}
-                            className="w-6 h-6 flex items-center justify-center rounded-full text-white/20 hover:text-white/60 hover:bg-white/8 transition-all shrink-0 -mt-0.5"
+                            className="w-10 h-10 flex items-center justify-center rounded-full text-white/50 hover:text-white/80 hover:bg-white/8 transition-all shrink-0 -mt-0.5"
                         >
                             <X className="w-3.5 h-3.5" />
                         </button>
@@ -175,7 +175,7 @@ function NoirModal({ dialog, onResolve }: ModalProps) {
                             value={inputValue}
                             onChange={e => setInputValue(e.target.value)}
                             placeholder={dialog.placeholder ?? ''}
-                            className="mt-4 w-full bg-black/60 border border-white/10 rounded-sm px-3 py-2.5 text-white text-[13px] outline-none transition-all placeholder:text-white/20 focus:border-[#C5A059]/50 focus:shadow-[0_0_0_1px_rgba(197,160,89,0.15)] font-['Montserrat']"
+                            className="mt-4 w-full bg-black/60 border border-white/10 rounded-sm px-3 py-2.5 text-white text-[13px] outline-none transition-all placeholder:text-white/40 focus:border-[#C5A059]/50 focus:shadow-[0_0_0_1px_rgba(197,160,89,0.15)] font-['Montserrat']"
                         />
                     )}
                 </div>
@@ -185,7 +185,7 @@ function NoirModal({ dialog, onResolve }: ModalProps) {
                     {dialog.type !== 'alert' && (
                         <button
                             onClick={handleCancel}
-                            className="flex-1 py-2.5 rounded-sm border border-white/10 text-white/40 text-[11px] uppercase tracking-[0.12em] font-semibold hover:border-white/25 hover:text-white/70 transition-all active:scale-[0.97]"
+                            className="flex-1 py-2.5 rounded-sm border border-white/10 text-white/60 text-[11px] uppercase tracking-[0.12em] font-semibold hover:border-white/25 hover:text-white/80 transition-all active:scale-[0.97]"
                             style={{ fontFamily: 'var(--font-cinzel)' }}
                         >
                             {dialog.cancelLabel ?? 'Cancel'}

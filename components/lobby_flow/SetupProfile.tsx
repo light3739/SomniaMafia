@@ -62,7 +62,7 @@ const SocialCard: React.FC<SocialCardProps> = ({ icon, name, linked, username, o
                     {onUnlink && (
                         <button
                             onClick={onUnlink}
-                            className="p-2 text-white/30 hover:text-white/80 transition-colors"
+                            className="p-2 text-white/50 hover:text-white/80 transition-colors"
                             title="Disconnect"
                         >
                             <Unlink strokeWidth={1.5} className="w-5 h-5" />
@@ -260,7 +260,7 @@ export const SetupProfile: React.FC = () => {
                         {avatarUrl ? (
                             <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                         ) : (
-                            <Camera className="w-10 h-10 text-white/20 group-hover:text-white/50 transition-colors" />
+                            <Camera className="w-10 h-10 text-white/50 group-hover:text-white/70 transition-colors" />
                         )}
                     </div>
                     <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -291,7 +291,7 @@ export const SetupProfile: React.FC = () => {
                             ) : (
                                 <div className="flex items-center justify-center w-full h-full px-4">
                                     <span className="text-white text-xl md:text-2xl font-montserrat font-medium truncate group-hover:text-[#ffb01d] transition-colors text-center w-full">
-                                        {playerName || <span className="text-white/30 italic text-base font-normal">No nickname set</span>}
+                                        {playerName || <span className="text-white/50 italic text-base font-normal">No nickname set</span>}
                                     </span>
                                 </div>
                             )}
@@ -330,7 +330,7 @@ export const SetupProfile: React.FC = () => {
                             <span className="text-white font-montserrat font-medium text-lg md:text-xl tracking-wide leading-none">In-Game Wallet</span>
                             {hasEmbeddedWallet ? (
                                 !useEmbeddedWallet ? (
-                                    <span className="text-white/30 text-[11px] font-medium tracking-[0.1em] uppercase flex items-center gap-1.5">Disabled</span>
+                                    <span className="text-white/50 text-[11px] font-medium tracking-[0.1em] uppercase flex items-center gap-1.5">Disabled</span>
                                 ) : (
                                     <span className="text-[#C19A6B] text-[11px] font-medium tracking-[0.1em] uppercase flex items-center gap-1.5"><Check className="w-3.5 h-3.5" strokeWidth={2.5} /> Active</span>
                                 )
@@ -339,7 +339,7 @@ export const SetupProfile: React.FC = () => {
                             )}
                         </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-white/30 group-hover:text-white/70 transition-colors" />
+                    <ChevronRight className="w-5 h-5 text-white/50 group-hover:text-white/70 transition-colors" />
                 </button>
 
                 <button
@@ -355,7 +355,7 @@ export const SetupProfile: React.FC = () => {
                             <span className="text-white/40 text-[11px] font-medium tracking-[0.1em] uppercase">Manage Social Links</span>
                         </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-white/30 group-hover:text-white/70 transition-colors" />
+                    <ChevronRight className="w-5 h-5 text-white/50 group-hover:text-white/70 transition-colors" />
                 </button>
             </div>
 
@@ -410,7 +410,7 @@ export const SetupProfile: React.FC = () => {
                             <div className="flex items-center justify-between px-5 py-4 rounded-md border border-white/10 bg-white/5 mb-2 hover:bg-white/10 transition-colors">
                                 <div className="flex items-center gap-4">
                                     <div className="w-10 h-10 rounded-md bg-black/50 border border-white/10 flex items-center justify-center shadow-inner">
-                                        <Wallet className={`w-5 h-5 transition-colors ${useEmbeddedWallet ? 'text-[#ffb01d]' : 'text-white/30'}`} />
+                                        <Wallet className={`w-5 h-5 transition-colors ${useEmbeddedWallet ? 'text-[#ffb01d]' : 'text-white/50'}`} />
                                     </div>
                                     <div className="flex flex-col gap-1">
                                         <p className="text-white text-base font-montserrat font-medium tracking-wide">Use In-Game Wallet</p>
@@ -450,7 +450,7 @@ export const SetupProfile: React.FC = () => {
                                                 </button>
                                             </div>
                                         ) : (
-                                            <p className="text-white/30 text-xs mt-1">Not connected</p>
+                                            <p className="text-white/50 text-xs mt-1">Not connected</p>
                                         )}
                                     </div>
                                 </div>
@@ -554,7 +554,7 @@ export const SetupProfile: React.FC = () => {
                                                                         setFundAmount(val);
                                                                     }
                                                                 }}
-                                                                className="w-full h-[54px] bg-black/60 border border-white/10 text-white font-mono font-medium text-xl text-right rounded-md pl-16 pr-5 outline-none focus:border-[#C19A6B] focus:bg-black/80 transition-all placeholder:text-white/30 relative tabular-nums"
+                                                                className="w-full h-[54px] bg-black/60 border border-white/10 text-white font-mono font-medium text-xl text-right rounded-md pl-16 pr-5 outline-none focus:border-[#C19A6B] focus:bg-black/80 transition-all placeholder:text-white/50 relative tabular-nums"
                                                                 placeholder="0.00"
                                                             />
                                                         </div>
@@ -564,7 +564,7 @@ export const SetupProfile: React.FC = () => {
                                                     <button
                                                         onClick={handleFundWallet}
                                                         disabled={isFunding || !fundAmount || isNaN(Number(fundAmount)) || Number(fundAmount) <= 0}
-                                                        className={`w-full py-4 font-montserrat font-semibold text-base tracking-wide rounded-md transition-all shadow-lg flex items-center justify-center gap-2 border ${isFunding || !fundAmount || isNaN(Number(fundAmount)) || Number(fundAmount) <= 0 ? 'bg-white/5 text-white/30 border-white/5 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-[#916A47] to-[#A37B58] hover:from-[#A37B58] hover:to-[#B68E6A] text-white border-[#C19A6B]/50 hover:border-[#E8CBA3]/70 hover:scale-[1.02] shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(193,154,107,0.3)]'}`}
+                                                        className={`w-full py-4 font-montserrat font-semibold text-base tracking-wide rounded-md transition-all shadow-lg flex items-center justify-center gap-2 border ${isFunding || !fundAmount || isNaN(Number(fundAmount)) || Number(fundAmount) <= 0 ? 'bg-white/5 text-white/50 border-white/5 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-[#916A47] to-[#A37B58] hover:from-[#A37B58] hover:to-[#B68E6A] text-white border-[#C19A6B]/50 hover:border-[#E8CBA3]/70 hover:scale-[1.02] shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(193,154,107,0.3)]'}`}
                                                     >
                                                         {isFunding ? 'Processing...' : 'Send Tokens'}
                                                     </button>

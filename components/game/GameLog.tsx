@@ -432,7 +432,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         exit: { opacity: 0, scale: 0.95 },
     };
 
-    const LABEL = "text-white/30 font-mono text-[11px] tracking-widest uppercase w-[120px] shrink-0 pt-0.5 select-none";
+    const LABEL = "text-white/60 font-mono text-[11px] tracking-widest uppercase w-[120px] shrink-0 pt-0.5 select-none";
     const VAL_BASE = "text-white/80 font-mono text-[13px] leading-relaxed";
 
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -530,7 +530,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         )}
 
                         {!dayEvents.nightResult && !dayEvents.discussionStarted && !dayEvents.votingStarted && !showNightFalls && (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex w-full items-center justify-center text-white/20 py-10">
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex w-full items-center justify-center text-white/50 py-10">
                                 <span className="text-[11px] font-mono uppercase tracking-widest animate-pulse">Waiting for events...</span>
                             </motion.div>
                         )}
