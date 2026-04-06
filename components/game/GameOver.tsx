@@ -114,7 +114,6 @@ export const GameOver: React.FC = React.memo(() => {
     }, [publicClient, currentRoomId, gameState.isTournament, runtimeContractAddress, prizesClaimed]);
 
     // Show prize popup when prizes transition from unclaimed → claimed
-    // Show prize popup when prizes transition from unclaimed → claimed
     useEffect(() => {
         if (prizesClaimed && !prevPrizesClaimedRef.current) {
             prevPrizesClaimedRef.current = true;
@@ -123,19 +122,17 @@ export const GameOver: React.FC = React.memo(() => {
 
             // Find distribute tx hash for explorer link (all clients)
             if (currentRoomId && publicClient) {
-                // 1. Check localStorage first (fast — works for the client that distributed)
                 const storedHash = localStorage.getItem(`prize_tx_${currentRoomId}`);
                 if (storedHash) {
                     setPrizeTxHash(storedHash);
                 } else {
-                    // 2. Search on-chain: paginated getLogs in 900-block chunks (RPC limit = 1000)
+                    // Search on-chain logs in small chunks (Somnia RPC limit ~1000 blocks)
                     (async () => {
                         try {
                             const { parseAbiItem } = await import('viem');
                             const prizeEvent = parseAbiItem('event PrizeDistributed(uint256 indexed roomId, address indexed winner, uint128 amount)');
                             const currentBlock = await publicClient.getBlockNumber();
 
-                            // Search backwards in 900-block chunks, up to ~5 minutes
                             for (let offset = 0n; offset < 30000n; offset += 900n) {
                                 const to = currentBlock - offset;
                                 const from = to > 900n ? to - 900n : 0n;
@@ -150,7 +147,10 @@ export const GameOver: React.FC = React.memo(() => {
                                 });
 
                                 if (logs.length > 0) {
-                                    setPrizeTxHash(logs[0].transactionHash);
+                                    const hash = logs[0].transactionHash;
+                                    setPrizeTxHash(hash);
+                                    // Cache so other useEffect cycles find it instantly
+                                    localStorage.setItem(`prize_tx_${currentRoomId}`, hash);
                                     break;
                                 }
                             }
@@ -164,12 +164,17 @@ export const GameOver: React.FC = React.memo(() => {
     }, [prizesClaimed, currentRoomId, publicClient, runtimeContractAddress]);
 
     // Calculate payouts reactively from game state — recalculates as roles/prizePool load in
+    // Use buyIn * playersCount as the pool since on-chain prizePool resets to 0 after distribution
     const prizePayouts = React.useMemo(() => {
         if (!prizesClaimed || !winner) return [];
 
         const mafiaWon = winner === 'MAFIA';
         const players = gameState.players;
-        const pool = gameState.prizePool || 0n;
+
+        // prizePool is 0 after distribution, so reconstruct from buyIn
+        const pool = (gameState.buyIn && gameState.buyIn > 0n)
+            ? gameState.buyIn * BigInt(players.length)
+            : gameState.prizePool || 0n;
 
         if (pool <= 0n || players.length === 0) return [];
 

@@ -487,37 +487,20 @@ export function useEndGame(deps: EndGameDeps) {
                     if (alreadyClaimed) {
                         console.log('[AutoDistribute] Prizes already claimed');
                     } else {
-                        // Waterfall: stagger by player index to avoid simultaneous calls
+                        // Waterfall: only the first alive player (sorted by address) attempts distribution.
+                        // All others just wait for prizesClaimed to flip on-chain.
                         const myAddr = refs.addressRef.current!.toLowerCase();
                         const alivePlayers = gameState.players
                             .filter(p => p.isAlive)
                             .sort((a, b) => a.address.localeCompare(b.address));
                         const myIndex = alivePlayers.findIndex(p => p.address.toLowerCase() === myAddr);
-                        const delayMs = myIndex >= 0 ? myIndex * 5000 : 0;
+                        const isFirstInWaterfall = myIndex === 0;
 
-                        if (delayMs > 0) {
-                            console.log(`[AutoDistribute] Waterfall: waiting ${delayMs / 1000}s (position ${myIndex + 1}/${alivePlayers.length})`);
-                            await new Promise(r => setTimeout(r, delayMs));
-
-                            // Re-check after wait
-                            if (tournamentId > 0n) {
-                                const tDataAfter = await pClient.readContract({
-                                    address: refs.contractAddressRef.current,
-                                    abi: MAFIA_ABI,
-                                    functionName: 'getTournament',
-                                    args: [tournamentId],
-                                }) as any;
-                                const claimedAfterWait = Array.isArray(tDataAfter) ? Boolean(tDataAfter[13]) : Boolean(tDataAfter.prizesClaimed);
-                                if (claimedAfterWait) {
-                                    console.log('[AutoDistribute] Prizes claimed by another player during wait');
-                                    // Skip to session drain
-                                    throw new Error('ALREADY_CLAIMED');
-                                }
-                            }
-                        }
-
-                        if (session?.registeredOnChain && session.privateKey) {
-                            // Step 1a: Ask GM to reveal roles on-chain (required for prize distribution)
+                        if (!isFirstInWaterfall) {
+                            console.log(`[AutoDistribute] Not first in waterfall (position ${myIndex + 1}/${alivePlayers.length}), skipping — will poll for prizesClaimed`);
+                        } else if (session?.registeredOnChain && session.privateKey) {
+                            // Only the first player does reveal + distribute
+                            // Step 1a: Ask GM to reveal roles on-chain
                             try {
                                 const chainId = chain.id || 50312;
                                 console.log('[AutoDistribute] Requesting GM to reveal roles on-chain...');
@@ -534,6 +517,21 @@ export function useEndGame(deps: EndGameDeps) {
                                 }
                             } catch (revealErr: unknown) {
                                 console.warn('[AutoDistribute] Role reveal request failed (continuing anyway):', revealErr);
+                            }
+
+                            // Step 1b: Re-check if already claimed (reveal might have triggered another player's distribute)
+                            if (tournamentId > 0n) {
+                                const tDataCheck = await pClient.readContract({
+                                    address: refs.contractAddressRef.current,
+                                    abi: MAFIA_ABI,
+                                    functionName: 'getTournament',
+                                    args: [tournamentId],
+                                }) as any;
+                                const claimedNow = Array.isArray(tDataCheck) ? Boolean(tDataCheck[13]) : Boolean(tDataCheck.prizesClaimed);
+                                if (claimedNow) {
+                                    console.log('[AutoDistribute] Prizes claimed while revealing roles');
+                                    throw new Error('ALREADY_CLAIMED');
+                                }
                             }
 
                             console.log('[AutoDistribute] Submitting distributeMafiaPrizes via session key...');
@@ -555,11 +553,11 @@ export function useEndGame(deps: EndGameDeps) {
                                 chain,
                             });
 
-                            const receipt = await pClient.waitForTransactionReceipt({ hash });
+                            await pClient.waitForTransactionReceipt({ hash });
                             console.log('[AutoDistribute] Prizes distributed successfully!');
                             addLog('Prizes distributed automatically', 'success');
 
-                            // Store tx hash for GameOver popup
+                            // Store tx hash for GameOver popup (all clients can read)
                             if (currentRoomId) {
                                 localStorage.setItem(`prize_tx_${currentRoomId}`, hash);
                             }
