@@ -143,9 +143,10 @@ button:disabled,
 }
 
 /* Landing page entrance animations (CSS-only for fast LCP) */
-@keyframes landing-fade-in {
-  from { opacity: 0; transform: scale(0.95); filter: blur(10px); }
-  to { opacity: 1; transform: scale(1); filter: blur(0px); }
+/* Title: NO opacity change — element must be visible immediately for LCP */
+@keyframes landing-title-in {
+  from { transform: scale(0.97); }
+  to { transform: scale(1); }
 }
 
 @keyframes landing-slide-up {
@@ -159,15 +160,16 @@ button:disabled,
 }
 
 .animate-landing-title {
-  animation: landing-fade-in 1.5s ease-out both;
+  animation: landing-title-in 0.6s ease-out both;
+  will-change: transform;
 }
 
 .animate-landing-subtitle {
-  animation: landing-slide-up 1s ease-out 0.5s both;
+  animation: landing-slide-up 1s ease-out 0.3s both;
 }
 
 .animate-landing-button {
-  animation: landing-scale-in 0.5s ease-out 1.0s both;
+  animation: landing-scale-in 0.5s ease-out 0.8s both;
 }
 
 /* Animations for Neo-Noir UI */
