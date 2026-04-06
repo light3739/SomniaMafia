@@ -46,7 +46,7 @@ jobs:
         env:
           NEXT_PUBLIC_GM_SERVER_URL: https://gm-test.mafiaonchain.live
           NEXT_PUBLIC_LIVEKIT_URL: wss://livekit.mafiaonchain.live
-          NEXT_PUBLIC_ACTIVE_NETWORK: avalanche_fuji
+          NEXT_PUBLIC_ACTIVE_NETWORK: somnia_testnet
           NEXT_PUBLIC_MAFIA_DIAMOND: ${{ vars.NEXT_PUBLIC_MAFIA_DIAMOND }}
 
       - name: Set up Docker Buildx
@@ -106,6 +106,41 @@ jobs:
             docker rm -f mafia-frontend-dev mafia-gm-dev mafia-redis-dev || true && \
             docker compose -f ops/frontend-server/docker-compose.dev.yaml up -d
           "
+
+      - name: Sync monitoring credentials
+        env:
+          FRONT_SSH_HOST: ${{ secrets.MAFIATEST_SSH_HOST }}
+          FRONT_SSH_USER: ${{ secrets.GM_SSH_USER }}
+          FRONT_SSH_PORT: ${{ secrets.GM_SSH_PORT }}
+          TG_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          HOST="${FRONT_SSH_HOST:-${{ secrets.GM_SSH_HOST }}}"
+          USER="${FRONT_SSH_USER:-root}"
+          PORT="${FRONT_SSH_PORT:-22}"
+          if [ -n "$TG_BOT_TOKEN" ] && [ -n "$TG_CHAT_ID" ]; then
+            ssh -p "$PORT" "${USER}@${HOST}" "
+              sed -i 's|^TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=${TG_BOT_TOKEN}|' /etc/mafia-monitor.env
+              sed -i 's|^TELEGRAM_CHAT_ID=.*|TELEGRAM_CHAT_ID=${TG_CHAT_ID}|' /etc/mafia-monitor.env
+            "
+            echo "✅ Monitoring credentials synced"
+          fi
+
+      - name: Health check
+        run: |
+          echo "🏥 Checking https://test.mafiaonchain.live..."
+          sleep 10
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://test.mafiaonchain.live" || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Health check passed (attempt $i)"
+              exit 0
+            fi
+            echo "⏳ Attempt $i: status=$STATUS, retrying in 10s..."
+            sleep 10
+          done
+          echo "❌ Health check failed after 5 attempts"
+          exit 1
 
       - name: Notify success (Telegram)
         if: success()

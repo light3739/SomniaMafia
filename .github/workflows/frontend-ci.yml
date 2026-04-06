@@ -2,7 +2,7 @@ name: Frontend CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
 jobs:
@@ -22,8 +22,14 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Lint
-        continue-on-error: true
         run: npm run lint
 
       - name: Typecheck
         run: npx tsc --noEmit --pretty false
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_GM_SERVER_URL: https://gm-test.mafiaonchain.live
+          NEXT_PUBLIC_LIVEKIT_URL: wss://livekit.mafiaonchain.live
+          NEXT_PUBLIC_ACTIVE_NETWORK: somnia_testnet

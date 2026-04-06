@@ -6,8 +6,8 @@ services:
       dockerfile: ops/frontend-server/Dockerfile
       args:
         NEXT_PUBLIC_GM_SERVER_URL: ${NEXT_PUBLIC_GM_SERVER_URL:-https://gm-test.mafiaonchain.live}
-        NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-https://livekit.mafiaonchain.live}
-        NEXT_PUBLIC_ACTIVE_NETWORK: ${NEXT_PUBLIC_ACTIVE_NETWORK:-avalanche_fuji}
+        NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-wss://livekit.mafiaonchain.live}
+        NEXT_PUBLIC_ACTIVE_NETWORK: ${NEXT_PUBLIC_ACTIVE_NETWORK:-somnia_testnet}
     container_name: somnia-frontend-test
     restart: unless-stopped
     env_file:
