@@ -27,6 +27,18 @@ export const NightAnnouncement: React.FC<NightAnnouncementProps> = ({ show, onCo
                     {/* Solid opaque background */}
                     <div className="absolute inset-0 bg-[#050505]" />
 
+                    {/* Soft crimson radial bloom (subtle glow boost) */}
+                    <motion.div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                            background:
+                                'radial-gradient(circle at center, rgba(139,0,0,0.22) 0%, rgba(139,0,0,0.08) 35%, transparent 65%)',
+                        }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0, 0.9, 0.7, 0.85] }}
+                        transition={{ duration: 3.5, ease: 'easeInOut', times: [0, 0.3, 0.6, 1] }}
+                    />
+
                     {/* Falling dust particles — like dust caught in a beam of light */}
                     <div className="absolute inset-0 overflow-hidden pointer-events-none">
                         {/* Slow-falling dust motes */}
@@ -92,7 +104,10 @@ export const NightAnnouncement: React.FC<NightAnnouncementProps> = ({ show, onCo
                         transition={{ duration: 1.5, ease: "easeOut" }}
                         className="flex flex-col items-center relative z-10"
                     >
-                        <h1 className="text-5xl md:text-7xl font-['Cinzel'] font-light tracking-[0.3em] text-white/95 uppercase mix-blend-plus-lighter">
+                        <h1
+                            className="text-5xl md:text-7xl font-['Cinzel'] font-light tracking-[0.3em] text-white/95 uppercase mix-blend-plus-lighter"
+                            style={{ textShadow: '0 0 28px rgba(139,0,0,0.55), 0 0 60px rgba(139,0,0,0.25)' }}
+                        >
                             Night Falls
                         </h1>
                         <motion.div

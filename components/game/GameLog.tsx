@@ -3,16 +3,28 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { GamePhase } from '../../types';
 
+// Module-level cache of strings whose typewriter animation has finished. Lets
+// us skip retyping logs when GameLog remounts (e.g. day → night → day) and
+// also keeps already-typed entries stable when a brand-new log arrives.
+const typedTextCache = new Set<string>();
+export const __resetGameLogTypewriterCache = () => typedTextCache.clear();
+
 // ── TypewriterText ────────────────────────────────────────────────────────
 const TypewriterText: React.FC<{ text: string; speed?: number; className?: string }> = ({
     text,
     speed = 28,
     className,
 }) => {
-    const [displayed, setDisplayed] = useState('');
-    const [done, setDone] = useState(false);
+    const wasShown = typedTextCache.has(text);
+    const [displayed, setDisplayed] = useState(wasShown ? text : '');
+    const [done, setDone] = useState(wasShown);
 
     useEffect(() => {
+        if (typedTextCache.has(text)) {
+            setDisplayed(text);
+            setDone(true);
+            return;
+        }
         setDisplayed('');
         setDone(false);
         let i = 0;
@@ -22,6 +34,7 @@ const TypewriterText: React.FC<{ text: string; speed?: number; className?: strin
             if (i >= text.length) {
                 clearInterval(interval);
                 setDone(true);
+                typedTextCache.add(text);
             }
         }, speed);
         return () => clearInterval(interval);
@@ -43,10 +56,16 @@ const HighlightedTypewriterText: React.FC<{
     className?: string;
 }> = ({ parts, speed = 28, className }) => {
     const fullText = parts.map(p => p.text).join('');
-    const [displayed, setDisplayed] = useState('');
-    const [done, setDone] = useState(false);
+    const wasShown = typedTextCache.has(fullText);
+    const [displayed, setDisplayed] = useState(wasShown ? fullText : '');
+    const [done, setDone] = useState(wasShown);
 
     useEffect(() => {
+        if (typedTextCache.has(fullText)) {
+            setDisplayed(fullText);
+            setDone(true);
+            return;
+        }
         setDisplayed('');
         setDone(false);
         let i = 0;
@@ -56,6 +75,7 @@ const HighlightedTypewriterText: React.FC<{
             if (i >= fullText.length) {
                 clearInterval(interval);
                 setDone(true);
+                typedTextCache.add(fullText);
             }
         }, speed);
         return () => clearInterval(interval);
@@ -134,14 +154,13 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         ? lockedVotingDayRef.current
         : 0;
 
-    // Use actualLoggedDay as primary source — prevents the race where contract
-    // dayCount jumps to N+1 (via refreshPlayersList) before the server's
-    // "Day N+1 has begun" log has arrived.  Without the log marker,
-    // dayStartIdx can't find the new day → nightResult search fails →
-    // "Waiting for events" flash.  Fall back to dayCount only when no logs exist.
+    // Always advance to the latest known day so old-day events do not linger
+    // when a new day has begun on-chain but the "Day N has begun" server log
+    // hasn't been delivered yet. The dayEvents memo below treats a missing log
+    // marker as a clean state (no leak) instead of falling back to all logs.
     const targetDay = (showVotingResults && lockedVotingDayRef.current > 0)
         ? lockedVotingDayRef.current
-        : (actualLoggedDay || dayCount || 1);
+        : Math.max(actualLoggedDay || 0, dayCount || 0, 1);
 
     // ─── dayEvents: single source of truth from eventType/eventData ──────
     // Scans ALL logs directly instead of relying on todayLogs slice.
@@ -159,7 +178,9 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
 
         // 1. Find the current day's start index in the logs array.
         //    Uses both eventType and text matching for robustness.
-        let dayStartIdx = 0;
+        //    `dayStartIdx === -1` means the marker for the current day hasn't
+        //    arrived yet — we must NOT fall back to scanning prior days.
+        let dayStartIdx = -1;
         for (let i = logs.length - 1; i >= 0; i--) {
             const l = logs[i];
             const isDayMatch =
@@ -174,6 +195,21 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 dayStartIdx = i;
                 // Don't break — keep looking for a more specific "Day 1" marker
             }
+        }
+
+        // No marker for the current day yet → return a clean state so the UI
+        // doesn't render stale events from earlier days while we wait.
+        if (dayStartIdx < 0) {
+            return {
+                nightResult: null,
+                discussionStarted: false,
+                discussionFinished: false,
+                currentSpeaker: null,
+                votingStarted: false,
+                voteCasts: [],
+                votingResult: null,
+                nightFallen: false,
+            };
         }
 
         // 2. Search BACKWARDS from dayStartIdx for NIGHT_RESULT.

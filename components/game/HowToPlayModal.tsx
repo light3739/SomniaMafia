@@ -88,15 +88,16 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 // ─── Overlay animation ────────────────────────────────────────
+// Pure fade — no scaling — to keep the panel at a stable size
 const overlayVariants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1 },
 };
 
 const panelVariants = {
-  hidden: { opacity: 0, y: 24, scale: 0.96 },
-  visible: { opacity: 1, y: 0, scale: 1 },
-  exit: { opacity: 0, y: 16, scale: 0.97 },
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 },
+  exit: { opacity: 0 },
 };
 
 // ─── Tab Content Renderers ─────────────────────────────────────
@@ -120,7 +121,7 @@ const RolesTab: React.FC = () => (
         <div className="min-w-0">
           <p
             className="text-[11px] font-bold tracking-widest uppercase"
-            style={{ fontFamily: "Cinzel, serif", color: role.color }}
+            style={{ color: role.color }}
           >
             {role.label}
           </p>
@@ -141,10 +142,7 @@ const PhasesTab: React.FC = () => (
           {i + 1}
         </span>
         <div>
-          <p
-            className="text-white/90 text-[13px] font-semibold"
-            style={{ fontFamily: "Cinzel, serif" }}
-          >
+          <p className="text-white/90 text-[13px] font-semibold">
             {phase.title}
           </p>
           <p className="text-white/70 text-[12px] leading-relaxed mt-0.5">
@@ -205,19 +203,19 @@ const HowToPlayModal: React.FC = () => {
           onClick={close}
         >
           <motion.div
-            className="relative w-[92vw] max-w-[520px] max-h-[85vh] flex flex-col bg-[#0D0D0D] border border-[#916A47]/25 rounded-sm shadow-2xl"
+            className="relative w-[92vw] max-w-[520px] max-h-[85vh] flex flex-col bg-[#0D0D0D] border border-[#916A47]/25 rounded-sm shadow-2xl font-['Montserrat']"
             variants={panelVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
-            transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* ── Header ──────────────────────────────────────── */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h2
                 className="text-[18px] font-bold tracking-wide"
-                style={{ fontFamily: "Cinzel, serif", color: "#916A47" }}
+                style={{ color: "#916A47" }}
               >
                 How to Play
               </h2>
@@ -246,7 +244,6 @@ const HowToPlayModal: React.FC = () => {
                           : "text-white/35 hover:text-white/60 hover:bg-white/5"
                       }
                     `}
-                    style={{ fontFamily: "Cinzel, serif" }}
                   >
                     {tab.label}
                   </button>
@@ -259,9 +256,9 @@ const HowToPlayModal: React.FC = () => {
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}
-                  initial={{ opacity: 0, x: 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -8 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
                   transition={{ duration: 0.15 }}
                 >
                   {activeTab === "roles" && <RolesTab />}

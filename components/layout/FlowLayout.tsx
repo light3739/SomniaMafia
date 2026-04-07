@@ -1,6 +1,8 @@
 import React, { useRef } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import { HelpCircle } from 'lucide-react';
 import { BackButton } from '../ui/BackButton';
+import HowToPlayModal from '../game/HowToPlayModal';
 
 interface FlowLayoutProps {
     children: React.ReactNode;
@@ -38,10 +40,21 @@ export const FlowLayout: React.FC<FlowLayoutProps> = ({
     const vignetteOpacity = useTransform(scrollY, [0, 80], [0, 1]);
 
     return (
-        <div 
-            ref={scrollContainerRef} 
+        <div
+            ref={scrollContainerRef}
             className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 pb-12 custom-scrollbar"
         >
+            {/* How to Play modal + top-right trigger button (shared across lobby flow screens) */}
+            <HowToPlayModal />
+            <button
+                onClick={() => window.dispatchEvent(new Event('open-how-to-play'))}
+                className="fixed top-4 right-4 z-[100] w-11 h-11 flex items-center justify-center rounded-full bg-[#0A0A0A] border border-[#916A47]/30 hover:border-[#916A47]/60 hover:bg-[#1A130A] transition-all shadow-[0_5px_15px_rgba(0,0,0,0.8)]"
+                title="How to Play"
+                aria-label="How to Play"
+            >
+                <HelpCircle className="w-5 h-5 text-[#916A47]" />
+            </button>
+
             {/* Top vignette: transitions opacity on scroll to fade content behind nav */}
             <motion.div
                 className="fixed top-0 left-0 right-0 h-24 pointer-events-none z-40"

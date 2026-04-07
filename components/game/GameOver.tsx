@@ -404,15 +404,15 @@ export const GameOver: React.FC = React.memo(() => {
     }, [generateImage, winner, myRole]);
 
     if (!winner) {
+        // Quiet placeholder while the chain settles & roles reveal — the endgame
+        // screen takes over the moment a winner is known. No big "Game Over!" splash.
         return (
-            <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+            <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center pointer-events-auto">
                 <motion.div
                     animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                    className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full mb-6"
+                    transition={{ duration: 1.6, repeat: Infinity, ease: 'linear' }}
+                    className="w-9 h-9 border-2 border-[#916A47]/60 border-t-transparent rounded-full"
                 />
-                <h1 className="text-3xl font-bold text-white mb-2">Game Over!</h1>
-                <p className="text-slate-400">Finalizing result and revealing roles...</p>
             </div>
         );
     }
@@ -425,11 +425,10 @@ export const GameOver: React.FC = React.memo(() => {
         if (winner === 'TOWN') return p.role !== Role.MAFIA && p.role !== Role.UNKNOWN;
         return p.isAlive;
     });
-    const losers = gameState.players.filter(p => {
-        if (winner === 'MAFIA') return p.role !== Role.MAFIA && p.role !== Role.UNKNOWN;
-        if (winner === 'TOWN') return p.role === Role.MAFIA;
-        return false;
-    });
+    // Everyone who isn't a winner shows up as defeated — including UNKNOWN roles,
+    // so the full player roster is always visible in the endgame screen.
+    const winnerAddrs = new Set(winners.map(w => w.address.toLowerCase()));
+    const losers = gameState.players.filter(p => !winnerAddrs.has(p.address.toLowerCase()));
 
     return (
         <motion.div
@@ -446,13 +445,13 @@ export const GameOver: React.FC = React.memo(() => {
                 }}
             />
 
-            {/* Animated light pulse from center */}
+            {/* Animated light pulse from center (calmer than before) */}
             <motion.div
                 className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none rounded-full"
                 initial={{ width: 0, height: 0, opacity: 0 }}
-                animate={{ width: '900px', height: '900px', opacity: [0, 0.18, 0.1] }}
+                animate={{ width: '700px', height: '700px', opacity: [0, 0.1, 0.06] }}
                 transition={{ delay: 0.4, duration: 2.5, ease: 'easeOut' }}
-                style={{ filter: 'blur(140px)', backgroundColor: accentColor }}
+                style={{ filter: 'blur(160px)', backgroundColor: accentColor }}
             />
 
             {/* Post-game Global Voice Chat */}
@@ -470,10 +469,12 @@ export const GameOver: React.FC = React.memo(() => {
 
             <div className="relative w-full min-h-[100dvh] flex flex-col items-center justify-center py-12 px-4 md:px-8">
                 {/* === SHAREABLE CARD === */}
+                {/* Background color is intentionally not set here; html-to-image
+                    applies its own backgroundColor when generating the screenshot,
+                    so the on-screen card stays transparent over the cinematic bg. */}
                 <div
                     ref={shareCardRef}
                     className="relative w-full max-w-4xl flex flex-col items-center py-10 px-6"
-                    style={{ backgroundColor: '#050505' }}
                 >
                     {/* Massive title with glow */}
                     <AnimatePresence>
@@ -488,7 +489,7 @@ export const GameOver: React.FC = React.memo(() => {
                                     fontSize: 'clamp(2.5rem, 7vw, 5rem)',
                                     color: accentColor,
                                     letterSpacing: '0.2em',
-                                    textShadow: `0 0 30px ${accentColor}e6, 0 0 60px ${accentColor}99, 0 0 120px ${accentColor}55, 0 4px 20px rgba(0,0,0,0.9)`,
+                                    textShadow: `0 0 22px ${accentColor}99, 0 0 50px ${accentColor}55, 0 4px 20px rgba(0,0,0,0.85)`,
                                     lineHeight: 1.1,
                                 }}
                             >
@@ -550,17 +551,17 @@ export const GameOver: React.FC = React.memo(() => {
                                                 className="flex flex-col items-center"
                                             >
                                                 <div className="relative">
-                                                    {/* Glow halo */}
+                                                    {/* Glow halo (toned down) */}
                                                     <div
                                                         className="absolute inset-0 rounded-full blur-3xl"
-                                                        style={{ backgroundColor: roleColor, opacity: 0.55, transform: 'scale(1.4)' }}
+                                                        style={{ backgroundColor: roleColor, opacity: 0.28, transform: 'scale(1.25)' }}
                                                     />
                                                     {/* Avatar */}
                                                     <div
                                                         className="relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-2"
                                                         style={{
                                                             borderColor: roleColor,
-                                                            boxShadow: `0 0 35px ${roleColor}, 0 0 70px ${roleColor}66, inset 0 0 20px rgba(0,0,0,0.6)`,
+                                                            boxShadow: `0 0 18px ${roleColor}99, inset 0 0 16px rgba(0,0,0,0.55)`,
                                                         }}
                                                     >
                                                         {player.avatarUrl ? (
@@ -584,12 +585,12 @@ export const GameOver: React.FC = React.memo(() => {
                                                     )}
                                                 </div>
 
-                                                {/* Glowing name */}
+                                                {/* Glowing name (toned down) */}
                                                 <p
                                                     className="mt-4 font-['Cinzel'] font-bold uppercase tracking-wider text-base md:text-lg text-center"
                                                     style={{
                                                         color: '#fff',
-                                                        textShadow: `0 0 14px ${roleColor}cc, 0 0 28px ${roleColor}66, 0 2px 8px rgba(0,0,0,0.9)`,
+                                                        textShadow: `0 0 10px ${roleColor}99, 0 2px 8px rgba(0,0,0,0.85)`,
                                                     }}
                                                 >
                                                     {player.name}{isMe && ' (You)'}

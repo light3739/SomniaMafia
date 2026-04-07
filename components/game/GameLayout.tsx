@@ -11,7 +11,6 @@ import { VotingAnnouncement } from './VotingAnnouncement';
 import { NightAnnouncement } from './NightAnnouncement';
 import { MorningAnnouncement } from './MorningAnnouncement';
 import { RoleCompositionAnnouncement } from './RoleCompositionAnnouncement';
-import { PhaseTransitionOverlay } from './PhaseTransitionOverlay';
 import { EliminationCeremony } from './EliminationCeremony';
 import { GameStartCountdown } from './GameStartCountdown';
 import { useGameHints } from './GameHints';
@@ -51,9 +50,6 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const [hasShownRoleComposition, setHasShownRoleComposition] = useState(false);
     const [showNightAnnouncement, setShowNightAnnouncement] = useState(false);
     const [lastPhase, setLastPhase] = useState<GamePhase | null>(null);
-
-    // Dramatic phase transition overlays
-    const [dramaticTransition, setDramaticTransition] = useState<'night' | 'morning' | 'voting' | null>(null);
 
     // Elimination ceremony
     const [eliminationData, setEliminationData] = useState<{ name: string; role: string } | null>(null);
@@ -157,6 +153,21 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         setShowMorningAnnouncement(true);
     }, [playMorningTransition]);
 
+    // Triggers for old ambient announcements (replace dramatic overlay)
+    const triggerNightAnnouncement = useCallback(() => {
+        playNightTransition();
+        setShowNightAnnouncement(true);
+    }, [playNightTransition]);
+
+    const triggerMorningAnnouncement = useCallback(() => {
+        playMorningTransition();
+        setShowMorningAnnouncement(true);
+    }, [playMorningTransition]);
+
+    const triggerVotingAnnouncement = useCallback(() => {
+        setShowVotingAnnouncement(true);
+    }, []);
+
     const handleVotingComplete = useCallback(() => {
         setShowVotingAnnouncement(false);
         showHint('voting');
@@ -182,8 +193,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 lastMorningDayRef.current = gameState.dayCount;
                 if (gameState.dayCount === 1 && !hasShownRoleComposition) { setShowRoleComposition(true); setHasShownRoleComposition(true); }
                 else {
-                    // Fire dramatic transition first, then ambient on complete
-                    setDramaticTransition('morning');
+                    triggerMorningAnnouncement();
                 }
             }
         }
@@ -193,7 +203,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         const isVoting = activePhase === GamePhase.VOTING;
         if ((isVoting && lastPhase !== GamePhase.VOTING) || (isVoting && gameState.dayCount !== lastVotingDayRef.current)) {
             const delay = lastPhase === GamePhase.DAY ? 0 : (gameState.dayCount === lastMorningDayRef.current ? 2000 : 0);
-            const t = setTimeout(() => { setDramaticTransition('voting'); }, delay);
+            const t = setTimeout(() => { triggerVotingAnnouncement(); }, delay);
             lastVotingDayRef.current = gameState.dayCount; setLastPhase(activePhase);
             return () => clearTimeout(t);
         }
@@ -206,10 +216,10 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         if (entry && gameState.phase === GamePhase.NIGHT && gameState.dayCount !== lastNightDayRef.current) {
             if (nightAnnouncementPendingRef.current) return;
             nightAnnouncementPendingRef.current = true; lastNightDayRef.current = gameState.dayCount;
-            setDramaticTransition('night');
+            triggerNightAnnouncement();
             nightAnnouncementPendingRef.current = false;
         }
-    }, [activePhase, gameState.phase, gameState.dayCount, playNightTransition, showVotingResults]);
+    }, [activePhase, gameState.phase, gameState.dayCount, triggerNightAnnouncement, showVotingResults]);
 
     // === EXPOSE REFRESH FOR FAILSAFE ===
     useEffect(() => {
@@ -239,19 +249,10 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
             <GameUIOverlay />
 
 
-            {/* Dramatic phase transition overlays (replace old ambient announcements) */}
-            <PhaseTransitionOverlay
-                type={dramaticTransition || 'night'}
-                show={!!dramaticTransition}
-                dayCount={gameState.dayCount}
-                onComplete={() => {
-                    const t = dramaticTransition;
-                    setDramaticTransition(null);
-                    // Play sound only — no chain to old ambient overlays
-                    if (t === 'night') playNightTransition();
-                    else if (t === 'morning') playMorningTransition();
-                }}
-            />
+            {/* Ambient phase announcements (restored from older cinematic style) */}
+            <NightAnnouncement show={showNightAnnouncement} onComplete={handleNightComplete} />
+            <MorningAnnouncement show={showMorningAnnouncement} onComplete={handleMorningComplete} />
+            <VotingAnnouncement show={showVotingAnnouncement} onComplete={handleVotingComplete} />
 
             {/* Elimination ceremony */}
             <EliminationCeremony
