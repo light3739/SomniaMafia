@@ -109,13 +109,10 @@ export function useTransactionEngine(deps: TxEngineDeps) {
             commitAndConfirmRole: 1_000_000n,
             commitNightAction: 1_000_000n,
             revealNightAction: 2_000_000n,
-            commitMafiaTarget: 1_000_000n,
-            revealMafiaTarget: 3_000_000n,
             vote: 1_500_000n,
             startVoting: 4_000_000n,
             finalizeVoting: 8_000_000n,
             forcePhaseTimeout: 8_000_000n,
-            mafiaMessage: 1_500_000n,
             createTournamentAndRoom: 15_000_000n,
             createTournament: 6_000_000n,
             joinTournament: 1_500_000n,
@@ -202,7 +199,7 @@ export function useTransactionEngine(deps: TxEngineDeps) {
         }
 
         // Test mode simulation
-        if (isTestMode && ['commitNightAction', 'revealNightAction', 'commitMafiaTarget', 'revealMafiaTarget', 'commitRole'].includes(functionName)) {
+        if (isTestMode && ['commitNightAction', 'revealNightAction', 'commitRole'].includes(functionName)) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             return '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as `0x${string}`;
         }

@@ -177,13 +177,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 args: [currentRoomId, address as `0x${string}`],
             }) as [boolean, boolean, boolean, boolean, boolean, boolean, boolean];
 
-            const [mafiaCommitted, mafiaRevealed, consensusTarget] = await publicClient.readContract({
-                address: runtimeContractAddress,
-                abi: MAFIA_ABI,
-                functionName: 'getMafiaConsensus',
-                args: [currentRoomId],
-            }) as [number, number, string];
-
+            // Mafia consensus removed from contract — night flow is fully GM-resolved off-chain.
             setNightState(prev => {
                 // FORCE RECOVERY CHECK: If contract says committed but we don't have it locally
                 const needsRecovery = hasCommitted && !prev.hasCommitted;
@@ -195,9 +189,6 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                     ...prev,
                     hasCommitted: prev.hasCommitted || hasCommitted,
                     hasRevealed: prev.hasRevealed || hasRevealed,
-                    mafiaCommitted: Math.max(prev.mafiaCommitted, Number(mafiaCommitted)),
-                    mafiaRevealed: Math.max(prev.mafiaRevealed, Number(mafiaRevealed)),
-                    mafiaConsensusTarget: consensusTarget === '0x0000000000000000000000000000000000000000' ? null : consensusTarget as `0x${string}`
                 };
             });
         } catch (e) {
