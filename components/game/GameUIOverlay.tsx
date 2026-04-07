@@ -64,11 +64,11 @@ export const GameUIOverlay: React.FC = () => {
             {/* How to Play modal (opens via custom event from ? button) */}
             <HowToPlayModal />
 
-            {/* How to Play "?" button — bottom-right corner, doesn't block players */}
+            {/* How to Play "?" button — top-right corner */}
             {showExitButton && (
                 <button
                     onClick={() => window.dispatchEvent(new Event('open-how-to-play'))}
-                    className="fixed bottom-4 right-4 z-[100] w-11 h-11 flex items-center justify-center rounded-full bg-[#0A0A0A] border border-[#916A47]/30 hover:border-[#916A47]/60 hover:bg-[#1A130A] transition-all shadow-[0_5px_15px_rgba(0,0,0,0.8)]"
+                    className="fixed top-4 right-4 z-[100] w-11 h-11 flex items-center justify-center rounded-full bg-[#0A0A0A] border border-[#916A47]/30 hover:border-[#916A47]/60 hover:bg-[#1A130A] transition-all shadow-[0_5px_15px_rgba(0,0,0,0.8)]"
                     title="How to Play"
                     aria-label="How to Play"
                 >

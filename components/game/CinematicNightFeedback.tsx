@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Role } from '../../types';
-import { Skull, Shield, Search, Moon, CheckCircle2 } from 'lucide-react';
+import { Skull, Shield, Search, Moon, CheckCircle2, Ghost } from 'lucide-react';
 
 interface CinematicFeedbackProps {
     role: Role;
@@ -12,6 +12,9 @@ interface CinematicFeedbackProps {
     isWaitingConsensus?: boolean;
     consensusCount?: number;
     totalMafia?: number;
+    /** When true, the player is dead — render the resting-in-peace screen
+     *  instead of their role-specific cinematic. */
+    isDead?: boolean;
 }
 
 export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
@@ -22,6 +25,7 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
     isWaitingConsensus = false,
     consensusCount = 1,
     totalMafia = 1,
+    isDead = false,
 }) => {
     const [showDetectiveResult, setShowDetectiveResult] = React.useState(false);
 
@@ -109,6 +113,12 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
             desc: `Every sound in the dark makes your heart race. Pray for sunrise.`,
             accent: 'bg-[#6B5A4A]'
         },
+        DEAD: {
+            icon: <Ghost strokeWidth={1} className="w-24 h-24 md:w-32 md:h-32 text-[#7A6F66]" />,
+            title: 'RESTING IN PEACE',
+            desc: `Your story has ended. Watch the night unfold from beyond.`,
+            accent: 'bg-[#7A6F66]'
+        },
     };
 
     // Civilian window-light shimmer
@@ -127,7 +137,7 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
         accent: 'bg-gray-700'
     };
 
-    const config = configs[role] || fallbackConfig;
+    const config = isDead ? configs.DEAD : (configs[role] || fallbackConfig);
     const isSunRising = timeLeft !== null && timeLeft !== undefined && timeLeft <= 0;
 
     // Animation durations — skip slow animations on remount
@@ -243,7 +253,7 @@ export const CinematicNightFeedback: React.FC<CinematicFeedbackProps> = ({
 
                 {/* Строгий текст без лишнего форматирования / Результат расследования */}
                 <AnimatePresence mode="wait">
-                    {role === Role.DETECTIVE && displayResult != null ? (
+                    {!isDead && role === Role.DETECTIVE && displayResult != null ? (
                         <motion.div
                             key="result"
                             initial={{ opacity: 0 }}

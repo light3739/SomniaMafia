@@ -766,11 +766,13 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
     }, [setSelectedTarget]);
 
     if (!canAct) {
+        const isDead = !myPlayer?.isAlive;
         return (
             <div className="w-full h-full flex flex-col items-center justify-center p-4 md:p-8 no-scrollbar relative">
                 <CinematicNightFeedback
                     role={myRole}
                     timeLeft={timeLeft}
+                    isDead={isDead}
                 />
             </div>
         );

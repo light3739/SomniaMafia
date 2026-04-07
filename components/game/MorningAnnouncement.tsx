@@ -70,8 +70,8 @@ export const MorningAnnouncement = React.memo(({ show, onComplete }: MorningAnno
                         transition={{ duration: 3, ease: "easeOut", delay: 1 }}
                     >
                         <motion.div
-                            className="w-[300px] h-[300px] md:w-[450px] md:h-[450px] rounded-full blur-[120px] bg-amber-900"
-                            animate={{ scale: [1, 1.08, 1], opacity: [0.15, 0.25, 0.15] }}
+                            className="w-[340px] h-[340px] md:w-[520px] md:h-[520px] rounded-full blur-[120px] bg-amber-900"
+                            animate={{ scale: [1, 1.08, 1], opacity: [0.22, 0.38, 0.22] }}
                             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
                         />
                     </motion.div>
@@ -83,7 +83,10 @@ export const MorningAnnouncement = React.memo(({ show, onComplete }: MorningAnno
                         transition={{ duration: 2, ease: "easeOut", delay: 0.5 }}
                         className="flex flex-col items-center relative z-10"
                     >
-                        <h1 className="text-5xl md:text-7xl font-['Cinzel'] font-light tracking-[0.3em] text-white/95 uppercase mix-blend-plus-lighter">
+                        <h1
+                            className="text-5xl md:text-7xl font-['Cinzel'] font-light tracking-[0.3em] text-white/95 uppercase mix-blend-plus-lighter"
+                            style={{ textShadow: '0 0 28px rgba(217,169,89,0.55), 0 0 60px rgba(217,169,89,0.25)' }}
+                        >
                             Day Breaks
                         </h1>
                         

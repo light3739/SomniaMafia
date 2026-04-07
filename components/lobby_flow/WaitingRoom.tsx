@@ -8,9 +8,10 @@ import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { GamePhase } from '../../types';
 import { formatEther } from 'viem';
-import { Loader2 } from 'lucide-react';
+import { Loader2, HelpCircle } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { SessionKeyBanner } from '../game/SessionKeyBanner';
+import HowToPlayModal from '../game/HowToPlayModal';
 import * as GM from '../../services/gmService';
 
 export const WaitingRoom: React.FC = () => {
@@ -94,6 +95,17 @@ export const WaitingRoom: React.FC = () => {
     return (
         <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
+
+            {/* How to Play modal + top-right trigger button */}
+            <HowToPlayModal />
+            <button
+                onClick={() => window.dispatchEvent(new Event('open-how-to-play'))}
+                className="fixed top-4 right-4 z-[100] w-11 h-11 flex items-center justify-center rounded-full bg-[#0A0A0A] border border-[#916A47]/30 hover:border-[#916A47]/60 hover:bg-[#1A130A] transition-all shadow-[0_5px_15px_rgba(0,0,0,0.8)]"
+                title="How to Play"
+                aria-label="How to Play"
+            >
+                <HelpCircle className="w-5 h-5 text-[#916A47]" />
+            </button>
 
             {/* Sticky header — always visible at top */}
             <div className="fixed top-0 left-0 w-full z-50 px-4 pt-4 pb-2">

@@ -117,60 +117,78 @@ export const BackButton: React.FC<BackButtonProps> = ({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+                        transition={{ duration: 0.18 }}
+                        className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/74 backdrop-blur-md font-['Montserrat']"
                         onClick={handleCancelExit}
                     >
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 6 }}
+                            transition={{ duration: 0.18, ease: 'easeOut' }}
                             onClick={(e) => e.stopPropagation()}
-                            className="relative w-[380px] max-w-[90vw] bg-gradient-to-b from-[#1A1210] to-[#0D0907] border border-[#8B2E2E]/30 rounded-2xl overflow-hidden"
+                            className="relative w-full max-w-md bg-[#0B0908] rounded-lg overflow-hidden"
+                            style={{
+                                border: '1px solid rgba(226,107,107,0.42)',
+                                boxShadow: '0 0 80px rgba(226,107,107,0.16), 0 24px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.04)',
+                            }}
                         >
-                            {/* Red glow at top */}
-                            <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-[#8B2E2E]/10 to-transparent pointer-events-none" />
+                            {/* Top accent line */}
+                            <div
+                                className="absolute top-0 left-0 right-0 h-[2px]"
+                                style={{ background: 'linear-gradient(90deg, transparent, #E26B6B, transparent)' }}
+                            />
 
-                            <div className="relative p-6 flex flex-col items-center text-center">
-                                {/* Warning Icon */}
-                                <div className="w-14 h-14 rounded-full bg-[#8B2E2E]/15 border border-[#C94040]/30 flex items-center justify-center mb-4">
-                                    <AlertTriangle className="w-7 h-7 text-[#C94040]" />
+                            <div className="relative p-6">
+                                {/* Header */}
+                                <div className="flex items-center gap-3 mb-4">
+                                    <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[#E26B6B]/14">
+                                        <AlertTriangle className="w-[18px] h-[18px] text-[#E26B6B]" />
+                                    </span>
+                                    <h3
+                                        className="text-[15px] font-semibold tracking-wide text-[#E26B6B]"
+                                        style={{ fontFamily: 'var(--font-cinzel)' }}
+                                    >
+                                        {exitContext === 'lobby' ? 'Leave Lobby?' : 'Leave Game?'}
+                                    </h3>
                                 </div>
-
-                                {/* Title */}
-                                <h3 className="text-white text-lg font-['Cinzel'] font-bold tracking-wide mb-2">
-                                    {exitContext === 'lobby' ? 'Leave Lobby?' : 'Leave Game?'}
-                                </h3>
 
                                 {/* Description — context-dependent */}
                                 {exitContext === 'lobby' ? (
-                                    <p className="text-white/50 text-sm leading-relaxed mb-6 max-w-[280px]">
-                                        You will leave the lobby. Your session gas will be <span className="text-[#4CAF50] font-semibold">refunded</span>.
+                                    <p className="text-white/75 text-[14px] leading-relaxed mb-6">
+                                        You will leave the lobby. Your session gas will be <span className="text-[#5BBB8C] font-semibold">refunded</span>.
                                     </p>
                                 ) : exitContext === 'tournament-game' ? (
-                                    <p className="text-white/50 text-sm leading-relaxed mb-6 max-w-[280px]">
-                                        Your character will be <span className="text-[#C94040] font-semibold">eliminated</span>. You will <span className="text-[#C94040] font-semibold">lose your session gas</span> and be <span className="text-[#C94040] font-semibold">excluded from prizes</span>.
+                                    <p className="text-white/75 text-[14px] leading-relaxed mb-6">
+                                        Your character will be <span className="text-[#E26B6B] font-semibold">eliminated</span>. You will <span className="text-[#E26B6B] font-semibold">lose your session gas</span> and be <span className="text-[#E26B6B] font-semibold">excluded from prizes</span>.
                                     </p>
                                 ) : (
-                                    <p className="text-white/50 text-sm leading-relaxed mb-6 max-w-[280px]">
-                                        Your character will be <span className="text-[#C94040] font-semibold">eliminated</span>. You will <span className="text-[#C94040] font-semibold">lose your session gas</span>.
+                                    <p className="text-white/75 text-[14px] leading-relaxed mb-6">
+                                        Your character will be <span className="text-[#E26B6B] font-semibold">eliminated</span>. You will <span className="text-[#E26B6B] font-semibold">lose your session gas</span>.
                                     </p>
                                 )}
 
                                 {/* Buttons */}
-                                <div className="flex gap-3 w-full">
+                                <div className="flex gap-2.5">
                                     <button
                                         onClick={handleCancelExit}
                                         disabled={isExiting}
-                                        className="flex-1 h-11 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                        className="flex-1 h-11 rounded-md border border-white/10 text-white/65 text-[12px] uppercase tracking-[0.12em] font-semibold hover:border-white/25 hover:text-white hover:bg-white/[0.04] transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                     >
                                         Stay
                                     </button>
                                     <button
                                         onClick={handleConfirmExit}
                                         disabled={isExiting}
-                                        className="flex-1 h-11 rounded-xl bg-[#8B2E2E] hover:bg-[#A33636] border border-[#C94040]/30 text-white transition-all text-sm font-semibold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(139,46,46,0.3)] disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+                                        className="flex-1 h-11 rounded-md text-[12px] uppercase tracking-[0.14em] font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+                                        style={{
+                                            border: '1px solid #E26B6B',
+                                            color: '#0A0A0A',
+                                            backgroundColor: '#E26B6B',
+                                            boxShadow: '0 6px 18px rgba(226,107,107,0.16)',
+                                        }}
+                                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.08)'; }}
+                                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.filter = ''; }}
                                     >
                                         {isExiting ? (
                                             <>
@@ -180,7 +198,7 @@ export const BackButton: React.FC<BackButtonProps> = ({
                                         ) : (
                                             <>
                                                 <LogOut className="w-4 h-4" />
-                                                Leave Game
+                                                Leave
                                             </>
                                         )}
                                     </button>

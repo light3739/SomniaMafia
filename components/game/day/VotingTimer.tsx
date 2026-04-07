@@ -8,9 +8,14 @@ export const VotingTimer: React.FC = React.memo(() => {
     const [timeLeft, setTimeLeft] = useState<number>(0);
     const [timerMode, setTimerMode] = useState<'soft' | 'transition' | 'hard'>('soft');
     const hasAutoVotedRef = useRef(false);
+    // First-tick "voting phase entered at" timestamp — used to enforce a minimum
+    // manual-vote window regardless of contract timer length.
+    const phaseStartedAtRef = useRef<number | null>(null);
 
-    // Contract: 90s (1.5m). Target: 30s soft timer. Buffer: 60s hard timer.
-    const BUFFER = 60;
+    // Minimum window (seconds) a player gets to cast a manual vote before any
+    // failsafe kicks in. Prevents the "everyone insta-self-votes" bug when the
+    // contract VOTING duration is shorter than the legacy hard buffer.
+    const MIN_MANUAL_VOTE_WINDOW = 15;
 
     // Primitives for dependency array stability
     const phaseDeadline = gameState.phaseDeadline;
@@ -19,16 +24,39 @@ export const VotingTimer: React.FC = React.memo(() => {
     const isAlive = myPlayer?.isAlive;
     const isVotingPhase = gameState.phase === GamePhase.VOTING;
 
+    // Reset auto-vote guard + phase-start ref whenever the voting phase ends so
+    // each new voting round starts from a clean slate.
+    useEffect(() => {
+        if (!isVotingPhase) {
+            hasAutoVotedRef.current = false;
+            phaseStartedAtRef.current = null;
+        } else if (phaseStartedAtRef.current == null) {
+            phaseStartedAtRef.current = Math.floor(Date.now() / 1000);
+        }
+    }, [isVotingPhase]);
+
     useEffect(() => {
         if (!phaseDeadline) return;
+
+        // Compute a buffer that scales to short contract timers — never larger
+        // than half the actual voting window.
+        const initialNow = Math.floor(Date.now() / 1000);
+        const totalVotingDuration = Math.max(0, phaseDeadline - initialNow);
+        const BUFFER = Math.min(60, Math.max(5, Math.floor(totalVotingDuration / 2)));
 
         const tick = () => {
             const now = Math.floor(Date.now() / 1000);
             const realRemaining = Math.max(0, phaseDeadline - now);
             const softRemaining = realRemaining - BUFFER;
+            const elapsedInPhase = phaseStartedAtRef.current
+                ? now - phaseStartedAtRef.current
+                : 0;
+            // Hard gate: never auto-vote until the player has had a real chance
+            // to vote manually for this voting phase.
+            const canAutoVote = elapsedInPhase >= MIN_MANUAL_VOTE_WINDOW;
 
             if (softRemaining > 0) {
-                // --- PHASE 1: SOFT TIMER (0-60s) ---
+                // --- PHASE 1: SOFT TIMER ---
                 setTimeLeft(softRemaining);
                 setTimerMode('soft');
             } else {
@@ -36,15 +64,13 @@ export const VotingTimer: React.FC = React.memo(() => {
                 const overtimeSeconds = Math.abs(softRemaining);
 
                 if (overtimeSeconds < 5) {
-                    // --- TRANSITION (0-5s after deadline) ---
-                    // Show 0:00 and attempt auto-vote
+                    // --- TRANSITION (0-5s after soft deadline) ---
                     setTimeLeft(0);
                     setTimerMode('transition');
 
-                    // Guard: only auto-vote if still in VOTING phase (prevents stale fire after NightStarted resets hasVoted flags)
-                    if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive && isVotingPhase) {
+                    if (canAutoVote && !hasAutoVotedRef.current && myAddress && !hasVoted && isAlive && isVotingPhase) {
                         hasAutoVotedRef.current = true;
-                        addLog("1 minute limit reached. Auto-voting for self...", "warning");
+                        addLog("Voting time expired. Auto-voting for self...", "warning");
                         const freshPlayer = gameState.players.find(p => p.address.toLowerCase() === myAddress.toLowerCase());
                         if (freshPlayer?.hasVoted) return; // Already voted manually
                         voteOnChain(myAddress as `0x${string}`).catch(e => {
@@ -54,13 +80,13 @@ export const VotingTimer: React.FC = React.memo(() => {
                         });
                     }
                 } else {
-                    // --- PHASE 3: HARD TIMER (Remaining ~115s) ---
-                    // If game is still going, show real contract time
+                    // --- PHASE 3: HARD TIMER ---
                     setTimeLeft(realRemaining);
                     setTimerMode('hard');
 
-                    // LATE JOINER PROTECTION: Auto-vote if in Hard Mode
-                    if (!hasAutoVotedRef.current && myAddress && !hasVoted && isAlive && isVotingPhase) {
+                    // LATE JOINER PROTECTION — gated by the same minimum window
+                    // so fresh voting rounds don't insta-self-vote.
+                    if (canAutoVote && !hasAutoVotedRef.current && myAddress && !hasVoted && isAlive && isVotingPhase) {
                         hasAutoVotedRef.current = true;
                         addLog("Late join during hard timer. Auto-voting for self...", "warning");
                         const freshPlayer = gameState.players.find(p => p.address.toLowerCase() === myAddress.toLowerCase());

@@ -31,7 +31,7 @@ export const VotingAnnouncement = React.memo(({ show, onComplete }: VotingAnnoun
                     <motion.div
                         className="absolute inset-0 pointer-events-none flex items-center justify-center"
                         animate={{
-                            opacity: [0.08, 0.15, 0.08],
+                            opacity: [0.14, 0.24, 0.14],
                             scale: [0.95, 1.05, 0.95],
                         }}
                         transition={{
@@ -40,7 +40,7 @@ export const VotingAnnouncement = React.memo(({ show, onComplete }: VotingAnnoun
                             ease: 'easeInOut',
                         }}
                     >
-                        <div className="w-[100vw] h-[100vw] max-w-[800px] max-h-[800px] rounded-full bg-[#8B0000] blur-[100px]" />
+                        <div className="w-[100vw] h-[100vw] max-w-[820px] max-h-[820px] rounded-full bg-[#8B0000] blur-[100px]" />
                     </motion.div>
 
                     {/* Very subtle dark-red ambient glow at edges */}
@@ -64,7 +64,10 @@ export const VotingAnnouncement = React.memo(({ show, onComplete }: VotingAnnoun
                         transition={{ duration: 1, ease: "easeOut" }}
                         className="relative z-10 flex flex-col items-center"
                     >
-                        <h1 className="text-5xl md:text-7xl font-['Cinzel'] font-light tracking-[0.3em] text-white/95 uppercase mix-blend-plus-lighter">
+                        <h1
+                            className="text-5xl md:text-7xl font-['Cinzel'] font-light tracking-[0.3em] text-white/95 uppercase mix-blend-plus-lighter"
+                            style={{ textShadow: '0 0 28px rgba(139,0,0,0.55), 0 0 60px rgba(139,0,0,0.25)' }}
+                        >
                             Judgment
                         </h1>
                         
