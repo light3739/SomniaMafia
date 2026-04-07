@@ -7,11 +7,13 @@ import { useGameContext } from '../../contexts/GameContext';
 import { usePublicClient, useAccount } from 'wagmi';
 import { formatEther } from 'viem';
 import { MAFIA_ABI } from '../../contracts/config';
+import { toPng } from 'html-to-image';
+import { toast } from 'sonner';
 
 import { Role, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
 import { useSoundEffects } from '../ui/SoundEffects';
-import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye, Coins } from 'lucide-react';
+import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye, Coins, Share2 } from 'lucide-react';
 import { MicButton } from './MicButton';
 
 const RoleIcons: Record<Role, React.ReactNode> = {
@@ -28,14 +30,6 @@ const RoleColors: Record<Role, string> = {
     [Role.DETECTIVE]: 'text-[#B45309]',
     [Role.CIVILIAN]: 'text-[#6B5A4A]',
     [Role.UNKNOWN]: 'text-gray-500'
-};
-
-const RoleBgColors: Record<Role, string> = {
-    [Role.MAFIA]: 'bg-[#8B0000]/50',
-    [Role.DOCTOR]: 'bg-[#0D9488]/50',
-    [Role.DETECTIVE]: 'bg-[#B45309]/50',
-    [Role.CIVILIAN]: 'bg-[#6B5A4A]/50',
-    [Role.UNKNOWN]: 'bg-gray-900/50'
 };
 
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
@@ -275,21 +269,19 @@ export const GameOver: React.FC = React.memo(() => {
 
     // Role reveal logic is now in useEndGame hook — GameOver reads from context
 
-    // Музыка победы
+    // Музыка победы — играет синхронно с появлением title (через 600ms после mount)
     useEffect(() => {
         if (hasPlayedSound.current || !winner) return;
-
-        if (winner === 'MAFIA') {
-            playMafiaWin();
+        const t = setTimeout(() => {
+            if (winner === 'MAFIA') playMafiaWin();
+            else if (winner === 'TOWN') playTownWin();
             hasPlayedSound.current = true;
-        } else if (winner === 'TOWN') {
-            playTownWin();
-            hasPlayedSound.current = true;
-        }
+        }, 600);
+        return () => clearTimeout(t);
+    }, [winner, playMafiaWin, playTownWin]);
 
-        // Остановка при размонтировании (на всякий случай)
-        return () => stopVictoryMusic();
-    }, [winner, playMafiaWin, playTownWin, stopVictoryMusic]);
+    // Cleanup victory music on unmount
+    useEffect(() => () => stopVictoryMusic(), [stopVictoryMusic]);
 
     const myRole = myPlayer?.role || Role.UNKNOWN;
 
@@ -335,6 +327,82 @@ export const GameOver: React.FC = React.memo(() => {
         router.push('/');
     }, [stopVictoryMusic, router]);
 
+    // ─── Cinematic reveal sequencing ──────────────────────────────────────
+    const [revealStage, setRevealStage] = useState<'curtain' | 'title' | 'winners' | 'losers' | 'actions'>('curtain');
+    useEffect(() => {
+        if (!winner) return;
+        const t1 = setTimeout(() => setRevealStage('title'), 600);
+        const t2 = setTimeout(() => setRevealStage('winners'), 1800);
+        const t3 = setTimeout(() => setRevealStage('losers'), 3200);
+        const t4 = setTimeout(() => setRevealStage('actions'), 4400);
+        return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
+    }, [winner]);
+
+    // ─── Share / Screenshot ──────────────────────────────────────────────
+    const shareCardRef = useRef<HTMLDivElement>(null);
+    const [isSharing, setIsSharing] = useState(false);
+
+    const generateImage = useCallback(async (): Promise<Blob | null> => {
+        if (!shareCardRef.current) return null;
+        try {
+            const dataUrl = await toPng(shareCardRef.current, {
+                cacheBust: true,
+                pixelRatio: 2,
+                backgroundColor: '#050505',
+            });
+            const res = await fetch(dataUrl);
+            return await res.blob();
+        } catch (e) {
+            console.error('[GameOver] Screenshot generation failed:', e);
+            return null;
+        }
+    }, []);
+
+    const handleShare = useCallback(async () => {
+        setIsSharing(true);
+        try {
+            const blob = await generateImage();
+            if (!blob) {
+                toast.error('Failed to generate screenshot');
+                return;
+            }
+            const file = new File([blob], `mafia-onchain-${Date.now()}.png`, { type: 'image/png' });
+            const shareText = winner === 'MAFIA'
+                ? `🔪 The Mafia has won on Mafia OnChain! I played as ${myRole}.`
+                : winner === 'TOWN'
+                    ? `⚖️ Justice prevails on Mafia OnChain! I played as ${myRole}.`
+                    : `🎲 What a game on Mafia OnChain!`;
+
+            // Try Web Share API with file
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: 'Mafia OnChain',
+                    text: shareText,
+                });
+                return;
+            }
+
+            // Fallback: download the image
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `mafia-onchain-${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            toast.success('Screenshot downloaded');
+        } catch (e: any) {
+            if (e?.name !== 'AbortError') {
+                console.error('[GameOver] Share failed:', e);
+                toast.error('Share failed');
+            }
+        } finally {
+            setIsSharing(false);
+        }
+    }, [generateImage, winner, myRole]);
+
     if (!winner) {
         return (
             <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
@@ -351,13 +419,42 @@ export const GameOver: React.FC = React.memo(() => {
 
     const config = winnerConfig[winner];
 
+    const accentColor = winner === 'MAFIA' ? '#8B0000' : winner === 'TOWN' ? '#C49A6C' : '#9ca3af';
+    const winners = gameState.players.filter(p => {
+        if (winner === 'MAFIA') return p.role === Role.MAFIA;
+        if (winner === 'TOWN') return p.role !== Role.MAFIA && p.role !== Role.UNKNOWN;
+        return p.isAlive;
+    });
+    const losers = gameState.players.filter(p => {
+        if (winner === 'MAFIA') return p.role !== Role.MAFIA && p.role !== Role.UNKNOWN;
+        if (winner === 'TOWN') return p.role === Role.MAFIA;
+        return false;
+    });
+
     return (
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 1 }}
-            className="fixed inset-0 z-[100] flex flex-col items-center p-8 bg-[#050505] pointer-events-auto overflow-y-auto overflow-x-hidden custom-scrollbar h-[100dvh] w-screen"
+            transition={{ duration: 0.8 }}
+            className="fixed inset-0 z-[100] bg-black pointer-events-auto overflow-y-auto overflow-x-hidden custom-scrollbar h-[100dvh] w-screen"
         >
+            {/* Atmospheric background — radial vignette */}
+            <div
+                className="fixed inset-0 pointer-events-none"
+                style={{
+                    background: `radial-gradient(ellipse at center, ${accentColor}22 0%, rgba(0,0,0,0.95) 55%, #000 100%)`,
+                }}
+            />
+
+            {/* Animated light pulse from center */}
+            <motion.div
+                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none rounded-full"
+                initial={{ width: 0, height: 0, opacity: 0 }}
+                animate={{ width: '900px', height: '900px', opacity: [0, 0.18, 0.1] }}
+                transition={{ delay: 0.4, duration: 2.5, ease: 'easeOut' }}
+                style={{ filter: 'blur(140px)', backgroundColor: accentColor }}
+            />
+
             {/* Post-game Global Voice Chat */}
             {currentRoomId && myPlayer && (
                 <div className="fixed top-6 right-6 z-[110] flex items-center gap-3 bg-black/50 backdrop-blur-md px-4 py-2 border border-white/10 rounded-full shadow-lg">
@@ -371,221 +468,312 @@ export const GameOver: React.FC = React.memo(() => {
                 </div>
             )}
 
-            <div className="w-full flex-1 flex flex-col items-center justify-center py-20 my-auto">
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ type: "spring", duration: 0.8 }}
-                    className="max-w-2xl w-full my-auto"
+            <div className="relative w-full min-h-[100dvh] flex flex-col items-center justify-center py-12 px-4 md:px-8">
+                {/* === SHAREABLE CARD === */}
+                <div
+                    ref={shareCardRef}
+                    className="relative w-full max-w-4xl flex flex-col items-center py-10 px-6"
+                    style={{ backgroundColor: '#050505' }}
                 >
-                    {/* Winner Banner */}
-                    <motion.div
-                        initial={{ y: -50, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.2 }}
-                        className={`text-center p-8 rounded-md mb-8 bg-[#0A0A0A] shadow-[0_20px_50px_rgba(0,0,0,0.9)] border border-white/5`}
-                    >
-                        <motion.div
-                            initial={{ rotate: -180, scale: 0 }}
-                            animate={{ rotate: 0, scale: 1 }}
-                            transition={{ delay: 0.4, type: "spring" }}
-                            className="mb-4"
-                        >
-                            <Trophy className={`w-20 h-20 mx-auto ${config.trophy}`} />
-                        </motion.div>
-
-                        <motion.h1
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.6 }}
-                            className={`text-4xl md:text-5xl font-['Cinzel'] mb-2 ${config.color}`}
-                        >
-                            {config.title}
-                        </motion.h1>
-
-                        <motion.p
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.8 }}
-                            className="text-white/60"
-                        >
-                            {config.description}
-                        </motion.p>
-
-                        {/* Personal result */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 1 }}
-                            className={`mt-6 flex flex-col items-center justify-center gap-0 ${didIWin ? 'text-green-400' : 'text-gray-400'}`}
-                        >
-                            {didIWin ? (
-                                <span className="font-medium">You Won!</span>
-                            ) : (
-                                <span className="font-medium">You Lost</span>
-                            )}
-                            <span className="text-white/60">as {myRole}</span>
-                        </motion.div>
-                    </motion.div>
-
-                    {/* All Players Reveal */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 1.2 }}
-                        className="bg-[#0A0A0A] rounded-md border border-white/5 shadow-[0_20px_50px_rgba(0,0,0,0.9)] p-6 mb-6"
-                    >
-                        <div className="flex items-center justify-between gap-2 mb-4">
-                            <div className="flex items-center gap-2">
-                                <h3 className="text-white/50 text-sm uppercase tracking-wider">All Roles Revealed</h3>
-                                {!revealTimedOut && gameState.players.some(p => p.role === Role.UNKNOWN) && <span className="text-xs text-white/60">(loading...)</span>}
-                            </div>
-                            {/* Manual refresh — useful when GM was slow to cache roles */}
-                            <button
-                                onClick={async () => {
-                                    await Promise.all([
-                                        fetchOnChainRoles(),
-                                        fetchGMRoles(),
-                                    ]);
+                    {/* Massive title with glow */}
+                    <AnimatePresence>
+                        {revealStage !== 'curtain' && (
+                            <motion.h1
+                                key="title"
+                                initial={{ opacity: 0, scale: 1.4, y: 40, filter: 'blur(20px)' }}
+                                animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+                                transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+                                className="font-['Cinzel'] uppercase font-bold text-center"
+                                style={{
+                                    fontSize: 'clamp(2.5rem, 7vw, 5rem)',
+                                    color: accentColor,
+                                    letterSpacing: '0.2em',
+                                    textShadow: `0 0 30px ${accentColor}e6, 0 0 60px ${accentColor}99, 0 0 120px ${accentColor}55, 0 4px 20px rgba(0,0,0,0.9)`,
+                                    lineHeight: 1.1,
                                 }}
-                                className="flex items-center gap-1 text-xs text-white/50 hover:text-white/80 transition-colors"
-                                title="Refresh roles"
                             >
-                                <Eye className="w-3 h-3" />
-                                Refresh
-                            </button>
-                        </div>
+                                {config.title.replace('!', '')}
+                            </motion.h1>
+                        )}
+                    </AnimatePresence>
 
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            {gameState.players.map((player, index) => {
-                                const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
-                                const isDead = !player.isAlive;
-                                // Roles are synced into gameState.players by useEndGame hook
-                                const role = player.role;
-                                const roleKnown = role !== Role.UNKNOWN;
-                                const isOnChain = roleKnown;
+                    {/* Subtitle / description */}
+                    <AnimatePresence>
+                        {(revealStage === 'winners' || revealStage === 'losers' || revealStage === 'actions') && (
+                            <motion.p
+                                key="desc"
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.6 }}
+                                className="text-white/50 text-sm md:text-base text-center mt-3 italic font-['Montserrat'] tracking-wide max-w-md"
+                            >
+                                {config.description}
+                            </motion.p>
+                        )}
+                    </AnimatePresence>
 
-                                return (
-                                    <motion.div
-                                        key={player.address}
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 1.4 + index * 0.1 }}
-                                        className={`
-                                        p-3 rounded-xl border
-                                        ${isDead
-                                                ? 'bg-gray-900/50 border-gray-800 opacity-60'
-                                                : isMe
-                                                    ? 'bg-[#916A47]/20 border-[#916A47]/40'
-                                                    : 'bg-white/5 border-white/10'
-                                            }
-                                    `}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`relative w-10 h-10 rounded-full flex items-center justify-center overflow-hidden border border-white/10 ${roleKnown ? RoleBgColors[role] : 'bg-gray-800/50'}`}>
-                                                {player.avatarUrl ? (
-                                                    <Image
-                                                        src={player.avatarUrl}
-                                                        alt={player.name}
-                                                        fill
-                                                        sizes="40px"
-                                                        className="object-cover"
+                    {/* Decorative ornament */}
+                    {revealStage !== 'curtain' && (
+                        <motion.div
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: '220px', opacity: 1 }}
+                            transition={{ delay: 0.6, duration: 0.8 }}
+                            className="h-px my-8"
+                            style={{ background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)` }}
+                        />
+                    )}
+
+                    {/* === WINNERS — emerge from shadows === */}
+                    <AnimatePresence>
+                        {(revealStage === 'winners' || revealStage === 'losers' || revealStage === 'actions') && winners.length > 0 && (
+                            <motion.div
+                                key="winners"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ duration: 0.4 }}
+                                className="w-full mb-2"
+                            >
+                                <p className="text-center text-[10px] uppercase tracking-[0.4em] text-white/40 mb-8 font-['Cinzel']">
+                                    {winner === 'MAFIA' ? '— The Family —' : winner === 'TOWN' ? '— The Survivors —' : '— Survivors —'}
+                                </p>
+                                <div className="flex flex-wrap items-end justify-center gap-7 md:gap-12">
+                                    {winners.map((player, index) => {
+                                        const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
+                                        const role = player.role;
+                                        const roleColor = role === Role.MAFIA ? '#8B0000' : role === Role.DOCTOR ? '#0D9488' : role === Role.DETECTIVE ? '#A85832' : '#C49A6C';
+                                        return (
+                                            <motion.div
+                                                key={player.address}
+                                                initial={{ opacity: 0, y: 40, filter: 'blur(20px) brightness(0.1)' }}
+                                                animate={{ opacity: 1, y: 0, filter: 'blur(0px) brightness(1)' }}
+                                                transition={{ delay: 0.2 + index * 0.3, duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+                                                className="flex flex-col items-center"
+                                            >
+                                                <div className="relative">
+                                                    {/* Glow halo */}
+                                                    <div
+                                                        className="absolute inset-0 rounded-full blur-3xl"
+                                                        style={{ backgroundColor: roleColor, opacity: 0.55, transform: 'scale(1.4)' }}
                                                     />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center">
-                                                        {roleKnown
-                                                            ? RoleIcons[role]
-                                                            : <Users className="w-5 h-5 text-white/50 animate-pulse" />
-                                                        }
+                                                    {/* Avatar */}
+                                                    <div
+                                                        className="relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-2"
+                                                        style={{
+                                                            borderColor: roleColor,
+                                                            boxShadow: `0 0 35px ${roleColor}, 0 0 70px ${roleColor}66, inset 0 0 20px rgba(0,0,0,0.6)`,
+                                                        }}
+                                                    >
+                                                        {player.avatarUrl ? (
+                                                            <Image src={player.avatarUrl} alt={player.name} fill sizes="96px" className="object-cover" />
+                                                        ) : (
+                                                            <div className="w-full h-full bg-[#19130D] flex items-center justify-center">
+                                                                {RoleIcons[role] || <Users className="w-8 h-8 text-white/50" />}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                )}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className={`font-medium truncate ${isMe ? 'text-[#916A47]' : 'text-white'}`}>
-                                                    {player.name} {isMe && '(You)'}
-                                                </p>
-                                                <div className="flex items-center gap-1">
-                                                    {roleKnown ? (
-                                                        <>
-                                                            <p className={`text-xs font-semibold ${RoleColors[role]}`}>{role}</p>
-                                                            {isOnChain && <span className="text-[10px] text-white/60">✓</span>}
-                                                        </>
-                                                    ) : revealTimedOut ? (
-                                                        <p className="text-xs text-white/60">Unknown</p>
-                                                    ) : (
-                                                        <p className="text-xs text-white/50 animate-pulse">revealing...</p>
+                                                    {/* Crown for survivors */}
+                                                    {player.isAlive && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, y: 8, scale: 0 }}
+                                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                            transition={{ delay: 0.2 + index * 0.3 + 0.7, type: 'spring', stiffness: 200 }}
+                                                            className="absolute -top-4 left-1/2 -translate-x-1/2"
+                                                        >
+                                                            <Trophy className="w-5 h-5" style={{ color: roleColor, filter: `drop-shadow(0 0 10px ${roleColor})` }} />
+                                                        </motion.div>
                                                     )}
                                                 </div>
-                                            </div>
-                                            {isDead && (
-                                                <Skull className="w-4 h-4 text-[#8B0000]/50" />
-                                            )}
-                                        </div>
-                                    </motion.div>
-                                );
-                            })}
-                        </div>
-                    </motion.div>
 
-
-
-
-                    {/* Actions */}
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 2 }}
-                        className="flex flex-col gap-4 w-full"
-                    >
-                        {/* Tournament: Fallback distribute button (only if auto-distribute failed) */}
-                        {gameState.isTournament && prizeDistributionFailed && !prizesClaimed && (
-                            <Button
-                                onClick={async () => {
-                                    if (currentRoomId) {
-                                        await distributePrizesOnChain(currentRoomId);
-                                    }
-                                }}
-                                isLoading={isTxPending}
-                                className="w-full h-[60px] text-lg bg-[#916A47] hover:bg-[#A87B51] text-[#050505] font-bold border border-[#C5A059]/30 transition-colors shadow-[0_10px_20px_rgba(0,0,0,0.5)]"
-                            >
-                                <Trophy className="w-5 h-5 mr-2" />
-                                Distribute Prize Pool
-                            </Button>
+                                                {/* Glowing name */}
+                                                <p
+                                                    className="mt-4 font-['Cinzel'] font-bold uppercase tracking-wider text-base md:text-lg text-center"
+                                                    style={{
+                                                        color: '#fff',
+                                                        textShadow: `0 0 14px ${roleColor}cc, 0 0 28px ${roleColor}66, 0 2px 8px rgba(0,0,0,0.9)`,
+                                                    }}
+                                                >
+                                                    {player.name}{isMe && ' (You)'}
+                                                </p>
+                                                <p
+                                                    className="text-[10px] uppercase tracking-[0.25em] mt-1 font-['Cinzel'] font-bold"
+                                                    style={{ color: roleColor }}
+                                                >
+                                                    {role}
+                                                </p>
+                                                {!player.isAlive && (
+                                                    <span className="text-[9px] text-white/30 mt-0.5 italic">posthumous</span>
+                                                )}
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
+                            </motion.div>
                         )}
+                    </AnimatePresence>
 
-                        {/* Tournament: Confirmed distribution badge */}
-                        {gameState.isTournament && prizesClaimed && (
-                            <button
-                                onClick={() => setShowPrizePopup(true)}
-                                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-[#4caf82]/8 border border-[#4caf82]/25 hover:bg-[#4caf82]/15 hover:border-[#4caf82]/40 transition-all cursor-pointer"
+                    {/* === LOSERS — dim, grayscale, small === */}
+                    <AnimatePresence>
+                        {(revealStage === 'losers' || revealStage === 'actions') && losers.length > 0 && (
+                            <motion.div
+                                key="losers"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.8 }}
+                                className="w-full mt-12"
                             >
-                                <Coins className="w-4 h-4 text-[#4caf82]" />
-                                <span className="text-[#4caf82] text-sm font-['Montserrat'] font-bold uppercase tracking-wider">
-                                    Prizes Distributed
-                                </span>
-                            </button>
+                                <p className="text-center text-[10px] uppercase tracking-[0.4em] text-white/30 mb-5 font-['Cinzel']">
+                                    — Defeated —
+                                </p>
+                                <div className="flex flex-wrap items-start justify-center gap-4 md:gap-5">
+                                    {losers.map((player, index) => {
+                                        const role = player.role;
+                                        const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
+                                        return (
+                                            <motion.div
+                                                key={player.address}
+                                                initial={{ opacity: 0, scale: 0.85 }}
+                                                animate={{ opacity: 0.55, scale: 1 }}
+                                                transition={{ delay: 0.1 + index * 0.1 }}
+                                                className="flex flex-col items-center grayscale"
+                                            >
+                                                <div className="relative w-12 h-12 rounded-full overflow-hidden border border-white/10 bg-[#0A0A0A]">
+                                                    {player.avatarUrl ? (
+                                                        <Image src={player.avatarUrl} alt={player.name} fill sizes="48px" className="object-cover opacity-60" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center">
+                                                            {RoleIcons[role] || <Users className="w-5 h-5 text-white/30" />}
+                                                        </div>
+                                                    )}
+                                                    {!player.isAlive && (
+                                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                                            <Skull className="w-4 h-4 text-white/50" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <p className="text-[10px] text-white/40 mt-1.5 font-mono truncate max-w-[80px]">
+                                                    {player.name}{isMe && ' (You)'}
+                                                </p>
+                                                <p className={`text-[9px] uppercase tracking-wider mt-0 ${RoleColors[role]} opacity-60`}>
+                                                    {role}
+                                                </p>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
+                            </motion.div>
                         )}
+                    </AnimatePresence>
 
-                        <div className="flex gap-4">
-                            <Button
-                                onClick={handlePlayAgain}
-                                className="flex-1 h-[60px] text-lg !text-white"
+                    {/* === Personal verdict === */}
+                    <AnimatePresence>
+                        {revealStage === 'actions' && (
+                            <motion.div
+                                key="verdict"
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.7 }}
+                                className="mt-12 text-center"
                             >
-                                <RotateCcw className="w-5 h-5 mr-2" />
-                                Play Again
-                            </Button>
+                                <p className="text-[10px] uppercase tracking-[0.4em] text-white/40 font-['Cinzel'] mb-2">
+                                    Your verdict
+                                </p>
+                                <p
+                                    className={`text-2xl md:text-4xl font-['Cinzel'] uppercase tracking-[0.25em] font-bold ${didIWin ? 'text-[#4caf82]' : 'text-white/50'}`}
+                                    style={didIWin ? { textShadow: '0 0 25px rgba(76,175,130,0.7), 0 0 50px rgba(76,175,130,0.4), 0 0 100px rgba(76,175,130,0.2)' } : {}}
+                                >
+                                    {didIWin ? 'Victory' : 'Defeated'}
+                                </p>
+                                <p className="text-xs text-white/40 mt-2 font-['Cinzel'] tracking-widest uppercase">as {myRole}</p>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Branding inside shareable */}
+                    <div className="mt-10 text-center">
+                        <p className="text-[10px] uppercase tracking-[0.5em] text-white/25 font-['Cinzel']">Mafia · OnChain</p>
+                        <p className="text-[8px] text-white/20 mt-1 font-mono tracking-wider">{new Date().toLocaleDateString()} · ROOM {currentRoomId?.toString() || '???'}</p>
+                    </div>
+                </div>
+
+                {/* === ACTION BUTTONS — outside shareable === */}
+                <AnimatePresence>
+                    {revealStage === 'actions' && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                            className="w-full max-w-2xl mt-10 flex flex-col gap-3"
+                        >
+                            {/* Tournament: Fallback distribute */}
+                            {gameState.isTournament && prizeDistributionFailed && !prizesClaimed && (
+                                <Button
+                                    onClick={async () => {
+                                        if (currentRoomId) { await distributePrizesOnChain(currentRoomId); }
+                                    }}
+                                    isLoading={isTxPending}
+                                    className="w-full h-[60px] text-lg bg-[#916A47] hover:bg-[#A87B51] text-[#050505] font-bold border border-[#C5A059]/30 transition-colors shadow-[0_10px_20px_rgba(0,0,0,0.5)]"
+                                >
+                                    <Trophy className="w-5 h-5 mr-2" />
+                                    Distribute Prize Pool
+                                </Button>
+                            )}
+
+                            {/* Tournament: Confirmed distribution badge */}
+                            {gameState.isTournament && prizesClaimed && (
+                                <button
+                                    onClick={() => setShowPrizePopup(true)}
+                                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-[#4caf82]/8 border border-[#4caf82]/25 hover:bg-[#4caf82]/15 hover:border-[#4caf82]/40 transition-all cursor-pointer"
+                                >
+                                    <Coins className="w-4 h-4 text-[#4caf82]" />
+                                    <span className="text-[#4caf82] text-sm font-['Montserrat'] font-bold uppercase tracking-wider">
+                                        Prizes Distributed
+                                    </span>
+                                </button>
+                            )}
+
+                            {/* Share button */}
                             <Button
-                                onClick={handleHome}
+                                onClick={handleShare}
+                                isLoading={isSharing}
                                 variant="outline-gold"
-                                className="flex-1 h-[60px] text-lg hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
+                                className="w-full h-[56px] text-base hover:bg-[#916A47]/15 hover:border-[#916A47] transition-all"
                             >
-                                <Home className="w-5 h-5 mr-2" />
-                                Home
+                                <Share2 className="w-4 h-4 mr-2" />
+                                {isSharing ? 'Generating screenshot...' : 'Share Result'}
                             </Button>
-                        </div>
-                    </motion.div>
 
-                </motion.div>
+                            <div className="flex gap-3">
+                                <Button
+                                    onClick={handlePlayAgain}
+                                    className="flex-1 h-[60px] text-lg !text-white"
+                                >
+                                    <RotateCcw className="w-5 h-5 mr-2" />
+                                    Play Again
+                                </Button>
+                                <Button
+                                    onClick={handleHome}
+                                    variant="outline-gold"
+                                    className="flex-1 h-[60px] text-lg hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
+                                >
+                                    <Home className="w-5 h-5 mr-2" />
+                                    Home
+                                </Button>
+                            </div>
+
+                            {/* Refresh roles (if some are still unknown) */}
+                            {!revealTimedOut && gameState.players.some(p => p.role === Role.UNKNOWN) && (
+                                <button
+                                    onClick={async () => { await Promise.all([fetchOnChainRoles(), fetchGMRoles()]); }}
+                                    className="flex items-center justify-center gap-1 text-xs text-white/40 hover:text-white/70 transition-colors mt-1"
+                                    title="Refresh roles"
+                                >
+                                    <Eye className="w-3 h-3" />
+                                    Some roles still loading — refresh
+                                </button>
+                            )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
             {/* Prize Distribution Popup */}
             <AnimatePresence>
