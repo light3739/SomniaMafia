@@ -534,8 +534,17 @@ export const GameOver: React.FC = React.memo(() => {
                                 transition={{ duration: 0.4 }}
                                 className="w-full mb-2"
                             >
-                                <p className="text-center text-[10px] uppercase tracking-[0.4em] text-white/40 mb-8 font-['Cinzel']">
-                                    {winner === 'MAFIA' ? '— The Family —' : winner === 'TOWN' ? '— The Survivors —' : '— Survivors —'}
+                                <p
+                                    className="text-center text-xs md:text-sm uppercase tracking-[0.5em] mb-8 font-['Cinzel'] font-bold"
+                                    style={{
+                                        color: '#fff',
+                                        opacity: 0.85,
+                                        textShadow: `0 0 14px ${accentColor}66, 0 2px 8px rgba(0,0,0,0.85)`,
+                                    }}
+                                >
+                                    {winner === 'MAFIA'
+                                        ? (winners.length === 1 ? '— The Mafia —' : '— The Family —')
+                                        : winner === 'TOWN' ? '— The Survivors —' : '— Survivors —'}
                                 </p>
                                 <div className="flex flex-wrap items-end justify-center gap-7 md:gap-12">
                                     {winners.map((player, index) => {
@@ -622,39 +631,64 @@ export const GameOver: React.FC = React.memo(() => {
                                 transition={{ duration: 0.8 }}
                                 className="w-full mt-12"
                             >
-                                <p className="text-center text-[10px] uppercase tracking-[0.4em] text-white/30 mb-5 font-['Cinzel']">
+                                <p
+                                    className="text-center text-xs md:text-sm uppercase tracking-[0.5em] mb-6 font-['Cinzel'] font-bold"
+                                    style={{
+                                        color: '#fff',
+                                        opacity: 0.7,
+                                        textShadow: '0 0 12px rgba(139,0,0,0.45), 0 2px 6px rgba(0,0,0,0.85)',
+                                    }}
+                                >
                                     — Defeated —
                                 </p>
-                                <div className="flex flex-wrap items-start justify-center gap-4 md:gap-5">
+                                <div className="flex flex-wrap items-start justify-center gap-5 md:gap-7">
                                     {losers.map((player, index) => {
                                         const role = player.role;
                                         const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
                                         return (
                                             <motion.div
                                                 key={player.address}
-                                                initial={{ opacity: 0, scale: 0.85 }}
-                                                animate={{ opacity: 0.55, scale: 1 }}
-                                                transition={{ delay: 0.1 + index * 0.1 }}
-                                                className="flex flex-col items-center grayscale"
+                                                initial={{ opacity: 0, scale: 0.85, y: 10 }}
+                                                animate={{ opacity: 0.92, scale: 1, y: 0 }}
+                                                transition={{ delay: 0.1 + index * 0.12, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                                className="flex flex-col items-center grayscale contrast-125"
                                             >
-                                                <div className="relative w-12 h-12 rounded-full overflow-hidden border border-white/10 bg-[#0A0A0A]">
+                                                <div
+                                                    className="relative w-16 h-16 md:w-[72px] md:h-[72px] rounded-full overflow-hidden bg-[#0A0606]"
+                                                    style={{
+                                                        border: '1px solid rgba(139,0,0,0.55)',
+                                                        boxShadow: '0 0 14px rgba(139,0,0,0.25), inset 0 0 22px rgba(0,0,0,0.75)',
+                                                    }}
+                                                >
                                                     {player.avatarUrl ? (
-                                                        <Image src={player.avatarUrl} alt={player.name} fill sizes="48px" className="object-cover opacity-60" />
+                                                        <Image src={player.avatarUrl} alt={player.name} fill sizes="72px" className="object-cover opacity-70" />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center">
-                                                            {RoleIcons[role] || <Users className="w-5 h-5 text-white/30" />}
+                                                            {RoleIcons[role] || <Users className="w-6 h-6 text-white/40" />}
                                                         </div>
                                                     )}
+                                                    {/* Permanent dark wash so they read as "fallen", not just smaller winners */}
+                                                    <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/5 to-black/70 pointer-events-none" />
                                                     {!player.isAlive && (
-                                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                                            <Skull className="w-4 h-4 text-white/50" />
+                                                        <div className="absolute inset-0 flex items-center justify-center">
+                                                            <Skull
+                                                                className="w-6 h-6 text-[#8B0000]"
+                                                                style={{ filter: 'drop-shadow(0 0 8px rgba(0,0,0,0.95))', opacity: 0.85 }}
+                                                            />
                                                         </div>
                                                     )}
                                                 </div>
-                                                <p className="text-[10px] text-white/40 mt-1.5 font-mono truncate max-w-[80px]">
+                                                <p
+                                                    className="text-[11px] mt-2 font-['Cinzel'] font-bold uppercase tracking-[0.15em] truncate max-w-[90px]"
+                                                    style={{
+                                                        color: '#fff',
+                                                        opacity: 0.75,
+                                                        textShadow: '0 2px 6px rgba(0,0,0,0.85)',
+                                                    }}
+                                                >
                                                     {player.name}{isMe && ' (You)'}
                                                 </p>
-                                                <p className={`text-[9px] uppercase tracking-wider mt-0 ${RoleColors[role]} opacity-60`}>
+                                                <p className={`text-[9px] uppercase tracking-[0.2em] mt-0.5 font-bold ${RoleColors[role]}`} style={{ opacity: 0.85 }}>
                                                     {role}
                                                 </p>
                                             </motion.div>
@@ -673,27 +707,49 @@ export const GameOver: React.FC = React.memo(() => {
                                 initial={{ opacity: 0, y: 12 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.7 }}
-                                className="mt-12 text-center"
+                                className="mt-14 text-center"
                             >
-                                <p className="text-[10px] uppercase tracking-[0.4em] text-white/40 font-['Cinzel'] mb-2">
-                                    Your verdict
+                                <p
+                                    className="text-xs md:text-sm uppercase tracking-[0.5em] font-['Cinzel'] font-bold mb-3"
+                                    style={{
+                                        color: '#fff',
+                                        opacity: 0.78,
+                                        textShadow: '0 2px 6px rgba(0,0,0,0.85)',
+                                    }}
+                                >
+                                    — Your Verdict —
                                 </p>
                                 <p
-                                    className={`text-2xl md:text-4xl font-['Cinzel'] uppercase tracking-[0.25em] font-bold ${didIWin ? 'text-[#4caf82]' : 'text-white/50'}`}
-                                    style={didIWin ? { textShadow: '0 0 25px rgba(76,175,130,0.7), 0 0 50px rgba(76,175,130,0.4), 0 0 100px rgba(76,175,130,0.2)' } : {}}
+                                    className={`text-3xl md:text-5xl font-['Cinzel'] uppercase tracking-[0.25em] font-bold ${didIWin ? 'text-[#4caf82]' : 'text-white/55'}`}
+                                    style={didIWin
+                                        ? { textShadow: '0 0 30px rgba(76,175,130,0.85), 0 0 60px rgba(76,175,130,0.5), 0 0 120px rgba(76,175,130,0.25)' }
+                                        : { textShadow: '0 2px 12px rgba(0,0,0,0.9)' }}
                                 >
                                     {didIWin ? 'Victory' : 'Defeated'}
                                 </p>
-                                <p className="text-xs text-white/40 mt-2 font-['Cinzel'] tracking-widest uppercase">as {myRole}</p>
+                                <p
+                                    className="text-sm md:text-base mt-3 font-['Cinzel'] tracking-[0.35em] uppercase font-bold"
+                                    style={{
+                                        color: '#fff',
+                                        opacity: 0.7,
+                                        textShadow: '0 2px 6px rgba(0,0,0,0.85)',
+                                    }}
+                                >
+                                    as{' '}
+                                    <span
+                                        style={{
+                                            color: accentColor,
+                                            opacity: 1,
+                                            textShadow: `0 0 16px ${accentColor}aa, 0 0 32px ${accentColor}55`,
+                                        }}
+                                    >
+                                        {myRole}
+                                    </span>
+                                </p>
                             </motion.div>
                         )}
                     </AnimatePresence>
 
-                    {/* Branding inside shareable */}
-                    <div className="mt-10 text-center">
-                        <p className="text-[10px] uppercase tracking-[0.5em] text-white/25 font-['Cinzel']">Mafia · OnChain</p>
-                        <p className="text-[8px] text-white/20 mt-1 font-mono tracking-wider">{new Date().toLocaleDateString()} · ROOM {currentRoomId?.toString() || '???'}</p>
-                    </div>
                 </div>
 
                 {/* === ACTION BUTTONS — outside shareable === */}
@@ -732,17 +788,6 @@ export const GameOver: React.FC = React.memo(() => {
                                 </button>
                             )}
 
-                            {/* Share button */}
-                            <Button
-                                onClick={handleShare}
-                                isLoading={isSharing}
-                                variant="outline-gold"
-                                className="w-full h-[56px] text-base hover:bg-[#916A47]/15 hover:border-[#916A47] transition-all"
-                            >
-                                <Share2 className="w-4 h-4 mr-2" />
-                                {isSharing ? 'Generating screenshot...' : 'Share Result'}
-                            </Button>
-
                             <div className="flex gap-3">
                                 <Button
                                     onClick={handlePlayAgain}
@@ -760,6 +805,16 @@ export const GameOver: React.FC = React.memo(() => {
                                     Home
                                 </Button>
                             </div>
+
+                            {/* Share — quiet ghost link, no longer competing with Play Again */}
+                            <button
+                                onClick={handleShare}
+                                disabled={isSharing}
+                                className="mt-1 mx-auto flex items-center gap-2 px-4 py-2 text-[11px] uppercase tracking-[0.3em] text-white/35 hover:text-white/70 transition-colors disabled:opacity-50 disabled:cursor-wait font-['Cinzel']"
+                            >
+                                <Share2 className="w-3 h-3" />
+                                {isSharing ? 'Generating...' : 'Share Result'}
+                            </button>
 
                             {/* Refresh roles (if some are still unknown) */}
                             {!revealTimedOut && gameState.players.some(p => p.role === Role.UNKNOWN) && (
