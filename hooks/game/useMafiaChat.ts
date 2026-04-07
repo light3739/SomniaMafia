@@ -240,32 +240,23 @@ export function useMafiaChat(deps: ChatDeps) {
             });
         }
 
-        try {
-            const hash = await txEngine.sendGameTransaction('mafiaMessage', [roomId, hexData]);
-            if (myAddr) {
-                const playerForMatch = refs.playersRef.current.find(p => p.address.toLowerCase() === myAddr.toLowerCase());
-                setGameState(prev => ({
-                    ...prev,
-                    mafiaMessages: [...prev.mafiaMessages, {
-                        id: `optimistic-${Date.now()}`,
-                        sender: myAddr,
-                        playerName: playerForMatch?.name || myAddr.slice(0, 6),
-                        content,
-                        timestamp: Date.now(),
-                    }]
-                }));
-            }
-            
-            const pClient = refs.publicClientRef.current;
-            if (pClient) {
-                const receipt = await pClient.waitForTransactionReceipt({ hash });
-                if (receipt.status === 'reverted') throw new Error("mafiaMessage reverted");
-            }
-        } catch (e: any) {
-            addLog(`Chat failed: ${e.shortMessage || e.message}`, "danger");
-            throw e;
+        // On-chain mafiaMessage was removed (privacy + dead code). Mafia chat is now
+        // delivered exclusively over LiveKit signaling above. Optimistically append the
+        // message to local state so the sender sees it instantly.
+        if (myAddr) {
+            const playerForMatch = refs.playersRef.current.find(p => p.address.toLowerCase() === myAddr.toLowerCase());
+            setGameState(prev => ({
+                ...prev,
+                mafiaMessages: [...prev.mafiaMessages, {
+                    id: `optimistic-${Date.now()}`,
+                    sender: myAddr,
+                    playerName: playerForMatch?.name || myAddr.slice(0, 6),
+                    content,
+                    timestamp: Date.now(),
+                }]
+            }));
         }
-    }, [refs, txEngine, getMafiaChatKey, setGameState, addLog]);
+    }, [refs, getMafiaChatKey, setGameState]);
 
     // === HANDLE INCOMING SIGNAL ===
     const handleIncomingMafiaSignal = useCallback(async (sender: string, encryptedHex: string) => {

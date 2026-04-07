@@ -76,19 +76,15 @@ export function useGameDataSync(deps: DataSyncDeps) {
                         functionName: 'getRoom',
                         args: [roomId],
                     },
-                    {
-                        address: refs.contractAddressRef.current,
-                        abi: MAFIA_ABI,
-                        functionName: 'getMafiaConsensus',
-                        args: [roomId],
-                    },
                 ],
                 allowFailure: true,
             }); // Default blockTag is 'latest' which is safer for fast testnets
 
             const playersResult = results[0].status === 'success' ? results[0].result as any[] : [];
             const roomResult = results[1].status === 'success' ? results[1].result : null;
-            const mafiaResult = results[2].status === 'success' ? results[2].result as [number, number, string] : [0, 0, '0x0000000000000000000000000000000000000000'];
+            // Mafia commit/reveal counters removed: night flow is GM-resolved off-chain.
+            const mafiaCommitted = 0;
+            const mafiaRevealed = 0;
 
             if (results[0].status === 'failure') {
                 console.error(`[FetchGameData] getPlayers failed on chain ${refs.runtimeChainRef.current.id}:`, results[0].error);
@@ -100,12 +96,11 @@ export function useGameDataSync(deps: DataSyncDeps) {
 
             const data = playersResult;
             const roomData = roomResult as any;
-            
+
             if (!roomData || (Array.isArray(roomData) && roomData[0] === 0n)) {
                 console.warn(`[FetchGameData] Room ${roomId} not found or uninitialized on chain ${refs.runtimeChainRef.current.id}`);
                 return null;
             }
-            const [mafiaCommitted, mafiaRevealed] = mafiaResult;
 
             let phase: GamePhase, dayCount: number, aliveCount: number;
             let committedCount: number, revealedCount: number, phaseDeadline: number, maxPlayers: number;
