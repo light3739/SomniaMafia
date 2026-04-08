@@ -146,14 +146,25 @@ export function useGameDataSync(deps: DataSyncDeps) {
     // === REFRESH PLAYERS LIST ===
     const refreshPlayersList = useCallback(async (roomId: bigint) => {
         if (refreshInProgressRef.current) return;
+
+        // Pre-fetch guard: bail before hitting the RPC if the caller's roomId is already
+        // stale. Reads from the live ref (set in GameContext) — the `currentRoomId` prop
+        // would be stale here because this callback's closure is only rebuilt when its
+        // useCallback deps change, which is rarer than currentRoomId updates.
+        const liveRoomId = refs.currentRoomIdRef.current;
+        if (liveRoomId !== null && roomId !== liveRoomId) {
+            return;
+        }
+
         refreshInProgressRef.current = true;
         try {
             const gameData = await fetchGameData(roomId);
             if (!gameData) return;
 
-            // Guard: if currentRoomId changed while we were fetching, discard stale data
-            if (currentRoomId !== null && roomId !== currentRoomId) {
-                console.warn(`[refreshPlayersList] Discarding stale data for room ${roomId} (current: ${currentRoomId})`);
+            // Post-fetch guard: the live room may have changed while multicall was in
+            // flight. Silently discard — this is normal during fast navigation, not a bug.
+            const stillLiveRoomId = refs.currentRoomIdRef.current;
+            if (stillLiveRoomId !== null && roomId !== stillLiveRoomId) {
                 return;
             }
 
@@ -353,7 +364,21 @@ export function useGameDataSync(deps: DataSyncDeps) {
         const interval = setInterval(() => {
             refreshPlayersListDebounced(currentRoomId);
         }, 3000);
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            // Flush any pending debounced refresh queued against the old room so
+            // it doesn't fire after we've moved on.
+            if (refreshTimerRef.current) {
+                clearTimeout(refreshTimerRef.current);
+                refreshTimerRef.current = null;
+            }
+            // Drop the in-flight promise handle. The fetch itself can't be aborted
+            // here, but the pre/post guards inside refreshPlayersList will discard
+            // its result once currentRoomIdRef has moved on, and clearing the handle
+            // lets the next room immediately queue its own refresh instead of
+            // waiting for the old one to settle.
+            refreshPromiseRef.current = null;
+        };
     }, [isTestMode, refreshPlayersListDebounced, refs, currentRoomId]);
 
     return {
