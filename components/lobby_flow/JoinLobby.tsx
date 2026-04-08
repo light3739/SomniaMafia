@@ -100,6 +100,18 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const [currentPage, setCurrentPage] = React.useState(1);
     const PAGE_SIZE = 8;
 
+    // Direct join-by-code input (lives at the top of the lobby browser).
+    // Accepts a numeric room id; navigates to the existing /join?roomId=…
+    // deep link so the rest of the join flow is reused.
+    const [joinCode, setJoinCode] = React.useState('');
+    const handleJoinByCode = () => {
+        const trimmed = joinCode.trim();
+        if (!trimmed) return;
+        const numeric = trimmed.replace(/[^0-9]/g, '');
+        if (!numeric) return;
+        router.push(`/join?roomId=${numeric}`);
+    };
+
     const filteredRooms = React.useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
         return rooms.filter((r) => {
@@ -148,7 +160,11 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
         const isHardLoad = reason === 'initial' || reason === 'refresh';
 
-        if (isHardLoad) setIsInitialLoad(true);
+        // Only the very first load shows the "Scanning Network..." radar.
+        // Refresh keeps the existing filter/search/code-input UI on screen
+        // and just spins the refresh icon via isRefreshing — without this,
+        // clicking refresh used to wipe the whole panel back to the radar.
+        if (reason === 'initial') setIsInitialLoad(true);
         if (reason === 'refresh') setIsRefreshing(true);
 
         const fetchStartTime = Date.now();
@@ -417,8 +433,41 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     </div>
                 </div>
 
-                {/* Filter chips + search — only when we have rooms to filter */}
-                {!isInitialLoad && rooms.length > 0 && (
+                {/* Direct room-code join — visible immediately so the user
+                    doesn't have to wait for the network scan. Always shown. */}
+                {!initialRoomId && (
+                    <div className="w-full bg-[#19130D]/60 border border-white/10 rounded-lg p-3 md:p-4 flex flex-col gap-2">
+                        <span className="text-white/55 text-[10px] uppercase tracking-[0.2em] font-bold font-['Montserrat']">
+                            Join by Room Code
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="text"
+                                value={joinCode}
+                                onChange={(e) => setJoinCode(e.target.value.replace(/[^0-9 #]/g, ''))}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleJoinByCode(); }}
+                                placeholder="Room code (e.g. 142)"
+                                disabled={isTxPending || !isWalletReady}
+                                className="flex-1 h-[44px] bg-black/40 border border-white/10 rounded-md px-4 text-sm text-white/85 placeholder-white/30 font-['Montserrat'] tracking-[0.15em] text-center focus:outline-none focus:border-[#C49A3C]/60 transition-colors disabled:opacity-50"
+                                inputMode="numeric"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleJoinByCode}
+                                disabled={!joinCode.trim() || isTxPending || !isWalletReady}
+                                className="h-[44px] px-5 rounded-md bg-[#C49A3C]/15 border border-[#C49A3C]/40 text-[#C49A3C] text-[11px] font-bold uppercase tracking-[0.15em] font-['Montserrat'] hover:bg-[#C49A3C]/25 hover:border-[#C49A3C]/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                            >
+                                Join
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Filter chips + search — visible as soon as the initial scan
+                    completes, even if the result set is empty. Don't gate on
+                    rooms.length so the controls don't disappear when the list
+                    is briefly empty. */}
+                {!isInitialLoad && (
                     <div className="w-full flex flex-col gap-2.5">
                         <div className="flex items-center gap-2 flex-wrap">
                             {([
