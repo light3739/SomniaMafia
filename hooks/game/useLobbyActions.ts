@@ -86,7 +86,6 @@ export function useLobbyActions(deps: LobbyDeps) {
 
     // === CREATE LOBBY ===
     const createLobbyOnChain = useCallback(async (maxPlayers: number = 10, tournamentId: bigint = 0n, nonce?: number): Promise<boolean> => {
-        const myAddr = refs.addressRef.current;
         const pClient = refs.publicClientRef.current;
         const targetChain = refs.runtimeChainRef.current;
         const name = refs.playerNameRef.current;
@@ -94,9 +93,25 @@ export function useLobbyActions(deps: LobbyDeps) {
         const lobbyPassword = refs.lobbyPasswordRef.current;
         const avatarUrl = refs.avatarUrlRef.current;
 
-        if (!name || !myAddr || !lobbyName || !pClient) { await showAlert("Enter details and connect wallet!"); return false; }
+        if (!name || !lobbyName || !pClient || !targetChain) { await showAlert("Enter details and connect wallet!"); return false; }
         setIsTxPending(true);
         try {
+            // Acquire wallet FIRST so we have the canonical signing address before
+            // we touch the session/ECIES storage. On a cold start with a locked
+            // external wallet, refs.addressRef can hold a stale (e.g. Privy
+            // embedded) address while the actual signer is a freshly-unlocked
+            // MetaMask account — using that stale address would persist a
+            // session keyed by the wrong wallet and force a second pubkey popup
+            // in WaitingRoom. See useWalletManager.getActiveWalletClient where
+            // refs.addressRef.current can be overwritten during unlock.
+            const { client: activeWalletClient, account: activeAccount } = await wallet.getActiveWalletClient();
+            const activeAddr = (typeof activeAccount === 'string' ? activeAccount : (activeAccount as any)?.address) as `0x${string}` | undefined;
+            if (!activeAddr) { await showAlert("Wallet not ready. Please unlock and try again."); setIsTxPending(false); return false; }
+            const myAddr = activeAddr.toLowerCase() as `0x${string}`;
+            // Keep refs in sync so any concurrent reader (WaitingRoom polling,
+            // useGameDataSync, etc.) sees the same canonical address.
+            refs.addressRef.current = myAddr;
+
             const nextId = await pClient.readContract({
                 address: refs.contractAddressRef.current,
                 abi: MAFIA_ABI,
@@ -116,10 +131,6 @@ export function useLobbyActions(deps: LobbyDeps) {
 
             const safeName = /^[a-zA-Z0-9_ ]+$/.test(name) ? name : `Player_${Math.floor(Math.random() * 1000)}`;
             console.log(`[SafeName] Original: "${name}", Used: "${safeName}"`);
-
-            const { client: activeWalletClient, account: activeAccount } = await wallet.getActiveWalletClient();
-
-            if (!pClient || !targetChain || !myAddr) { await showAlert("Public client or chain/address not ready!"); return false; }
 
             const txValue = wallet.LOBBY_FUNDING_VALUE;
 
@@ -251,17 +262,27 @@ export function useLobbyActions(deps: LobbyDeps) {
     const joinLobbyOnChain = useCallback(async (roomId: bigint | number, passwordOverride?: string): Promise<boolean> => {
         const pClient = refs.publicClientRef.current;
         const targetChain = refs.runtimeChainRef.current;
-        const myAddr = refs.addressRef.current;
         const name = refs.playerNameRef.current;
         const lobbyPassword = passwordOverride ?? refs.lobbyPasswordRef.current;
         const avatarUrl = refs.avatarUrlRef.current;
 
-        if (!name || !myAddr || !pClient || !targetChain) { await showAlert("Connect wallet and set name first!"); return false; }
+        if (!name || !pClient || !targetChain) { await showAlert("Connect wallet and set name first!"); return false; }
 
         const rId = BigInt(roomId);
         setIsTxPending(true);
         try {
+            // Acquire wallet FIRST and derive the canonical address from the
+            // signer that will actually sign the join tx. See createLobbyOnChain
+            // for the rationale — on cold-start with a locked external wallet,
+            // refs.addressRef can hold a stale embedded address while the real
+            // signer is the freshly-unlocked MetaMask, which would otherwise
+            // persist a session under the wrong key and force a second pubkey
+            // popup in WaitingRoom.
             const { client: activeWalletClient, account: activeAccount } = await wallet.getActiveWalletClient();
+            const activeAddr = (typeof activeAccount === 'string' ? activeAccount : (activeAccount as any)?.address) as `0x${string}` | undefined;
+            if (!activeAddr) { await showAlert("Wallet not ready. Please unlock and try again."); setIsTxPending(false); return false; }
+            const myAddr = activeAddr.toLowerCase() as `0x${string}`;
+            refs.addressRef.current = myAddr;
 
             const safeName = /^[a-zA-Z0-9_ ]+$/.test(name) ? name : `Player_${Math.floor(Math.random() * 1000)}`;
             console.log(`[SafeName] Join - Original: "${name}", Used: "${safeName}"`);
@@ -300,7 +321,13 @@ export function useLobbyActions(deps: LobbyDeps) {
                     currentSession.roomId === Number(roomId) &&
                     currentSession.mainWallet.toLowerCase() === myAddr.toLowerCase();
 
-                let onChainSessionSynced = false;
+                // Tri-state on-chain verification:
+                //  - 'matches'    : on-chain sessionKeys returned data that matches our local key
+                //  - 'mismatch'   : on-chain returned a different key — must re-register
+                //  - 'unknown'    : RPC failed or returned empty struct — DON'T force a wallet
+                //                   popup if our local cache already says registeredOnChain.
+                //                   This avoids the cold-cache "phantom re-registration" tx.
+                let onChainCheck: 'matches' | 'mismatch' | 'unknown' = 'unknown';
                 try {
                     const onChainData = await pClient.readContract({
                         address: refs.contractAddressRef.current,
@@ -310,22 +337,43 @@ export function useLobbyActions(deps: LobbyDeps) {
                     }) as any;
 
                     if (onChainData && currentSession) {
-                        const onChainAddr = (Array.isArray(onChainData) ? onChainData[0] : onChainData.sessionAddress).toLowerCase();
-                        const onChainRoomId = (Array.isArray(onChainData) ? onChainData[2] : onChainData.roomId).toString();
+                        const rawAddr = Array.isArray(onChainData) ? onChainData[0] : onChainData.sessionAddress;
+                        const onChainAddr = String(rawAddr || '').toLowerCase();
+                        const onChainRoomId = (Array.isArray(onChainData) ? onChainData[2] : onChainData.roomId)?.toString() ?? '0';
+                        const isActive = Array.isArray(onChainData) ? onChainData[3] : onChainData.isActive;
 
-                        onChainSessionSynced = onChainAddr === currentSession.address.toLowerCase() &&
+                        // Empty / unset session struct → treat as unknown, not a definitive mismatch.
+                        const isEmpty = !onChainAddr || onChainAddr === '0x0000000000000000000000000000000000000000';
+
+                        if (isEmpty) {
+                            onChainCheck = 'unknown';
+                        } else if (
+                            onChainAddr === currentSession.address.toLowerCase() &&
                             onChainRoomId === rId.toString() &&
-                            (Array.isArray(onChainData) ? onChainData[3] : onChainData.isActive);
-
-                        if (!onChainSessionSynced) {
+                            isActive
+                        ) {
+                            onChainCheck = 'matches';
+                        } else {
+                            onChainCheck = 'mismatch';
                             console.log(`[Join] Session mismatch! Local: ${currentSession.address}, On-Chain: ${onChainAddr}. Forcing resync...`);
                         }
                     }
                 } catch (e) {
-                    console.warn("[Join] Failed to verify on-chain sessionKey data:", e);
+                    console.warn("[Join] Failed to verify on-chain sessionKey data (will trust local cache):", e);
+                    onChainCheck = 'unknown';
                 }
 
-                if (!sessionMatches || !currentSession?.registeredOnChain || !onChainSessionSynced) {
+                // Decide whether we actually need to re-register:
+                //  - No matching local session → must register
+                //  - Local session exists but flag not set → must register
+                //  - On-chain says definitively mismatched → must re-register
+                //  - On-chain unknown but local cache says registered → trust it, skip
+                const needsRegister =
+                    !sessionMatches ||
+                    !currentSession?.registeredOnChain ||
+                    onChainCheck === 'mismatch';
+
+                if (needsRegister) {
                     if (!sessionMatches) {
                         console.log("[Join] No valid session for this room locally. Creating a new one for auto-signing...");
                         const sessionRes = createNewSession(myAddr, Number(roomId), targetChain.id, undefined, true);
@@ -373,6 +421,8 @@ export function useLobbyActions(deps: LobbyDeps) {
                             console.warn("[Join] Failed to register/fund session key during sync:", e);
                         }
                     }
+                } else if (onChainCheck === 'unknown') {
+                    console.log("[Join] On-chain check inconclusive — trusting locally cached session, skipping transaction.");
                 } else {
                     console.log("[Join] Valid registered session already exists and is synced. Skipping transaction.");
                 }

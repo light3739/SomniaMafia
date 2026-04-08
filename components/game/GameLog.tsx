@@ -436,10 +436,29 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
 
     const targetingDay = (showVotingResults && displayDay > 0) ? displayDay : dayCount;
 
+    // Lock quorum per day at the moment we first observe VOTING phase — that's
+    // strictly BEFORE finalizeVoting kills the executed player and decrements
+    // aliveCount. Without this lock, the next polling cycle (after the kill)
+    // recomputes Math.floor(alive/2)+1 with one fewer alive player, and the
+    // already-typed "Voting phase started. Quorum: N" log entry visibly
+    // rewrites itself to N-1 mid-render. The lock is keyed by dayCount so each
+    // day's voting gets a fresh snapshot.
+    const quorumLockRef = useRef<Map<number, number>>(new Map());
+    useEffect(() => {
+        if (phase !== GamePhase.VOTING) return;
+        const day = dayCount || 1;
+        if (quorumLockRef.current.has(day)) return;
+        quorumLockRef.current.set(day, Math.floor(alivePlayers.length / 2) + 1);
+    }, [phase, dayCount, alivePlayers.length]);
+
     const quorumData = useMemo(() => {
-        const needed = Math.floor(alivePlayers.length / 2) + 1;
+        const day = (showVotingResults && lockedVotingDayRef.current > 0)
+            ? lockedVotingDayRef.current
+            : (dayCount || 1);
+        const locked = quorumLockRef.current.get(day);
+        const needed = locked ?? (Math.floor(alivePlayers.length / 2) + 1);
         return { needed };
-    }, [alivePlayers.length]);
+    }, [alivePlayers.length, dayCount, showVotingResults]);
 
     const [showNightFalls, setShowNightFalls] = useState(false);
     useEffect(() => {
