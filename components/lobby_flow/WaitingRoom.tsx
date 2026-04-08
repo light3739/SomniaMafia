@@ -51,74 +51,71 @@ export const WaitingRoom: React.FC = () => {
         };
     }, []);
 
-    // Register ECIES pubkey with GM so it can encrypt our role privately.
+    // Fallback ECIES pubkey registration with GM.
     //
-    // Three preconditions must hold to avoid an unwanted MetaMask popup:
-    //  1. walletClient is ready (Privy may still be hydrating on first paint)
-    //  2. A matching session key is already in localStorage — otherwise
-    //     signRequest() inside registerEciesPubkey would fall back to
-    //     walletClient.signMessage and trigger a wallet popup.
-    //  3. We use the session's `mainWallet` as the player address, NOT wagmi's
-    //     `useAccount().address`. On cold-start with a freshly-unlocked external
-    //     wallet, wagmi's connector state can lag and still return the Privy
-    //     embedded address while the canonical signer (the one that actually
-    //     signed the createAndJoin tx and owns the session) is the external
-    //     wallet. Using wagmi's stale address would make signRequest's session
-    //     mainWallet comparison fail, forcing the wallet popup every time.
-    //     See useLobbyActions.ts where refs.addressRef.current is explicitly
-    //     overridden to the canonical signer before the session is stored.
+    // The PRIMARY path now lives in useLobbyActions.createLobbyOnChain /
+    // joinLobbyOnChain — they call GM.registerEciesPubkey inline right
+    // after storing the session, while still holding the canonical
+    // signer + walletClient that just signed the createAndJoin / joinRoom
+    // tx. That eliminates the wagmi/Privy race entirely.
+    //
+    // This effect only matters for cold-start cases (page reload while
+    // already in a room), where the inline path never runs in this tab
+    // session.
+    //
+    // Crucial: we use loadSession().mainWallet as the canonical address,
+    // NOT useAccount().address. During /create→/waiting navigation (and
+    // for ~1s after page reload while @privy-io/wagmi is still syncing
+    // the active wallet), wagmi's useAccount() can briefly return a
+    // different wallet (Privy embedded vs main) than the one that
+    // actually owns the session. Trusting useAccount here is exactly
+    // what caused the unwanted Privy popup AND the "No Session" UI
+    // mismatch in useSessionKey.
+    //
+    // signRequest will sign with the session key (no wallet popup) as
+    // long as the session row exists for this roomId — walletClient is
+    // still passed in but only consulted on the impossible "session
+    // disappeared mid-call" branch.
     useEffect(() => {
         if (!currentRoomId || !chainId) return;
         if (eciesRegistered || eciesRegisteringRef.current) return;
-        if (!walletClient) return;
 
         let cancelled = false;
-        const roomId = String(currentRoomId);
+        const roomIdStr = String(currentRoomId);
         const roomIdNum = Number(currentRoomId);
 
-        const canonicalAddress = (): `0x${string}` | null => {
+        const findMatchingSession = () => {
             const s = loadSession();
-            if (
-                s &&
-                s.roomId === roomIdNum &&
-                Date.now() < s.expiresAt
-            ) {
-                return s.mainWallet.toLowerCase() as `0x${string}`;
-            }
-            // No matching session yet — fall back to wagmi address.
-            return address ? (address.toLowerCase() as `0x${string}`) : null;
-        };
-
-        const hasMatchingSession = () => {
-            const s = loadSession();
-            return !!(
-                s &&
-                s.roomId === roomIdNum &&
-                Date.now() < s.expiresAt
-            );
+            if (!s) return null;
+            if (s.roomId !== roomIdNum) return null;
+            if (Date.now() >= s.expiresAt) return null;
+            return s;
         };
 
         const runRegistration = async () => {
-            // Wait up to ~4s for the session to appear so we don't pop a wallet
-            // signature for register-pubkey when the session is moments away.
-            for (let i = 0; i < 8 && !hasMatchingSession(); i++) {
+            // Wait up to ~4s for the session to appear. Covers the very
+            // narrow window where this effect fires before the inline
+            // register in createLobby/joinLobby has finished writing the
+            // session row.
+            let session = findMatchingSession();
+            for (let i = 0; i < 8 && !session; i++) {
                 if (cancelled) return;
                 await new Promise(r => setTimeout(r, 500));
+                session = findMatchingSession();
             }
-            if (cancelled) return;
+            if (cancelled || !session) return;
             if (eciesRegisteringRef.current) return;
 
-            const playerAddr = canonicalAddress();
-            if (!playerAddr) {
-                console.warn('[ECIES] No canonical address resolvable — skipping register-pubkey');
-                return;
-            }
+            const canonicalAddress = session.mainWallet;
 
             eciesRegisteringRef.current = true;
             try {
-                await GM.registerEciesPubkey(roomId, playerAddr, walletClient, chainId);
+                // walletClient may be undefined or for a different wallet
+                // than canonicalAddress — that's fine, signRequest signs
+                // with the session key because the session row exists.
+                await GM.registerEciesPubkey(roomIdStr, canonicalAddress, walletClient, chainId);
                 if (mountedRef.current && !cancelled) setEciesRegistered(true);
-                console.log('[ECIES] Public key registered with GM server');
+                console.log('[ECIES] Public key registered with GM server (fallback)');
             } catch (e) {
                 console.warn('[ECIES] register-pubkey error:', e);
             } finally {
@@ -129,7 +126,7 @@ export const WaitingRoom: React.FC = () => {
         runRegistration();
 
         return () => { cancelled = true; };
-    }, [currentRoomId, address, chainId, eciesRegistered, walletClient]);
+    }, [currentRoomId, chainId, eciesRegistered, walletClient]);
 
     // 1. Авто-переход при смене фазы в блокчейне
     //    Set a flag so /game can show the countdown overlay (non-blocking)
