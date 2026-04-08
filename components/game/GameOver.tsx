@@ -32,6 +32,24 @@ const RoleColors: Record<Role, string> = {
     [Role.UNKNOWN]: 'text-gray-500'
 };
 
+// Brighter inline-style variants used where readability over the dark
+// vignette matters (verdict text, role badge under winner avatars).
+// Civilian gets a lifted bronze instead of the muted #6B5A4A so it stays
+// legible in Montserrat at 10–11px.
+const RoleAccent: Record<Role, string> = {
+    [Role.MAFIA]: '#B33A3A',
+    [Role.DOCTOR]: '#14B8A6',
+    [Role.DETECTIVE]: '#D17A3F',
+    [Role.CIVILIAN]: '#C49A6C',
+    [Role.UNKNOWN]: '#9CA3AF',
+};
+
+// Hard cap on display nicknames so the endgame cards stay aligned regardless
+// of name length (CSS truncate is a fallback; this guarantees the share PNG
+// also gets a clean cut even if html2canvas mishandles text-overflow).
+const truncateName = (name: string, max: number): string =>
+    name.length > max ? name.slice(0, max - 1) + '…' : name;
+
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
 
 export const GameOver: React.FC = React.memo(() => {
@@ -45,6 +63,9 @@ export const GameOver: React.FC = React.memo(() => {
     }, []);
     const publicClient = usePublicClient();
     const { address } = useAccount();
+
+    // Note: session-wallet gas drain is already handled by runEndGameCleanup
+    // in useEndGame.ts ([SessionDrain] log) — no duplicate sweep needed here.
     const router = useRouter();
     // Winner state is managed by useEndGame hook
     const [refundClaimed, setRefundClaimed] = useState(false);
@@ -544,33 +565,33 @@ export const GameOver: React.FC = React.memo(() => {
                                 >
                                     {winner === 'MAFIA'
                                         ? (winners.length === 1 ? '— The Mafia —' : '— The Family —')
-                                        : winner === 'TOWN' ? '— The Survivors —' : '— Survivors —'}
+                                        : winner === 'TOWN' ? '— The Family —' : '— Survivors —'}
                                 </p>
-                                <div className="flex flex-wrap items-end justify-center gap-7 md:gap-12">
+                                <div className="flex flex-wrap items-end justify-center gap-4 md:gap-6">
                                     {winners.map((player, index) => {
                                         const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
                                         const role = player.role;
-                                        const roleColor = role === Role.MAFIA ? '#8B0000' : role === Role.DOCTOR ? '#0D9488' : role === Role.DETECTIVE ? '#A85832' : '#C49A6C';
+                                        const roleBadgeColor = RoleAccent[role] ?? '#C49A6C';
                                         return (
                                             <motion.div
                                                 key={player.address}
                                                 initial={{ opacity: 0, y: 40, filter: 'blur(20px) brightness(0.1)' }}
                                                 animate={{ opacity: 1, y: 0, filter: 'blur(0px) brightness(1)' }}
                                                 transition={{ delay: 0.2 + index * 0.3, duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
-                                                className="flex flex-col items-center"
+                                                className="flex flex-col items-center w-[120px] md:w-[132px] shrink-0"
                                             >
                                                 <div className="relative">
-                                                    {/* Glow halo (toned down) */}
+                                                    {/* Glow halo — unified team accent */}
                                                     <div
                                                         className="absolute inset-0 rounded-full blur-3xl"
-                                                        style={{ backgroundColor: roleColor, opacity: 0.28, transform: 'scale(1.25)' }}
+                                                        style={{ backgroundColor: accentColor, opacity: 0.28, transform: 'scale(1.25)' }}
                                                     />
-                                                    {/* Avatar */}
+                                                    {/* Avatar — border in unified team accent */}
                                                     <div
                                                         className="relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-2"
                                                         style={{
-                                                            borderColor: roleColor,
-                                                            boxShadow: `0 0 18px ${roleColor}99, inset 0 0 16px rgba(0,0,0,0.55)`,
+                                                            borderColor: accentColor,
+                                                            boxShadow: `0 0 18px ${accentColor}99, inset 0 0 16px rgba(0,0,0,0.55)`,
                                                         }}
                                                     >
                                                         {player.avatarUrl ? (
@@ -581,37 +602,42 @@ export const GameOver: React.FC = React.memo(() => {
                                                             </div>
                                                         )}
                                                     </div>
-                                                    {/* Crown for survivors */}
+                                                    {/* Trophy — only for survivors, unified team accent, lifted higher with breathing room */}
                                                     {player.isAlive && (
                                                         <motion.div
                                                             initial={{ opacity: 0, y: 8, scale: 0 }}
                                                             animate={{ opacity: 1, y: 0, scale: 1 }}
                                                             transition={{ delay: 0.2 + index * 0.3 + 0.7, type: 'spring', stiffness: 200 }}
-                                                            className="absolute -top-4 left-1/2 -translate-x-1/2"
+                                                            className="absolute -top-7 left-1/2 -translate-x-1/2"
                                                         >
-                                                            <Trophy className="w-5 h-5" style={{ color: roleColor, filter: `drop-shadow(0 0 10px ${roleColor})` }} />
+                                                            <Trophy className="w-6 h-6" style={{ color: accentColor, filter: `drop-shadow(0 0 12px ${accentColor})` }} />
                                                         </motion.div>
                                                     )}
                                                 </div>
 
-                                                {/* Glowing name (toned down) */}
+                                                {/* Name — unified team accent shadow. "you" marker is a
+                                                    coloured dot BEFORE the name so it never gets eaten by
+                                                    the truncate ellipsis on long nicknames. */}
                                                 <p
-                                                    className="mt-4 font-['Cinzel'] font-bold uppercase tracking-wider text-base md:text-lg text-center"
+                                                    className="mt-4 font-['Cinzel'] font-bold uppercase tracking-wider text-base md:text-lg text-center w-full truncate"
                                                     style={{
                                                         color: '#fff',
-                                                        textShadow: `0 0 10px ${roleColor}99, 0 2px 8px rgba(0,0,0,0.85)`,
+                                                        textShadow: `0 0 10px ${accentColor}99, 0 2px 8px rgba(0,0,0,0.85)`,
                                                     }}
+                                                    title={player.name}
                                                 >
-                                                    {player.name}{isMe && ' (You)'}
+                                                    {isMe && <span className="mr-1.5" style={{ color: accentColor }}>●</span>}
+                                                    {truncateName(player.name, 13)}
                                                 </p>
+                                                {/* Role badge — kept per-role colour, Montserrat for document feel */}
                                                 <p
-                                                    className="text-[10px] uppercase tracking-[0.25em] mt-1 font-['Cinzel'] font-bold"
-                                                    style={{ color: roleColor }}
+                                                    className="text-[10px] uppercase tracking-[0.25em] mt-1 font-['Montserrat'] font-bold"
+                                                    style={{ color: roleBadgeColor }}
                                                 >
                                                     {role}
                                                 </p>
                                                 {!player.isAlive && (
-                                                    <span className="text-[9px] text-white/30 mt-0.5 italic">posthumous</span>
+                                                    <span className="text-[9px] text-white/30 mt-0.5 italic font-['Montserrat']">posthumous</span>
                                                 )}
                                             </motion.div>
                                         );
@@ -641,54 +667,71 @@ export const GameOver: React.FC = React.memo(() => {
                                 >
                                     — Defeated —
                                 </p>
-                                <div className="flex flex-wrap items-start justify-center gap-5 md:gap-7">
+                                <div className="flex flex-wrap items-start justify-center gap-4 md:gap-5">
                                     {losers.map((player, index) => {
                                         const role = player.role;
                                         const isMe = player.address.toLowerCase() === myPlayer?.address.toLowerCase();
+                                        const isAlive = player.isAlive;
+                                        const roleBadgeColor = RoleAccent[role] ?? '#9CA3AF';
                                         return (
                                             <motion.div
                                                 key={player.address}
                                                 initial={{ opacity: 0, scale: 0.85, y: 10 }}
-                                                animate={{ opacity: 0.92, scale: 1, y: 0 }}
+                                                animate={{ opacity: isAlive ? 1 : 0.88, scale: 1, y: 0 }}
                                                 transition={{ delay: 0.1 + index * 0.12, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                                                className="flex flex-col items-center grayscale contrast-125"
+                                                className="flex flex-col items-center w-[100px] shrink-0"
                                             >
-                                                <div
-                                                    className="relative w-16 h-16 md:w-[72px] md:h-[72px] rounded-full overflow-hidden bg-[#0A0606]"
-                                                    style={{
-                                                        border: '1px solid rgba(139,0,0,0.55)',
-                                                        boxShadow: '0 0 14px rgba(139,0,0,0.25), inset 0 0 22px rgba(0,0,0,0.75)',
-                                                    }}
-                                                >
-                                                    {player.avatarUrl ? (
-                                                        <Image src={player.avatarUrl} alt={player.name} fill sizes="72px" className="object-cover opacity-70" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center">
-                                                            {RoleIcons[role] || <Users className="w-6 h-6 text-white/40" />}
-                                                        </div>
-                                                    )}
-                                                    {/* Permanent dark wash so they read as "fallen", not just smaller winners */}
-                                                    <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/5 to-black/70 pointer-events-none" />
-                                                    {!player.isAlive && (
-                                                        <div className="absolute inset-0 flex items-center justify-center">
-                                                            <Skull
-                                                                className="w-6 h-6 text-[#8B0000]"
-                                                                style={{ filter: 'drop-shadow(0 0 8px rgba(0,0,0,0.95))', opacity: 0.85 }}
-                                                            />
+                                                <div className="relative">
+                                                    {/* Avatar — grayscale ONLY on the picture container so the role
+                                                        badge below can stay coloured. Skull badge sits in the bottom
+                                                        corner so the player's face is still readable. */}
+                                                    <div
+                                                        className={`relative w-16 h-16 md:w-[72px] md:h-[72px] rounded-full overflow-hidden bg-[#0A0606] ${!isAlive ? 'grayscale contrast-110' : ''}`}
+                                                        style={{
+                                                            border: '1px solid rgba(139,0,0,0.55)',
+                                                            boxShadow: '0 0 14px rgba(139,0,0,0.25), inset 0 0 22px rgba(0,0,0,0.75)',
+                                                        }}
+                                                    >
+                                                        {player.avatarUrl ? (
+                                                            <Image src={player.avatarUrl} alt={player.name} fill sizes="72px" className={`object-cover ${isAlive ? '' : 'opacity-65'}`} />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center">
+                                                                {RoleIcons[role] || <Users className="w-6 h-6 text-white/40" />}
+                                                            </div>
+                                                        )}
+                                                        {/* Permanent dark wash so they read as "fallen" */}
+                                                        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/5 to-black/70 pointer-events-none" />
+                                                    </div>
+
+                                                    {/* Skull death badge — bottom-right corner, doesn't cover the face */}
+                                                    {!isAlive && (
+                                                        <div
+                                                            className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center bg-[#0a0606]"
+                                                            style={{
+                                                                border: '1px solid rgba(139,0,0,0.7)',
+                                                                boxShadow: '0 0 10px rgba(139,0,0,0.5)',
+                                                            }}
+                                                        >
+                                                            <Skull className="w-3.5 h-3.5 text-[#8B0000]" />
                                                         </div>
                                                     )}
                                                 </div>
                                                 <p
-                                                    className="text-[11px] mt-2 font-['Cinzel'] font-bold uppercase tracking-[0.15em] truncate max-w-[90px]"
+                                                    className="text-[11px] mt-2 font-['Cinzel'] font-bold uppercase tracking-[0.15em] truncate w-full text-center"
                                                     style={{
                                                         color: '#fff',
-                                                        opacity: 0.75,
+                                                        opacity: isAlive ? 0.85 : 0.7,
                                                         textShadow: '0 2px 6px rgba(0,0,0,0.85)',
                                                     }}
+                                                    title={player.name}
                                                 >
-                                                    {player.name}{isMe && ' (You)'}
+                                                    {isMe && <span className="mr-1" style={{ color: '#C49A6C' }}>●</span>}
+                                                    {truncateName(player.name, 11)}
                                                 </p>
-                                                <p className={`text-[9px] uppercase tracking-[0.2em] mt-0.5 font-bold ${RoleColors[role]}`} style={{ opacity: 0.85 }}>
+                                                <p
+                                                    className="text-[9px] uppercase tracking-[0.2em] mt-0.5 font-['Montserrat'] font-bold"
+                                                    style={{ color: roleBadgeColor, opacity: isAlive ? 0.95 : 0.75 }}
+                                                >
                                                     {role}
                                                 </p>
                                             </motion.div>
@@ -728,7 +771,7 @@ export const GameOver: React.FC = React.memo(() => {
                                     {didIWin ? 'Victory' : 'Defeated'}
                                 </p>
                                 <p
-                                    className="text-sm md:text-base mt-3 font-['Cinzel'] tracking-[0.35em] uppercase font-bold"
+                                    className="text-sm md:text-base mt-3 font-['Montserrat'] tracking-[0.35em] uppercase font-bold"
                                     style={{
                                         color: '#fff',
                                         opacity: 0.7,
@@ -738,9 +781,9 @@ export const GameOver: React.FC = React.memo(() => {
                                     as{' '}
                                     <span
                                         style={{
-                                            color: accentColor,
+                                            color: RoleAccent[myRole] ?? accentColor,
                                             opacity: 1,
-                                            textShadow: `0 0 16px ${accentColor}aa, 0 0 32px ${accentColor}55`,
+                                            textShadow: `0 0 16px ${(RoleAccent[myRole] ?? accentColor)}aa, 0 0 32px ${(RoleAccent[myRole] ?? accentColor)}55`,
                                         }}
                                     >
                                         {myRole}

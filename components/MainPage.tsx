@@ -54,7 +54,22 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                 <div className="animate-landing-button mt-32 relative z-20">
                     {(() => {
                         if (!ready) {
-                            return <div style={{ opacity: 0 }}>Loading...</div>;
+                            // Reserve the exact final button footprint so the
+                            // flex column above doesn't reflow when Privy
+                            // hydrates and the placeholder swaps to the real
+                            // button. Without this, the title visibly jumps up
+                            // by ~16px once the button grows from ~20px-tall
+                            // text to ~52px-tall styled button (justify-center
+                            // re-centers the whole stack). Same paddings,
+                            // same text size, same ring — invisible.
+                            return (
+                                <div
+                                    aria-hidden
+                                    className="px-14 py-3.5 rounded-xl font-mono font-bold text-base md:text-lg tracking-[0.1em] ring-1 ring-transparent invisible"
+                                >
+                                    LOGIN / CONNECT
+                                </div>
+                            );
                         }
 
                         if (!authenticated) {
