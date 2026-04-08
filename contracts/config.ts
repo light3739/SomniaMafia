@@ -27,12 +27,14 @@ export const DEPLOYMENTS = {
         contracts: {
             MafiaDiamond: (process.env.NEXT_PUBLIC_MAFIA_DIAMOND || '0x0406a14729b0c77c187ac5229c8c2317589e73c0') as string,
             Groth16Verifier: '0xc5ece9781099a959626ca26529472af19cbc166f',
-            LobbyFacet: '0x9fd7dcb1ec1afb860497820395c9a438ff656d7b',
+            LobbyFacet: '0x42367ed4bfaaec1133ff267cbdb0eba1e02ef593',
             ShuffleFacet: '0xdd1b4cdb7e647ac96cd7b34c971bba9f3390458d',
             VotingFacet: '0x277ca1b0123f4facff59830ae461086b64ba4719',
             NightFacet: '0x5475c783e17c65bb819db62b7ad29860d35cabc7',
             GameEndFacet: '0x2577be48cfeac61d4b88ca4b71077ce21ce22f68',
-            TournamentFacet: '0x4a321d983b11d5b04420c5dbe04f1cf386316c96',
+            TournamentFacet: '0x0d8289d9abb8745fdd9c1b36c08544a54e2bc518',
+            TimeoutsFacet: '0x0904b5b040efe4360a139e0a8e507746b92edbc5',
+            RefundsFacet: '0x7f38c2292df18b77c6d83d7f0f3740aa0c1abcf8',
         },
     },
 } as const;
