@@ -167,30 +167,57 @@ export const WaitingRoom: React.FC = () => {
                 className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10"
             >
 
-                <div className="flex flex-col items-center text-center">
+                <div className="flex flex-col items-center text-center gap-2">
 
                     <h1 className="text-white text-3xl font-['Cinzel'] font-light tracking-widest uppercase">
                         {lobbyName || 'Game Lobby'}
                     </h1>
 
+                    {currentRoomId !== null && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                try {
+                                    navigator.clipboard.writeText(String(currentRoomId));
+                                } catch { /* ignore — not a critical action */ }
+                            }}
+                            className="group inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#19130D]/60 border border-[#C49A3C]/25 hover:border-[#C49A3C]/55 hover:bg-[#19130D]/90 transition-colors"
+                            title="Copy Room ID"
+                        >
+                            <span className="text-[#C49A3C]/70 text-[9px] uppercase tracking-[0.2em] font-bold font-['Montserrat']">
+                                Room
+                            </span>
+                            <span className="text-[#C49A3C] text-[12px] font-bold font-mono tabular-nums">
+                                #{String(currentRoomId)}
+                            </span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#C49A3C]/40 group-hover:text-[#C49A3C]/80 transition-colors">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                        </button>
+                    )}
+
                 </div>
 
-                {/* Prize Pool Banner */}
-                {gameState.prizePool && gameState.prizePool > 0n && (
+                {/* Prize Pool Banner — only when there's an actual pool. Use
+                    explicit `> 0n` so a `0n` value can't short-circuit through
+                    JSX and render as the literal text "0" (React 18 renders
+                    BigInt). */}
+                {(gameState.prizePool ?? 0n) > 0n && (
                     <div className="w-full bg-gradient-to-r from-[#2A1F0A]/90 to-[#19130D]/90 backdrop-blur-xl rounded-2xl px-5 py-4 border border-[#C49A3C]/25 shadow-[0_4px_20px_rgba(196,154,60,0.1)] flex items-center justify-between">
                         <div className="flex flex-col gap-0.5">
                             <span className="text-[#C49A3C]/60 text-[10px] uppercase tracking-widest font-bold font-['Montserrat']">
                                 {gameState.isTournament ? 'Tournament Prize Pool' : 'Prize Pool'}
                             </span>
-                            {gameState.buyIn && gameState.buyIn > 0n && (
+                            {(gameState.buyIn ?? 0n) > 0n && (
                                 <span className="text-white/50 text-[10px] font-mono">
-                                    Buy-in: {parseFloat(formatEther(gameState.buyIn)).toFixed(2)} {currencySymbol}
+                                    Buy-in: {parseFloat(formatEther(gameState.buyIn ?? 0n)).toFixed(2)} {currencySymbol}
                                 </span>
                             )}
                         </div>
                         <div className="flex items-baseline gap-1.5">
                             <span className="text-[#C49A3C] text-2xl md:text-3xl font-bold font-['Montserrat'] tabular-nums">
-                                {parseFloat(formatEther(gameState.prizePool)).toFixed(2)}
+                                {parseFloat(formatEther(gameState.prizePool ?? 0n)).toFixed(2)}
                             </span>
                             <span className="text-[#C49A3C]/50 text-sm font-bold">
                                 {currencySymbol}
