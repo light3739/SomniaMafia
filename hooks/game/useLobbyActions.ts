@@ -139,8 +139,10 @@ export function useLobbyActions(deps: LobbyDeps) {
             const sessionAccount = privateKeyToAccount(sessionPrivKey);
             const pubKeyHex = sessionAccount.publicKey;
 
-            const eciesKp = await loadOrCreateKeypair(newRoomId.toString(), myAddr);
-            refs.eciesPrivKeyRef.current = eciesKp.privateKey;
+            // ECIES keypair is created AFTER finalRoomId is known (below) so the
+            // localStorage entry is keyed by the real on-chain room id, not the
+            // optimistic newRoomId — those can diverge if another room was
+            // created between our nextRoomId read and our tx landing.
 
             const safeName = /^[a-zA-Z0-9_ ]+$/.test(name) ? name : `Player_${Math.floor(Math.random() * 1000)}`;
             console.log(`[SafeName] Original: "${name}", Used: "${safeName}"`);
@@ -201,6 +203,25 @@ export function useLobbyActions(deps: LobbyDeps) {
             storeSession(newSessionObj);
             markSessionRegistered();
 
+            // Now that the real roomId is known and the session is in storage,
+            // create the ECIES keypair under the canonical key and register the
+            // pubkey with the GM server. We do it HERE — not in WaitingRoom —
+            // because we still hold the canonical signer (myAddr) and the
+            // walletClient that just signed the createAndJoin tx. The matching
+            // session row in localStorage means signRequest will sign with the
+            // session key (no wallet popup).
+            //
+            // Doing this in WaitingRoom is racy: useAccount()/useWalletClient()
+            // can briefly return a different wallet (Privy embedded vs main)
+            // during /create→/waiting navigation, which both pops the wrong
+            // wallet AND breaks the session check in useSessionKey.
+            try {
+                const eciesKp = await loadOrCreateKeypair(finalRoomId.toString(), myAddr);
+                refs.eciesPrivKeyRef.current = eciesKp.privateKey;
+            } catch (e) {
+                console.warn('[Create] Failed to create ECIES keypair:', e);
+            }
+
             // Non-blocking GM sync has been removed to prevent double MetaMask popup.
             // The GM Server will automatically fetch the session key from the blockchain on the first signature verification.
             /*
@@ -246,9 +267,6 @@ export function useLobbyActions(deps: LobbyDeps) {
                 }
             }
 
-            // ECIES pubkey registration is handled by WaitingRoom on mount —
-            // no need to duplicate it here (was causing extra MetaMask popup).
-
             setCurrentRoomId(finalRoomId);
             // Don't call refreshPlayersList here — setCurrentRoomId triggers a
             // useEffect that resets gameState to INITIAL, which would race with
@@ -259,6 +277,14 @@ export function useLobbyActions(deps: LobbyDeps) {
             if (avatarUrl && myAddr) {
                 uploadAvatar(finalRoomId, myAddr, avatarUrl, activeWalletClient, targetChain.id);
             }
+
+            // Register ECIES pubkey with GM server. Fire-and-forget so the user
+            // isn't blocked on a slow GM round-trip; signRequest will use the
+            // session key we just stored above (no wallet popup). On failure
+            // WaitingRoom's fallback effect can retry on mount.
+            GM.registerEciesPubkey(finalRoomId.toString(), myAddr, activeWalletClient, targetChain.id)
+                .then(() => console.log('[Create] ECIES pubkey registered with GM ✅'))
+                .catch(e => console.warn('[Create] ECIES register failed (WaitingRoom may retry):', e));
 
             addLog("Lobby created successfully!", "success");
             setIsTxPending(false);
@@ -451,6 +477,21 @@ export function useLobbyActions(deps: LobbyDeps) {
                 } else {
                     console.log("[Join] Valid registered session already exists and is synced. Skipping transaction.");
                 }
+
+                // Ensure ECIES keypair exists locally and pubkey is registered
+                // with GM. Done here so WaitingRoom never has to read wagmi
+                // address/walletClient mid-navigation (which races between
+                // Privy embedded and main wallet). Fire-and-forget — signRequest
+                // uses the session key, so no wallet popup.
+                try {
+                    const eciesKp = await loadOrCreateKeypair(rId.toString(), myAddr);
+                    refs.eciesPrivKeyRef.current = eciesKp.privateKey;
+                } catch (e) {
+                    console.warn('[Join Rejoin] Failed to create ECIES keypair:', e);
+                }
+                GM.registerEciesPubkey(rId.toString(), myAddr, activeWalletClient, targetChain.id)
+                    .then(() => console.log('[Join Rejoin] ECIES pubkey registered with GM ✅'))
+                    .catch(e => console.warn('[Join Rejoin] ECIES register failed (WaitingRoom may retry):', e));
 
                 setCurrentRoomId(rId);
                 // Polling in useGameDataSync will auto-fetch player data.
@@ -647,9 +688,6 @@ export function useLobbyActions(deps: LobbyDeps) {
             }
             */
 
-            // ECIES pubkey registration is handled by WaitingRoom on mount —
-            // no need to duplicate it here (was causing extra MetaMask popup).
-
             setCurrentRoomId(BigInt(roomId));
             // Polling in useGameDataSync will auto-fetch player data for the new room.
 
@@ -657,6 +695,16 @@ export function useLobbyActions(deps: LobbyDeps) {
             if (avatarUrl && myAddr) {
                 uploadAvatar(BigInt(roomId), myAddr, avatarUrl, activeWalletClient, targetChain.id);
             }
+
+            // Register ECIES pubkey with GM server. Done here (not in
+            // WaitingRoom) so the canonical signer + walletClient that just
+            // signed joinRoom is what GM sees — eliminates the wagmi/Privy
+            // race that pops the wrong wallet during navigation. Fire-and-
+            // forget; signRequest uses the session key we just stored, so
+            // there's no wallet popup.
+            GM.registerEciesPubkey(BigInt(roomId).toString(), myAddr, activeWalletClient, targetChain.id)
+                .then(() => console.log('[Join] ECIES pubkey registered with GM ✅'))
+                .catch(e => console.warn('[Join] ECIES register failed (WaitingRoom may retry):', e));
 
             return true;
         } catch (e: any) {

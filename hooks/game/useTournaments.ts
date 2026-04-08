@@ -207,8 +207,9 @@ export function useTournaments(deps: TournamentDeps) {
             const sessionAccount = privateKeyToAccount(sessionPrivKey);
             const pubKeyHex = sessionAccount.publicKey;
 
-            const eciesKp = await loadOrCreateKeypair(newRoomId.toString(), account);
-            refs.eciesPrivKeyRef.current = eciesKp.privateKey;
+            // ECIES keypair is created AFTER we know the real on-chain roomId
+            // (parsed from the receipt below), so the localStorage entry is
+            // keyed by the actual id rather than the optimistic newRoomId.
 
             let tournamentPasswordHash = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
             if (params.password) {
@@ -260,12 +261,30 @@ export function useTournaments(deps: TournamentDeps) {
                     const roomId = (logs[0] as any).args.roomId;
                     localStorage.setItem('currentRoomId', roomId.toString());
                     sessionStorage.setItem('currentRoomId', roomId.toString());
+
+                    // Create ECIES keypair under the canonical roomId now that
+                    // we know it. See createLobbyOnChain for the rationale on
+                    // why we do this here rather than in WaitingRoom.
+                    try {
+                        const eciesKp = await loadOrCreateKeypair(roomId.toString(), account);
+                        refs.eciesPrivKeyRef.current = eciesKp.privateKey;
+                    } catch (e) {
+                        console.warn('[CreateTournament] Failed to create ECIES keypair:', e);
+                    }
+
                     setCurrentRoomId(roomId);
                     addLog(`Tournament and Room #${roomId} created!`, 'success');
 
+                    // Register ECIES pubkey with GM. Fire-and-forget — signRequest
+                    // uses the session key (no wallet popup). Done here so the
+                    // canonical signer + walletClient is what GM sees, avoiding
+                    // the wagmi/Privy race in WaitingRoom.
+                    GM.registerEciesPubkey(roomId.toString(), account, client, targetChain.id)
+                        .then(() => console.log('[CreateTournament] ECIES pubkey registered with GM ✅'))
+                        .catch(e => console.warn('[CreateTournament] ECIES register failed (WaitingRoom may retry):', e));
+
                     try {
-                        // ECIES pubkey registration is handled by WaitingRoom on mount.
-                        // Only do password sync here (if needed).
+                        // Password sync (if needed).
                         const results = await Promise.allSettled([
                             params.isPrivate && params.joinPassword
                                 ? GM.setRoomPassword({
