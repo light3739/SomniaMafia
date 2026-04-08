@@ -358,9 +358,12 @@ export const RoleReveal: React.FC = React.memo(() => {
             const interval = setInterval(handleFetchRole, 2000);
             return () => clearInterval(interval);
         } else if (!revealState.hasConfirmed && !isProcessing && !isTxPending) {
+            // Give the player 10s to memorise their role before the code
+            // auto-submits commitAndConfirmRole. After confirm the contract
+            // waits for everyone else and then transitions REVEAL → DAY.
             const timeout = setTimeout(() => {
                 handleConfirmRole();
-            }, 4000);
+            }, 10000);
             return () => clearTimeout(timeout);
         }
     }, [

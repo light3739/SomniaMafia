@@ -13,6 +13,7 @@ import { useAccount, useWalletClient } from 'wagmi';
 import { SessionKeyBanner } from '../game/SessionKeyBanner';
 import HowToPlayModal from '../game/HowToPlayModal';
 import * as GM from '../../services/gmService';
+import { loadSession } from '../../services/sessionKeyService';
 
 export const WaitingRoom: React.FC = () => {
     const {
@@ -50,25 +51,64 @@ export const WaitingRoom: React.FC = () => {
         };
     }, []);
 
-    // Register ECIES pubkey with GM so it can encrypt our role privately
-    // Uses refs to avoid re-triggering on walletClient reference changes
+    // Register ECIES pubkey with GM so it can encrypt our role privately.
+    //
+    // Two preconditions must hold to avoid an unwanted MetaMask popup:
+    //  1. walletClient is ready (Privy may still be hydrating on first paint)
+    //  2. A matching session key is already in localStorage — otherwise
+    //     signRequest() inside registerEciesPubkey would fall back to
+    //     walletClient.signMessage and trigger a wallet popup.
+    //
+    // We poll briefly for the session to appear before giving up, since
+    // joinLobbyOnChain stores the session synchronously after the join tx
+    // confirms but the WaitingRoom may mount on a slightly different render
+    // cycle in cold-cache scenarios.
     useEffect(() => {
-        if (!currentRoomId || !address || !chainId || eciesRegistered || eciesRegisteringRef.current) return;
-        // walletClient may not be ready on first render — skip without it
+        if (!currentRoomId || !address || !chainId) return;
+        if (eciesRegistered || eciesRegisteringRef.current) return;
         if (!walletClient) return;
 
-        eciesRegisteringRef.current = true;
+        let cancelled = false;
         const roomId = String(currentRoomId);
+        const roomIdNum = Number(currentRoomId);
+        const myAddrLower = address.toLowerCase();
 
-        GM.registerEciesPubkey(roomId, address, walletClient, chainId)
-            .then(() => {
-                if (mountedRef.current) setEciesRegistered(true);
+        const hasMatchingSession = () => {
+            const s = loadSession();
+            return !!(
+                s &&
+                s.mainWallet.toLowerCase() === myAddrLower &&
+                s.roomId === roomIdNum &&
+                Date.now() < s.expiresAt
+            );
+        };
+
+        const runRegistration = async () => {
+            // Wait up to ~4s for the session to appear so we don't pop a wallet
+            // signature for register-pubkey when the session is moments away.
+            for (let i = 0; i < 8 && !hasMatchingSession(); i++) {
+                if (cancelled) return;
+                await new Promise(r => setTimeout(r, 500));
+            }
+            if (cancelled) return;
+            if (eciesRegisteringRef.current) return;
+
+            eciesRegisteringRef.current = true;
+            try {
+                await GM.registerEciesPubkey(roomId, address, walletClient, chainId);
+                if (mountedRef.current && !cancelled) setEciesRegistered(true);
                 console.log('[ECIES] Public key registered with GM server');
-            })
-            .catch(e => console.warn('[ECIES] register-pubkey error:', e))
-            .finally(() => { eciesRegisteringRef.current = false; });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentRoomId, address, chainId, eciesRegistered]);
+            } catch (e) {
+                console.warn('[ECIES] register-pubkey error:', e);
+            } finally {
+                eciesRegisteringRef.current = false;
+            }
+        };
+
+        runRegistration();
+
+        return () => { cancelled = true; };
+    }, [currentRoomId, address, chainId, eciesRegistered, walletClient]);
 
     // 1. Авто-переход при смене фазы в блокчейне
     //    Set a flag so /game can show the countdown overlay (non-blocking)

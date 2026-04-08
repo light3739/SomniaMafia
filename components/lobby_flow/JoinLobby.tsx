@@ -78,7 +78,7 @@ function formatPrizePool(amount: bigint): string {
 }
 
 export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
-    const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress, publicClient: ctxPublicClient, currencySymbol } = useGameContext();
+    const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress, publicClient: ctxPublicClient, currencySymbol, isWalletReady } = useGameContext();
     const { login, authenticated } = usePrivy();
     const { isConnected } = useAccount();
 
@@ -283,6 +283,13 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             return;
         }
 
+        // Wait until wagmi/Privy finished hydrating before touching the wallet.
+        // Without this, getActiveWalletClient may resolve against a stale Privy
+        // embedded address while the actual signer is the still-locked external
+        // wallet — leading to a session keyed by the wrong address and a second
+        // pubkey popup later in WaitingRoom.
+        if (!isWalletReady) return;
+
         let pass = '';
         if (room.isPrivate) {
             const inputPass = await showPrompt("Enter room password:", { title: 'Private Room', placeholder: 'Password...' });
@@ -330,11 +337,11 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                     <Button
                                         onClick={() => handleJoin(initialRoomData)}
                                         variant="primary-lobby"
-                                        isLoading={isTxPending}
-                                        disabled={isTxPending}
+                                        isLoading={isTxPending || !isWalletReady}
+                                        disabled={isTxPending || !isWalletReady}
                                         className="w-full py-4 text-sm md:text-base tracking-[0.2em] font-['Cinzel']"
                                     >
-                                        Accept Invite & Join
+                                        {!isWalletReady ? 'Connecting...' : 'Accept Invite & Join'}
                                     </Button>
                                 )}
                             </div>
@@ -444,7 +451,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                                 whileHover={{ scale: 1.015 }}
                                                 whileTap={{ scale: 0.98 }}
                                                 onClick={() => handleJoin(room)}
-                                                disabled={isTxPending}
+                                                disabled={isTxPending || !isWalletReady}
                                                 className={`w-full p-4 md:p-5 backdrop-blur-md rounded-md flex items-center justify-between group transition-colors relative overflow-hidden text-left
                                                     ${tournament.isTournament
                                                         ? 'bg-gradient-to-r from-[#2A1F0A] to-[#19130D] border border-[#C49A3C]/30 hover:border-[#C49A3C]/60 shadow-[0_4px_20px_rgba(0,0,0,0.3)]'

@@ -7,6 +7,12 @@ import { LazyAudio } from "@/components/ui/LazyAudio";
 const cinzel = Cinzel({
   subsets: ["latin", "latin-ext"],
   variable: "--font-cinzel",
+  // 'optional' gives the browser ~100ms to load Cinzel; otherwise it sticks
+  // with the size-adjusted fallback for the rest of the session and never swaps.
+  // This kills the FOUT-induced vertical jump on the landing title without
+  // hurting LCP (the title paints immediately with the metric-matched fallback,
+  // and on repeat visits Cinzel is in cache and loads in time).
+  display: "optional",
 });
 
 const montserrat = Montserrat({
