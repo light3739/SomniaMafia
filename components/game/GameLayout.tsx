@@ -99,6 +99,18 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
 
                 const t = setTimeout(() => {
                     sessionStorage.removeItem('mafia_cinematic_commit_ts');
+                    // Pre-trigger the morning announcement BEFORE swapping the
+                    // active phase. Without this, setActivePhase fires first,
+                    // NightPhase unmounts, DayPhase mounts, and only then the
+                    // separate announcement effect runs and fades the morning
+                    // overlay in — leaving 1-2 frames where the bare game
+                    // table is visible. Triggering both state updates inside
+                    // the same callback lets React batch them so the morning
+                    // overlay paints together with the day phase swap.
+                    if (gameState.dayCount > 0 && gameState.dayCount !== lastMorningDayRef.current) {
+                        lastMorningDayRef.current = gameState.dayCount;
+                        triggerMorningAnnouncement();
+                    }
                     setActivePhase(gameState.phase);
                 }, delay);
                 return () => clearTimeout(t);

@@ -182,8 +182,12 @@ export function useEventPoller(deps: PollerDeps) {
                         // Sync player list so isAlive flags update
                         if (roomId) await dataSync.fetchGameData(roomId);
 
-                        // Write night result log immediately with stable id so it deduplicates
-                        // with the server log when it arrives (same txHash-logIndex format).
+                        // NightFinalized is only emitted by LibGame.finalizeNight on the
+                        // failsafe peaceful path (resolveNightAsGameMaster with victim==0
+                        // or LobbyFacet.forcePhaseTimeout). Real mafia kills come through
+                        // NightResolvedByGM (handled in the next case). Either way we
+                        // surface a NIGHT_RESULT log entry so GameLog can render the
+                        // morning recap on the next day.
                         const nightId = stableId(log);
                         if (args.killed && args.killed !== '0x0000000000000000000000000000000000000000') {
                             const killedStr = (args.killed as string).toLowerCase();
@@ -196,6 +200,29 @@ export function useEventPoller(deps: PollerDeps) {
                                 addLog(`Night Result: ${kname} was killed by Mafia!`, 'danger', 'NIGHT_RESULT', { isEliminated: true, playerName: kname }, nightId);
                             }
                         } else {
+                            addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
+                        }
+                        break;
+                    }
+
+                    case 'NightResolvedByGM': {
+                        // Real mafia kill path. NightFacet.resolveNightAsGameMaster emits
+                        // this BEFORE transitionToDay when victim != 0. Without this case,
+                        // no NIGHT_RESULT log is ever produced for kill nights and the
+                        // morning recap on the next day stays empty.
+                        if (roomId) await dataSync.fetchGameData(roomId);
+
+                        const nightId = stableId(log);
+                        const killed = args.killed as string | undefined;
+                        if (killed && killed !== '0x0000000000000000000000000000000000000000') {
+                            const killedStr = killed.toLowerCase();
+                            const killedPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === killedStr);
+                            const kname = killedPlayer?.name || killed.slice(0, 6);
+                            addLog(`Night Result: ${kname} was killed by Mafia!`, 'danger', 'NIGHT_RESULT', { isEliminated: true, playerName: kname }, nightId);
+                        } else {
+                            // Defensive: GM should never call resolveNightAsGameMaster with
+                            // victim==0 (it routes to finalizeNight which fires NightFinalized
+                            // instead), but log a peaceful result just in case.
                             addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
                         }
                         break;

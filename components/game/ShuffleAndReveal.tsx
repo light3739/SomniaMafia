@@ -314,17 +314,38 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
             if (!revealState.eciesRegistered) handleRegisterEcies();
             else if (!revealState.hasSharedKeys) handleShareKey();
             else if (!revealState.isRevealed) handleFetchRole();
-            else if (!revealState.hasConfirmed && !isRevealProcessing && !isTxPending) {
-                // Give the player 10s to memorise their role before the code
-                // auto-submits commitAndConfirmRole. After confirm the contract
-                // waits for everyone else and then transitions REVEAL → DAY.
-                const timeout = setTimeout(() => {
-                    handleConfirmRole();
-                }, 10000);
-                return () => clearTimeout(timeout);
-            }
+            // Auto-confirm is intentionally NOT here. It lives in its own
+            // effect below with narrower deps so the 10s timer doesn't get
+            // cleared on every parent re-render via callback identity churn.
         }
-    }, [isReveal, shuffleState.isMyTurn, shuffleState.hasCommitted, isShuffleProcessing, isTxPending, revealState, handleMyTurn, handleRevealRecovery, handleRegisterEcies, handleShareKey, handleFetchRole, handleConfirmRole]);
+    }, [isReveal, shuffleState.isMyTurn, shuffleState.hasCommitted, isShuffleProcessing, isTxPending, revealState, handleMyTurn, handleRevealRecovery, handleRegisterEcies, handleShareKey, handleFetchRole]);
+
+    // ── Auto-confirm role: 10s timer with stable deps ──────────────────────
+    // The previous version put this inside the cascading auto-flow effect
+    // above, which had `handleConfirmRole` (a useCallback) and the entire
+    // `revealState` object in its deps. handleConfirmRole's own useCallback
+    // depends on `commitAndConfirmRoleOnChain` from GameContext, and the
+    // context provider re-renders on every poll cycle (~2s) — every poll the
+    // callback got a new identity, the effect re-ran, the cleanup cleared
+    // the pending setTimeout, and a fresh 10s timer started from zero. Net
+    // effect: the 10s wait never actually completed and the player had to
+    // tap the button manually. We pin handleConfirmRole behind a ref so the
+    // timer isolation effect only re-runs when the booleans that actually
+    // gate the auto-confirm change.
+    const handleConfirmRoleRef = useRef(handleConfirmRole);
+    useEffect(() => { handleConfirmRoleRef.current = handleConfirmRole; }, [handleConfirmRole]);
+
+    useEffect(() => {
+        if (!isReveal) return;
+        if (!revealState.isRevealed) return;     // role not fetched yet
+        if (revealState.hasConfirmed) return;    // already confirmed
+        if (isRevealProcessing || isTxPending) return; // busy with another tx
+
+        const timeout = setTimeout(() => {
+            handleConfirmRoleRef.current();
+        }, 10000);
+        return () => clearTimeout(timeout);
+    }, [isReveal, revealState.isRevealed, revealState.hasConfirmed, isRevealProcessing, isTxPending]);
 
     // ── UI Helpers ──
     const totalPlayers = gameState.players.length;
