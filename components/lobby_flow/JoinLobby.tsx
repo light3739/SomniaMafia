@@ -4,8 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { usePrivy } from '@privy-io/react-auth';
 import { useGameContext } from '../../contexts/GameContext';
 import { useNoirDialog } from '../../contexts/NoirDialogContext';
-import { Button } from '../ui/Button';
-import { BackButton } from '../ui/BackButton';
 import { useAccount, useChainId } from 'wagmi';
 import { formatEther } from 'viem';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
@@ -78,7 +76,8 @@ function formatPrizePool(amount: bigint): string {
 }
 
 export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
-    const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress, publicClient: ctxPublicClient, currencySymbol, isWalletReady } = useGameContext();
+    const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress, publicClient: ctxPublicClient, currencySymbol, isWalletReady, setLobbyPassword } = useGameContext();
+    const { showPrompt, showAlert } = useNoirDialog();
     const { login, authenticated } = usePrivy();
     const { isConnected } = useAccount();
 
@@ -100,16 +99,73 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const [currentPage, setCurrentPage] = React.useState(1);
     const PAGE_SIZE = 8;
 
-    // Direct join-by-code input (lives at the top of the lobby browser).
-    // Accepts a numeric room id; navigates to the existing /join?roomId=…
-    // deep link so the rest of the join flow is reused.
-    const [joinCode, setJoinCode] = React.useState('');
-    const handleJoinByCode = () => {
-        const trimmed = joinCode.trim();
-        if (!trimmed) return;
-        const numeric = trimmed.replace(/[^0-9]/g, '');
-        if (!numeric) return;
-        router.push(`/join?roomId=${numeric}`);
+    // Re-fetch a single room directly from chain and validate it. Returns the
+    // parsed room on success, or null after surfacing a popup error to the
+    // user. Used by both the join-by-code prompt and the URL invite flow so
+    // the validation rules / error wording stay in one place.
+    const fetchAndValidateRoom = React.useCallback(
+        async (numericId: string): Promise<ReturnType<typeof parseRoom> | null> => {
+            if (!publicClient) return null;
+            let idBig: bigint;
+            try { idBig = BigInt(numericId); } catch {
+                await showAlert("That room code isn't valid.", { title: 'Invalid Code' });
+                return null;
+            }
+
+            try {
+                const data = await publicClient.readContract({
+                    address: runtimeContractAddress, abi: MAFIA_ABI,
+                    functionName: 'getRoom', args: [idBig],
+                });
+                const parsed = parseRoom(idBig, data);
+                if (!parsed || parsed.host === '0x0000000000000000000000000000000000000000' || parsed.max === 0) {
+                    await showAlert(`Room #${numericId} doesn't exist.`, { title: 'Room Not Found' });
+                    return null;
+                }
+                if (parsed.phase !== 0) {
+                    await showAlert(`Room #${numericId} has already started or ended.`, { title: 'Game In Progress' });
+                    return null;
+                }
+                if (parsed.players >= parsed.max) {
+                    await showAlert(`Room #${numericId} is full.`, { title: 'Room Full' });
+                    return null;
+                }
+                return parsed;
+            } catch (e) {
+                console.error('[JoinLobby] fetchAndValidateRoom error:', e);
+                await showAlert(`Couldn't load room #${numericId}. Please try again.`, { title: 'Network Error' });
+                return null;
+            }
+        },
+        [publicClient, runtimeContractAddress, showAlert]
+    );
+
+    // Direct join-by-code: opens the noir prompt, reads + validates the room
+    // directly from chain, and joins it in-place. No intermediate /join?roomId
+    // navigation, no invite banner — invalid codes surface as alert popups so
+    // the lobby browser stays usable behind the modal.
+    const handleJoinByCodeClick = async () => {
+        if (!publicClient) return;
+        if (!isConnected || !authenticated) { login(); return; }
+        if (!isWalletReady) return;
+
+        const raw = await showPrompt("Enter room code:", {
+            title: 'Join by Room Code',
+            placeholder: 'e.g. 142',
+            confirmLabel: 'Join',
+        });
+        if (!raw) return;
+        const numeric = raw.replace(/[^0-9]/g, '');
+        if (!numeric) {
+            await showAlert("Room code must be a number.", { title: 'Invalid Code' });
+            return;
+        }
+
+        const room = await fetchAndValidateRoom(numeric);
+        if (!room) return;
+        // handleJoin is defined later in this component scope; safe because
+        // this body only runs from a click handler, well after component init.
+        await handleJoin(room);
     };
 
     const filteredRooms = React.useMemo(() => {
@@ -330,9 +386,6 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         };
     }, [fetchRooms, publicClient, runtimeContractAddress]);
 
-    const { setLobbyPassword } = useGameContext();
-    const { showPrompt } = useNoirDialog();
-
     const handleJoin = async (room: any) => {
         if (!isConnected || !authenticated) {
             login();
@@ -363,7 +416,45 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         }
     };
 
-    const initialRoomData = initialRoomId ? rooms.find(r => r.id === Number(initialRoomId)) : null;
+    // Auto-join when arriving from a deep-link URL like /join?roomId=142.
+    // We bypass the (removed) invite banner entirely: as soon as the wallet
+    // is ready we read the room directly, validate it, and run the same join
+    // flow as the in-page # button. Errors surface as alert popups so the
+    // user lands on the normal lobby browser, not a dead-end screen.
+    //
+    // If the user isn't logged in we trigger Privy's login() once so they
+    // aren't stranded silently — after auth completes the effect re-runs via
+    // its `authenticated` dep and continues to the join step.
+    const inviteAutoJoinedRef = useRef(false);
+    const inviteLoginRequestedRef = useRef(false);
+    useEffect(() => {
+        if (!initialRoomId) return;
+        if (inviteAutoJoinedRef.current) return;
+        if (!publicClient) return;
+
+        if (!isConnected || !authenticated) {
+            if (!inviteLoginRequestedRef.current) {
+                inviteLoginRequestedRef.current = true;
+                login();
+            }
+            return;
+        }
+        if (!isWalletReady) return;
+
+        inviteAutoJoinedRef.current = true;
+        (async () => {
+            const numeric = String(initialRoomId).replace(/[^0-9]/g, '');
+            if (!numeric) {
+                await showAlert("That invite link isn't valid.", { title: 'Invalid Invite' });
+                return;
+            }
+            const room = await fetchAndValidateRoom(numeric);
+            if (!room) return;
+            await handleJoin(room);
+        })();
+        // handleJoin is referenced at call time, after init — safe to omit.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialRoomId, publicClient, isConnected, authenticated, isWalletReady, fetchAndValidateRoom, showAlert, login]);
 
     return (
         <FlowLayout
@@ -371,43 +462,6 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             rightElement={<NetworkSelector compact />}
         >
             <div className="w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6">
-
-                {/* Баннер Инвайта */}
-                {initialRoomId && !isInitialLoad && (
-                    <div className="w-full p-6 bg-gradient-to-br from-[#19130D] to-[#281608] border border-[#C49A3C]/30 rounded-lg shadow-[0_0_20px_rgba(196,154,60,0.15)] flex flex-col items-center text-center">
-                        <h3 className="text-white text-xl md:text-2xl font-['Cinzel'] mb-1">Room #{initialRoomId} Invite</h3>
-
-                        {initialRoomData ? (
-                            <div className="flex flex-col gap-4 w-full mt-2">
-                                <p className="text-white/60 text-sm">You have been invited to join <span className="text-[#C49A3C] font-semibold">{initialRoomData.name || 'this session'}</span>.</p>
-
-                                {(!isConnected || !authenticated) ? (
-                                    <Button
-                                        onClick={() => login()}
-                                        variant="primary-lobby"
-                                        className="w-full py-4 text-sm md:text-base tracking-[0.2em] font-['Cinzel']"
-                                    >
-                                        Connect Wallet to Join
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        onClick={() => handleJoin(initialRoomData)}
-                                        variant="primary-lobby"
-                                        isLoading={isTxPending || !isWalletReady}
-                                        disabled={isTxPending || !isWalletReady}
-                                        className="w-full py-4 text-sm md:text-base tracking-[0.2em] font-['Cinzel']"
-                                    >
-                                        {!isWalletReady ? 'Connecting...' : 'Accept Invite & Join'}
-                                    </Button>
-                                )}
-                            </div>
-                        ) : (
-                            <p className="text-red-400/80 mt-2 text-sm bg-red-950/30 py-2 px-4 rounded-lg border border-red-900/50">
-                                This room no longer exists or the game has already started.
-                            </p>
-                        )}
-                    </div>
-                )}
 
                 {/* Заголовок списка */}
                 <div className="flex items-center justify-between w-full mt-2">
@@ -419,6 +473,24 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                             <span className="text-white/50 text-[10px] md:text-xs font-mono">
                                 {new Date(lastUpdate).toLocaleTimeString()}
                             </span>
+                        )}
+                        {/* Join-by-code icon button — opens noir prompt to
+                            paste a room id and deep-link into /join. */}
+                        {!initialRoomId && (
+                            <button
+                                onClick={handleJoinByCodeClick}
+                                disabled={isTxPending || !isWalletReady}
+                                className="text-[#C49A3C] hover:text-[#A8784F] transition-colors p-1 disabled:opacity-50"
+                                title="Join by Room Code"
+                                aria-label="Join by Room Code"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 md:w-6 md:h-6">
+                                    <line x1="4" y1="9" x2="20" y2="9"></line>
+                                    <line x1="4" y1="15" x2="20" y2="15"></line>
+                                    <line x1="10" y1="3" x2="8" y2="21"></line>
+                                    <line x1="16" y1="3" x2="14" y2="21"></line>
+                                </svg>
+                            </button>
                         )}
                         <button
                             onClick={() => fetchRooms('refresh')}
@@ -433,76 +505,48 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     </div>
                 </div>
 
-                {/* Direct room-code join — visible immediately so the user
-                    doesn't have to wait for the network scan. Always shown. */}
-                {!initialRoomId && (
-                    <div className="w-full bg-[#19130D]/60 border border-white/10 rounded-lg p-3 md:p-4 flex flex-col gap-2">
-                        <span className="text-white/55 text-[10px] uppercase tracking-[0.2em] font-bold font-['Montserrat']">
-                            Join by Room Code
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="text"
-                                value={joinCode}
-                                onChange={(e) => setJoinCode(e.target.value.replace(/[^0-9 #]/g, ''))}
-                                onKeyDown={(e) => { if (e.key === 'Enter') handleJoinByCode(); }}
-                                placeholder="Room code (e.g. 142)"
-                                disabled={isTxPending || !isWalletReady}
-                                className="flex-1 h-[44px] bg-black/40 border border-white/10 rounded-md px-4 text-sm text-white/85 placeholder-white/30 font-['Montserrat'] tracking-[0.15em] text-center focus:outline-none focus:border-[#C49A3C]/60 transition-colors disabled:opacity-50"
-                                inputMode="numeric"
-                            />
-                            <button
-                                type="button"
-                                onClick={handleJoinByCode}
-                                disabled={!joinCode.trim() || isTxPending || !isWalletReady}
-                                className="h-[44px] px-5 rounded-md bg-[#C49A3C]/15 border border-[#C49A3C]/40 text-[#C49A3C] text-[11px] font-bold uppercase tracking-[0.15em] font-['Montserrat'] hover:bg-[#C49A3C]/25 hover:border-[#C49A3C]/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-                            >
-                                Join
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Filter chips + search — visible as soon as the initial scan
-                    completes, even if the result set is empty. Don't gate on
-                    rooms.length so the controls don't disappear when the list
-                    is briefly empty. */}
-                {!isInitialLoad && (
-                    <div className="w-full flex flex-col gap-2.5">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            {([
-                                { id: 'all', label: 'All' },
-                                { id: 'public', label: 'Public' },
-                                { id: 'private', label: 'Private' },
-                                { id: 'tournament', label: 'Tournament' },
-                            ] as { id: FilterType; label: string }[]).map((chip) => {
-                                const active = filterType === chip.id;
-                                return (
-                                    <button
-                                        key={chip.id}
-                                        onClick={() => setFilterType(chip.id)}
-                                        className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-[0.15em] font-['Montserrat'] transition-all ${active
-                                            ? 'bg-[#C49A3C] text-[#281608] border border-[#C49A3C]'
-                                            : 'bg-[#19130D]/60 text-white/55 border border-white/8 hover:border-white/20 hover:text-white/80'
-                                            }`}
-                                    >
-                                        {chip.label}
-                                    </button>
-                                );
-                            })}
+                {/* Filter chips + search — always visible so the panel doesn't
+                    flicker in/out around the radar scan. Inputs are disabled
+                    while the initial scan is running, since there's nothing to
+                    filter against yet. */}
+                <div className="w-full flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {([
+                            { id: 'all', label: 'All' },
+                            { id: 'public', label: 'Public' },
+                            { id: 'private', label: 'Private' },
+                            { id: 'tournament', label: 'Tournament' },
+                        ] as { id: FilterType; label: string }[]).map((chip) => {
+                            const active = filterType === chip.id;
+                            return (
+                                <button
+                                    key={chip.id}
+                                    onClick={() => setFilterType(chip.id)}
+                                    disabled={isInitialLoad}
+                                    className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-[0.15em] font-['Montserrat'] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${active
+                                        ? 'bg-[#C49A3C] text-[#281608] border border-[#C49A3C]'
+                                        : 'bg-[#19130D]/60 text-white/55 border border-white/8 hover:border-white/20 hover:text-white/80'
+                                        }`}
+                                >
+                                    {chip.label}
+                                </button>
+                            );
+                        })}
+                        {!isInitialLoad && (
                             <span className="text-white/35 text-[10px] font-mono ml-auto">
                                 {filteredRooms.length} {filteredRooms.length === 1 ? 'lobby' : 'lobbies'}
                             </span>
-                        </div>
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search by name or room id…"
-                            className="w-full h-[40px] bg-[#19130D]/60 border border-white/10 rounded-md px-4 text-sm text-white/85 placeholder-white/30 font-['Montserrat'] focus:outline-none focus:border-[#C49A3C]/50 transition-colors"
-                        />
+                        )}
                     </div>
-                )}
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search by name or room id…"
+                        disabled={isInitialLoad}
+                        className="w-full h-[40px] bg-[#19130D]/60 border border-white/10 rounded-md px-4 text-sm text-white/85 placeholder-white/30 font-['Montserrat'] focus:outline-none focus:border-[#C49A3C]/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                </div>
 
                 {/* Список комнат */}
                 <div className="w-full flex flex-col gap-3 min-h-[250px]">
