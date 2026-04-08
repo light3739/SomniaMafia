@@ -98,6 +98,18 @@ export const SetupProfile: React.FC = () => {
     // Modal state: null = closed, 'wallet' | 'accounts' = open
     const [activeModal, setActiveModal] = useState<'wallet' | 'accounts' | null>(null);
 
+    // Join-by-code input state. Accepts the numeric room id printed in
+    // the lobby browser. Hits the existing /join?roomId=… deep link route.
+    const [joinCode, setJoinCode] = useState('');
+    const handleJoinByCode = () => {
+        const trimmed = joinCode.trim();
+        if (!trimmed) return;
+        // Strip everything but digits — tolerant of "Room #142" or "142 " inputs.
+        const numeric = trimmed.replace(/[^0-9]/g, '');
+        if (!numeric) return;
+        router.push(`/join?roomId=${numeric}`);
+    };
+
     useEffect(() => { setHydrated(true); }, []);
 
     // Auto-fill name from Privy on first load
@@ -377,6 +389,28 @@ export const SetupProfile: React.FC = () => {
                 >
                     {!hydrated || !isWalletReady ? 'Connecting...' : 'Connect to Lobby'}
                 </Button>
+
+                {/* Join by room code — direct deep link to a specific lobby */}
+                <div className="flex items-center gap-2 mt-1">
+                    <Input
+                        value={joinCode}
+                        onChange={(e) => setJoinCode(e.target.value.replace(/[^0-9 #]/g, ''))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleJoinByCode(); }}
+                        placeholder="Room code"
+                        disabled={!hydrated || !isWalletReady}
+                        containerClassName="flex-1"
+                        className="h-[48px] md:h-[52px] !font-['Montserrat'] focus:border-[#C49A3C] text-center tracking-[0.2em]"
+                        inputMode="numeric"
+                    />
+                    <Button
+                        onClick={handleJoinByCode}
+                        disabled={!hydrated || !joinCode.trim() || !playerName.trim() || !isWalletReady}
+                        variant="outline-gold-lobby"
+                        className="h-[48px] md:h-[52px] px-5 text-sm tracking-[0.1em] shrink-0"
+                    >
+                        Join
+                    </Button>
+                </div>
             </div>
 
             {/* MODALS */}

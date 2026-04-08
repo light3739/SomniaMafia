@@ -92,6 +92,46 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const [isInitialLoad, setIsInitialLoad] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
+    // Lobby browser filter / pagination state. Filter and search are
+    // applied client-side over the polled `rooms` list — no extra RPC.
+    type FilterType = 'all' | 'public' | 'private' | 'tournament';
+    const [filterType, setFilterType] = React.useState<FilterType>('all');
+    const [searchQuery, setSearchQuery] = React.useState('');
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const PAGE_SIZE = 8;
+
+    const filteredRooms = React.useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        return rooms.filter((r) => {
+            // Type filter
+            const isTournament = r.tournamentId ? r.tournamentId > 0n : false;
+            if (filterType === 'public' && r.isPrivate) return false;
+            if (filterType === 'private' && !r.isPrivate) return false;
+            if (filterType === 'tournament' && !isTournament) return false;
+            // Search by name or numeric id
+            if (q) {
+                const nameMatch = (r.name || '').toLowerCase().includes(q);
+                const idMatch = String(r.id).includes(q);
+                if (!nameMatch && !idMatch) return false;
+            }
+            return true;
+        });
+    }, [rooms, filterType, searchQuery]);
+
+    const pageCount = Math.max(1, Math.ceil(filteredRooms.length / PAGE_SIZE));
+    // Clamp current page if filter / refresh shrinks the list under it.
+    React.useEffect(() => {
+        if (currentPage > pageCount) setCurrentPage(pageCount);
+    }, [pageCount, currentPage]);
+    // Reset to page 1 whenever filter or search changes so the user always
+    // sees the top of the new result set.
+    React.useEffect(() => { setCurrentPage(1); }, [filterType, searchQuery]);
+
+    const pagedRooms = React.useMemo(() => {
+        const start = (currentPage - 1) * PAGE_SIZE;
+        return filteredRooms.slice(start, start + PAGE_SIZE);
+    }, [filteredRooms, currentPage]);
+
     const [lastUpdate, setLastUpdate] = useState<number>(0);
     const mountedRef = useRef(true);
     const lastFetchRef = useRef(0);
@@ -377,6 +417,44 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                     </div>
                 </div>
 
+                {/* Filter chips + search — only when we have rooms to filter */}
+                {!isInitialLoad && rooms.length > 0 && (
+                    <div className="w-full flex flex-col gap-2.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {([
+                                { id: 'all', label: 'All' },
+                                { id: 'public', label: 'Public' },
+                                { id: 'private', label: 'Private' },
+                                { id: 'tournament', label: 'Tournament' },
+                            ] as { id: FilterType; label: string }[]).map((chip) => {
+                                const active = filterType === chip.id;
+                                return (
+                                    <button
+                                        key={chip.id}
+                                        onClick={() => setFilterType(chip.id)}
+                                        className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-[0.15em] font-['Montserrat'] transition-all ${active
+                                            ? 'bg-[#C49A3C] text-[#281608] border border-[#C49A3C]'
+                                            : 'bg-[#19130D]/60 text-white/55 border border-white/8 hover:border-white/20 hover:text-white/80'
+                                            }`}
+                                    >
+                                        {chip.label}
+                                    </button>
+                                );
+                            })}
+                            <span className="text-white/35 text-[10px] font-mono ml-auto">
+                                {filteredRooms.length} {filteredRooms.length === 1 ? 'lobby' : 'lobbies'}
+                            </span>
+                        </div>
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search by name or room id…"
+                            className="w-full h-[40px] bg-[#19130D]/60 border border-white/10 rounded-md px-4 text-sm text-white/85 placeholder-white/30 font-['Montserrat'] focus:outline-none focus:border-[#C49A3C]/50 transition-colors"
+                        />
+                    </div>
+                )}
+
                 {/* Список комнат */}
                 <div className="w-full flex flex-col gap-3 min-h-[250px]">
                     <AnimatePresence mode="wait">
@@ -429,6 +507,28 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                     )}
                                 </AnimatePresence>
                             </motion.div>
+                        ) : filteredRooms.length === 0 ? (
+                            <motion.div
+                                key="filter-empty"
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.98 }}
+                                transition={{ duration: 0.2 }}
+                                className="w-full min-h-[250px] flex flex-col items-center justify-center bg-[#19130D]/40 rounded-lg border border-white/5 py-10"
+                            >
+                                <span className="text-[#C49A3C]/30 mb-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                </span>
+                                <span className="text-white/60 text-center leading-relaxed">
+                                    No lobbies match your filter.
+                                </span>
+                                <button
+                                    onClick={() => { setFilterType('all'); setSearchQuery(''); }}
+                                    className="mt-3 text-[10px] text-[#C49A3C]/80 hover:text-[#C49A3C] uppercase tracking-[0.2em] font-bold font-['Montserrat']"
+                                >
+                                    Clear filters
+                                </button>
+                            </motion.div>
                         ) : (
                             <motion.div
                                 key="list"
@@ -439,7 +539,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                 className="w-full flex flex-col gap-3"
                             >
                                 <AnimatePresence>
-                                    {rooms.map((room) => {
+                                    {pagedRooms.map((room) => {
                                         const tournament = getTournamentInfo(room);
                                         return (
                                             <motion.button
@@ -523,6 +623,29 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                         )}
                     </AnimatePresence>
                 </div>
+
+                {/* Pagination — only when filteredRooms exceeds one page */}
+                {!isInitialLoad && filteredRooms.length > PAGE_SIZE && (
+                    <div className="w-full flex items-center justify-center gap-3 mt-1">
+                        <button
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={currentPage <= 1}
+                            className="px-3 py-1.5 rounded-md bg-[#19130D]/60 border border-white/10 text-white/70 text-[10px] uppercase font-bold tracking-[0.15em] font-['Montserrat'] hover:border-[#C49A3C]/40 hover:text-[#C49A3C] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            ‹ Prev
+                        </button>
+                        <span className="text-white/55 text-[11px] font-mono tabular-nums">
+                            {currentPage} / {pageCount}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
+                            disabled={currentPage >= pageCount}
+                            className="px-3 py-1.5 rounded-md bg-[#19130D]/60 border border-white/10 text-white/70 text-[10px] uppercase font-bold tracking-[0.15em] font-['Montserrat'] hover:border-[#C49A3C]/40 hover:text-[#C49A3C] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            Next ›
+                        </button>
+                    </div>
+                )}
 
                 {(!isConnected || !authenticated) && rooms.length > 0 && !initialRoomId && (
                     <div className="mt-2 text-white/60 text-xs italic">

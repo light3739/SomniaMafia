@@ -80,7 +80,12 @@ export function useMafiaChat(deps: ChatDeps) {
                 return null;
             }
 
-            const { mafia } = await res.json() as { mafia: string[] };
+            // GM server returns { members: string[] } — keep the local
+            // alias `mafia` so the rest of the function reads naturally.
+            // Without this rename the destructure used to silently return
+            // undefined, the AES key was never derived, and teammates
+            // couldn't decrypt each other's chat at all.
+            const { members: mafia } = await res.json() as { members: string[] };
             if (!mafia || mafia.length === 0) return null;
 
             const sortedMafia = [...mafia].map(a => a.toLowerCase()).sort();

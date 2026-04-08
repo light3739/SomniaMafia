@@ -314,7 +314,15 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
             if (!revealState.eciesRegistered) handleRegisterEcies();
             else if (!revealState.hasSharedKeys) handleShareKey();
             else if (!revealState.isRevealed) handleFetchRole();
-            else if (!revealState.hasConfirmed) handleConfirmRole();
+            else if (!revealState.hasConfirmed && !isRevealProcessing && !isTxPending) {
+                // Give the player 10s to memorise their role before the code
+                // auto-submits commitAndConfirmRole. After confirm the contract
+                // waits for everyone else and then transitions REVEAL → DAY.
+                const timeout = setTimeout(() => {
+                    handleConfirmRole();
+                }, 10000);
+                return () => clearTimeout(timeout);
+            }
         }
     }, [isReveal, shuffleState.isMyTurn, shuffleState.hasCommitted, isShuffleProcessing, isTxPending, revealState, handleMyTurn, handleRevealRecovery, handleRegisterEcies, handleShareKey, handleFetchRole, handleConfirmRole]);
 
