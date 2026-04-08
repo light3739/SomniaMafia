@@ -53,31 +53,46 @@ export const WaitingRoom: React.FC = () => {
 
     // Register ECIES pubkey with GM so it can encrypt our role privately.
     //
-    // Two preconditions must hold to avoid an unwanted MetaMask popup:
+    // Three preconditions must hold to avoid an unwanted MetaMask popup:
     //  1. walletClient is ready (Privy may still be hydrating on first paint)
     //  2. A matching session key is already in localStorage — otherwise
     //     signRequest() inside registerEciesPubkey would fall back to
     //     walletClient.signMessage and trigger a wallet popup.
-    //
-    // We poll briefly for the session to appear before giving up, since
-    // joinLobbyOnChain stores the session synchronously after the join tx
-    // confirms but the WaitingRoom may mount on a slightly different render
-    // cycle in cold-cache scenarios.
+    //  3. We use the session's `mainWallet` as the player address, NOT wagmi's
+    //     `useAccount().address`. On cold-start with a freshly-unlocked external
+    //     wallet, wagmi's connector state can lag and still return the Privy
+    //     embedded address while the canonical signer (the one that actually
+    //     signed the createAndJoin tx and owns the session) is the external
+    //     wallet. Using wagmi's stale address would make signRequest's session
+    //     mainWallet comparison fail, forcing the wallet popup every time.
+    //     See useLobbyActions.ts where refs.addressRef.current is explicitly
+    //     overridden to the canonical signer before the session is stored.
     useEffect(() => {
-        if (!currentRoomId || !address || !chainId) return;
+        if (!currentRoomId || !chainId) return;
         if (eciesRegistered || eciesRegisteringRef.current) return;
         if (!walletClient) return;
 
         let cancelled = false;
         const roomId = String(currentRoomId);
         const roomIdNum = Number(currentRoomId);
-        const myAddrLower = address.toLowerCase();
+
+        const canonicalAddress = (): `0x${string}` | null => {
+            const s = loadSession();
+            if (
+                s &&
+                s.roomId === roomIdNum &&
+                Date.now() < s.expiresAt
+            ) {
+                return s.mainWallet.toLowerCase() as `0x${string}`;
+            }
+            // No matching session yet — fall back to wagmi address.
+            return address ? (address.toLowerCase() as `0x${string}`) : null;
+        };
 
         const hasMatchingSession = () => {
             const s = loadSession();
             return !!(
                 s &&
-                s.mainWallet.toLowerCase() === myAddrLower &&
                 s.roomId === roomIdNum &&
                 Date.now() < s.expiresAt
             );
@@ -93,9 +108,15 @@ export const WaitingRoom: React.FC = () => {
             if (cancelled) return;
             if (eciesRegisteringRef.current) return;
 
+            const playerAddr = canonicalAddress();
+            if (!playerAddr) {
+                console.warn('[ECIES] No canonical address resolvable — skipping register-pubkey');
+                return;
+            }
+
             eciesRegisteringRef.current = true;
             try {
-                await GM.registerEciesPubkey(roomId, address, walletClient, chainId);
+                await GM.registerEciesPubkey(roomId, playerAddr, walletClient, chainId);
                 if (mountedRef.current && !cancelled) setEciesRegistered(true);
                 console.log('[ECIES] Public key registered with GM server');
             } catch (e) {

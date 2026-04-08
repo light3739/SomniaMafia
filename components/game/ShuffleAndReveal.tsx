@@ -14,10 +14,11 @@ import { RevealPanel } from './shuffle/RevealPanel';
 import { SuspectRow } from './shuffle/SuspectRow';
 
 // Services
-import { 
-    registerEciesPubkey, submitSraKeyToGm, fetchMyRoleFromGm 
+import {
+    registerEciesPubkey, submitSraKeyToGm, fetchMyRoleFromGm
 } from '../../services/gmService';
 import { loadOrCreateKeypair } from '../../services/eciesService';
+import { loadSession } from '../../services/sessionKeyService';
 
 export const ShuffleAndReveal: React.FC = React.memo(() => {
     const {
@@ -235,40 +236,59 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
         } catch (e: any) { addLog(e.message || 'Reveal failed', 'danger'); } finally { setIsShuffleProcessing(false); }
     }, [currentRoomId, pendingDeck, pendingSalt, isShuffleProcessing, revealDeckOnChain, SHUFFLE_COMMIT_KEY, addLog]);
 
+    // Resolve the canonical player address for this room. See RoleReveal.tsx
+    // for the rationale — wagmi's useAccount() address can lag on cold-start
+    // with a freshly-unlocked external wallet, while the session's mainWallet
+    // always matches the actual on-chain player entry.
+    const resolvePlayerAddress = useCallback((): `0x${string}` | null => {
+        const roomIdNum = currentRoomId ? Number(currentRoomId) : null;
+        const s = loadSession();
+        if (s && roomIdNum !== null && s.roomId === roomIdNum && Date.now() < s.expiresAt) {
+            return s.mainWallet.toLowerCase() as `0x${string}`;
+        }
+        return address ? (address.toLowerCase() as `0x${string}`) : null;
+    }, [currentRoomId, address]);
+
     // ── Reveal Flow ──
     const handleRegisterEcies = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient || registerInFlightRef.current) return;
-        const { isNew } = await loadOrCreateKeypair(currentRoomId.toString(), address);
+        if (!currentRoomId || !walletClient || registerInFlightRef.current) return;
+        const playerAddr = resolvePlayerAddress();
+        if (!playerAddr) return;
+        const { isNew } = await loadOrCreateKeypair(currentRoomId.toString(), playerAddr);
         if (revealState.eciesRegistered && !isNew) return;
         registerInFlightRef.current = true;
         try {
-            await registerEciesPubkey(currentRoomId.toString(), address, walletClient, chainId, false);
+            await registerEciesPubkey(currentRoomId.toString(), playerAddr, walletClient, chainId, false);
             setRevealState(prev => ({ ...prev, eciesRegistered: true }));
         } catch { /* silent */ } finally { registerInFlightRef.current = false; }
-    }, [currentRoomId, address, walletClient, chainId, revealState.eciesRegistered]);
+    }, [currentRoomId, walletClient, chainId, revealState.eciesRegistered, resolvePlayerAddress]);
 
     const handleShareKey = useCallback(async () => {
-        if (!currentRoomId || !address || !walletClient || revealState.hasSharedKeys || submitInFlightRef.current) return;
+        if (!currentRoomId || !walletClient || revealState.hasSharedKeys || submitInFlightRef.current) return;
+        const playerAddr = resolvePlayerAddress();
+        if (!playerAddr) return;
         submitInFlightRef.current = true; setIsRevealProcessing(true);
         try {
             const svc = getShuffleService();
-            if (!svc.hasKeys() && !svc.loadKeys(currentRoomId.toString(), address)) return;
-            await submitSraKeyToGm({ roomId: currentRoomId.toString(), address, sraKey: svc.getDecryptionKey(), walletClient, chainId });
+            if (!svc.hasKeys() && !svc.loadKeys(currentRoomId.toString(), playerAddr)) return;
+            await submitSraKeyToGm({ roomId: currentRoomId.toString(), address: playerAddr, sraKey: svc.getDecryptionKey(), walletClient, chainId });
             setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
         } catch { /* silent */ } finally { setIsRevealProcessing(false); submitInFlightRef.current = false; }
-    }, [currentRoomId, address, walletClient, chainId, revealState.hasSharedKeys]);
+    }, [currentRoomId, walletClient, chainId, revealState.hasSharedKeys, resolvePlayerAddress]);
 
     const handleFetchRole = useCallback(async () => {
-        if (isTestMode || !currentRoomId || !address || !walletClient || revealState.isRevealed || !revealState.hasSharedKeys || fetchInFlightRef.current) return;
+        if (isTestMode || !currentRoomId || !walletClient || revealState.isRevealed || !revealState.hasSharedKeys || fetchInFlightRef.current) return;
+        const playerAddr = resolvePlayerAddress();
+        if (!playerAddr) return;
         fetchInFlightRef.current = true;
         try {
-            const role = await fetchMyRoleFromGm({ roomId: currentRoomId.toString(), address, walletClient, chainId });
+            const role = await fetchMyRoleFromGm({ roomId: currentRoomId.toString(), address: playerAddr, walletClient, chainId });
             if (role) {
                 setRevealState(prev => ({ ...prev, myRole: role, isRevealed: true }));
-                setGameState(prev => ({ ...prev, players: prev.players.map(p => p.address.toLowerCase() === address.toLowerCase() ? { ...p, role } : p) }));
+                setGameState(prev => ({ ...prev, players: prev.players.map(p => p.address.toLowerCase() === playerAddr.toLowerCase() ? { ...p, role } : p) }));
             }
         } catch { /* silent */ } finally { fetchInFlightRef.current = false; }
-    }, [currentRoomId, address, walletClient, chainId, revealState.isRevealed, revealState.hasSharedKeys, setGameState, isTestMode]);
+    }, [currentRoomId, walletClient, chainId, revealState.isRevealed, revealState.hasSharedKeys, setGameState, isTestMode, resolvePlayerAddress]);
 
     const handleConfirmRole = useCallback(async () => {
         if (!revealState.myRole || !address || revealState.hasConfirmed || isRevealProcessing || isTxPending) return;
