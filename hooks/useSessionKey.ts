@@ -8,13 +8,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useWriteContract } from 'wagmi';
-import { 
-  clearSession, 
-  hasValidSession,
-  getSessionInfo,
+import {
+  clearSession,
+  loadSession,
   getSessionAccount,
 } from '../services/sessionKeyService';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, getDeploymentByChainId } from '../contracts/config';
+import { MAFIA_ABI, getDeploymentByChainId } from '../contracts/config';
 
 interface UseSessionKeyReturn {
   // State
@@ -42,10 +41,29 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
 
   const { writeContractAsync } = useWriteContract();
 
-  // Check session status on mount and when roomId/wallet/chain changes
-  // Poll every second until session is valid (covers timing issues with markSessionRegistered)
+  // Check session status on mount and when roomId/chain changes.
+  // Poll every second until a session row appears (covers timing
+  // issues with markSessionRegistered writing on a slightly later tick).
+  //
+  // Crucial: we read the session row directly from localStorage and
+  // do NOT compare its mainWallet against useAccount().address.
+  //
+  // useAccount() races during /create→/waiting navigation between
+  // Privy embedded and the main wallet — it can briefly return a
+  // different address than the canonical signer that actually stored
+  // the session row in createLobby/joinLobby. If we gate on a wallet
+  // match here, the banner shows "No Session" for the entire window
+  // the race lasts (sometimes permanently if the wagmi flicker
+  // settles on the wrong wallet).
+  //
+  // The session row in localStorage IS the source of truth: it was
+  // written by createLobby/joinLobby with the canonical myAddr that
+  // signed the on-chain registerSessionKey call, and localStorage is
+  // per-tab so we can trust any non-expired row for this roomId as
+  // belonging to the current user. clearSession() runs on logout /
+  // expiry, so stale rows can't outlive a real session change.
   useEffect(() => {
-    if (!roomId || !mainWallet) {
+    if (!roomId) {
       setHasSession(false);
       setSessionAddress(null);
       setExpiresAt(null);
@@ -53,15 +71,22 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
     }
 
     const checkSession = () => {
-      const valid = hasValidSession(roomId, mainWallet, chainId);
+      const session = loadSession();
+      const valid = !!(
+        session &&
+        session.roomId === roomId &&
+        session.registeredOnChain &&
+        Date.now() < session.expiresAt &&
+        (!chainId || session.chainId === chainId)
+      );
       setHasSession(valid);
 
-      if (valid) {
-        const info = getSessionInfo();
-        if (info) {
-          setSessionAddress(info.address);
-          setExpiresAt(info.expiresAt);
-        }
+      if (valid && session) {
+        setSessionAddress(session.address);
+        setExpiresAt(new Date(session.expiresAt));
+      } else {
+        setSessionAddress(null);
+        setExpiresAt(null);
       }
       return valid;
     };
@@ -69,9 +94,9 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
     // Check immediately
     const isValid = checkSession();
 
-    // If not valid yet, poll every second until it becomes valid
-    // This handles the race condition where markSessionRegistered() updates localStorage
-    // but the useEffect deps haven't changed to trigger a re-check
+    // If not valid yet, poll every second until it becomes valid.
+    // This handles the race where markSessionRegistered() updates
+    // localStorage on a slightly later tick than this effect ran.
     if (!isValid) {
       const interval = setInterval(() => {
         const nowValid = checkSession();
@@ -81,7 +106,7 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [roomId, mainWallet, chainId]);
+  }, [roomId, chainId]);
 
   /**
    * NOTE: In V4 contract, session key is registered automatically during joinRoom.
@@ -89,25 +114,25 @@ export function useSessionKey(roomId: number | null): UseSessionKeyReturn {
    * The session is already active if you successfully joined a room.
    */
   const registerSession = useCallback(async (_targetRoomId: number, _fundAmount: string = '0.02') => {
-    // V4: Session key is already registered during joinRoom
-    // Just check if we have a valid session
-    if (!mainWallet) {
-      setError('Wallet not connected');
-      return;
-    }
-
-    const valid = hasValidSession(_targetRoomId, mainWallet, chainId);
-    if (valid) {
+    // V4: Session key is already registered during joinRoom.
+    // Read directly from localStorage — see the main effect above
+    // for why we don't gate on useAccount().address here.
+    const session = loadSession();
+    const valid = !!(
+      session &&
+      session.roomId === _targetRoomId &&
+      session.registeredOnChain &&
+      Date.now() < session.expiresAt &&
+      (!chainId || session.chainId === chainId)
+    );
+    if (valid && session) {
       setHasSession(true);
-      const info = getSessionInfo();
-      if (info) {
-        setSessionAddress(info.address);
-        setExpiresAt(info.expiresAt);
-      }
+      setSessionAddress(session.address);
+      setExpiresAt(new Date(session.expiresAt));
     } else {
       setError('Session not found. Please rejoin the room.');
     }
-  }, [mainWallet]);
+  }, [chainId]);
 
   /**
    * Revoke the current session key
