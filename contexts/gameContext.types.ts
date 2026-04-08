@@ -122,6 +122,12 @@ export interface GameContextType {
     discussionState: DiscussionState | null;
     setDiscussionState: React.Dispatch<React.SetStateAction<DiscussionState | null>>;
     fetchDiscussionState: () => Promise<void>;
+
+    // Pull-based refund (PR1 DoS fallback UI)
+    pendingRefundNative: bigint;
+    isClaimingRefund: boolean;
+    claimRefund: () => Promise<boolean>;
+    refreshPendingRefund: () => Promise<void>;
 }
 
 export interface DiscussionState {

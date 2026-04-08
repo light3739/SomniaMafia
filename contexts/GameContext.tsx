@@ -16,11 +16,13 @@
  *   Level 4: useEventPoller
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
 import { GamePhase, GameState, Player, Role, LogEntry, type GameEventType, type GameEventData } from '../types';
 import type { GameContextType, DiscussionState } from './gameContext.types';
 import { useAccount } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
+import { toast } from 'sonner';
+import { resetShuffleService } from '../services/shuffleService';
 
 import {
     useGameRefs,
@@ -36,6 +38,7 @@ import {
     useTournaments,
     useEndGame,
     useEventPoller,
+    useRefundClaims,
 } from '../hooks/game';
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -225,6 +228,76 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         refs.lastPhaseKeyRef.current = '';
     }, [currentRoomId]);
 
+    // Phase rewind detector: if the room transitions from SHUFFLING/REVEAL back
+    // to LOBBY within the same currentRoomId, the contract rewound the room via
+    // kickAfkAndReturnToLobby (pre-DAY timeout). The game isn't over — players
+    // stay in the room, host can re-start — but the local state from the aborted
+    // shuffle (commit/reveal flags, deck, role keys) is stale. Reset the
+    // relevant slices and surface a toast so the player knows what happened.
+    const prevPhaseRef = useRef<GamePhase>(gameState.phase);
+    useEffect(() => {
+        const prev = prevPhaseRef.current;
+        const next = gameState.phase;
+        prevPhaseRef.current = next;
+
+        const wentBackToLobby =
+            (prev === GamePhase.SHUFFLING || prev === GamePhase.REVEAL) &&
+            next === GamePhase.LOBBY;
+
+        if (!wentBackToLobby) return;
+        if (!currentRoomId) return;
+
+        console.log('[GameContext] Room rewound from', GamePhase[prev], '→ LOBBY. Resetting shuffle state.');
+
+        // Clear shuffle service singleton — it holds the SRA keypair from the
+        // aborted attempt which won't match the restart.
+        resetShuffleService();
+        if (refs.addressRef.current) {
+            try {
+                // Best-effort localStorage cleanup for the specific room+wallet.
+                const rid = currentRoomId.toString();
+                const addrLower = refs.addressRef.current.toLowerCase();
+                localStorage.removeItem(`mafia_keys_${rid}_${addrLower}`);
+                localStorage.removeItem(`mafia_shuffle_commit_${rid}_${addrLower}`);
+                localStorage.removeItem(`role_salt_${rid}_${addrLower}`);
+                localStorage.removeItem(`my_role_${rid}_${addrLower}`);
+            } catch {
+                /* localStorage unavailable — ignore */
+            }
+        }
+
+        // Reset phase-specific slices of gameState. Keep currentRoomId,
+        // players list (it'll be refreshed from chain on next poll), and
+        // room metadata. Drop stale dayCount / revealed counters.
+        setGameState(prev => ({
+            ...prev,
+            phase: GamePhase.LOBBY,
+            dayCount: 0,
+            revealedCount: 0,
+            mafiaCommittedCount: 0,
+            mafiaRevealedCount: 0,
+            winner: null,
+            players: prev.players.map(p => ({
+                ...p,
+                role: Role.UNKNOWN,
+                hasConfirmedRole: false,
+                hasDeckCommitted: false,
+                hasVoted: false,
+                hasNightCommitted: false,
+                hasNightRevealed: false,
+            })),
+        }));
+
+        refs.lastPhaseKeyRef.current = '';
+        refs.roleFetchedRef.current = false;
+
+        toast.warning(
+            'Game was aborted before it started — back to lobby. Host can re-start when everyone is ready.',
+            { duration: 7000, id: 'room-rewound' },
+        );
+        addLog('Room returned to lobby (shuffle/reveal aborted)', 'info');
+    }, [gameState.phase, currentRoomId, refs, addLog]);
+
     // ==================== WALLET READY STATE ====================
     const { isConnecting, isReconnecting } = useAccount();
     const { ready, authenticated } = usePrivy();
@@ -325,6 +398,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const endGame = useEndGame({
         refs, txEngine, dataSync, gameState,
         setIsTxPending, setGameState, addLog, isTestMode, currentRoomId
+    });
+
+    const refundClaims = useRefundClaims({
+        refs, wallet, addLog,
     });
 
     // ==================== LEVEL 4: EVENT POLLING ====================
@@ -482,6 +559,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         kickStalledPlayerOnChain,
         refreshPlayersList: dataSync.refreshPlayersList,
         handlePlayerAction, canActOnPlayer, getActionLabel,
+
+        // Pull-based refund
+        pendingRefundNative: refundClaims.pendingNative,
+        isClaimingRefund: refundClaims.isClaiming,
+        claimRefund: refundClaims.claim,
+        refreshPendingRefund: refundClaims.refresh,
     }), [
         playerName, avatarUrl, lobbyName, gameState, isTxPending, isTxConfirming,
         currentRoomId, selectedTarget, showVotingResults, isTestMode,
@@ -495,6 +578,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         dataSync.refreshPlayersList,
         kickStalledPlayerOnChain, handlePlayerAction, canActOnPlayer, getActionLabel,
         setPlayerMark,
+        refundClaims.pendingNative, refundClaims.isClaiming,
+        refundClaims.claim, refundClaims.refresh,
     ]);
 
     return (

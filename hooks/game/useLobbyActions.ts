@@ -22,6 +22,7 @@ import { signRequest } from '../../services/requestSigning';
 import { buildAvatarMessage } from '../../services/signingSchema';
 import * as GM from '../../services/gmService';
 import { registerSessionOnGm } from '../../services/gmService';
+import { checkAfkCooldown, formatCooldown } from '../../services/cooldownCheck';
 import type { GameRefs } from './useGameRefs';
 import type { WalletManager } from './useWalletManager';
 import type { TransactionEngine } from './useTransactionEngine';
@@ -111,6 +112,18 @@ export function useLobbyActions(deps: LobbyDeps) {
             // Keep refs in sync so any concurrent reader (WaitingRoom polling,
             // useGameDataSync, etc.) sees the same canonical address.
             refs.addressRef.current = myAddr;
+
+            // AFK cooldown preflight: if the wallet was kicked for inactivity in
+            // a previous game, show a clear message instead of a generic tx revert.
+            const cooldown = await checkAfkCooldown(pClient as any, refs.contractAddressRef.current, myAddr);
+            if (cooldown.blocked) {
+                await showAlert(
+                    `You were kicked for inactivity in a previous game. Access returns in ${formatCooldown(cooldown.remaining)}.`,
+                    { variant: 'danger', title: 'AFK Cooldown' }
+                );
+                setIsTxPending(false);
+                return false;
+            }
 
             const nextId = await pClient.readContract({
                 address: refs.contractAddressRef.current,
@@ -283,6 +296,18 @@ export function useLobbyActions(deps: LobbyDeps) {
             if (!activeAddr) { await showAlert("Wallet not ready. Please unlock and try again."); setIsTxPending(false); return false; }
             const myAddr = activeAddr.toLowerCase() as `0x${string}`;
             refs.addressRef.current = myAddr;
+
+            // AFK cooldown preflight — surface a clear message instead of the
+            // generic Unauthorized() revert from requireNotAfkBlocked.
+            const cooldown = await checkAfkCooldown(pClient as any, refs.contractAddressRef.current, myAddr);
+            if (cooldown.blocked) {
+                await showAlert(
+                    `You were kicked for inactivity in a previous game. Access returns in ${formatCooldown(cooldown.remaining)}.`,
+                    { variant: 'danger', title: 'AFK Cooldown' }
+                );
+                setIsTxPending(false);
+                return false;
+            }
 
             const safeName = /^[a-zA-Z0-9_ ]+$/.test(name) ? name : `Player_${Math.floor(Math.random() * 1000)}`;
             console.log(`[SafeName] Join - Original: "${name}", Used: "${safeName}"`);
