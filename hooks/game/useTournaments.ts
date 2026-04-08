@@ -16,6 +16,8 @@ import { generateKeyPair, stringToHex } from '../../services/cryptoUtils';
 import { createNewSession, markSessionRegistered } from '../../services/sessionKeyService';
 import { loadOrCreateKeypair } from '../../services/eciesService';
 import * as GM from '../../services/gmService';
+import { checkAfkCooldown, formatCooldown } from '../../services/cooldownCheck';
+import { toast } from 'sonner';
 import type { GameRefs } from './useGameRefs';
 import type { WalletManager } from './useWalletManager';
 import type { TransactionEngine } from './useTransactionEngine';
@@ -46,6 +48,18 @@ export function useTournaments(deps: TournamentDeps) {
         try {
             setIsTxPending(true);
             const { client, account } = await wallet.getActiveWalletClient();
+
+            // AFK cooldown preflight
+            const callerAddr = (typeof account === 'string' ? account : (account as any)?.address) as `0x${string}` | undefined;
+            if (callerAddr) {
+                const cooldown = await checkAfkCooldown(pClient as any, refs.contractAddressRef.current, callerAddr.toLowerCase() as `0x${string}`);
+                if (cooldown.blocked) {
+                    toast.error(`AFK cooldown active. Try again in ${formatCooldown(cooldown.remaining)}.`, { duration: 6000 });
+                    addLog(`Cannot create tournament: AFK cooldown ${formatCooldown(cooldown.remaining)}`, 'danger');
+                    setIsTxPending(false);
+                    return null;
+                }
+            }
 
             let passwordHash = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
             if (params.password) {
@@ -99,6 +113,18 @@ export function useTournaments(deps: TournamentDeps) {
         try {
             setIsTxPending(true);
             const { client, account } = await wallet.getActiveWalletClient();
+
+            // AFK cooldown preflight
+            const callerAddr = (typeof account === 'string' ? account : (account as any)?.address) as `0x${string}` | undefined;
+            if (callerAddr) {
+                const cooldown = await checkAfkCooldown(pClient as any, refs.contractAddressRef.current, callerAddr.toLowerCase() as `0x${string}`);
+                if (cooldown.blocked) {
+                    toast.error(`AFK cooldown active. Try again in ${formatCooldown(cooldown.remaining)}.`, { duration: 6000 });
+                    addLog(`Cannot join tournament: AFK cooldown ${formatCooldown(cooldown.remaining)}`, 'danger');
+                    setIsTxPending(false);
+                    return false;
+                }
+            }
 
             const tournamentData = await pClient.readContract({
                 address: refs.contractAddressRef.current,
@@ -154,6 +180,18 @@ export function useTournaments(deps: TournamentDeps) {
         try {
             setIsTxPending(true);
             const { client, account } = await wallet.getActiveWalletClient();
+
+            // AFK cooldown preflight
+            const callerAddr = (typeof account === 'string' ? account : (account as any)?.address) as `0x${string}` | undefined;
+            if (callerAddr) {
+                const cooldown = await checkAfkCooldown(pClient as any, refs.contractAddressRef.current, callerAddr.toLowerCase() as `0x${string}`);
+                if (cooldown.blocked) {
+                    toast.error(`AFK cooldown active. Try again in ${formatCooldown(cooldown.remaining)}.`, { duration: 6000 });
+                    addLog(`Cannot create tournament: AFK cooldown ${formatCooldown(cooldown.remaining)}`, 'danger');
+                    setIsTxPending(false);
+                    return false;
+                }
+            }
 
             const nextId = await pClient.readContract({
                 address: refs.contractAddressRef.current,

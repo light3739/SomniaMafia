@@ -14,3 +14,4 @@ export { useMafiaChat, type MafiaChat } from './useMafiaChat';
 export { useTournaments, type Tournaments } from './useTournaments';
 export { useEndGame, type EndGame } from './useEndGame';
 export { useEventPoller, type EventPoller } from './useEventPoller';
+export { useRefundClaims, type RefundClaims } from './useRefundClaims';
