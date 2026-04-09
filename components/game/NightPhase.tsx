@@ -102,8 +102,6 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
     // Моя роль (defined early for use in callbacks)
     const myRole = myPlayer?.role || Role.UNKNOWN;
     const roleConfig = RoleActions[myRole];
-    // Can act only if role has action AND player is alive
-    const canAct = roleConfig.action !== NightActionType.NONE && myPlayer?.isAlive;
 
     const [nightState, setNightState] = useState<NightState>({
         hasCommitted: initialNightState?.hasCommitted ?? false,
@@ -117,6 +115,11 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         mafiaRevealed: initialNightState?.mafiaRevealed ?? 0,
         mafiaConsensusTarget: initialNightState?.mafiaConsensusTarget ?? null
     });
+
+    // Can act only if role has action AND player is alive.
+    // Once committed, keep showing the role cinematic even if killed mid-night —
+    // the player learns about their death from the morning announcement on DAY.
+    const canAct = roleConfig.action !== NightActionType.NONE && (myPlayer?.isAlive || nightState.hasCommitted);
 
     // Timer state for UX
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
