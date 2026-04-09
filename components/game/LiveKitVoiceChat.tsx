@@ -240,7 +240,7 @@ function makeSessionIdentity(baseName: string): string {
 /** Minimum delay (ms) between automatic reconnect attempts */
 const RECONNECT_COOLDOWN_MS = 5000;
 /** Maximum number of automatic reconnect attempts before requiring manual action */
-const MAX_AUTO_RECONNECTS = 2;
+const MAX_AUTO_RECONNECTS = 5;
 /** If a connection dies shortly after connect, force relay-only on next attempt */
 const SHORT_ICE_CONNECTION_MS = 20000;
 

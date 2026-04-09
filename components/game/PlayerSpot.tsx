@@ -122,7 +122,6 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
 
     return (
         <motion.div
-            layout
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{
                 opacity: 1, // Always opaque to prevent blending with background
@@ -158,30 +157,23 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                 className="relative w-full h-full flex flex-row items-center gap-4 p-4"
                 style={{ filter: !player.isAlive ? 'blur(1.5px)' : 'none' }}
             >
-                {/* Soft Glowing Frame Aura (Framer Motion) */}
+                {/* Soft Glowing Frame Aura — static shadow + CSS opacity pulse (compositor-friendly) */}
                 <AnimatePresence>
                     {isSpeaking && speechTimeRemaining > 0 && (
                         <motion.div
                             initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
+                            transition={{ duration: 0.5 }}
                             className="absolute inset-0 rounded-md pointer-events-none z-0"
-                            animate={{
-                                opacity: 1,
-                                boxShadow: [
-                                    '0 0 20px 0px rgba(145, 106, 71, 0.4), inset 0 0 10px 0px rgba(145, 106, 71, 0.2)',
-                                    '0 0 50px 8px rgba(145, 106, 71, 0.95), inset 0 0 25px 0px rgba(145, 106, 71, 0.45)'
-                                ]
-                            }}
-                            transition={{
-                                opacity: { duration: 0.5 },
-                                boxShadow: {
-                                    duration: 1.25,
-                                    repeat: Infinity,
-                                    repeatType: "reverse",
-                                    ease: "easeInOut"
-                                }
-                            }}
-                        />
+                        >
+                            <div
+                                className="absolute inset-0 rounded-md animate-speaking-glow"
+                                style={{
+                                    boxShadow: '0 0 50px 8px rgba(145, 106, 71, 0.95), inset 0 0 25px 0px rgba(145, 106, 71, 0.45)'
+                                }}
+                            />
+                        </motion.div>
                     )}
                 </AnimatePresence>
 

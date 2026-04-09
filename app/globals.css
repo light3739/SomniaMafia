@@ -142,6 +142,19 @@ button:disabled,
   border-color: rgba(145, 106, 71, 0.8) !important;
 }
 
+/* Speaking glow pulse — opacity-only animation for compositor-friendly rendering.
+   Replaces per-frame boxShadow interpolation with a static shadow + opacity cycle.
+   Opacity 0.42 ≈ dim state (0.4/0.95 alpha ratio), 1.0 = bright state. */
+@keyframes speaking-glow-pulse {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 1; }
+}
+
+.animate-speaking-glow {
+  animation: speaking-glow-pulse 2.5s ease-in-out infinite;
+  will-change: opacity;
+}
+
 /* Landing page entrance animations (CSS-only for fast LCP) */
 /* Title: NO opacity change — element must be visible immediately for LCP */
 @keyframes landing-title-in {
