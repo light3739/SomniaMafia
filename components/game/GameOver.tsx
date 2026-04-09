@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { Role, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
 import { useSoundEffects } from '../ui/SoundEffects';
-import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye, Coins, Share2 } from 'lucide-react';
+import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye, Coins, Share2, Swords } from 'lucide-react';
 import { MicButton } from './MicButton';
 
 const RoleIcons: Record<Role, React.ReactNode> = {
@@ -348,6 +348,26 @@ export const GameOver: React.FC = React.memo(() => {
         router.push('/setup');
     }, [stopVictoryMusic, router]);
 
+    const handleRematch = useCallback(() => {
+        stopVictoryMusic();
+        // Save current game settings so /create can pre-fill the form
+        try {
+            const prevName = sessionStorage.getItem('lobbyName') || 'Rematch';
+            // Increment suffix: "Lobby" → "Lobby #2", "Lobby #2" → "Lobby #3"
+            const match = prevName.match(/^(.+?) #(\d+)$/);
+            const nextName = match
+                ? `${match[1]} #${Number(match[2]) + 1}`
+                : `${prevName} #2`;
+            sessionStorage.setItem('rematch_settings', JSON.stringify({
+                lobbyName: nextName,
+                maxPlayers: gameState.maxPlayers || 10,
+            }));
+        } catch { /* ignore */ }
+        sessionStorage.removeItem('currentRoomId');
+        localStorage.removeItem('currentRoomId');
+        router.push('/create');
+    }, [stopVictoryMusic, router, gameState.maxPlayers]);
+
     const handleHome = useCallback(() => {
         stopVictoryMusic();
         sessionStorage.removeItem('currentRoomId');
@@ -487,7 +507,7 @@ export const GameOver: React.FC = React.memo(() => {
                     </p>
                     <div className="flex flex-col sm:flex-row gap-3 justify-center">
                         <button
-                            onClick={handlePlayAgain}
+                            onClick={handleRematch}
                             className="h-12 px-8 rounded-md text-[13px] uppercase tracking-[0.14em] font-bold transition-all active:scale-[0.98] cursor-pointer"
                             style={{
                                 border: '1px solid #C49A6C',
@@ -495,6 +515,12 @@ export const GameOver: React.FC = React.memo(() => {
                                 backgroundColor: '#C49A6C',
                                 boxShadow: '0 6px 18px rgba(196,154,108,0.18)',
                             }}
+                        >
+                            Rematch
+                        </button>
+                        <button
+                            onClick={handlePlayAgain}
+                            className="h-12 px-8 rounded-md border border-white/15 text-white/75 text-[13px] uppercase tracking-[0.12em] font-semibold hover:border-white/30 hover:text-white hover:bg-white/[0.04] transition-all active:scale-[0.98] cursor-pointer"
                         >
                             Play Again
                         </button>
@@ -905,21 +931,29 @@ export const GameOver: React.FC = React.memo(() => {
 
                             <div className="flex gap-3">
                                 <Button
-                                    onClick={handlePlayAgain}
+                                    onClick={handleRematch}
                                     className="flex-1 h-[60px] text-lg !text-white"
+                                >
+                                    <Swords className="w-5 h-5 mr-2" />
+                                    Rematch
+                                </Button>
+                                <Button
+                                    onClick={handlePlayAgain}
+                                    variant="outline-gold"
+                                    className="flex-1 h-[60px] text-lg hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
                                 >
                                     <RotateCcw className="w-5 h-5 mr-2" />
                                     Play Again
                                 </Button>
-                                <Button
-                                    onClick={handleHome}
-                                    variant="outline-gold"
-                                    className="flex-1 h-[60px] text-lg hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
-                                >
-                                    <Home className="w-5 h-5 mr-2" />
-                                    Home
-                                </Button>
                             </div>
+                            <Button
+                                onClick={handleHome}
+                                variant="outline-gold"
+                                className="w-full h-[44px] text-sm hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
+                            >
+                                <Home className="w-4 h-4 mr-2" />
+                                Home
+                            </Button>
 
                             {/* Share — quiet ghost link, no longer competing with Play Again */}
                             <button

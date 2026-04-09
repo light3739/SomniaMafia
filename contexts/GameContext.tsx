@@ -206,7 +206,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { refs.playerNameRef.current = playerName; }, [playerName]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { refs.lobbyNameRef.current = lobbyName; }, [lobbyName]);
+    useEffect(() => { refs.lobbyNameRef.current = lobbyName; if (lobbyName) sessionStorage.setItem('lobbyName', lobbyName); }, [lobbyName]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { refs.lobbyPasswordRef.current = lobbyPassword; }, [lobbyPassword]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
