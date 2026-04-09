@@ -8,7 +8,7 @@
  * - Role reveal (on-chain + GM server) after game ends
  * - Auto-distribute prizes + session wallet drain
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { formatEther } from 'viem';
 import { MAFIA_ABI, GM_SERVER_URL } from '../../contracts/config';
 import { generateEndGameProof } from '../../services/zkProof';
@@ -18,6 +18,7 @@ import type { GameRefs } from './useGameRefs';
 import type { TransactionEngine } from './useTransactionEngine';
 import type { GameDataSync } from './useGameDataSync';
 import type { LogEntry } from '../../types';
+import { gmWs } from '../../services/gmWebSocket';
 import React from 'react';
 
 // Convert contract Role enum (0-4) to frontend Role
@@ -814,8 +815,16 @@ export function useEndGame(deps: EndGameDeps) {
             }
         }, 3000);
 
-        // Polling loop: every 3s, max 100 polls
+        // Subscribe to WS roles-revealed push for instant updates
+        const unsubWs = gmWs.on('roles-revealed', (_data: unknown) => {
+            // Roles were revealed on-chain by GM — fetch them immediately
+            fetchOnChainRoles();
+            fetchGMRoles();
+        });
+
+        // Polling loop: 10s when WS connected (safety net), 3s when disconnected
         let pollCount = 0;
+        const pollMs = gmWs.isConnected ? 10_000 : 3_000;
         pollIntervalRef.current = setInterval(async () => {
             pollCount++;
             if (pollCount > 100 || allRolesKnown()) {
@@ -826,11 +835,12 @@ export function useEndGame(deps: EndGameDeps) {
             if (allRolesKnown()) {
                 if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
             }
-        }, 3000);
+        }, pollMs);
 
         return () => {
             clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4);
             clearTimeout(tTimeout); clearTimeout(tWinner);
+            unsubWs();
             if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
         };
     }, [gameState.phase, refs, currentRoomId, isTestMode, fetchOnChainRoles, fetchGMRoles, allRolesKnown]);

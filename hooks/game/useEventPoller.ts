@@ -13,7 +13,7 @@
  *
  * - Poll interval: 2s (optimized for Somnia's 100ms blocks)
  */
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useMemo } from 'react';
 import { pad, toHex, parseEventLogs } from 'viem';
 import { MAFIA_ABI } from '../../contracts/config';
 import { GamePhase, GameState } from '../../types';
@@ -22,6 +22,8 @@ import type { GameDataSync } from './useGameDataSync';
 import type { LogEntry } from '../../types';
 import React from 'react';
 import { GM_SERVER_URL } from '../../contracts/config';
+import { useGmWebSocket } from './useGmWebSocket';
+import type { ServerEventType } from '../../services/gmWebSocket';
 
 interface PollerDeps {
     refs: GameRefs;
@@ -368,19 +370,60 @@ export function useEventPoller(deps: PollerDeps) {
         });
     }, [refs, pollEvents, dataSync]);
 
-    // === POLL INTERVAL ===
+    // === WEBSOCKET EVENT HANDLERS ===
+    // GM server pushes logs, phase changes, and player updates via WS.
+    // When connected, we skip the polling interval entirely.
+    const wsHandlers = useMemo(() => ({
+        'log': (data: unknown) => {
+            const log = data as LogEntry;
+            if (log && log.message) {
+                addLogs([log]);
+            }
+        },
+        'phase-change': (_data: unknown) => {
+            const roomId = refs.currentRoomIdRef.current;
+            if (roomId) dataSync.fetchGameData(roomId);
+        },
+        'player-update': (_data: unknown) => {
+            const roomId = refs.currentRoomIdRef.current;
+            if (roomId) dataSync.refreshPlayersListDebounced(roomId);
+        },
+        'night-resolved': (_data: unknown) => {
+            const roomId = refs.currentRoomIdRef.current;
+            if (roomId) dataSync.fetchGameData(roomId);
+        },
+    } as Partial<Record<ServerEventType, (data: unknown) => void>>),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [addLogs, dataSync, refs]);
+
+    const { wsConnected } = useGmWebSocket({
+        roomId: currentRoomId ? Number(currentRoomId) : null,
+        chainId: refs.runtimeChain.id,
+        playerAddress: refs.addressRef.current ?? null,
+        handlers: wsHandlers,
+    });
+
+    // === POLL INTERVAL (fallback when WS disconnected, slow heartbeat when connected) ===
     useEffect(() => {
         if (!refs.publicClientRef.current || !currentRoomId) return;
         if (gameState.phase === GamePhase.ENDED && gameState.winner) return;
+
+        // When WS is connected: slow fallback (10s) for safety net.
+        // When WS is disconnected: fast polling (2s) as before.
+        const intervalMs = wsConnected ? 10_000 : 2_000;
+
         const interval = setInterval(() => {
             pollEvents();
-            pollServerLogs();
-        }, 2000);
+            if (!wsConnected) {
+                pollServerLogs();
+            }
+        }, intervalMs);
         return () => clearInterval(interval);
-    }, [pollEvents, pollServerLogs, gameState.phase, gameState.winner, refs, currentRoomId]);
+    }, [pollEvents, pollServerLogs, gameState.phase, gameState.winner, refs, currentRoomId, wsConnected]);
 
     return {
         pollEvents,
+        wsConnected,
     };
 }
 
