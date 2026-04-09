@@ -383,6 +383,67 @@ export function useTournaments(deps: TournamentDeps) {
         }
     }, [refs, wallet, txEngine, setIsTxPending, setIsTxConfirming, addLog]);
 
+    /**
+     * Leave a tournament you joined but never bound to a room. Dangling
+     * participants (those who called joinTournament but never joined any of
+     * the tournament's rooms) can exit through this path and recover their
+     * buyIn + sessionFee gas reserve.
+     *
+     * Must be called from the main wallet: contract's leaveTournament uses
+     * `msg.sender` to index the participant mapping, and a session key would
+     * not match the main-wallet-keyed pendingRefunds (if the push refund fails
+     * and gets queued).
+     *
+     * Not currently reachable through the standard UI — atomic
+     * createTournamentAndRoomOnChain + joinTournamentAndRoom(...) paths always
+     * bind to a room. This hook exists so power users who got dangling via
+     * direct contract interaction can still unwind, and so any future
+     * standalone-join UI has a companion exit path ready.
+     */
+    const leaveTournamentOnChain = useCallback(async (tournamentId: bigint): Promise<boolean> => {
+        const pClient = refs.publicClientRef.current;
+        const targetChain = refs.runtimeChainRef.current;
+        if (!pClient || !targetChain) return false;
+        try {
+            setIsTxPending(true);
+            const { client, account } = await wallet.getActiveWalletClient();
+            const gasConfig = await txEngine.getSmartGasConfig({
+                functionName: 'leaveTournament',
+                args: [tournamentId],
+                account,
+            });
+
+            const hash = await client.writeContract({
+                address: refs.contractAddressRef.current,
+                abi: MAFIA_ABI,
+                functionName: 'leaveTournament',
+                args: [tournamentId],
+                account,
+                chain: targetChain,
+                ...gasConfig,
+            });
+
+            setIsTxConfirming(true);
+            const receipt = await pClient.waitForTransactionReceipt({ hash });
+            setIsTxConfirming(false);
+
+            if (receipt.status === 'reverted') {
+                addLog(`Leave tournament #${tournamentId} reverted`, 'danger');
+                return false;
+            }
+
+            addLog(`Left tournament #${tournamentId} — refund issued`, 'success');
+            return true;
+        } catch (error: any) {
+            console.error('Failed to leave tournament:', error);
+            const msg = error?.shortMessage || error?.message || 'Unknown error';
+            addLog(`Leave tournament failed: ${msg.slice(0, 80)}`, 'danger');
+            return false;
+        } finally {
+            setIsTxPending(false);
+        }
+    }, [refs, wallet, txEngine, setIsTxPending, setIsTxConfirming, addLog]);
+
     const cancelTournamentOnChain = useCallback(async (tournamentId: bigint) => {
         const pClient = refs.publicClientRef.current;
         const targetChain = refs.runtimeChainRef.current;
@@ -419,6 +480,7 @@ export function useTournaments(deps: TournamentDeps) {
         createTournamentAndRoomOnChain,
         distributePrizesOnChain,
         cancelTournamentOnChain,
+        leaveTournamentOnChain,
     };
 }
 

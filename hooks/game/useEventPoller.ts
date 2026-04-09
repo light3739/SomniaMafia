@@ -274,6 +274,23 @@ export function useEventPoller(deps: PollerDeps) {
                         break;
                     }
 
+                    case 'RoomReturnedToLobby': {
+                        // Pre-DAY failure path: LibGame.kickAfkAndReturnToLobby rewound
+                        // the room back to LOBBY. Trigger an immediate state resync so
+                        // GameContext's phase-rewind effect (which clears stale
+                        // shuffle/reveal state and surfaces the toast) fires within
+                        // ~2s instead of waiting for the next 3s multicall poll.
+                        if (roomId) await dataSync.fetchGameData(roomId);
+                        addLog(
+                            'Game aborted before start — room returned to lobby.',
+                            'warning',
+                            undefined,
+                            undefined,
+                            stableId(log),
+                        );
+                        break;
+                    }
+
                     case 'VotingFinalized': {
                         // Write result log immediately with stable id for deduplication.
                         const vfId = stableId(log);

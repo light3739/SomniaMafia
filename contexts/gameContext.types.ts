@@ -111,6 +111,7 @@ export interface GameContextType {
     }) => Promise<boolean>;
     distributePrizesOnChain: (roomId: bigint) => Promise<void>;
     cancelTournamentOnChain: (tournamentId: bigint) => Promise<void>;
+    leaveTournamentOnChain: (tournamentId: bigint) => Promise<boolean>;
     publicClient: any;
     address: `0x${string}` | undefined;
     isWalletReady: boolean;
