@@ -147,7 +147,17 @@ export function useLobbyActions(deps: LobbyDeps) {
             const safeName = /^[a-zA-Z0-9_ ]+$/.test(name) ? name : `Player_${Math.floor(Math.random() * 1000)}`;
             console.log(`[SafeName] Original: "${name}", Used: "${safeName}"`);
 
-            const txValue = wallet.LOBBY_FUNDING_VALUE;
+            // Fetch on-chain entry fee (non-refundable platform fee charged in createAndJoinRoomInternal)
+            let entryFee = 0n;
+            try {
+                entryFee = await pClient.readContract({
+                    address: refs.contractAddressRef.current,
+                    abi: MAFIA_ABI,
+                    functionName: 'getEntryFee',
+                }) as bigint;
+            } catch { /* entryFee stays 0 if getter unavailable */ }
+
+            const txValue = wallet.LOBBY_FUNDING_VALUE + entryFee;
 
             // Check balance
             const balance = await pClient.getBalance({ address: myAddr as `0x${string}` });
@@ -610,7 +620,17 @@ export function useLobbyActions(deps: LobbyDeps) {
                 }
             }
 
-            const txValue = needsTournamentJoin ? tournamentValueRequired : (isTournamentRoom ? 0n : wallet.LOBBY_FUNDING_VALUE);
+            // Fetch on-chain entry fee for joinRoom / joinTournamentAndRoom
+            let joinEntryFee = 0n;
+            try {
+                joinEntryFee = await pClient.readContract({
+                    address: refs.contractAddressRef.current,
+                    abi: MAFIA_ABI,
+                    functionName: 'getEntryFee',
+                }) as bigint;
+            } catch { /* stays 0 */ }
+
+            const txValue = (needsTournamentJoin ? tournamentValueRequired : (isTournamentRoom ? 0n : wallet.LOBBY_FUNDING_VALUE)) + joinEntryFee;
 
             if (txValue > 0n) {
                 const balance = await pClient.getBalance({ address: myAddr as `0x${string}` });
