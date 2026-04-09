@@ -407,7 +407,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ==================== LEVEL 4: EVENT POLLING ====================
     useEventPoller({
         refs, dataSync, gameState, currentRoomId,
-        setGameState, setVoteMap, setShowVotingResults, addLog, addLogs
+        setGameState, setVoteMap, setShowVotingResults, addLog, addLogs,
+        handleIncomingMafiaSignal: chat.handleIncomingMafiaSignal,
     });
 
     // ==================== SHARED DISCUSSION POLLING ====================

@@ -13,7 +13,7 @@ import { keccak256, encodePacked } from 'viem';
 import { GamePhase, GameState, Role, MafiaChatMessage } from '../../types';
 import { signRequest } from '../../services/requestSigning';
 import { buildMafiaMembersMessage } from '../../services/signingSchema';
-import { emitGameSignal } from '../../services/signalBus';
+import { gmWs } from '../../services/gmWebSocket';
 import type { GameRefs } from './useGameRefs';
 import type { WalletManager } from './useWalletManager';
 import type { TransactionEngine } from './useTransactionEngine';
@@ -235,19 +235,15 @@ export function useMafiaChat(deps: ChatDeps) {
             }
         }
 
-        // Broadcast via LiveKit
+        // Relay encrypted chat via GM WebSocket (available in all phases, no LiveKit dependency)
         if (myAddr && roomId) {
-            emitGameSignal({
-                type: 'MAFIA_CHAT',
-                sender: myAddr,
-                encryptedData: hexData,
-                roomId: roomId.toString()
+            gmWs.relay({
+                type: 'mafia-chat',
+                data: { sender: myAddr, encryptedData: hexData },
             });
         }
 
-        // On-chain mafiaMessage was removed (privacy + dead code). Mafia chat is now
-        // delivered exclusively over LiveKit signaling above. Optimistically append the
-        // message to local state so the sender sees it instantly.
+        // Optimistically append the message to local state so the sender sees it instantly.
         if (myAddr) {
             const playerForMatch = refs.playersRef.current.find(p => p.address.toLowerCase() === myAddr.toLowerCase());
             setGameState(prev => ({

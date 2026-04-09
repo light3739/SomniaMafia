@@ -128,6 +128,16 @@ class GmWebSocket {
     };
   }
 
+  /**
+   * Send a relay message — broadcasts an event to all OTHER players in the room.
+   * Used for mafia chat and optimistic game signals.
+   */
+  relay(event: { type: ServerEventType; data?: unknown }) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'relay', event }));
+    }
+  }
+
   /** Remove all handlers for a given event type. */
   off(event: ServerEventType) {
     this.handlers.delete(event);

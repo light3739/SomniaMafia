@@ -35,10 +35,11 @@ interface PollerDeps {
     setShowVotingResults: (v: boolean) => void;
     addLog: (message: string, type?: LogEntry['type'], eventType?: import('../../types').GameEventType, eventData?: import('../../types').GameEventData, id?: string) => void;
     addLogs: (logs: LogEntry[]) => void;
+    handleIncomingMafiaSignal?: (sender: string, encryptedHex: string) => Promise<void>;
 }
 
 export function useEventPoller(deps: PollerDeps) {
-    const { refs, dataSync, gameState, currentRoomId, setGameState, setVoteMap, setShowVotingResults, addLog, addLogs } = deps;
+    const { refs, dataSync, gameState, currentRoomId, setGameState, setVoteMap, setShowVotingResults, addLog, addLogs, handleIncomingMafiaSignal } = deps;
 
     // Helper: stable event id matching the server's format (txHash-logIndex).
     // Passing this as `id` to addLog() ensures server logs and client logs
@@ -392,9 +393,15 @@ export function useEventPoller(deps: PollerDeps) {
             const roomId = refs.currentRoomIdRef.current;
             if (roomId) dataSync.fetchGameData(roomId);
         },
+        'mafia-chat': (data: unknown) => {
+            const d = data as { sender?: string; encryptedData?: string } | undefined;
+            if (d?.sender && d?.encryptedData && handleIncomingMafiaSignal) {
+                handleIncomingMafiaSignal(d.sender, d.encryptedData);
+            }
+        },
     } as Partial<Record<ServerEventType, (data: unknown) => void>>),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [addLogs, dataSync, refs]);
+    [addLogs, dataSync, refs, handleIncomingMafiaSignal]);
 
     const { wsConnected } = useGmWebSocket({
         roomId: currentRoomId ? Number(currentRoomId) : null,
