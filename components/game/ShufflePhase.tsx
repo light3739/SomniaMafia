@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
-import { usePublicClient, useWriteContract } from 'wagmi';
+import { usePublicClient } from 'wagmi';
 import { MAFIA_ABI } from '../../contracts/config';
 import { Check, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -48,7 +48,8 @@ export const ShufflePhase: React.FC = React.memo(() => {
         isTxPending,
         refreshPlayersList,
         runtimeContractAddress,
-        isTestMode
+        isTestMode,
+        forcePhaseTimeoutOnChain
     } = useGameContext();
 
     const publicClient = usePublicClient();
@@ -271,26 +272,18 @@ export const ShufflePhase: React.FC = React.memo(() => {
         }
     }, [currentRoomId, fetchShuffleData, refreshPlayersList]);
 
-    const { writeContractAsync } = useWriteContract();
-
     const handleTimeoutKick = useCallback(async () => {
         if (!currentRoomId) return;
         setIsProcessing(true);
         try {
-            const hash = await writeContractAsync({
-                address: runtimeContractAddress,
-                abi: MAFIA_ABI,
-                functionName: 'forcePhaseTimeout',
-                args: [currentRoomId],
-            });
-            addLog(`Timeout kick tx sent: ${hash.substring(0, 10)}...`, 'info');
+            await forcePhaseTimeoutOnChain();
         } catch (err) {
             console.error("Kick failed", err);
             addLog("Failed to kick player", 'danger');
         } finally {
             setIsProcessing(false);
         }
-    }, [currentRoomId, writeContractAsync, addLog]);
+    }, [currentRoomId, forcePhaseTimeoutOnChain, addLog]);
 
     // AUTO-UNSTICK
     useEffect(() => {

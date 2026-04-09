@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
-import { useAccount, useWalletClient, usePublicClient, useWriteContract } from 'wagmi';
+import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
 import { GamePhase, Role } from '../../types';
 import { ShuffleService, getShuffleService } from '../../services/shuffleService';
 import { MAFIA_ABI } from '../../contracts/config';
@@ -26,14 +26,15 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
         commitAndConfirmRoleOnChain, addLog,
         isTxPending, setGameState,
         commitDeckOnChain, revealDeckOnChain,
-        refreshPlayersList, runtimeContractAddress, isTestMode, runtimeChain
+        refreshPlayersList, runtimeContractAddress, isTestMode, runtimeChain,
+        forcePhaseTimeoutOnChain
     } = useGameContext();
 
     const { address, chainId: wagmiChainId } = useAccount();
     const chainId = runtimeChain?.id || wagmiChainId;
     const { data: walletClient } = useWalletClient();
     const publicClient = usePublicClient();
-    const { writeContractAsync } = useWriteContract();
+
 
     const isReveal = gameState.phase === GamePhase.REVEAL;
     const SHUFFLE_COMMIT_KEY = `mafia_shuffle_commit_${currentRoomId}_${myPlayer?.address?.toLowerCase() || ''}`;
@@ -187,12 +188,9 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
         if (!currentRoomId) return;
         setIsShuffleProcessing(true);
         try {
-            const hash = await writeContractAsync({
-                address: runtimeContractAddress, abi: MAFIA_ABI, functionName: 'forcePhaseTimeout', args: [currentRoomId]
-            });
-            addLog(`Kick tx: ${hash.substring(0, 10)}...`, 'info');
+            await forcePhaseTimeoutOnChain();
         } catch { addLog('Kick failed', 'danger'); } finally { setIsShuffleProcessing(false); }
-    }, [currentRoomId, writeContractAsync, addLog]);
+    }, [currentRoomId, forcePhaseTimeoutOnChain, addLog]);
 
     const handleMyTurn = useCallback(async () => {
         if (!currentRoomId || !myPlayer || isShuffleProcessing || processRef.current) return;
