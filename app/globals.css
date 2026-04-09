@@ -185,6 +185,17 @@ button:disabled,
   animation: landing-scale-in 0.5s ease-out 0.8s both;
 }
 
+/* Landing — noir fog drift (transform-only, compositor-friendly) */
+@keyframes fog-drift-1 {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(5%); }
+}
+
+@keyframes fog-drift-2 {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-6%); }
+}
+
 /* Animations for Neo-Noir UI */
 @keyframes spin-reverse {
   from { transform: rotate(0deg); }

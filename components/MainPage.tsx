@@ -15,6 +15,28 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
         <div className="relative w-full h-[100dvh] overflow-y-auto overflow-x-hidden font-sans flex flex-col items-center custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
 
+            {/* Noir fog — two slow-drifting gradient layers at the bottom */}
+            <div className="absolute bottom-0 left-0 right-0 h-[55%] pointer-events-none z-[5] overflow-hidden">
+                <div
+                    className="absolute w-[140%] h-full -left-[20%] bottom-0"
+                    style={{
+                        background: 'radial-gradient(ellipse 70% 55% at 25% 100%, rgba(145,106,71,0.1) 0%, transparent 70%)',
+                        animation: 'fog-drift-1 30s ease-in-out infinite',
+                        willChange: 'transform',
+                    }}
+                />
+                <div
+                    className="absolute w-[140%] h-full -left-[20%] bottom-0"
+                    style={{
+                        background: 'radial-gradient(ellipse 60% 50% at 75% 100%, rgba(100,80,55,0.09) 0%, transparent 65%)',
+                        animation: 'fog-drift-2 24s ease-in-out infinite',
+                        willChange: 'transform',
+                    }}
+                />
+                {/* Bottom edge fade — grounds the scene */}
+                <div className="absolute bottom-0 left-0 right-0 h-[30%] bg-gradient-to-t from-black/50 to-transparent" />
+            </div>
+
             {/* Content Container — radial vignette behind text for readability over busy background */}
             <div
                 className="relative z-10 w-full flex flex-col items-center justify-center p-4 my-auto min-h-full"
@@ -51,7 +73,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
                             On Somnia Network
                         </p>
-                        <Image src={somniaLogo} alt="Somnia" width={45} height={40} className="h-6 md:h-8 lg:h-10 w-auto object-contain drop-shadow-md" />
+                        <Image src={somniaLogo} alt="Somnia" width={45} height={40} className="h-6 md:h-8 lg:h-10 object-contain drop-shadow-md" />
                     </div>
                 </div>
 
