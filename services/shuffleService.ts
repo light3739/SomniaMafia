@@ -211,8 +211,9 @@ export class ShuffleService {
         // Use activeCount if provided to determine role quantities
         const countForRoles = activeCount !== undefined ? activeCount : playerCount;
 
-        // Определяем количество мафии (примерно 1/4 игроков, минимум 1)
-        const mafiaCount = Math.max(1, Math.floor(countForRoles / 4));
+        // Must match LibGame.expectedMafiaCount on-chain:
+        // ≤5 → 1, ≤8 → 2, ≤11 → 3, else 4
+        const mafiaCount = countForRoles <= 5 ? 1 : countForRoles <= 8 ? 2 : countForRoles <= 11 ? 3 : 4;
 
         // Добавляем мафию
         for (let i = 0; i < mafiaCount; i++) {
@@ -356,9 +357,10 @@ export class ShuffleService {
         const activeCount = activeIndices.length;
 
         // 2. Generate roles for ACTIVE players only
-        // Standard distribution logic (1 mafia per 4 players) based on ACTIVE count
+        // Must match LibGame.expectedMafiaCount on-chain:
+        // ≤5 → 1, ≤8 → 2, ≤11 → 3, else 4
         const activeDeckArr: number[] = [];
-        const mafiaCount = Math.max(1, Math.floor(activeCount / 4));
+        const mafiaCount = activeCount <= 5 ? 1 : activeCount <= 8 ? 2 : activeCount <= 11 ? 3 : 4;
 
         for (let i = 0; i < mafiaCount; i++) activeDeckArr.push(1 + offset);
         if (activeCount >= 4) activeDeckArr.push(2 + offset); // Doctor
