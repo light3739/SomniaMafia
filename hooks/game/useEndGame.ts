@@ -803,7 +803,7 @@ export function useEndGame(deps: EndGameDeps) {
                     const log = allParsed[i] as any;
                     if (log.eventName === 'GameEnded') {
                         const wc = ((log.args?.winCondition as string) || '').toLowerCase();
-                        const resolved = wc.includes('town') ? 'TOWN' : wc.includes('mafia') ? 'MAFIA' : wc.includes('draw') ? 'DRAW' : 'TOWN';
+                        const resolved = wc.includes('aborted') ? 'ABORTED' : wc.includes('town') ? 'TOWN' : wc.includes('mafia') ? 'MAFIA' : wc.includes('draw') ? 'DRAW' : 'TOWN';
                         console.log(`[WinnerFallback] Resolved: ${resolved}`);
                         setGameState(prev => ({ ...prev, phase: GamePhase.ENDED, winner: resolved }));
                         return;
