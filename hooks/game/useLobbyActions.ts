@@ -240,13 +240,24 @@ export function useLobbyActions(deps: LobbyDeps) {
                 let lastPasswordErr: any;
                 for (let attempt = 0; attempt < 3; attempt++) {
                     try {
+                        // Sign with the session key (forceWallet removed). The
+                        // session row was just stored above so signRequest will
+                        // pick it up. GM's verifyAuthorizedSignature handles
+                        // session-key signatures for the host check (it checks
+                        // hostAddress against on-chain room.host, not the signer).
+                        //
+                        // Forcing wallet here used to mount Privy's transaction
+                        // confirmation modal on embedded-wallet flows. That modal
+                        // contains a buggy useGetTokenPrice path that throws
+                        // React error #300 ("Rendered fewer hooks than expected")
+                        // when the Somnia STT price 404s on auth.privy.io —
+                        // which is exactly why this error only appeared on
+                        // password lobbies + Privy embedded.
                         await GM.setRoomPassword({
                             roomId: finalRoomId.toString(),
                             address: activeAddress,
                             password: lobbyPassword,
                             walletClient: activeWalletClient,
-                            signerAddress: activeAddress,
-                            forceWallet: true,
                             chainId: targetChain.id,
                             maxPlayers: maxPlayers
                         });

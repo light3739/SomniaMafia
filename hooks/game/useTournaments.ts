@@ -13,7 +13,7 @@ import { parseEther, formatEther, parseEventLogs, keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { MAFIA_ABI, GM_SERVER_URL } from '../../contracts/config';
 import { generateKeyPair, stringToHex } from '../../services/cryptoUtils';
-import { createNewSession, markSessionRegistered } from '../../services/sessionKeyService';
+import { createNewSession, storeSession, markSessionRegistered } from '../../services/sessionKeyService';
 import { loadOrCreateKeypair } from '../../services/eciesService';
 import * as GM from '../../services/gmService';
 import { checkAfkCooldown, formatCooldown } from '../../services/cooldownCheck';
@@ -203,7 +203,13 @@ export function useTournaments(deps: TournamentDeps) {
             const keyPair = await generateKeyPair();
             setKeys(keyPair);
 
-            const { sessionAddress, privateKey: sessionPrivKey } = createNewSession(account as `0x${string}`, newRoomId, targetChain.id);
+            // Defer storeSession until we know the real on-chain roomId so the
+            // localStorage row is keyed by the actual id (not the optimistic
+            // newRoomId). Without this, GM.setRoomPassword below would fall
+            // through to walletClient.signMessage because the session's roomId
+            // wouldn't match the real one — and on Privy embedded that mounts
+            // their buggy confirmation modal that throws React error #300.
+            const { sessionAddress, privateKey: sessionPrivKey, session: newSessionObj } = createNewSession(account as `0x${string}`, newRoomId, targetChain.id, undefined, true);
             const sessionAccount = privateKeyToAccount(sessionPrivKey);
             const pubKeyHex = sessionAccount.publicKey;
 
@@ -255,12 +261,22 @@ export function useTournaments(deps: TournamentDeps) {
             setIsTxConfirming(false);
 
             if (receipt && receipt.status === 'success') {
-                markSessionRegistered();
                 const logs = parseEventLogs({ abi: MAFIA_ABI, eventName: 'RoomCreated', logs: receipt.logs });
                 if (logs.length > 0) {
                     const roomId = (logs[0] as any).args.roomId;
                     localStorage.setItem('currentRoomId', roomId.toString());
                     sessionStorage.setItem('currentRoomId', roomId.toString());
+
+                    // Activate session under the canonical roomId. Must happen
+                    // BEFORE the GM.setRoomPassword call below — that call uses
+                    // signRequest which only picks up the session if its
+                    // roomId matches. Otherwise it falls back to walletClient
+                    // signMessage and (on Privy embedded) mounts the buggy
+                    // confirmation modal that throws React error #300.
+                    newSessionObj.roomId = Number(roomId);
+                    newSessionObj.registeredOnChain = true;
+                    storeSession(newSessionObj);
+                    markSessionRegistered();
 
                     // Create ECIES keypair under the canonical roomId now that
                     // we know it. See createLobbyOnChain for the rationale on
