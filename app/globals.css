@@ -187,13 +187,19 @@ button:disabled,
 
 /* Landing — noir fog drift (transform-only, compositor-friendly) */
 @keyframes fog-drift-1 {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(5%); }
+  0%, 100% { transform: translateX(0) translateY(0) scale(1); }
+  50% { transform: translateX(8%) translateY(-4%) scale(1.05); }
 }
 
 @keyframes fog-drift-2 {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(-6%); }
+  0%, 100% { transform: translateX(0) translateY(0) scale(1); }
+  50% { transform: translateX(-10%) translateY(-3%) scale(1.08); }
+}
+
+@keyframes fog-drift-3 {
+  0%, 100% { transform: translateX(0) translateY(0) scale(1); opacity: 0.6; }
+  33% { transform: translateX(6%) translateY(-5%) scale(1.1); opacity: 1; }
+  66% { transform: translateX(-4%) translateY(-2%) scale(1.03); opacity: 0.8; }
 }
 
 /* Animations for Neo-Noir UI */

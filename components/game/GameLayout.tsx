@@ -31,8 +31,8 @@ const NightPhase = dynamic(() => import('./NightPhase').then(m => m.NightPhase),
 const GameOver = dynamic(() => import('./GameOver').then(m => m.GameOver), { ssr: false });
 const PostVotingTransition = dynamic(() => import('./PostVotingTransition').then(m => m.PostVotingTransition), { ssr: false });
 
-const dayBg = "/assets/game_background_light.png";
-const nightBg = "/assets/game_background.png";
+const dayBg = "/images/day.png";
+const nightBg = "/images/night.png";
 
 export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionState?: any }> = ({ initialNightState, initialDiscussionState }) => {
     const {

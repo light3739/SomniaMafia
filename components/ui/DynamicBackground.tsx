@@ -3,8 +3,8 @@
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 
-const LANDING_BG = "/assets/mafia1.jpg";
-const LOBBY_BG = "/assets/lobby_background.png";
+const LANDING_BG = "/images/mainscreen.png";
+const LOBBY_BG = "/images/setup.png";
 
 export const DynamicBackground = () => {
     const pathname = usePathname();
@@ -26,7 +26,7 @@ export const DynamicBackground = () => {
                     fill
                     priority
                     sizes="100vw"
-                    quality={90}
+                    unoptimized
                     className="object-cover"
                 />
             </div>
@@ -40,12 +40,13 @@ export const DynamicBackground = () => {
                     fill
                     priority
                     sizes="100vw"
-                    quality={90}
+                    unoptimized
                     className="object-cover"
                 />
             </div>
-            {/* Dark overlay for better text readability */}
+            {/* Dark overlay — landing gets 20%, lobby gets extra 40% to match landing darkness */}
             <div className="absolute inset-0 bg-black/20" />
+            {!isLanding && <div className="absolute inset-0 bg-black/40" />}
         </div>
     );
 };

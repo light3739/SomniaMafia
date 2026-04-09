@@ -1,7 +1,10 @@
 import React from 'react';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { usePrivy } from '@privy-io/react-auth';
 const somniaLogo = "/assets/somniayeal.png";
+
+const LightRays = dynamic(() => import('./ui/LightRays'), { ssr: false });
 
 interface MainPageProps {
     onStart: () => void;
@@ -15,25 +18,23 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
         <div className="relative w-full h-[100dvh] overflow-y-auto overflow-x-hidden font-sans flex flex-col items-center custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
 
-            {/* Noir fog — fixed overlay at the bottom, pointer-events-none so clicks pass through */}
-            <div className="fixed bottom-0 left-0 right-0 h-[45%] pointer-events-none z-20 overflow-hidden">
-                <div
-                    className="absolute w-[140%] h-full -left-[20%] bottom-0"
-                    style={{
-                        background: 'radial-gradient(ellipse 70% 55% at 25% 100%, rgba(180,130,70,0.25) 0%, transparent 70%)',
-                        animation: 'fog-drift-1 30s ease-in-out infinite',
-                        willChange: 'transform',
-                    }}
+            {/* Light rays overlay — WebGL, pointer-events-none */}
+            <div className="fixed inset-0 z-[5] pointer-events-none">
+                <LightRays
+                    raysOrigin="top-center"
+                    raysColor="#fec28b"
+                    raysSpeed={0.6}
+                    lightSpread={0.7}
+                    rayLength={100}
+                    followMouse={true}
+                    mouseInfluence={0.05}
+                    noiseAmount={0.27}
+                    distortion={0}
+                    pulsating={false}
+                    fadeDistance={1}
+                    saturation={0}
+                    intensity={2}
                 />
-                <div
-                    className="absolute w-[140%] h-full -left-[20%] bottom-0"
-                    style={{
-                        background: 'radial-gradient(ellipse 60% 50% at 75% 100%, rgba(140,100,50,0.20) 0%, transparent 65%)',
-                        animation: 'fog-drift-2 24s ease-in-out infinite',
-                        willChange: 'transform',
-                    }}
-                />
-                <div className="absolute bottom-0 left-0 right-0 h-[40%] bg-gradient-to-t from-black/50 to-transparent" />
             </div>
 
             {/* Content Container — radial vignette behind text for readability over busy background */}
@@ -64,28 +65,18 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     </h1>
                 </div>
 
-                {/* Subtitle Row */}
-                <div
-                    className="animate-landing-subtitle mt-[-10px] relative overflow-hidden bg-black/40 px-2 rounded-full backdrop-blur-md border border-white/10 shadow-xl h-[40px] md:h-[50px] lg:h-[60px] flex items-center justify-center w-[220px] md:w-[300px] lg:w-[380px]"
-                >
-                    <div className="flex flex-row items-center justify-center gap-3 h-full">
-                        <p className="font-sans text-[#ffb01d] uppercase tracking-[0.2em] font-semibold text-[10px] md:text-[14px] lg:text-[18px] whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
-                            On Somnia Network
-                        </p>
-                        <Image src={somniaLogo} alt="Somnia" width={45} height={40} className="h-6 md:h-8 lg:h-10 object-contain drop-shadow-md" />
-                    </div>
-                </div>
+                {/* Decorative divider */}
+                <div className="animate-landing-subtitle w-[120px] md:w-[180px] h-[1px] mt-3 mb-1 bg-gradient-to-r from-transparent via-[#C49A6C]/50 to-transparent" />
 
-                {/* Game Description — answers "what is it?" in 5 seconds */}
+                {/* Game Description */}
                 <p
-                    className="mt-10 text-center font-bold"
+                    className="animate-landing-subtitle mt-2 text-center font-bold"
                     style={{
                         fontFamily: 'var(--font-cinzel), serif',
                         fontSize: 'clamp(0.85rem, 2.5vw, 1.3rem)',
                         letterSpacing: '0.12em',
                         color: '#C49A6C',
                         textShadow: '0 2px 20px rgba(0,0,0,1), 0 0 40px rgba(0,0,0,0.5)',
-                        animation: 'landing-slide-up 1s ease-out 0.5s both',
                     }}
                 >
                     Unmask the Mafia. Deceive the Town.
@@ -95,14 +86,45 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     style={{
                         fontSize: 'clamp(0.6rem, 1.2vw, 0.8rem)',
                         textShadow: '0 1px 10px rgba(0,0,0,1)',
-                        animation: 'landing-slide-up 1s ease-out 0.65s both',
+                        animation: 'landing-slide-up 1s ease-out 0.5s both',
                     }}
                 >
-                    Voice chat · 4–16 players · Play free in your browser
+                    Voice chat · 4–16 players · Play in your browser
                 </p>
 
+                {/* Corner ribbon — On Somnia Network */}
+                <div
+                    className="fixed inset-0 z-50 pointer-events-none overflow-hidden"
+                >
+                    <div
+                        className="absolute flex items-center justify-center gap-3"
+                        style={{
+                            width: '600px',
+                            top: '110px',
+                            right: '-180px',
+                            transform: 'rotate(45deg)',
+                            background: 'linear-gradient(135deg, #1a1208 0%, #2a1d0e 50%, #1a1208 100%)',
+                            borderTop: '1px solid rgba(196,154,108,0.35)',
+                            borderBottom: '1px solid rgba(196,154,108,0.35)',
+                            padding: '12px 0',
+                            boxShadow: '0 6px 30px rgba(0,0,0,0.7)',
+                        }}
+                    >
+                        <span
+                            className="font-sans uppercase tracking-[0.2em] font-bold text-[15px]"
+                            style={{
+                                color: '#ffe08a',
+                                textShadow: '0 0 8px rgba(255,200,80,0.7), 0 1px 3px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.8)',
+                            }}
+                        >
+                            On Somnia Network
+                        </span>
+                        <Image src={somniaLogo} alt="Somnia" width={28} height={28} className="h-7 w-7 object-contain drop-shadow-md" />
+                    </div>
+                </div>
+
                 {/* CONNECT / ENTER Button */}
-                <div className="animate-landing-button mt-14 relative z-20">
+                <div className="animate-landing-button mt-20 relative z-20">
                     {(() => {
                         if (!ready) {
                             // Reserve the exact final button footprint so the

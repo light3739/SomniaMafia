@@ -36,8 +36,8 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
     // Update internal audio volume based on context and local mute
     useEffect(() => {
         if (audioRef.current) {
-            // Background music uses its calibrated peak (0.02) scaled by master volume
-            audioRef.current.volume = isMuted ? 0 : (0.02 * masterVolume);
+            // Background music baseline scaled by master volume
+            audioRef.current.volume = isMuted ? 0 : (0.06 * masterVolume);
         }
     }, [masterVolume, isMuted]);
 
@@ -111,7 +111,7 @@ export const BackgroundMusic: React.FC<BackgroundMusicProps> = ({ additionalButt
 
     return (
         <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-3 pointer-events-none">
-            <audio ref={audioRef} src="/assets/Main_Music.mp3" loop preload="none" />
+            <audio ref={audioRef} src="/assets/mainmusic.mp3" loop preload="none" />
 
             {/* Expanded Settings Panel */}
             <AnimatePresence>
