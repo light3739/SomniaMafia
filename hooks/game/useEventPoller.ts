@@ -236,10 +236,18 @@ export function useEventPoller(deps: PollerDeps) {
                         if (!isHistorical) {
                             const winCondition = args.winCondition as string || '';
                             const lower = winCondition.toLowerCase();
-                            const gameWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
-                                lower.includes('town') ? 'TOWN' :
-                                    lower.includes('mafia') ? 'MAFIA' :
-                                        lower.includes('draw') ? 'DRAW' : 'TOWN';
+
+                            // Pre-DAY abort: room ended before reaching DAY,
+                            // no winner, every player (including the one who
+                            // ghosted) got their buy-in + deposit refunded via
+                            // LibGame.abortPreGame.
+                            const isPreGameAbort = lower.includes('aborted');
+
+                            const gameWinner: 'MAFIA' | 'TOWN' | 'DRAW' | 'ABORTED' =
+                                isPreGameAbort ? 'ABORTED' :
+                                    lower.includes('town') ? 'TOWN' :
+                                        lower.includes('mafia') ? 'MAFIA' :
+                                            lower.includes('draw') ? 'DRAW' : 'TOWN';
 
                             console.log(`[Event] GameEnded! Winner: ${gameWinner}, condition: ${winCondition}`);
                             setGameState(prev => ({
@@ -247,6 +255,17 @@ export function useEventPoller(deps: PollerDeps) {
                                 phase: GamePhase.ENDED,
                                 winner: gameWinner
                             }));
+
+                            if (isPreGameAbort) {
+                                if (roomId) await dataSync.fetchGameData(roomId);
+                                addLog(
+                                    'Game aborted before start — everyone refunded (deposit + buy-in).',
+                                    'warning',
+                                    undefined,
+                                    undefined,
+                                    stableId(log),
+                                );
+                            }
                         }
                         break;
                     }
@@ -275,19 +294,13 @@ export function useEventPoller(deps: PollerDeps) {
                     }
 
                     case 'RoomReturnedToLobby': {
-                        // Pre-DAY failure path: LibGame.kickAfkAndReturnToLobby rewound
-                        // the room back to LOBBY. Trigger an immediate state resync so
-                        // GameContext's phase-rewind effect (which clears stale
-                        // shuffle/reveal state and surfaces the toast) fires within
-                        // ~2s instead of waiting for the next 3s multicall poll.
+                        // Legacy event — the old kickAfkAndReturnToLobby path
+                        // rewound the room back to LOBBY on pre-DAY timeout.
+                        // The new abortPreGame model ENDs the room outright
+                        // and emits GameEnded("Aborted pre-game") instead.
+                        // Kept as a defensive no-op for historical log replay;
+                        // new contracts never emit this event.
                         if (roomId) await dataSync.fetchGameData(roomId);
-                        addLog(
-                            'Game aborted before start — room returned to lobby.',
-                            'warning',
-                            undefined,
-                            undefined,
-                            stableId(log),
-                        );
                         break;
                     }
 

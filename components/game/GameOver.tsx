@@ -50,7 +50,7 @@ const RoleAccent: Record<Role, string> = {
 const truncateName = (name: string, max: number): string =>
     name.length > max ? name.slice(0, max - 1) + '…' : name;
 
-type Winner = 'MAFIA' | 'TOWN' | 'DRAW';
+type Winner = 'MAFIA' | 'TOWN' | 'DRAW' | 'ABORTED';
 
 export const GameOver: React.FC = React.memo(() => {
     const { gameState, myPlayer, currentRoomId, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain, runtimeChain, fetchOnChainRoles, fetchGMRoles } = useGameContext();
@@ -331,6 +331,13 @@ export const GameOver: React.FC = React.memo(() => {
             color: 'text-gray-400',
             bg: 'from-gray-950/50 to-gray-900/30 border-gray-500/30',
             trophy: 'text-gray-500'
+        },
+        'ABORTED': {
+            title: 'Game Aborted',
+            description: 'The game was cancelled before the first round. Every player has been refunded in full — deposit and buy-in are already back on your wallet.',
+            color: 'text-[#C49A6C]',
+            bg: 'from-[#C49A6C]/15 to-[#0A0705]/80 border-[#C49A6C]/30',
+            trophy: 'text-[#C49A6C]'
         }
     }), []);
 
@@ -435,6 +442,71 @@ export const GameOver: React.FC = React.memo(() => {
                     className="w-9 h-9 border-2 border-[#916A47]/60 border-t-transparent rounded-full"
                 />
             </div>
+        );
+    }
+
+    // ─── Pre-DAY abort screen ────────────────────────────────────────────
+    // The game was cancelled before reaching DAY. Nobody got a role, nobody
+    // died, nobody won. LibGame.abortPreGame has already refunded every
+    // player (deposit + buy-in + freeroll sponsor prize to organizer). Skip
+    // the winners/losers cinematic entirely and show a calm refund screen.
+    if (winner === 'ABORTED') {
+        const abortConfig = winnerConfig.ABORTED;
+        return (
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.6 }}
+                className="fixed inset-0 z-[100] bg-black pointer-events-auto flex flex-col items-center justify-center px-6"
+            >
+                <div
+                    className="fixed inset-0 pointer-events-none"
+                    style={{
+                        background: `radial-gradient(ellipse at center, #C49A6C22 0%, rgba(0,0,0,0.95) 55%, #000 100%)`,
+                    }}
+                />
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2, duration: 0.8 }}
+                    className="relative max-w-xl text-center"
+                >
+                    <h1
+                        className="font-['Cinzel'] uppercase font-bold mb-6"
+                        style={{
+                            fontSize: 'clamp(2.25rem, 6vw, 4rem)',
+                            color: '#C49A6C',
+                            letterSpacing: '0.2em',
+                            textShadow: '0 0 22px #C49A6C99, 0 0 50px #C49A6C55',
+                        }}
+                    >
+                        {abortConfig.title}
+                    </h1>
+                    <p className="text-white/80 text-[15px] md:text-[17px] leading-relaxed mb-10 font-['Montserrat']">
+                        {abortConfig.description}
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        <button
+                            onClick={handlePlayAgain}
+                            className="h-12 px-8 rounded-md text-[13px] uppercase tracking-[0.14em] font-bold transition-all active:scale-[0.98] cursor-pointer"
+                            style={{
+                                border: '1px solid #C49A6C',
+                                color: '#0A0A0A',
+                                backgroundColor: '#C49A6C',
+                                boxShadow: '0 6px 18px rgba(196,154,108,0.18)',
+                            }}
+                        >
+                            Play Again
+                        </button>
+                        <button
+                            onClick={handleHome}
+                            className="h-12 px-8 rounded-md border border-white/15 text-white/75 text-[13px] uppercase tracking-[0.12em] font-semibold hover:border-white/30 hover:text-white hover:bg-white/[0.04] transition-all active:scale-[0.98] cursor-pointer"
+                        >
+                            Home
+                        </button>
+                    </div>
+                </motion.div>
+            </motion.div>
         );
     }
 

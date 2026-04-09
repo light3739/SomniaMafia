@@ -112,7 +112,7 @@ export interface GameState {
   mafiaCommittedCount: number; // For night phase (Mafia)
   mafiaRevealedCount: number; // For night phase (Mafia)
   phaseDeadline: number; // Unix timestamp in seconds
-  winner: 'MAFIA' | 'TOWN' | 'DRAW' | null;
+  winner: 'MAFIA' | 'TOWN' | 'DRAW' | 'ABORTED' | null;
   // Tournament info
   tournamentId?: bigint;
   isTournament?: boolean;

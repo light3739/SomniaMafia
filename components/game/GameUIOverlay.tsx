@@ -56,8 +56,20 @@ export const GameUIOverlay: React.FC = () => {
         />
     ) : undefined;
 
-    // Show exit button during active game phases (not during shuffle/reveal overlays or ended)
-    const showExitButton = [GamePhase.DAY, GamePhase.VOTING, GamePhase.NIGHT].includes(gameState.phase);
+    // Pre-DAY phases (SHUFFLING / REVEAL): leaving aborts the WHOLE round
+    // with a full refund to everyone via LibGame.abortPreGame. Distinct from
+    // mid-game forfeit, which eliminates just the caller with penalty.
+    const isPreDayPhase = [GamePhase.SHUFFLING, GamePhase.REVEAL].includes(gameState.phase);
+    // Mid-game forfeit phases: eliminates the caller only.
+    const isMidGamePhase = [GamePhase.DAY, GamePhase.VOTING, GamePhase.NIGHT].includes(gameState.phase);
+    // Show the exit button in both, with different confirmation copy.
+    const showExitButton = isPreDayPhase || isMidGamePhase;
+
+    const exitContext: 'tournament-game' | 'game' | 'pre-game-abort' = isPreDayPhase
+        ? 'pre-game-abort'
+        : gameState.isTournament
+            ? 'tournament-game'
+            : 'game';
 
     return (
         <>
@@ -65,7 +77,7 @@ export const GameUIOverlay: React.FC = () => {
             <HowToPlayModal />
 
             {/* How to Play "?" button — top-right corner */}
-            {showExitButton && (
+            {isMidGamePhase && (
                 <button
                     onClick={() => window.dispatchEvent(new Event('open-how-to-play'))}
                     className="fixed top-4 right-4 z-[100] w-11 h-11 flex items-center justify-center rounded-full bg-[#0A0A0A] border border-[#916A47]/30 hover:border-[#916A47]/60 hover:bg-[#1A130A] transition-all shadow-[0_5px_15px_rgba(0,0,0,0.8)]"
@@ -83,7 +95,7 @@ export const GameUIOverlay: React.FC = () => {
                         to="/setup"
                         label=""
                         exitGame
-                        exitContext={gameState.isTournament ? 'tournament-game' : 'game'}
+                        exitContext={exitContext}
                         onExitGame={async () => { await forfeitGameOnChain(); }}
                         isLoading={isTxPending}
                     />

@@ -14,7 +14,7 @@ interface BackButtonProps {
     /** Whether a transaction is currently pending */
     isLoading?: boolean;
     /** Context for the exit confirmation message */
-    exitContext?: 'lobby' | 'game' | 'tournament-game';
+    exitContext?: 'lobby' | 'game' | 'tournament-game' | 'pre-game-abort';
 }
 
 export const BackButton: React.FC<BackButtonProps> = ({
@@ -149,7 +149,9 @@ export const BackButton: React.FC<BackButtonProps> = ({
                                         className="text-[15px] font-semibold tracking-wide text-[#E26B6B]"
                                         style={{ fontFamily: 'var(--font-cinzel)' }}
                                     >
-                                        {exitContext === 'lobby' ? 'Leave Lobby?' : 'Leave Game?'}
+                                        {exitContext === 'lobby' ? 'Leave Lobby?'
+                                            : exitContext === 'pre-game-abort' ? 'Abort Round?'
+                                                : 'Leave Game?'}
                                     </h3>
                                 </div>
 
@@ -157,6 +159,10 @@ export const BackButton: React.FC<BackButtonProps> = ({
                                 {exitContext === 'lobby' ? (
                                     <p className="text-white/75 text-[14px] leading-relaxed mb-6">
                                         You will leave the lobby. Your session gas will be <span className="text-[#5BBB8C] font-semibold">refunded</span>.
+                                    </p>
+                                ) : exitContext === 'pre-game-abort' ? (
+                                    <p className="text-white/75 text-[14px] leading-relaxed mb-6">
+                                        The round hasn&apos;t started yet, so leaving <span className="text-[#E26B6B] font-semibold">cancels the whole round</span>. Every player (including anyone who went offline) gets a <span className="text-[#5BBB8C] font-semibold">full refund</span> — deposit and tournament buy-in back to their wallet.
                                     </p>
                                 ) : exitContext === 'tournament-game' ? (
                                     <p className="text-white/75 text-[14px] leading-relaxed mb-6">
