@@ -27,7 +27,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     <div
                         className="absolute w-[140%] h-full -left-[20%] bottom-0"
                         style={{
-                            background: 'radial-gradient(ellipse 70% 55% at 25% 100%, rgba(145,106,71,0.18) 0%, transparent 70%)',
+                            background: 'radial-gradient(ellipse 70% 55% at 25% 100%, rgba(180,130,70,0.30) 0%, transparent 70%)',
                             animation: 'fog-drift-1 30s ease-in-out infinite',
                             willChange: 'transform',
                         }}
@@ -35,7 +35,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     <div
                         className="absolute w-[140%] h-full -left-[20%] bottom-0"
                         style={{
-                            background: 'radial-gradient(ellipse 60% 50% at 75% 100%, rgba(100,80,55,0.14) 0%, transparent 65%)',
+                            background: 'radial-gradient(ellipse 60% 50% at 75% 100%, rgba(140,100,50,0.25) 0%, transparent 65%)',
                             animation: 'fog-drift-2 24s ease-in-out infinite',
                             willChange: 'transform',
                         }}
