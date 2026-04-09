@@ -15,28 +15,6 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
         <div className="relative w-full h-[100dvh] overflow-y-auto overflow-x-hidden font-sans flex flex-col items-center custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
 
-            {/* Noir fog — two slow-drifting gradient layers at the bottom */}
-            <div className="absolute bottom-0 left-0 right-0 h-[55%] pointer-events-none z-[5] overflow-hidden">
-                <div
-                    className="absolute w-[140%] h-full -left-[20%] bottom-0"
-                    style={{
-                        background: 'radial-gradient(ellipse 70% 55% at 25% 100%, rgba(145,106,71,0.1) 0%, transparent 70%)',
-                        animation: 'fog-drift-1 30s ease-in-out infinite',
-                        willChange: 'transform',
-                    }}
-                />
-                <div
-                    className="absolute w-[140%] h-full -left-[20%] bottom-0"
-                    style={{
-                        background: 'radial-gradient(ellipse 60% 50% at 75% 100%, rgba(100,80,55,0.09) 0%, transparent 65%)',
-                        animation: 'fog-drift-2 24s ease-in-out infinite',
-                        willChange: 'transform',
-                    }}
-                />
-                {/* Bottom edge fade — grounds the scene */}
-                <div className="absolute bottom-0 left-0 right-0 h-[30%] bg-gradient-to-t from-black/50 to-transparent" />
-            </div>
-
             {/* Content Container — radial vignette behind text for readability over busy background */}
             <div
                 className="relative z-10 w-full flex flex-col items-center justify-center p-4 my-auto min-h-full"
@@ -44,6 +22,26 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     background: 'radial-gradient(ellipse 80% 65% at center, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 50%, transparent 100%)',
                 }}
             >
+                {/* Noir fog — negative z so it sits above parent background but behind text */}
+                <div className="absolute bottom-0 left-0 right-0 h-[60%] pointer-events-none -z-10 overflow-hidden">
+                    <div
+                        className="absolute w-[140%] h-full -left-[20%] bottom-0"
+                        style={{
+                            background: 'radial-gradient(ellipse 70% 55% at 25% 100%, rgba(145,106,71,0.18) 0%, transparent 70%)',
+                            animation: 'fog-drift-1 30s ease-in-out infinite',
+                            willChange: 'transform',
+                        }}
+                    />
+                    <div
+                        className="absolute w-[140%] h-full -left-[20%] bottom-0"
+                        style={{
+                            background: 'radial-gradient(ellipse 60% 50% at 75% 100%, rgba(100,80,55,0.14) 0%, transparent 65%)',
+                            animation: 'fog-drift-2 24s ease-in-out infinite',
+                            willChange: 'transform',
+                        }}
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 h-[35%] bg-gradient-to-t from-black/60 to-transparent" />
+                </div>
 
                 {/* Main Title — CSS animation for fast LCP (no JS needed) */}
                 <div className="w-full flex items-center justify-center animate-landing-title">
