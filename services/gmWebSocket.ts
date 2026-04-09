@@ -13,6 +13,7 @@
  */
 
 import { GM_SERVER_URL } from '../contracts/config';
+import { signRequest } from './requestSigning';
 
 // ── Event types (must match gm-server/src/ws/wsManager.ts) ──────────────
 
@@ -25,6 +26,8 @@ export type ServerEventType =
   | 'win-detected'
   | 'player-update'
   | 'roles-revealed'
+  | 'mafia-chat'
+  | 'game-signal'
   | 'pong'
   | 'joined'
   | 'error';
@@ -177,17 +180,43 @@ class GmWebSocket {
       return;
     }
 
-    this.ws.onopen = () => {
+    this.ws.onopen = async () => {
       this.reconnectAttempt = 0;
 
-      // Send join message
+      // Sign and send authenticated join message
       if (this.currentRoom) {
-        this.ws!.send(JSON.stringify({
-          type: 'join',
-          roomId: this.currentRoom.roomId,
-          chainId: this.currentRoom.chainId,
-          playerAddress: this.currentRoom.playerAddress,
-        }));
+        const { roomId, chainId, playerAddress } = this.currentRoom;
+        const timestamp = Date.now();
+        try {
+          const signed = await signRequest({
+            address: playerAddress,
+            roomId,
+            buildMessage: () => `ws-join:${chainId}:${roomId}:${timestamp}`,
+          });
+          if (this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+              type: 'join',
+              roomId,
+              chainId,
+              playerAddress,
+              signature: signed.signature,
+              signerAddress: signed.signerAddress,
+              timestamp,
+            }));
+          }
+        } catch (err) {
+          console.error('[GmWebSocket] Failed to sign join message:', err);
+          // Fall back to unsigned join (server may reject)
+          if (this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+              type: 'join',
+              roomId,
+              chainId,
+              playerAddress,
+              timestamp,
+            }));
+          }
+        }
       }
 
       // Start keepalive pings (25s — under Somnia's 30s timeout)
