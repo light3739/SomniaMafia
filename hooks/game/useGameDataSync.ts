@@ -289,7 +289,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
 
                 const winner = checkWinCondition(formattedPlayers, phase);
                 let finalPhase = phase;
-                let resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' | null = winner;
+                let resolvedWinner: 'MAFIA' | 'TOWN' | 'DRAW' | 'ABORTED' | null = winner;
 
                 if (winner && phase !== GamePhase.ENDED) {
                     console.log('[Win Condition Calculated Local]', winner);
