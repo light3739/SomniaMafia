@@ -227,17 +227,7 @@ export function useTournaments(deps: TournamentDeps) {
             const initialPrizeUnits = parseEther(params.initialPrize);
             const sessionFeeUnits = wallet.LOBBY_FUNDING_VALUE;
 
-            // Fetch on-chain entry fee (charged inside createAndJoinRoomInternal)
-            let entryFee = 0n;
-            try {
-                entryFee = await pClient.readContract({
-                    address: refs.contractAddressRef.current,
-                    abi: MAFIA_ABI,
-                    functionName: 'getEntryFee',
-                }) as bigint;
-            } catch { /* entryFee stays 0 if getter unavailable */ }
-
-            let value = wallet.LOBBY_FUNDING_VALUE + entryFee;
+            let value = wallet.LOBBY_FUNDING_VALUE;
             if (isNative) {
                 value += buyInUnits + initialPrizeUnits;
             }
