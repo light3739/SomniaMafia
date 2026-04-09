@@ -20,7 +20,7 @@ export function useWalletManager(refs: GameRefs, useEmbeddedWallet: boolean) {
     const LOBBY_FUNDING_VALUE = useMemo(() => {
         const chainId = Number(refs.runtimeChain.id);
         const isSomnia = (chainId === 5031 || chainId === 50312);
-        return isSomnia ? parseEther('1.5') : parseEther('1.5');
+        return isSomnia ? parseEther('2.0') : parseEther('2.0');
     }, [refs.runtimeChain.id]);
 
     // === ACTIVE WALLET CLIENT ===
