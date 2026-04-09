@@ -94,6 +94,8 @@ export const SetupProfile: React.FC = () => {
     const [tempName, setTempName] = useState('');
     const [fundAmount, setFundAmount] = useState('');
     const [isFunding, setIsFunding] = useState(false);
+    const [withdrawAmount, setWithdrawAmount] = useState('');
+    const [isWithdrawing, setIsWithdrawing] = useState(false);
 
     // Modal state: null = closed, 'wallet' | 'accounts' = open
     const [activeModal, setActiveModal] = useState<'wallet' | 'accounts' | null>(null);
@@ -232,6 +234,41 @@ export const SetupProfile: React.FC = () => {
             await showAlert('Funding failed: ' + (err.message || 'Unknown error'), { variant: 'danger', title: 'Transaction Failed' });
         } finally {
             setIsFunding(false);
+        }
+    };
+
+    const handleWithdrawMax = () => {
+        if (!somniaBalance) return;
+        let max = Number(formatEther(somniaBalance.value));
+        if (max > 0.001) max -= 0.001;
+        setWithdrawAmount(Math.max(0, max).toFixed(3));
+    };
+
+    const handleWithdrawToMain = async () => {
+        if (!externalWallet || !embeddedWalletAddress) return;
+        const privyEmbeddedWallet = wallets.find(w => w.walletClientType === 'privy');
+        if (!privyEmbeddedWallet) return;
+        try {
+            setIsWithdrawing(true);
+            await privyEmbeddedWallet.switchChain(SOMNIA_TESTNET.id);
+            const provider = await privyEmbeddedWallet.getEthereumProvider() as any;
+
+            const valueWei = parseEther(withdrawAmount);
+            await provider.request({
+                method: 'eth_sendTransaction',
+                params: [{
+                    from: embeddedWalletAddress,
+                    to: externalWallet.address,
+                    value: '0x' + valueWei.toString(16),
+                }],
+            });
+            await showAlert('Withdrawal sent to your main wallet!', { variant: 'success', title: 'Withdrawal Sent' });
+            setWithdrawAmount('');
+        } catch (err: any) {
+            console.error('Withdrawal failed:', err);
+            await showAlert('Withdrawal failed: ' + (err.message || 'Unknown error'), { variant: 'danger', title: 'Withdrawal Failed' });
+        } finally {
+            setIsWithdrawing(false);
         }
     };
 
@@ -575,6 +612,73 @@ export const SetupProfile: React.FC = () => {
                                             </div>
                                         )}
                                     </div>
+
+                                    {/* Withdraw to Main Wallet Section */}
+                                    {externalWallet && (
+                                        <div className="mt-2 p-5 rounded-md border border-white/10 bg-gradient-to-b from-white/5 to-transparent flex flex-col gap-4 relative overflow-hidden">
+                                            <div className="flex items-center justify-between relative z-10">
+                                                <h4 className="text-white/60 text-[10px] font-montserrat font-bold uppercase tracking-[0.2em] flex items-center gap-2">
+                                                    <LogOut className="w-4 h-4 text-white/50" /> Withdraw to Main Wallet
+                                                </h4>
+                                            </div>
+                                            <div className="flex flex-col gap-4 relative z-10">
+                                                <div className="flex justify-between items-center bg-black/60 p-3.5 rounded-md border border-white/5">
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <span className="text-white/60 text-[10px] font-bold uppercase tracking-[0.15em]">Destination</span>
+                                                        <span className="text-white/60 text-sm font-mono border border-white/10 bg-black/40 px-2.5 py-1 rounded-md inline-block w-fit tracking-wide shadow-inner tabular-nums">
+                                                            {externalWallet.address.slice(0, 6)}...{externalWallet.address.slice(-4)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col gap-2 w-full">
+                                                    <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.15em] font-bold text-white/60 px-1">
+                                                        <span>Amount</span>
+                                                        <span className="text-white/60">
+                                                            Available: <span className="font-mono text-white/80 tabular-nums">{somniaBalance ? Number(formatEther(somniaBalance.value)).toFixed(3) : '0.000'}</span> STT
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex gap-2 w-full">
+                                                        <div className="relative w-[80px] flex items-center justify-center">
+                                                            <span className="text-white font-montserrat text-sm font-semibold">STT</span>
+                                                        </div>
+                                                        <div className="relative flex-1 group">
+                                                            <button
+                                                                onClick={handleWithdrawMax}
+                                                                className="absolute left-3 top-1/2 -translate-y-1/2 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-md text-[10px] font-bold uppercase tracking-widest text-white/50 hover:text-white/80 transition-all z-10"
+                                                            >
+                                                                MAX
+                                                            </button>
+                                                            <input
+                                                                type="text"
+                                                                inputMode="decimal"
+                                                                value={withdrawAmount}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value.replace(',', '.');
+                                                                    if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                                                                        setWithdrawAmount(val);
+                                                                    }
+                                                                }}
+                                                                className="w-full h-[54px] bg-black/60 border border-white/10 text-white font-mono font-medium text-xl text-right rounded-md pl-16 pr-5 outline-none focus:border-white/30 focus:bg-black/80 transition-all placeholder:text-white/50 relative tabular-nums"
+                                                                placeholder="0.00"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col gap-1.5 w-full mt-2">
+                                                    <button
+                                                        onClick={handleWithdrawToMain}
+                                                        disabled={isWithdrawing || !withdrawAmount || isNaN(Number(withdrawAmount)) || Number(withdrawAmount) <= 0}
+                                                        className={`w-full py-4 font-montserrat font-semibold text-base tracking-wide rounded-md transition-all shadow-lg flex items-center justify-center gap-2 border ${isWithdrawing || !withdrawAmount || isNaN(Number(withdrawAmount)) || Number(withdrawAmount) <= 0 ? 'bg-white/5 text-white/50 border-white/5 cursor-not-allowed opacity-70' : 'bg-white/5 hover:bg-white/10 text-white border-white/10 hover:border-white/20'}`}
+                                                    >
+                                                        {isWithdrawing ? 'Processing...' : 'Withdraw'}
+                                                    </button>
+                                                    <p className="text-center text-white/40 text-[10px] font-semibold uppercase tracking-widest mt-1">
+                                                        Est. Network Fee: <span className="font-mono text-white/50 tabular-nums">~0.001 STT</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </motion.div>
