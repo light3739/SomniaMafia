@@ -27,16 +27,12 @@ export const DEPLOYMENTS = {
         contracts: {
             MafiaDiamond: (process.env.NEXT_PUBLIC_MAFIA_DIAMOND || '0x0406a14729b0c77c187ac5229c8c2317589e73c0') as string,
             Groth16Verifier: '0xc5ece9781099a959626ca26529472af19cbc166f',
-            // LobbyFacet + TimeoutsFacet upgraded 2026-04-09 for the pre-DAY
-            // abort semantics (full refund to everyone when a room ends before
-            // reaching DAY). Frontend goes through the Diamond proxy so only
-            // the MafiaDiamond address is load-bearing.
-            LobbyFacet: '0x75512769d3035e925ee652c78d31ce4ed6a6593b',
+            LobbyFacet: '0x0c8d697689f553eab926b91c92a222773f384f05',
             ShuffleFacet: '0xdd1b4cdb7e647ac96cd7b34c971bba9f3390458d',
             VotingFacet: '0x277ca1b0123f4facff59830ae461086b64ba4719',
             NightFacet: '0x5475c783e17c65bb819db62b7ad29860d35cabc7',
             GameEndFacet: '0x2577be48cfeac61d4b88ca4b71077ce21ce22f68',
-            TournamentFacet: '0xd85a7c2137c720d53dcc463738d881885ae57c65',
+            TournamentFacet: '0x2589e4bfa42e8ee97ddd673c1253b832a72838e4',
             TimeoutsFacet: '0x1c393242879ab7bda579d7bffe4bc6200eab08c9',
             RefundsFacet: '0x7f38c2292df18b77c6d83d7f0f3740aa0c1abcf8',
         },
