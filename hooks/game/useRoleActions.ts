@@ -284,9 +284,21 @@ export function useRoleActions(deps: RoleDeps) {
                 );
 
                 if (res.status === 202) {
-                    console.log('[MyRole] SRA keys not ready, retrying in 4s...');
+                    console.log('[MyRole] SRA keys not ready, will retry on WS push or 4s timeout...');
                     refs.roleFetchedRef.current = false;
-                    setTimeout(tryFetch, 4000);
+
+                    // Subscribe to WS role-ready push for instant retry
+                    const { gmWs } = await import('../../services/gmWebSocket');
+                    let wsUnsub: (() => void) | null = null;
+                    const timer = setTimeout(tryFetch, 4000);
+                    wsUnsub = gmWs.on('role-ready', (data: unknown) => {
+                        const d = data as { playerAddress?: string } | undefined;
+                        if (d?.playerAddress?.toLowerCase() === myAddr.toLowerCase()) {
+                            clearTimeout(timer);
+                            wsUnsub?.();
+                            tryFetch();
+                        }
+                    });
                     return;
                 }
 
