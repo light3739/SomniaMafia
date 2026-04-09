@@ -10,6 +10,7 @@ import { MAFIA_ABI } from '../../contracts/config';
 import { GamePhase } from '../../types';
 import { GameLog } from './GameLog';
 import { emitGameSignal } from '../../services/signalBus';
+import { gmWs } from '../../services/gmWebSocket';
 
 // Internal Components
 import { DiscussionSection } from './day/DiscussionSection';
@@ -183,16 +184,42 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         }
     }, [isDayPhase, discussionState?.active, discussionState?.currentSpeakerAddress, gameState.players, addLog]);
 
-    // Poll fetchDiscussionState every 3 seconds during day phase
+    // Poll fetchDiscussionState during day phase.
+    // When GM WebSocket is connected, the server pushes discussion-update events
+    // so we slow down to a 10s safety-net poll. When disconnected, poll every 3s.
     useEffect(() => {
         if (!isDayPhase || !currentRoomId || isTestMode) return;
-        
+
         // Fetch immediately on enter
         fetchDiscussionState();
-        
-        // And poll every 3 seconds to keep non-hosts in sync
-        const iv = setInterval(fetchDiscussionState, 3000);
-        return () => clearInterval(iv);
+
+        // Subscribe to WS discussion-update events for instant updates
+        const unsubWs = gmWs.on('discussion-update', (data: unknown) => {
+            if (data && typeof data === 'object') {
+                // The WS push contains the core fields; trigger a full fetch
+                // to get the complete discussion state (timeRemaining, isMyTurn, etc.)
+                fetchDiscussionState();
+            }
+        });
+
+        // Slow safety-net poll when WS connected, fast when disconnected
+        let intervalMs = gmWs.isConnected ? 10_000 : 3_000;
+        let iv = setInterval(fetchDiscussionState, intervalMs);
+
+        const unsubState = gmWs.onStateChange((state) => {
+            const newMs = state === 'connected' ? 10_000 : 3_000;
+            if (newMs !== intervalMs) {
+                intervalMs = newMs;
+                clearInterval(iv);
+                iv = setInterval(fetchDiscussionState, intervalMs);
+            }
+        });
+
+        return () => {
+            clearInterval(iv);
+            unsubWs();
+            unsubState();
+        };
     }, [isDayPhase, currentRoomId, isTestMode, fetchDiscussionState]);
 
     // Clear discussion state when voting results are shown to prevent stale
