@@ -43,6 +43,18 @@ export const CreateLobby: React.FC = () => {
     const [tournamentType, setTournamentType] = useState<TournamentType>('buy-in');
     const [tournamentAmount, setTournamentAmount] = useState(''); // Used for both entry fee and prize pool
 
+    // Pre-fill form from rematch settings (set by GameOver "Rematch" button)
+    useEffect(() => {
+        try {
+            const raw = sessionStorage.getItem('rematch_settings');
+            if (!raw) return;
+            sessionStorage.removeItem('rematch_settings');
+            const settings = JSON.parse(raw);
+            if (settings.lobbyName) setLobbyName(settings.lobbyName);
+            if (settings.maxPlayers >= 10 && settings.maxPlayers <= 16) setMaxPlayers(settings.maxPlayers);
+        } catch { /* ignore malformed data */ }
+    }, [setLobbyName]);
+
     // Scroll-driven vignette: opacity directly tied to scroll position
     const [scrollProgress, setScrollProgress] = useState(0);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
