@@ -554,6 +554,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         createTournamentAndRoomOnChain: tournaments.createTournamentAndRoomOnChain,
         distributePrizesOnChain: tournaments.distributePrizesOnChain,
         cancelTournamentOnChain: tournaments.cancelTournamentOnChain,
+        leaveTournamentOnChain: tournaments.leaveTournamentOnChain,
 
         // Utility
         kickStalledPlayerOnChain,
