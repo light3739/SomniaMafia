@@ -946,24 +946,25 @@ export const GameOver: React.FC = React.memo(() => {
                                     Play Again
                                 </Button>
                             </div>
-                            <Button
-                                onClick={handleHome}
-                                variant="outline-gold"
-                                className="w-full h-[44px] text-sm hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
-                            >
-                                <Home className="w-4 h-4 mr-2" />
-                                Home
-                            </Button>
-
-                            {/* Share — quiet ghost link, no longer competing with Play Again */}
-                            <button
-                                onClick={handleShare}
-                                disabled={isSharing}
-                                className="mt-1 mx-auto flex items-center gap-2 px-4 py-2 text-[11px] uppercase tracking-[0.3em] text-white/35 hover:text-white/70 transition-colors disabled:opacity-50 disabled:cursor-wait font-['Cinzel']"
-                            >
-                                <Share2 className="w-3 h-3" />
-                                {isSharing ? 'Generating...' : 'Share Result'}
-                            </button>
+                            <div className="flex gap-3">
+                                <Button
+                                    onClick={handleShare}
+                                    disabled={isSharing}
+                                    variant="outline-gold"
+                                    className="flex-1 h-[44px] text-sm hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
+                                >
+                                    <Share2 className="w-4 h-4 mr-2" />
+                                    {isSharing ? 'Saving...' : 'Share'}
+                                </Button>
+                                <Button
+                                    onClick={handleHome}
+                                    variant="outline-gold"
+                                    className="flex-1 h-[44px] text-sm hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
+                                >
+                                    <Home className="w-4 h-4 mr-2" />
+                                    Home
+                                </Button>
+                            </div>
 
                             {/* Refresh roles (if some are still unknown) */}
                             {!revealTimedOut && gameState.players.some(p => p.role === Role.UNKNOWN) && (

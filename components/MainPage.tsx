@@ -50,8 +50,32 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                     </div>
                 </div>
 
+                {/* Game Description — answers "what is it?" in 5 seconds */}
+                <p
+                    className="mt-10 text-center font-bold"
+                    style={{
+                        fontFamily: 'var(--font-cinzel), serif',
+                        fontSize: 'clamp(0.85rem, 2.5vw, 1.3rem)',
+                        letterSpacing: '0.12em',
+                        color: '#C49A6C',
+                        textShadow: '0 2px 10px rgba(0,0,0,0.8)',
+                        animation: 'landing-slide-up 1s ease-out 0.5s both',
+                    }}
+                >
+                    Unmask the Mafia. Deceive the Town.
+                </p>
+                <p
+                    className="mt-3 text-center text-white/40 font-sans tracking-[0.15em] uppercase"
+                    style={{
+                        fontSize: 'clamp(0.6rem, 1.2vw, 0.8rem)',
+                        animation: 'landing-slide-up 1s ease-out 0.65s both',
+                    }}
+                >
+                    Voice chat · 4–16 players · Play free in your browser
+                </p>
+
                 {/* CONNECT / ENTER Button */}
-                <div className="animate-landing-button mt-32 relative z-20">
+                <div className="animate-landing-button mt-14 relative z-20">
                     {(() => {
                         if (!ready) {
                             // Reserve the exact final button footprint so the
