@@ -424,56 +424,57 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
                         {player.address ? `${player.address.slice(0, 4)}...${player.address.slice(-4)}` : '0x...'}
                     </div>
 
-                    {/* Voter Avatars - shows who voted for this player */}
-                    <AnimatePresence>
-                        {voters.length > 0 && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 5 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 5 }}
-                                className="flex -space-x-2 mt-2"
-                            >
-                                {voters.slice(0, 5).map((voter, index) => (
-                                    <motion.div
-                                        key={voter.address}
-                                        initial={{ opacity: 0, scale: 0 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0 }}
-                                        transition={{ delay: index * 0.1, type: "spring", stiffness: 500, damping: 25 }}
-                                        className="relative w-6 h-6 rounded-full border-2 border-[#916A47] overflow-hidden bg-[#19130D] shadow-lg"
-                                        title={voter.name}
-                                        style={{ zIndex: voters.length - index }}
-                                    >
-                                        {voter.avatarUrl ? (
-                                            <Image
-                                                src={voter.avatarUrl}
-                                                alt={voter.name}
-                                                fill
-                                                sizes="24px"
-                                                className="object-cover grayscale contrast-125 brightness-75"
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center bg-[#916A47]/30">
-                                                <User className="w-3 h-3 text-[#916A47]" />
-                                            </div>
-                                        )}
-                                    </motion.div>
-                                ))}
-                                {voters.length > 5 && (
-                                    <motion.div
-                                        initial={{ opacity: 0, scale: 0 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        transition={{ delay: 0.5 }}
-                                        className="w-6 h-6 rounded-full border-2 border-[#916A47] bg-[#19130D] flex items-center justify-center text-[10px] text-[#916A47] font-bold"
-                                    >
-                                        +{voters.length - 5}
-                                    </motion.div>
-                                )}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
                 </div>
             </div>
+
+            {/* Voter Avatars - outside the blur overlay so they stay crisp on dead players */}
+            <AnimatePresence>
+                {voters.length > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 5 }}
+                        className="absolute bottom-2 left-4 flex -space-x-2 z-10"
+                    >
+                        {voters.slice(0, 5).map((voter, index) => (
+                            <motion.div
+                                key={voter.address}
+                                initial={{ opacity: 0, scale: 0 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0 }}
+                                transition={{ delay: index * 0.1, type: "spring", stiffness: 500, damping: 25 }}
+                                className="relative w-6 h-6 rounded-full border-2 border-[#916A47] overflow-hidden bg-[#19130D] shadow-lg"
+                                title={voter.name}
+                                style={{ zIndex: voters.length - index }}
+                            >
+                                {voter.avatarUrl ? (
+                                    <Image
+                                        src={voter.avatarUrl}
+                                        alt={voter.name}
+                                        fill
+                                        sizes="24px"
+                                        className="object-cover grayscale contrast-125 brightness-75"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-[#916A47]/30">
+                                        <User className="w-3 h-3 text-[#916A47]" />
+                                    </div>
+                                )}
+                            </motion.div>
+                        ))}
+                        {voters.length > 5 && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.5 }}
+                                className="w-6 h-6 rounded-full border-2 border-[#916A47] bg-[#19130D] flex items-center justify-center text-[10px] text-[#916A47] font-bold"
+                            >
+                                +{voters.length - 5}
+                            </motion.div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* DEAD Badge */}
             {!player.isAlive && (
