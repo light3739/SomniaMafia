@@ -7,6 +7,7 @@ import { Volume2, VolumeX, X, Loader2, Users } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
 import { buildTokenMessage } from '@/services/signingSchema';
+import { loadSession } from '@/services/sessionKeyService';
 import { ConnectionState, RoomEvent } from 'livekit-client';
 import { useGameSignaling, type GameSignal } from '@/hooks/useGameSignaling';
 
@@ -400,34 +401,50 @@ export function LiveKitVoiceChat({
             try {
                 setError(null);
                 setStatusMessage('Connecting to voice...');
-                const playerAddress = addressRef.current || '';
+                // Prefer the session row's mainWallet over wagmi's address.
+                // See MicButton for the rationale: useAccount() races during
+                // navigation / cold-start and can return a wallet that doesn't
+                // own the session — signRequest then falls back to
+                // walletClient.signMessage and Privy embedded mounts its
+                // confirmation modal as an unwanted "register" popup.
+                const roomIdPrefix = roomId.split('-')[0];
+                const parsedRoomId = Number(roomIdPrefix);
+
+                let playerAddress = addressRef.current || '';
+                if (Number.isFinite(parsedRoomId)) {
+                    const session = loadSession();
+                    if (
+                        session &&
+                        session.roomId === parsedRoomId &&
+                        Date.now() < session.expiresAt
+                    ) {
+                        playerAddress = session.mainWallet;
+                    }
+                }
+
                 let signature: `0x${string}` | undefined;
                 let signerAddress: string | undefined;
                 let nonce: string | undefined;
                 let timestamp: number | undefined;
 
-                if (playerAddress) {
-                    const roomIdPrefix = roomId.split('-')[0];
-                    const parsedRoomId = Number(roomIdPrefix);
-                    if (Number.isFinite(parsedRoomId)) {
-                        const signed = await signRequest({
-                            address: playerAddress,
-                            roomId: parsedRoomId,
-                            walletClient: walletClientRef.current,
-                            buildMessage: ({ nonce: n, timestamp: t }) => buildTokenMessage({
-                                room: roomId,
-                                username: userNameRef.current,
-                                playerAddress,
-                                nonce: n,
-                                timestamp: t,
-                                chainId: chainIdRef.current,
-                            }),
-                        });
-                        signature = signed.signature;
-                        signerAddress = signed.signerAddress;
-                        nonce = signed.nonce;
-                        timestamp = signed.timestamp;
-                    }
+                if (playerAddress && Number.isFinite(parsedRoomId)) {
+                    const signed = await signRequest({
+                        address: playerAddress,
+                        roomId: parsedRoomId,
+                        walletClient: walletClientRef.current,
+                        buildMessage: ({ nonce: n, timestamp: t }) => buildTokenMessage({
+                            room: roomId,
+                            username: userNameRef.current,
+                            playerAddress,
+                            nonce: n,
+                            timestamp: t,
+                            chainId: chainIdRef.current,
+                        }),
+                    });
+                    signature = signed.signature;
+                    signerAddress = signed.signerAddress;
+                    nonce = signed.nonce;
+                    timestamp = signed.timestamp;
                 }
 
                 if (cancelled) return;

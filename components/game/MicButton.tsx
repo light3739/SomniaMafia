@@ -7,6 +7,7 @@ import { Room, RoomEvent, Track, LocalAudioTrack, RemoteTrack, RemoteTrackPublic
 import { useAccount, useWalletClient, useChainId } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
 import { buildTokenMessage } from '@/services/signingSchema';
+import { loadSession } from '@/services/sessionKeyService';
 
 const LIVEKIT_CONNECT_TIMEOUT_MS = (() => {
     const raw = process.env.NEXT_PUBLIC_LIVEKIT_CONNECT_TIMEOUT_MS;
@@ -192,34 +193,59 @@ export function MicButton({
             setError(null);
 
             try {
-                const playerAddress = addressRef.current || '';
+                // Resolve canonical playerAddress.
+                //
+                // Prefer the session row's mainWallet over useAccount().address:
+                // wagmi's address can race during navigation / cold-start while
+                // @privy-io/wagmi resyncs the active wallet, returning a wallet
+                // that doesn't own the session for this room. signRequest would
+                // then fail its session-match check and fall through to
+                // walletClient.signMessage — on Privy embedded that mounts
+                // their confirmation modal, which the user sees as an unwanted
+                // "register" popup for the mic.
+                //
+                // The session row in localStorage IS the canonical signer for
+                // this room (it was written by createLobby/joinLobby with the
+                // wallet that actually signed the on-chain join), so reading
+                // it directly is race-proof.
+                const roomIdPrefix = roomId.split('-')[0];
+                const parsedRoomId = Number(roomIdPrefix);
+
+                let playerAddress = addressRef.current || '';
+                if (Number.isFinite(parsedRoomId)) {
+                    const session = loadSession();
+                    if (
+                        session &&
+                        session.roomId === parsedRoomId &&
+                        Date.now() < session.expiresAt
+                    ) {
+                        playerAddress = session.mainWallet;
+                    }
+                }
+
                 let signature: `0x${string}` | undefined;
                 let signerAddress: string | undefined;
                 let nonce: string | undefined;
                 let timestamp: number | undefined;
 
-                if (playerAddress) {
-                    const roomIdPrefix = roomId.split('-')[0];
-                    const parsedRoomId = Number(roomIdPrefix);
-                    if (Number.isFinite(parsedRoomId)) {
-                        const signed = await signRequest({
-                            address: playerAddress,
-                            roomId: parsedRoomId,
-                            walletClient: walletClientRef.current,
-                            buildMessage: ({ nonce, timestamp }) => buildTokenMessage({
-                                room: roomId,
-                                username: userNameRef.current,
-                                playerAddress,
-                                nonce,
-                                timestamp,
-                                chainId: chainIdRef.current,
-                            }),
-                        });
-                        signature = signed.signature;
-                        signerAddress = signed.signerAddress;
-                        nonce = signed.nonce;
-                        timestamp = signed.timestamp;
-                    }
+                if (playerAddress && Number.isFinite(parsedRoomId)) {
+                    const signed = await signRequest({
+                        address: playerAddress,
+                        roomId: parsedRoomId,
+                        walletClient: walletClientRef.current,
+                        buildMessage: ({ nonce, timestamp }) => buildTokenMessage({
+                            room: roomId,
+                            username: userNameRef.current,
+                            playerAddress,
+                            nonce,
+                            timestamp,
+                            chainId: chainIdRef.current,
+                        }),
+                    });
+                    signature = signed.signature;
+                    signerAddress = signed.signerAddress;
+                    nonce = signed.nonce;
+                    timestamp = signed.timestamp;
                 }
 
                 if (cancelled) return;

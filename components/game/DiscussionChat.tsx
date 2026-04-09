@@ -10,6 +10,7 @@ import { useSoundEffects } from '@/components/ui/SoundEffects';
 import { useWalletClient, useAccount } from 'wagmi';
 import { signRequest } from '@/services/requestSigning';
 import { buildTokenMessage } from '@/services/signingSchema';
+import { loadSession } from '@/services/sessionKeyService';
 
 interface ChatMessage {
     id: string;
@@ -145,7 +146,25 @@ export const ChatToggleButton: React.FC<{
                 const roomName = `${currentRoomId}-day`;
                 console.log('[ChatToggleButton] Getting token for room:', roomName);
 
-                const playerAddress = myPlayer?.address || '';
+                // Prefer the session row's mainWallet over myPlayer/wagmi.
+                // See MicButton for the rationale: useAccount() races during
+                // navigation and can return a wallet that doesn't own the
+                // session — signRequest then falls back to walletClient
+                // signMessage and on Privy embedded mounts a popup as an
+                // unwanted "register" prompt. The session row IS the
+                // canonical signer for this room.
+                const parsedRoomId = Number(currentRoomId);
+                let playerAddress = myPlayer?.address || '';
+                if (Number.isFinite(parsedRoomId)) {
+                    const session = loadSession();
+                    if (
+                        session &&
+                        session.roomId === parsedRoomId &&
+                        Date.now() < session.expiresAt
+                    ) {
+                        playerAddress = session.mainWallet;
+                    }
+                }
                 const username = `${userNameRef.current}_chat`;
 
                 let signature: `0x${string}` | undefined;
@@ -153,10 +172,10 @@ export const ChatToggleButton: React.FC<{
                 let nonce: string | undefined;
                 let timestamp: number | undefined;
 
-                if (playerAddress) {
+                if (playerAddress && Number.isFinite(parsedRoomId)) {
                     const signed = await signRequest({
                         address: playerAddress,
-                        roomId: Number(currentRoomId),
+                        roomId: parsedRoomId,
                         walletClient,
                         buildMessage: ({ nonce, timestamp }) => buildTokenMessage({
                             room: roomName,
