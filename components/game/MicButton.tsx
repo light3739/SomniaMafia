@@ -192,6 +192,12 @@ export function MicButton({
             setIsConnecting(true);
             setError(null);
 
+            // Brief delay to let the previous MicButton's disconnect propagate
+            // to the LiveKit server, avoiding DUPLICATE_IDENTITY race conditions
+            // during phase transitions (day→vote→postgame).
+            await new Promise(r => setTimeout(r, 300));
+            if (cancelled) return;
+
             try {
                 // Resolve canonical playerAddress.
                 //
@@ -425,8 +431,12 @@ export function MicButton({
         return () => {
             cancelled = true;
             if (roomRef.current) {
-                roomRef.current.disconnect();
+                // Disconnect synchronously — must complete before the next
+                // MicButton instance tries to connect with the same identity,
+                // otherwise LiveKit sees DUPLICATE_IDENTITY and aborts both.
+                const r = roomRef.current;
                 roomRef.current = null;
+                r.disconnect().catch(() => {});
             }
             audioTrackRef.current = null;
             if (audioContainerRef.current) audioContainerRef.current.innerHTML = '';
