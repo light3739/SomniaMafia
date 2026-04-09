@@ -10,11 +10,12 @@
  * - Debounced refresh to prevent RPC spam
  * - Continuous polling interval
  */
-import { useCallback, useRef, useEffect, useMemo } from 'react';
+import { useCallback, useRef, useEffect, useMemo, useState } from 'react';
 import { MAFIA_ABI } from '../../contracts/config';
 import { GamePhase, GameState, Player, Role } from '../../types';
 import type { GameRefs } from './useGameRefs';
 import React from 'react';
+import { gmWs } from '../../services/gmWebSocket';
 
 interface DataSyncDeps {
     refs: GameRefs;
@@ -355,31 +356,35 @@ export function useGameDataSync(deps: DataSyncDeps) {
         }, delay);
     }, [refreshPlayersList]);
 
-    // === CONTINUOUS POLLING ===
+    // === CONTINUOUS POLLING (WS-aware) ===
+    // When GM WebSocket is connected, the event poller triggers
+    // refreshPlayersListDebounced on phase-change/player-update events.
+    // We keep a slow safety-net poll (10s) in case the WS push was missed.
+    // When WS is disconnected, fall back to the original fast polling (3s).
+    const [wsConnected, setWsConnected] = useState(false);
+    useEffect(() => {
+        const unsub = gmWs.onStateChange((state) => setWsConnected(state === 'connected'));
+        return unsub;
+    }, []);
+
     useEffect(() => {
         if (!currentRoomId || isTestMode || !refs.publicClientRef.current) return;
 
         refreshPlayersListDebounced(currentRoomId);
 
+        const intervalMs = wsConnected ? 10_000 : 3_000;
         const interval = setInterval(() => {
             refreshPlayersListDebounced(currentRoomId);
-        }, 3000);
+        }, intervalMs);
         return () => {
             clearInterval(interval);
-            // Flush any pending debounced refresh queued against the old room so
-            // it doesn't fire after we've moved on.
             if (refreshTimerRef.current) {
                 clearTimeout(refreshTimerRef.current);
                 refreshTimerRef.current = null;
             }
-            // Drop the in-flight promise handle. The fetch itself can't be aborted
-            // here, but the pre/post guards inside refreshPlayersList will discard
-            // its result once currentRoomIdRef has moved on, and clearing the handle
-            // lets the next room immediately queue its own refresh instead of
-            // waiting for the old one to settle.
             refreshPromiseRef.current = null;
         };
-    }, [isTestMode, refreshPlayersListDebounced, refs, currentRoomId]);
+    }, [isTestMode, refreshPlayersListDebounced, refs, currentRoomId, wsConnected]);
 
     return {
         fetchGameData,
