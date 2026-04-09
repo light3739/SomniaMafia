@@ -15,8 +15,13 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
         <div className="relative w-full h-[100dvh] overflow-y-auto overflow-x-hidden font-sans flex flex-col items-center custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
 
-            {/* Content Container */}
-            <div className="relative z-10 w-full flex flex-col items-center justify-center p-4 my-auto min-h-full">
+            {/* Content Container — radial vignette behind text for readability over busy background */}
+            <div
+                className="relative z-10 w-full flex flex-col items-center justify-center p-4 my-auto min-h-full"
+                style={{
+                    background: 'radial-gradient(ellipse 80% 65% at center, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 50%, transparent 100%)',
+                }}
+            >
 
                 {/* Main Title — CSS animation for fast LCP (no JS needed) */}
                 <div className="w-full flex items-center justify-center animate-landing-title">
@@ -58,16 +63,17 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         fontSize: 'clamp(0.85rem, 2.5vw, 1.3rem)',
                         letterSpacing: '0.12em',
                         color: '#C49A6C',
-                        textShadow: '0 2px 10px rgba(0,0,0,0.8)',
+                        textShadow: '0 2px 20px rgba(0,0,0,1), 0 0 40px rgba(0,0,0,0.5)',
                         animation: 'landing-slide-up 1s ease-out 0.5s both',
                     }}
                 >
                     Unmask the Mafia. Deceive the Town.
                 </p>
                 <p
-                    className="mt-3 text-center text-white/40 font-sans tracking-[0.15em] uppercase"
+                    className="mt-3 text-center text-white/50 font-sans tracking-[0.15em] uppercase"
                     style={{
                         fontSize: 'clamp(0.6rem, 1.2vw, 0.8rem)',
+                        textShadow: '0 1px 10px rgba(0,0,0,1)',
                         animation: 'landing-slide-up 1s ease-out 0.65s both',
                     }}
                 >
