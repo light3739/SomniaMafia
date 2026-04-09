@@ -3,16 +3,12 @@ import { Cinzel, Montserrat } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 import { LazyAudio } from "@/components/ui/LazyAudio";
+import { SmokeOverlay } from '@/components/ui/SmokeOverlay';
 
 const cinzel = Cinzel({
   subsets: ["latin", "latin-ext"],
   variable: "--font-cinzel",
-  // 'optional' gives the browser ~100ms to load Cinzel; otherwise it sticks
-  // with the size-adjusted fallback for the rest of the session and never swaps.
-  // This kills the FOUT-induced vertical jump on the landing title without
-  // hurting LCP (the title paints immediately with the metric-matched fallback,
-  // and on repeat visits Cinzel is in cache and loads in time).
-  display: "optional",
+  display: "swap",
 });
 
 const montserrat = Montserrat({
@@ -45,7 +41,7 @@ export const metadata = {
     siteName: "Onchain Mafia",
     images: [
       {
-        url: "/assets/lobby_background.png", // Fallback to lobby bg
+        url: "/images/mainscreen.png", // Fallback to lobby bg
         width: 1200,
         height: 630,
         alt: "Onchain Mafia Game Board",
@@ -58,7 +54,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "Onchain Mafia",
     description: "Web3 Social Deduction",
-    images: ["/assets/lobby_background.png"],
+    images: ["/images/mainscreen.png"],
   },
   icons: {
     icon: '/favicon.ico',
@@ -80,6 +76,8 @@ export default function RootLayout({
         <Providers>
           <LazyAudio />
           <DynamicBackground />
+          {/* Persistent smoke — lives outside router, never remounts on navigation */}
+          <SmokeOverlay />
           {children}
         </Providers>
       </body>

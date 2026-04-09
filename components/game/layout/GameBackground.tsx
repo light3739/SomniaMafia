@@ -17,6 +17,7 @@ export const GameBackground: React.FC<GameBackgroundProps> = ({ isNightPhase, da
                     alt="Day Background"
                     fill
                     priority
+                    unoptimized
                     className="object-cover"
                     style={{ filter: 'grayscale(30%) brightness(55%)' }}
                 />
@@ -29,6 +30,7 @@ export const GameBackground: React.FC<GameBackgroundProps> = ({ isNightPhase, da
                     alt="Night Background"
                     fill
                     priority
+                    unoptimized
                     className="object-cover"
                     style={{ filter: 'brightness(50%) sepia(20%) contrast(105%)' }}
                 />

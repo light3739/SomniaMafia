@@ -4,6 +4,7 @@ import { HelpCircle } from 'lucide-react';
 import { BackButton } from '../ui/BackButton';
 import HowToPlayModal from '../game/HowToPlayModal';
 
+
 interface FlowLayoutProps {
     children: React.ReactNode;
     backTo?: string;
@@ -44,6 +45,7 @@ export const FlowLayout: React.FC<FlowLayoutProps> = ({
             ref={scrollContainerRef}
             className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 pb-12 custom-scrollbar"
         >
+
             {/* How to Play modal + top-right trigger button (shared across lobby flow screens) */}
             <HowToPlayModal />
             <button
