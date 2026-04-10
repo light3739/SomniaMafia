@@ -38,6 +38,7 @@
   ],
   "exclude": [
     "node_modules",
+    "e2e-bots",
     "gm_index.ts",
     "gm_server.js",
     "scripts/*",
