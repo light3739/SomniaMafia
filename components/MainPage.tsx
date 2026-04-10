@@ -79,7 +79,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         textShadow: '0 2px 20px rgba(0,0,0,1), 0 0 40px rgba(0,0,0,0.5)',
                     }}
                 >
-                    Unmask the Mafia. Deceive the Town.
+                    Mafia, where lies pay real money.
                 </p>
                 <p
                     className="mt-3 text-center text-white/50 font-sans tracking-[0.15em] uppercase"
@@ -89,7 +89,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         animation: 'landing-slide-up 1s ease-out 0.5s both',
                     }}
                 >
-                    Voice chat · 4–16 players · Play in your browser
+                    Tournaments · Voice chat · 4–16 players · On-chain prizes
                 </p>
 
                 {/* Corner ribbon — On Somnia Network */}
@@ -140,7 +140,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                     aria-hidden
                                     className="px-14 py-3.5 rounded-xl font-mono font-bold text-base md:text-lg tracking-[0.1em] ring-1 ring-transparent invisible"
                                 >
-                                    LOGIN / CONNECT
+                                    PLAY NOW
                                 </div>
                             );
                         }
@@ -154,7 +154,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                                         background: 'linear-gradient(90deg, #E7D571 0%, #615511 100%)',
                                     }}
                                 >
-                                    <span className="relative z-10">LOGIN / CONNECT</span>
+                                    <span className="relative z-10">PLAY NOW</span>
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000" />
                                 </button>
                             );
