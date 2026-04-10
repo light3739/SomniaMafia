@@ -513,6 +513,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         createLobbyOnChain: lobby.createLobbyOnChain,
         joinLobbyOnChain: lobby.joinLobbyOnChain,
         forfeitGameOnChain: lobby.forfeitGameOnChain,
+        broadcastRematchInvite: lobby.broadcastRematchInvite,
+        createRematchLobby: lobby.createRematchLobby,
 
         // Shuffle
         startGameOnChain: shuffle.startGameOnChain,

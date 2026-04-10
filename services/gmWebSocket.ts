@@ -28,6 +28,7 @@ export type ServerEventType =
   | 'roles-revealed'
   | 'mafia-chat'
   | 'game-signal'
+  | 'rematch-invite'
   | 'pong'
   | 'joined'
   | 'error';

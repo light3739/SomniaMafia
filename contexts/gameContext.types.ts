@@ -26,6 +26,18 @@ export interface GameContextType {
     // Lobby
     joinLobbyOnChain: (roomId: bigint | number, passwordOverride?: string) => Promise<boolean>;
     forfeitGameOnChain: () => Promise<boolean>;
+    broadcastRematchInvite: (params: {
+        oldRoomId: bigint;
+        newRoomId: bigint;
+        lobbyName: string;
+        maxPlayers: number;
+        isPrivate: boolean;
+    }) => Promise<boolean>;
+    createRematchLobby: (params: {
+        oldRoomId: bigint;
+        lobbyName: string;
+        maxPlayers: number;
+    }) => Promise<bigint | null>;
 
     // Shuffle (V4: commit-reveal)
     startGameOnChain: () => Promise<void>;
@@ -115,7 +127,7 @@ export interface GameContextType {
     publicClient: any;
     address: `0x${string}` | undefined;
     isWalletReady: boolean;
-    createLobbyOnChain: (maxPlayers?: number, tournamentId?: bigint, nonce?: number) => Promise<boolean>;
+    createLobbyOnChain: (maxPlayers?: number, tournamentId?: bigint, nonce?: number) => Promise<bigint | null>;
     useEmbeddedWallet: boolean;
     setUseEmbeddedWallet: (v: boolean) => void;
     runtimeChain?: any;

@@ -395,6 +395,59 @@ export async function setRoomPassword(params: {
 }
 
 /**
+ * Broadcast a rematch invite to all players still subscribed to the OLD room's
+ * WS channel. The GM server verifies the caller is the old room's host and
+ * that the new room exists on-chain, then pushes a 'rematch-invite' event.
+ */
+export async function sendRematchInvite(params: {
+    oldRoomId: string;
+    newRoomId: string;
+    hostAddress: string;
+    walletClient: any;
+    chainId?: number;
+    lobbyName?: string;
+    maxPlayers?: number;
+    isPrivate?: boolean;
+}): Promise<void> {
+    const { oldRoomId, newRoomId, hostAddress, walletClient, chainId, lobbyName, maxPlayers, isPrivate } = params;
+
+    const meta = await signRequest({
+        address: hostAddress,
+        roomId: Number(oldRoomId),
+        walletClient,
+        buildMessage: ({ nonce, timestamp }) =>
+            new SignatureBuilder('sendRematchInvite', chainId, oldRoomId)
+                .withAddress(hostAddress)
+                .withParam(newRoomId)
+                .withModern(nonce, timestamp)
+                .build(),
+    });
+
+    const res = await fetch(`${GM_SERVER_URL}/rematch-invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            oldRoomId,
+            newRoomId,
+            hostAddress,
+            signature: meta.signature,
+            signerAddress: meta.signerAddress,
+            nonce: meta.nonce,
+            timestamp: meta.timestamp,
+            chainId,
+            lobbyName,
+            maxPlayers,
+            isPrivate,
+        }),
+    });
+
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(`Failed to send rematch invite: ${error.error || res.statusText}`);
+    }
+}
+
+/**
  * Request a join permit (GM signature) from GM server by providing the room password.
  */
 export async function requestJoinPermit(params: {
