@@ -248,6 +248,9 @@ export function useRoleActions(deps: RoleDeps) {
         }
     }, [refs]);
 
+    // Cleanup handle for in-flight WS role-ready subscription + retry timer
+    const roleRetryCleanupRef = useRef<(() => void) | null>(null);
+
     // === FETCH MY ROLE FROM GM ===
     const fetchMyRoleFromGM = useCallback(async () => {
         const roomId = refs.currentRoomIdRef.current;
@@ -287,6 +290,12 @@ export function useRoleActions(deps: RoleDeps) {
                     console.log('[MyRole] SRA keys not ready, will retry on WS push or 4s timeout...');
                     refs.roleFetchedRef.current = false;
 
+                    // Clean up any previous WS subscription + timer from an earlier 202
+                    if (roleRetryCleanupRef.current) {
+                        roleRetryCleanupRef.current();
+                        roleRetryCleanupRef.current = null;
+                    }
+
                     // Subscribe to WS role-ready push for instant retry
                     const { gmWs } = await import('../../services/gmWebSocket');
                     let wsUnsub: (() => void) | null = null;
@@ -296,9 +305,15 @@ export function useRoleActions(deps: RoleDeps) {
                         if (d?.playerAddress?.toLowerCase() === myAddr.toLowerCase()) {
                             clearTimeout(timer);
                             wsUnsub?.();
+                            roleRetryCleanupRef.current = null;
                             tryFetch();
                         }
                     });
+
+                    roleRetryCleanupRef.current = () => {
+                        clearTimeout(timer);
+                        wsUnsub?.();
+                    };
                     return;
                 }
 
@@ -563,6 +578,16 @@ export function useRoleActions(deps: RoleDeps) {
             setIsTxPending(false);
         }
     }, [refs, txEngine, dataSync, myPlayer, syncSecretWithServer, setIsTxPending, addLog]);
+
+    // Cleanup any pending WS role-ready subscription on unmount
+    React.useEffect(() => {
+        return () => {
+            if (roleRetryCleanupRef.current) {
+                roleRetryCleanupRef.current();
+                roleRetryCleanupRef.current = null;
+            }
+        };
+    }, []);
 
     return {
         syncSecretWithServer,

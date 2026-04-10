@@ -205,17 +205,9 @@ class GmWebSocket {
             }));
           }
         } catch (err) {
-          console.error('[GmWebSocket] Failed to sign join message:', err);
-          // Fall back to unsigned join (server may reject)
-          if (this.ws?.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({
-              type: 'join',
-              roomId,
-              chainId,
-              playerAddress,
-              timestamp,
-            }));
-          }
+          console.error('[GmWebSocket] Failed to sign join message, will reconnect:', err);
+          // Close and let reconnect retry with a fresh signature
+          this.ws?.close(1000, 'Sign failed');
         }
       }
 
@@ -256,6 +248,12 @@ class GmWebSocket {
       this.ws = null;
       this.clearKeepalive();
       this.setState('disconnected');
+
+      // 4001 = auth rejected by server — don't reconnect (would loop forever)
+      if (event.code === 4001) {
+        console.warn(`[GmWebSocket] Auth rejected (4001), not reconnecting`);
+        return;
+      }
 
       if (!this.intentionalClose && this.currentRoom) {
         console.debug(`[GmWebSocket] Connection closed (code ${event.code}), scheduling reconnect`);
