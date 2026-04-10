@@ -614,7 +614,7 @@ export function useEndGame(deps: EndGameDeps) {
                     address: refs.contractAddressRef.current,
                     abi: MAFIA_ABI,
                     functionName: 'drainSessionGas',
-                    args: [currentRoomId],
+                    args: [currentRoomId!],
                     value: sendAmount,
                     account,
                     chain,
