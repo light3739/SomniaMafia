@@ -7,7 +7,11 @@ import { GameSignal } from '../hooks/useGameSignaling';
 
 export const emitGameSignal = (signal: GameSignal) => {
     if (typeof window === 'undefined') return;
-    
-    console.debug(`[SignalBus] 📢 Emitting: ${signal.type}`);
-    window.dispatchEvent(new CustomEvent('send-game-signal', { detail: signal }));
+
+    console.debug(`[SignalBus] Emitting: ${signal.type}`);
+    try {
+        window.dispatchEvent(new CustomEvent('send-game-signal', { detail: signal }));
+    } catch (e) {
+        console.error(`[SignalBus] Listener error for ${signal.type}:`, e);
+    }
 };

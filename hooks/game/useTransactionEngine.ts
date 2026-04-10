@@ -181,15 +181,23 @@ export function useTransactionEngine(deps: TxEngineDeps) {
             roomId !== null &&
             session.roomId === Number(roomId);
 
-        // Balance check for heavy TXs
-        if (canUseSession && session && refs.publicClientRef.current && ['endGameZK'].includes(functionName)) {
+        // Balance check for heavy TXs — tiered thresholds per function
+        const HEAVY_TX_MIN_BALANCE: Record<string, bigint> = {
+            endGameZK: parseEther('0.85'),
+            createTournamentAndRoom: parseEther('0.30'),
+            distributeMafiaPrizes: parseEther('0.25'),
+            finalizeVoting: parseEther('0.15'),
+            forcePhaseTimeout: parseEther('0.15'),
+            startVoting: parseEther('0.08'),
+        };
+        const minBalance = HEAVY_TX_MIN_BALANCE[functionName];
+        if (canUseSession && session && refs.publicClientRef.current && minBalance) {
             try {
                 const sessionBalance = await refs.publicClientRef.current.getBalance({
                     address: session.address as `0x${string}`
                 });
-                const MIN_BALANCE_FOR_HEAVY_TX = parseEther('0.85');
-                if (sessionBalance < MIN_BALANCE_FOR_HEAVY_TX) {
-                    console.warn(`[Session TX] Session key balance low: ${formatEther(sessionBalance)}. Falling back to main wallet.`);
+                if (sessionBalance < minBalance) {
+                    console.warn(`[Session TX] Session key balance low for ${functionName}: ${formatEther(sessionBalance)} < ${formatEther(minBalance)}. Falling back to main wallet.`);
                     txToast.warning('Session key low on gas — confirming with your wallet', { duration: 4000 });
                     canUseSession = false;
                 }

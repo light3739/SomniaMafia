@@ -52,6 +52,7 @@ class GmWebSocket {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectAttempt = 0;
+  private authRetryCount = 0;
   private maxReconnectDelay = 30_000;
   private intentionalClose = false;
 
@@ -182,6 +183,7 @@ class GmWebSocket {
 
     this.ws.onopen = async () => {
       this.reconnectAttempt = 0;
+      this.authRetryCount = 0;
 
       // Sign and send authenticated join message
       if (this.currentRoom) {
@@ -203,6 +205,10 @@ class GmWebSocket {
               signerAddress: signed.signerAddress,
               timestamp,
             }));
+            // Signal frontend to force-refresh game state (catches missed events during disconnect)
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('gm-ws-reconnected'));
+            }
           }
         } catch (err) {
           console.error('[GmWebSocket] Failed to sign join message:', err);
@@ -252,9 +258,17 @@ class GmWebSocket {
       this.clearKeepalive();
       this.setState('disconnected');
 
-      // 4001 = auth rejected by server — don't reconnect (would loop forever)
+      // 4001 = auth rejected by server — retry a few times (session key may not be on-chain yet)
       if (event.code === 4001) {
-        console.warn(`[GmWebSocket] Auth rejected (4001), not reconnecting`);
+        if (this.authRetryCount < 3) {
+          this.authRetryCount++;
+          const delay = 5000 * this.authRetryCount; // 5s, 10s, 15s
+          console.warn(`[GmWebSocket] Auth rejected (4001), retrying in ${delay}ms (${this.authRetryCount}/3)`);
+          this.reconnectTimer = setTimeout(() => this.connect(), delay);
+        } else {
+          console.warn(`[GmWebSocket] Auth rejected (4001) after 3 retries, giving up`);
+          this.authRetryCount = 0;
+        }
         return;
       }
 
