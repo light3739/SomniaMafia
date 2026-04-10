@@ -575,7 +575,7 @@ export function useEndGame(deps: EndGameDeps) {
                 }
             }
 
-            // --- Step 2: Drain session wallet gas back to main wallet ---
+            // --- Step 2: Drain session wallet via drainSessionGas (GM share deducted, rest refunded) ---
             try {
                 if (!session?.registeredOnChain || !session.privateKey || !session.address) return;
 
@@ -584,17 +584,6 @@ export function useEndGame(deps: EndGameDeps) {
                     console.log('[SessionDrain] Session wallet already empty');
                     return;
                 }
-
-                const gasPrice = await pClient.getGasPrice();
-                const gasCost = 21000n * gasPrice * 2n;
-
-                if (bal <= gasCost) {
-                    console.log('[SessionDrain] Balance too low to cover transfer gas');
-                    return;
-                }
-
-                const sendAmount = bal - gasCost;
-                const mainWallet = refs.addressRef.current!;
 
                 const { createWalletClient, http: viemHttp } = await import('viem');
                 const { privateKeyToAccount } = await import('viem/accounts');
@@ -605,14 +594,34 @@ export function useEndGame(deps: EndGameDeps) {
                     transport: viemHttp(chain.rpcUrls.default.http[0]),
                 });
 
-                const hash = await sessionClient.sendTransaction({
-                    to: mainWallet,
+                // Estimate gas for drainSessionGas so we forward the right amount
+                const gasEstimate = await pClient.estimateGas({
+                    account: session.address as `0x${string}`,
+                    to: refs.contractAddressRef.current,
+                    data: '0x' as `0x${string}`, // placeholder — real estimate below
+                }).catch(() => 150000n); // fallback
+                const gasPrice = await pClient.getGasPrice();
+                const gasCost = gasEstimate * gasPrice * 2n;
+
+                if (bal <= gasCost) {
+                    console.log('[SessionDrain] Balance too low to cover drainSessionGas gas');
+                    return;
+                }
+
+                const sendAmount = bal - gasCost;
+
+                const hash = await sessionClient.writeContract({
+                    address: refs.contractAddressRef.current,
+                    abi: MAFIA_ABI,
+                    functionName: 'drainSessionGas',
+                    args: [currentRoomId],
                     value: sendAmount,
+                    account,
                     chain,
                 });
 
                 await pClient.waitForTransactionReceipt({ hash });
-                console.log(`[SessionDrain] Returned ${sendAmount} wei to ${mainWallet}`);
+                console.log(`[SessionDrain] Drained ${sendAmount} wei via drainSessionGas`);
                 addLog('Session gas refunded', 'success');
             } catch (e) {
                 console.warn('[SessionDrain] Failed to drain session wallet:', e);
