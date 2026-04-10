@@ -183,16 +183,18 @@ export function useGameDataSync(deps: DataSyncDeps) {
             }
 
             const phaseKey = `${phase}:${dayCount}`;
-            if (refs.lastPhaseKeyRef.current !== phaseKey) {
+            const phaseChanged = refs.lastPhaseKeyRef.current !== phaseKey;
+            if (phaseChanged) {
                 console.log('[Phase Sync]', { contractPhase: phase, phaseName: GamePhase[phase], dayCount });
                 refs.lastPhaseKeyRef.current = phaseKey;
             }
 
             // Fetch tournament data + avatars in parallel
+            // Refresh avatars on LOBBY, first load, or phase change (catches late joiners)
             const isLobby = refs.phaseRef.current === GamePhase.LOBBY;
             const hasCache = Object.keys(refs.avatarCacheRef.current).length > 0;
 
-            const avatarPromise = (isLobby || !hasCache)
+            const avatarPromise = (isLobby || !hasCache || phaseChanged)
                 ? fetch(`/api/game/avatar?roomId=${roomId.toString()}&chainId=${refs.runtimeChainRef.current.id}`)
                     .then(res => res.ok ? res.json() : null)
                     .then(data => data?.avatars || refs.avatarCacheRef.current)
@@ -364,8 +366,19 @@ export function useGameDataSync(deps: DataSyncDeps) {
     const [wsConnected, setWsConnected] = useState(false);
     useEffect(() => {
         const unsub = gmWs.onStateChange((state) => setWsConnected(state === 'connected'));
-        return unsub;
-    }, []);
+        // Force-refresh on WS reconnect to catch events missed during disconnect
+        const onReconnect = () => {
+            if (currentRoomId) {
+                console.log('[DataSync] WS reconnected — force-refreshing game state');
+                refreshPlayersList(currentRoomId);
+            }
+        };
+        window.addEventListener('gm-ws-reconnected', onReconnect);
+        return () => {
+            unsub();
+            window.removeEventListener('gm-ws-reconnected', onReconnect);
+        };
+    }, [currentRoomId, refreshPlayersList]);
 
     useEffect(() => {
         if (!currentRoomId || isTestMode || !refs.publicClientRef.current) return;

@@ -51,14 +51,15 @@ export function useEventPoller(deps: PollerDeps) {
     const liveStartBlockRef = useRef<bigint | null>(null);
     const votingFinalizedTimerRef = refs.votingFinalizedTimerRef;
     const votingFinalizedInnerRef = useRef<NodeJS.Timeout | null>(null);
-    const lastVotingFinalizedDayRef = useRef<number>(-1);
+    const lastVotingFinalizedDayRef = useRef<string>('');
 
     // Helper: show voting results overlay with proper dedup + cleanup.
     // Guarded by dayCount to prevent re-triggering from stale events.
     const triggerVotingResultsOverlay = useCallback(() => {
         const currentDay = refs.dayCountRef.current;
-        if (lastVotingFinalizedDayRef.current === currentDay) return; // already triggered this day
-        lastVotingFinalizedDayRef.current = currentDay;
+        const dedupKey = `${refs.currentRoomIdRef.current}:${currentDay}`;
+        if (lastVotingFinalizedDayRef.current === dedupKey) return; // already triggered this day+room
+        lastVotingFinalizedDayRef.current = dedupKey;
 
         console.log('[VotingFinalized] Triggering results phase for day', currentDay);
         setShowVotingResults(true);
@@ -114,7 +115,10 @@ export function useEventPoller(deps: PollerDeps) {
         isPollingRef.current = true;
         try {
             const currentBlock = await pClient.getBlockNumber();
-            if (currentBlock < lastProcessedBlockRef.current) return;
+            if (currentBlock < lastProcessedBlockRef.current) {
+                console.warn(`[EventPoller] Block regression: RPC returned ${currentBlock}, expected >= ${lastProcessedBlockRef.current}. Skipping cycle.`);
+                return;
+            }
 
             const roomIdTopic = pad(toHex(roomId), { size: 32 });
             const MAX_BLOCK_RANGE = 500n;
@@ -146,12 +150,11 @@ export function useEventPoller(deps: PollerDeps) {
 
                 if (processedEventsRef.current.has(logId)) continue;
 
-                // Memory cap
-                if (processedEventsRef.current.size > 2000) {
-                    const iterator = processedEventsRef.current.values();
-                    for (let i = 0; i < 500; i++) {
-                        const val = iterator.next().value;
-                        if (val !== undefined) processedEventsRef.current.delete(val);
+                // Memory cap — clear and re-seed with current batch to prevent stale re-processing
+                if (processedEventsRef.current.size > 3000) {
+                    processedEventsRef.current.clear();
+                    for (const prevLog of parsedLogs) {
+                        processedEventsRef.current.add(`${prevLog.transactionHash}-${prevLog.logIndex}`);
                     }
                 }
 
