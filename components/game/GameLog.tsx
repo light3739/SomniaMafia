@@ -154,13 +154,15 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         ? lockedVotingDayRef.current
         : 0;
 
-    // Always advance to the latest known day so old-day events do not linger
-    // when a new day has begun on-chain but the "Day N has begun" server log
-    // hasn't been delivered yet. The dayEvents memo below treats a missing log
-    // marker as a clean state (no leak) instead of falling back to all logs.
+    // Use actualLoggedDay (latest day with a log marker) as the source of truth.
+    // dayCount from the contract can advance before the "Day N has begun" log
+    // arrives via WS — using dayCount here caused either "Waiting for events..."
+    // (dayStartIdx not found) or a flash of stale Day N-1 events (fallback to
+    // "Game started" marker). Staying on the last logged day until the marker
+    // arrives is visually correct and avoids both bugs.
     const targetDay = (showVotingResults && lockedVotingDayRef.current > 0)
         ? lockedVotingDayRef.current
-        : Math.max(actualLoggedDay || 0, dayCount || 0, 1);
+        : (actualLoggedDay || 1);
 
     // ─── dayEvents: single source of truth from eventType/eventData ──────
     // Scans ALL logs directly instead of relying on todayLogs slice.
@@ -501,7 +503,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         <div className="flex flex-col h-full bg-transparent overflow-hidden">
             <div className="flex-shrink-0 flex items-center justify-center px-5 py-3 border-b border-white/5 bg-[#0A0A0A]">
                 <h2 className="text-sm font-mono font-bold text-[#916A47] tracking-[0.3em] uppercase">
-                    [ DAY {displayDay || dayCount || actualLoggedDay || 1} ]
+                    [ DAY {displayDay || targetDay} ]
                 </h2>
             </div>
 
