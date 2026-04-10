@@ -205,9 +205,12 @@ class GmWebSocket {
             }));
           }
         } catch (err) {
-          console.error('[GmWebSocket] Failed to sign join message, will reconnect:', err);
-          // Close and let reconnect retry with a fresh signature
+          console.error('[GmWebSocket] Failed to sign join message:', err);
+          // Don't send unsigned join — server will reject with 4001.
+          // Close and schedule reconnect (session key may not be ready yet).
           this.ws?.close(1000, 'Sign failed');
+          this.scheduleReconnect();
+          return;
         }
       }
 
