@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { http, fallback } from 'viem';
+import { http, webSocket, fallback } from 'viem';
 import { createConfig } from '@privy-io/wagmi';
 import { PrivyProvider } from '@privy-io/react-auth';
 import { WagmiProvider } from '@privy-io/wagmi';
@@ -20,7 +20,14 @@ export const config = createConfig({
         SOMNIA_TESTNET,
     ],
     transports: {
-        [SOMNIA_TESTNET.id]: fallback(SOMNIA_TESTNET.rpcUrls.default.http.map((url: string) => http(url))),
+        [SOMNIA_TESTNET.id]: fallback([
+            // WebSocket primary — real-time event subscriptions (watchContractEvent)
+            ...(SOMNIA_TESTNET.rpcUrls.default.webSocket || []).map((url: string) =>
+                webSocket(url, { reconnect: { delay: 2_000, attempts: 10 }, keepAlive: { interval: 25_000 } })
+            ),
+            // HTTP fallback — reliable for reads/writes, used when WS unavailable
+            ...SOMNIA_TESTNET.rpcUrls.default.http.map((url: string) => http(url)),
+        ]),
     },
     batch: {
         multicall: {
