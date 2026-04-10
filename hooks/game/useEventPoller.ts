@@ -50,6 +50,33 @@ export function useEventPoller(deps: PollerDeps) {
     const lastProcessedBlockRef = useRef<bigint | null>(null);
     const liveStartBlockRef = useRef<bigint | null>(null);
     const votingFinalizedTimerRef = refs.votingFinalizedTimerRef;
+    const votingFinalizedInnerRef = useRef<NodeJS.Timeout | null>(null);
+    const lastVotingFinalizedDayRef = useRef<number>(-1);
+
+    // Helper: show voting results overlay with proper dedup + cleanup.
+    // Guarded by dayCount to prevent re-triggering from stale events.
+    const triggerVotingResultsOverlay = useCallback(() => {
+        const currentDay = refs.dayCountRef.current;
+        if (lastVotingFinalizedDayRef.current === currentDay) return; // already triggered this day
+        lastVotingFinalizedDayRef.current = currentDay;
+
+        console.log('[VotingFinalized] Triggering results phase for day', currentDay);
+        setShowVotingResults(true);
+
+        // Clear both outer and inner timers before starting new sequence
+        if (votingFinalizedTimerRef.current) { clearTimeout(votingFinalizedTimerRef.current); votingFinalizedTimerRef.current = null; }
+        if (votingFinalizedInnerRef.current) { clearTimeout(votingFinalizedInnerRef.current); votingFinalizedInnerRef.current = null; }
+
+        votingFinalizedTimerRef.current = setTimeout(() => {
+            votingFinalizedTimerRef.current = null;
+            votingFinalizedInnerRef.current = setTimeout(() => {
+                votingFinalizedInnerRef.current = null;
+                console.log('[VotingFinalized] Results phase ended. Proceeding to Night.');
+                setShowVotingResults(false);
+                setVoteMap({});
+            }, 3000);
+        }, 5000);
+    }, [refs, setShowVotingResults, setVoteMap, votingFinalizedTimerRef]);
 
     // --- Poller Definition ---
 
@@ -323,18 +350,7 @@ export function useEventPoller(deps: PollerDeps) {
 
                         // Show voting results overlay (reactive UI state)
                         if (!isHistorical) {
-                            console.log('[VotingFinalized] Triggering results phase...');
-                            setShowVotingResults(true);
-
-                            if (votingFinalizedTimerRef.current) clearTimeout(votingFinalizedTimerRef.current);
-                            votingFinalizedTimerRef.current = setTimeout(() => {
-                                setTimeout(() => {
-                                    console.log('[VotingFinalized] Results phase ended. Proceeding to Night.');
-                                    setShowVotingResults(false);
-                                    setVoteMap({});
-                                }, 3000);
-                                votingFinalizedTimerRef.current = null;
-                            }, 5000);
+                            triggerVotingResultsOverlay();
                         }
                         break;
                     }
@@ -351,7 +367,7 @@ export function useEventPoller(deps: PollerDeps) {
         } finally {
             isPollingRef.current = false;
         }
-    }, [refs, dataSync, setGameState, setVoteMap, setShowVotingResults, addLog, votingFinalizedTimerRef]);
+    }, [refs, dataSync, setGameState, setVoteMap, addLog, triggerVotingResultsOverlay]);
 
     // === INITIALIZATION ===
     useEffect(() => {
@@ -392,18 +408,9 @@ export function useEventPoller(deps: PollerDeps) {
             if (roomId) dataSync.refreshPlayersListDebounced(roomId);
 
             // Handle VotingFinalized overlay immediately via WS push
-            // (on-chain poller also handles this but runs at 5s intervals)
             const d = data as { trigger?: string } | undefined;
             if (d?.trigger === 'VotingFinalized') {
-                setShowVotingResults(true);
-                if (votingFinalizedTimerRef.current) clearTimeout(votingFinalizedTimerRef.current);
-                votingFinalizedTimerRef.current = setTimeout(() => {
-                    setTimeout(() => {
-                        setShowVotingResults(false);
-                        setVoteMap({});
-                    }, 3000);
-                    votingFinalizedTimerRef.current = null;
-                }, 5000);
+                triggerVotingResultsOverlay();
             }
         },
         'night-resolved': (_data: unknown) => {
@@ -418,7 +425,7 @@ export function useEventPoller(deps: PollerDeps) {
         },
     } as Partial<Record<ServerEventType, (data: unknown) => void>>),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [addLogs, dataSync, refs, handleIncomingMafiaSignal, setShowVotingResults, setVoteMap, votingFinalizedTimerRef]);
+    [addLogs, dataSync, refs, handleIncomingMafiaSignal, triggerVotingResultsOverlay]);
 
     const { wsConnected } = useGmWebSocket({
         roomId: currentRoomId ? Number(currentRoomId) : null,
