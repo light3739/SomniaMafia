@@ -575,6 +575,31 @@ export function useEndGame(deps: EndGameDeps) {
                 }
             }
 
+            // --- Step 1.5: For non-tournament games, still call reveal-roles so GM
+            //     can record roles on-chain and report gas costs (reportRoomGasCost).
+            //     Only the first player in waterfall does this.
+            if (!gameState.isTournament && currentRoomId && session?.registeredOnChain && session.privateKey) {
+                const myAddr = refs.addressRef.current!.toLowerCase();
+                const alivePlayers = gameState.players
+                    .filter(p => p.isAlive)
+                    .sort((a, b) => a.address.localeCompare(b.address));
+                const isFirst = alivePlayers.length > 0 && alivePlayers[0].address.toLowerCase() === myAddr;
+
+                if (isFirst) {
+                    try {
+                        const chainId = chain.id || 50312;
+                        console.log('[AutoReveal] Requesting GM to reveal roles + report gas cost...');
+                        await fetch(`${GM_SERVER_URL}/reveal-roles/${currentRoomId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ chainId }),
+                        });
+                    } catch (e) {
+                        console.warn('[AutoReveal] Failed (non-blocking):', e);
+                    }
+                }
+            }
+
             // --- Step 2: Drain session wallet via drainSessionGas (GM share deducted, rest refunded) ---
             try {
                 if (!session?.registeredOnChain || !session.privateKey || !session.address) return;
