@@ -6,8 +6,7 @@ module.exports = {
     },
     transform: {
         '^.+\\.(ts|tsx)$': ['ts-jest', {
-            tsconfig: 'tsconfig.json',
-            isolatedModules: true,
+            tsconfig: 'tsconfig.test.json',
         }],
     },
     modulePathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
