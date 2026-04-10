@@ -73,6 +73,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                     roomId: roomId.toString(),
                     address: myAddr,
                     avatar: avatarUrl,
+                    signature: signed.signature,
                     signerAddress: signed.signerAddress,
                     nonce: signed.nonce,
                     timestamp: signed.timestamp,
