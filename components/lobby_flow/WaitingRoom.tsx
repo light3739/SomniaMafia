@@ -5,15 +5,14 @@ import { useGameContext } from '../../contexts/GameContext';
 import { useNoirDialog } from '../../contexts/NoirDialogContext';
 import { useSessionKey } from '../../hooks/useSessionKey';
 import { Button } from '../ui/Button';
-import { BackButton } from '../ui/BackButton';
+import { FlowLayout } from '../layout/FlowLayout';
 import { GamePhase } from '../../types';
 import { formatEther } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { MAFIA_ABI } from '../../contracts/config';
-import { Loader2, HelpCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { SessionKeyBanner } from '../game/SessionKeyBanner';
-import HowToPlayModal from '../game/HowToPlayModal';
 import * as GM from '../../services/gmService';
 import { loadSession } from '../../services/sessionKeyService';
 
@@ -186,41 +185,18 @@ export const WaitingRoom: React.FC = () => {
     };
 
     return (
-        <div className="relative w-full min-h-[100dvh] font-['Montserrat'] flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden p-4 pt-16 custom-scrollbar">
-            {/* Background is provided by RootLayout/DynamicBackground */}
-
-            {/* Top fade overlay — visual continuity under the fixed header */}
-            <div className="fixed top-0 left-0 w-full h-20 bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-40" />
-
-            {/* How to Play modal + top-right trigger button */}
-            <HowToPlayModal />
-            <button
-                onClick={() => window.dispatchEvent(new Event('open-how-to-play'))}
-                className="fixed top-4 right-4 z-[100] w-11 h-11 flex items-center justify-center rounded-full bg-[#0A0A0A] border border-[#916A47]/30 hover:border-[#916A47]/60 hover:bg-[#1A130A] transition-all shadow-[0_5px_15px_rgba(0,0,0,0.8)]"
-                title="How to Play"
-                aria-label="How to Play"
-            >
-                <HelpCircle className="w-5 h-5 text-[#916A47]" />
-            </button>
-
-            {/* Sticky header — always visible at top */}
-            <div className="fixed top-0 left-0 w-full z-50 px-4 pt-4 pb-2">
-                <div className="max-w-[600px] mx-auto">
-                    <BackButton
-                        to="/setup"
-                        label="Leave Lobby"
-                        exitGame
-                        exitContext="lobby"
-                        onExitGame={async () => { await forfeitGameOnChain(); }}
-                        isLoading={isTxPending}
-                    />
-                </div>
-            </div>
-
+        <FlowLayout
+            backTo="/setup"
+            backLabel="Leave Lobby"
+            exitGame
+            exitContext="lobby"
+            onExitGame={async () => { await forfeitGameOnChain(); }}
+            isLoading={isTxPending}
+        >
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="relative z-10 w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6 py-6 md:py-10"
+                className="w-full flex flex-col items-center gap-4 md:gap-6"
             >
 
                 <div className="flex flex-col items-center text-center gap-2">
@@ -410,6 +386,6 @@ export const WaitingRoom: React.FC = () => {
                     </div>
                 )}
             </motion.div>
-        </div>
+        </FlowLayout>
     );
 };
