@@ -186,8 +186,11 @@ export const WaitingRoom: React.FC = () => {
     };
 
     return (
-        <div className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
+        <div className="relative w-full min-h-[100dvh] font-['Montserrat'] flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden p-4 pt-16 custom-scrollbar">
             {/* Background is provided by RootLayout/DynamicBackground */}
+
+            {/* Top fade overlay — visual continuity under the fixed header */}
+            <div className="fixed top-0 left-0 w-full h-20 bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-40" />
 
             {/* How to Play modal + top-right trigger button */}
             <HowToPlayModal />

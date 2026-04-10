@@ -610,6 +610,25 @@ export function useEndGame(deps: EndGameDeps) {
                     return;
                 }
 
+                // Wait for GM to report gas costs so drainSessionGas deducts the correct share.
+                // GM server reports on GameEnded event (LogListener) — poll until it lands.
+                console.log('[SessionDrain] Waiting for GM gas cost report...');
+                for (let i = 0; i < 5; i++) {
+                    try {
+                        const gmCost = await pClient.readContract({
+                            address: refs.contractAddressRef.current,
+                            abi: MAFIA_ABI,
+                            functionName: 'getGmGasCost',
+                            args: [currentRoomId!],
+                        }) as bigint;
+                        if (gmCost > 0n) {
+                            console.log(`[SessionDrain] GM gas cost reported: ${gmCost} wei`);
+                            break;
+                        }
+                    } catch { /* getter may not exist on old deployment */ }
+                    if (i < 4) await new Promise(r => setTimeout(r, 1500));
+                }
+
                 const { createWalletClient, http: viemHttp } = await import('viem');
                 const { privateKeyToAccount } = await import('viem/accounts');
                 const account = privateKeyToAccount(session.privateKey as `0x${string}`);
