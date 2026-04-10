@@ -12,6 +12,10 @@ interface FlowLayoutProps {
     rightElement?: React.ReactNode;
     title?: string;
     maxWidth?: string; // e.g. "600px" or "560px"
+    exitGame?: boolean;
+    exitContext?: 'lobby' | 'game' | 'tournament-game' | 'pre-game-abort';
+    onExitGame?: () => Promise<void>;
+    isLoading?: boolean;
 }
 
 /**
@@ -27,7 +31,11 @@ export const FlowLayout: React.FC<FlowLayoutProps> = ({
     backLabel = "Back",
     rightElement,
     title,
-    maxWidth = "600px"
+    maxWidth = "600px",
+    exitGame,
+    exitContext,
+    onExitGame,
+    isLoading
 }) => {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     
@@ -72,7 +80,7 @@ export const FlowLayout: React.FC<FlowLayoutProps> = ({
                 style={{ maxWidth }}
             >
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 -ml-2">
-                    <BackButton to={backTo} label={backLabel} />
+                    <BackButton to={backTo} label={backLabel} exitGame={exitGame} exitContext={exitContext} onExitGame={onExitGame} isLoading={isLoading} />
                 </div>
                 
                 {title && (
