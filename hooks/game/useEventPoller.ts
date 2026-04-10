@@ -368,6 +368,8 @@ export function useEventPoller(deps: PollerDeps) {
                 // После реплея — обязательно синхронизировать состояние с контрактом
                 dataSync.fetchGameData(roomId);
             });
+            // Fetch server text logs immediately (WS only pushes new logs, not history)
+            pollServerLogs();
         });
     }, [refs, pollEvents, dataSync]);
 
@@ -383,15 +385,30 @@ export function useEventPoller(deps: PollerDeps) {
         },
         'phase-change': (_data: unknown) => {
             const roomId = refs.currentRoomIdRef.current;
-            if (roomId) dataSync.fetchGameData(roomId);
+            if (roomId) dataSync.refreshPlayersListDebounced(roomId);
         },
-        'player-update': (_data: unknown) => {
+        'player-update': (data: unknown) => {
             const roomId = refs.currentRoomIdRef.current;
             if (roomId) dataSync.refreshPlayersListDebounced(roomId);
+
+            // Handle VotingFinalized overlay immediately via WS push
+            // (on-chain poller also handles this but runs at 5s intervals)
+            const d = data as { trigger?: string } | undefined;
+            if (d?.trigger === 'VotingFinalized') {
+                setShowVotingResults(true);
+                if (votingFinalizedTimerRef.current) clearTimeout(votingFinalizedTimerRef.current);
+                votingFinalizedTimerRef.current = setTimeout(() => {
+                    setTimeout(() => {
+                        setShowVotingResults(false);
+                        setVoteMap({});
+                    }, 3000);
+                    votingFinalizedTimerRef.current = null;
+                }, 5000);
+            }
         },
         'night-resolved': (_data: unknown) => {
             const roomId = refs.currentRoomIdRef.current;
-            if (roomId) dataSync.fetchGameData(roomId);
+            if (roomId) dataSync.refreshPlayersListDebounced(roomId);
         },
         'mafia-chat': (data: unknown) => {
             const d = data as { sender?: string; encryptedData?: string } | undefined;
@@ -401,7 +418,7 @@ export function useEventPoller(deps: PollerDeps) {
         },
     } as Partial<Record<ServerEventType, (data: unknown) => void>>),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [addLogs, dataSync, refs, handleIncomingMafiaSignal]);
+    [addLogs, dataSync, refs, handleIncomingMafiaSignal, setShowVotingResults, setVoteMap, votingFinalizedTimerRef]);
 
     const { wsConnected } = useGmWebSocket({
         roomId: currentRoomId ? Number(currentRoomId) : null,
@@ -415,15 +432,13 @@ export function useEventPoller(deps: PollerDeps) {
         if (!refs.publicClientRef.current || !currentRoomId) return;
         if (gameState.phase === GamePhase.ENDED && gameState.winner) return;
 
-        // When WS is connected: slow fallback (10s) for safety net.
+        // When WS is connected: reduced polling (5s) as safety net.
         // When WS is disconnected: fast polling (2s) as before.
-        const intervalMs = wsConnected ? 10_000 : 2_000;
+        const intervalMs = wsConnected ? 5_000 : 2_000;
 
         const interval = setInterval(() => {
             pollEvents();
-            if (!wsConnected) {
-                pollServerLogs();
-            }
+            pollServerLogs();
         }, intervalMs);
         return () => clearInterval(interval);
     }, [pollEvents, pollServerLogs, gameState.phase, gameState.winner, refs, currentRoomId, wsConnected]);

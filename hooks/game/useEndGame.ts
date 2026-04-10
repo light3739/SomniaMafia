@@ -9,7 +9,7 @@
  * - Auto-distribute prizes + session wallet drain
  */
 import { useCallback, useRef, useState, useEffect } from 'react';
-import { formatEther } from 'viem';
+import { formatEther, pad, toHex } from 'viem';
 import { MAFIA_ABI, GM_SERVER_URL } from '../../contracts/config';
 import { generateEndGameProof } from '../../services/zkProof';
 import { loadSession } from '../../services/sessionKeyService';
@@ -802,10 +802,11 @@ export function useEndGame(deps: EndGameDeps) {
                 const totalLookback = 2000n;
                 const earliestBlock = currentBlock > totalLookback ? currentBlock - totalLookback : 0n;
                 const { parseEventLogs } = await import('viem');
+                const roomIdTopic = pad(toHex(rid), { size: 32 });
                 let allParsed: any[] = [];
                 for (let toBlock = currentBlock; toBlock > earliestBlock; ) {
                     const fromBlock = toBlock - chunkSize > earliestBlock ? toBlock - chunkSize : earliestBlock;
-                    const logs = await pClient.getLogs({ address: refs.contractAddressRef.current, fromBlock, toBlock } as any);
+                    const logs = await pClient.getLogs({ address: refs.contractAddressRef.current, topics: [null, roomIdTopic], fromBlock, toBlock } as any);
                     allParsed = allParsed.concat(parseEventLogs({ abi: MAFIA_ABI as any, logs }));
                     toBlock = fromBlock - 1n;
                 }
@@ -831,9 +832,9 @@ export function useEndGame(deps: EndGameDeps) {
             fetchGMRoles();
         });
 
-        // Polling loop: 10s when WS connected (safety net), 3s when disconnected
+        // Polling loop: 3s always (WS roles-revealed provides instant path,
+        // polling is the reliable fallback — keep it fast for role reveal)
         let pollCount = 0;
-        const pollMs = gmWs.isConnected ? 10_000 : 3_000;
         pollIntervalRef.current = setInterval(async () => {
             pollCount++;
             if (pollCount > 100 || allRolesKnown()) {
@@ -844,7 +845,7 @@ export function useEndGame(deps: EndGameDeps) {
             if (allRolesKnown()) {
                 if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
             }
-        }, pollMs);
+        }, 3_000);
 
         return () => {
             clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4);

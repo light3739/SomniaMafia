@@ -297,7 +297,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
                     finalPhase = GamePhase.ENDED;
                 }
                 
-                if (prev.phase === GamePhase.ENDED) {
+                if (prev.phase === GamePhase.ENDED && phase === GamePhase.ENDED) {
                     finalPhase = GamePhase.ENDED;
                 }
 
@@ -372,7 +372,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
 
         refreshPlayersListDebounced(currentRoomId);
 
-        const intervalMs = wsConnected ? 10_000 : 3_000;
+        const intervalMs = wsConnected ? 5_000 : 3_000;
         const interval = setInterval(() => {
             refreshPlayersListDebounced(currentRoomId);
         }, intervalMs);
