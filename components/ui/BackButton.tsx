@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, LogOut, AlertTriangle, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -110,7 +111,8 @@ export const BackButton: React.FC<BackButtonProps> = ({
                 {label && <span className="font-medium tracking-wide">{label}</span>}
             </button>
 
-            {/* Exit Game Confirmation Modal */}
+            {/* Exit Game Confirmation Modal — portal to body to escape overflow/transform containers */}
+            {typeof document !== 'undefined' && createPortal(
             <AnimatePresence>
                 {showConfirm && (
                     <motion.div
@@ -213,7 +215,8 @@ export const BackButton: React.FC<BackButtonProps> = ({
                         </motion.div>
                     </motion.div>
                 )}
-            </AnimatePresence>
+            </AnimatePresence>,
+            document.body)}
         </>
     );
 };

@@ -51,7 +51,7 @@ export const FlowLayout: React.FC<FlowLayoutProps> = ({
     return (
         <div
             ref={scrollContainerRef}
-            className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto overflow-x-hidden p-4 pb-12 custom-scrollbar"
+            className="relative w-full h-[100dvh] font-['Montserrat'] flex flex-col items-center overflow-y-auto p-4 pb-12 custom-scrollbar"
         >
 
             {/* How to Play modal + top-right trigger button (shared across lobby flow screens) */}
