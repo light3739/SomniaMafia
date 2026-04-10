@@ -561,7 +561,7 @@ export const SetupProfile: React.FC = () => {
                                                     </button>
                                                     <button
                                                         onClick={() => setWalletTab('withdraw')}
-                                                        className={`flex-1 py-2.5 text-[10px] font-bold uppercase tracking-[0.15em] transition-all flex items-center justify-center gap-1.5 ${walletTab === 'withdraw' ? 'bg-white/10 text-white/80' : 'bg-black/30 text-white/40 hover:text-white/60'}`}
+                                                        className={`flex-1 py-2.5 text-[10px] font-bold uppercase tracking-[0.15em] transition-all flex items-center justify-center gap-1.5 ${walletTab === 'withdraw' ? 'bg-[#916A47]/20 text-[#C19A6B]' : 'bg-black/30 text-white/40 hover:text-white/60'}`}
                                                     >
                                                         <LogOut className="w-3.5 h-3.5" /> Withdraw
                                                     </button>
@@ -585,7 +585,7 @@ export const SetupProfile: React.FC = () => {
                                                 {/* Amount input */}
                                                 <div className="flex flex-col gap-2 w-full relative z-10">
                                                     <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.15em] font-bold text-white/60 px-1">
-                                                        <span>{walletTab === 'fund' ? 'Token' : 'Amount'}</span>
+                                                        <span>Token</span>
                                                         <span className="text-white/60">
                                                             Available: <span className="font-mono text-white/80 tabular-nums">
                                                                 {walletTab === 'fund'
@@ -602,7 +602,7 @@ export const SetupProfile: React.FC = () => {
                                                         <div className="relative flex-1 group">
                                                             <button
                                                                 onClick={walletTab === 'fund' ? handleMaxClick : handleWithdrawMax}
-                                                                className={`absolute left-3 top-1/2 -translate-y-1/2 px-2.5 py-1.5 border rounded-md text-[10px] font-bold uppercase tracking-widest transition-all z-10 ${walletTab === 'fund' ? 'bg-gradient-to-r from-[#C19A6B]/20 to-[#916A47]/20 hover:from-[#C19A6B]/30 hover:to-[#916A47]/30 border-[#C19A6B]/40 text-[#f5d9b3] shadow-[0_0_10px_rgba(193,154,107,0.1)]' : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/50 hover:text-white/80'}`}
+                                                                className="absolute left-3 top-1/2 -translate-y-1/2 px-2.5 py-1.5 border rounded-md text-[10px] font-bold uppercase tracking-widest transition-all z-10 bg-gradient-to-r from-[#C19A6B]/20 to-[#916A47]/20 hover:from-[#C19A6B]/30 hover:to-[#916A47]/30 border-[#C19A6B]/40 text-[#f5d9b3] shadow-[0_0_10px_rgba(193,154,107,0.1)]"
                                                             >
                                                                 MAX
                                                             </button>
@@ -616,7 +616,7 @@ export const SetupProfile: React.FC = () => {
                                                                         walletTab === 'fund' ? setFundAmount(val) : setWithdrawAmount(val);
                                                                     }
                                                                 }}
-                                                                className={`w-full h-[54px] bg-black/60 border border-white/10 text-white font-mono font-medium text-xl text-right rounded-md pl-16 pr-5 outline-none transition-all placeholder:text-white/50 relative tabular-nums ${walletTab === 'fund' ? 'focus:border-[#C19A6B] focus:bg-black/80' : 'focus:border-white/30 focus:bg-black/80'}`}
+                                                                className="w-full h-[54px] bg-black/60 border border-white/10 text-white font-mono font-medium text-xl text-right rounded-md pl-16 pr-5 outline-none transition-all placeholder:text-white/50 relative tabular-nums focus:border-[#C19A6B] focus:bg-black/80"
                                                                 placeholder="0.00"
                                                             />
                                                         </div>
@@ -637,7 +637,7 @@ export const SetupProfile: React.FC = () => {
                                                         <button
                                                             onClick={handleWithdrawToMain}
                                                             disabled={isWithdrawing || !withdrawAmount || isNaN(Number(withdrawAmount)) || Number(withdrawAmount) <= 0}
-                                                            className={`w-full py-4 font-montserrat font-semibold text-base tracking-wide rounded-md transition-all shadow-lg flex items-center justify-center gap-2 border ${isWithdrawing || !withdrawAmount || isNaN(Number(withdrawAmount)) || Number(withdrawAmount) <= 0 ? 'bg-white/5 text-white/50 border-white/5 cursor-not-allowed opacity-70' : 'bg-white/5 hover:bg-white/10 text-white border-white/10 hover:border-white/20'}`}
+                                                            className={`w-full py-4 font-montserrat font-semibold text-base tracking-wide rounded-md transition-all shadow-lg flex items-center justify-center gap-2 border ${isWithdrawing || !withdrawAmount || isNaN(Number(withdrawAmount)) || Number(withdrawAmount) <= 0 ? 'bg-white/5 text-white/50 border-white/5 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-[#916A47] to-[#A37B58] hover:from-[#A37B58] hover:to-[#B68E6A] text-white border-[#C19A6B]/50 hover:border-[#E8CBA3]/70 hover:scale-[1.02] shadow-[inset_0_1px_2px_rgba(255,255,255,0.3),_0_0_15px_rgba(193,154,107,0.3)]'}`}
                                                         >
                                                             {isWithdrawing ? 'Processing...' : 'Withdraw'}
                                                         </button>
