@@ -594,14 +594,24 @@ export function useEndGame(deps: EndGameDeps) {
                     transport: viemHttp(chain.rpcUrls.default.http[0]),
                 });
 
-                // Estimate gas for drainSessionGas so we forward the right amount
+                // Estimate gas for the actual drainSessionGas call
+                const { encodeFunctionData } = await import('viem');
+                const calldata = encodeFunctionData({
+                    abi: MAFIA_ABI,
+                    functionName: 'drainSessionGas',
+                    args: [currentRoomId!],
+                });
+
+                // Use half the balance as a trial value for estimation
+                const trialValue = bal / 2n;
                 const gasEstimate = await pClient.estimateGas({
                     account: session.address as `0x${string}`,
                     to: refs.contractAddressRef.current,
-                    data: '0x' as `0x${string}`, // placeholder — real estimate below
-                }).catch(() => 150000n); // fallback
+                    data: calldata,
+                    value: trialValue,
+                }).catch(() => 300000n); // fallback
                 const gasPrice = await pClient.getGasPrice();
-                const gasCost = gasEstimate * gasPrice * 2n;
+                const gasCost = gasEstimate * gasPrice * 3n; // 3x buffer for price fluctuation
 
                 if (bal <= gasCost) {
                     console.log('[SessionDrain] Balance too low to cover drainSessionGas gas');
