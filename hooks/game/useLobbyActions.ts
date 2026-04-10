@@ -87,7 +87,7 @@ export function useLobbyActions(deps: LobbyDeps) {
     }, []);
 
     // === CREATE LOBBY ===
-    const createLobbyOnChain = useCallback(async (maxPlayers: number = 10, tournamentId: bigint = 0n, nonce?: number): Promise<boolean> => {
+    const createLobbyOnChain = useCallback(async (maxPlayers: number = 10, tournamentId: bigint = 0n, nonce?: number): Promise<bigint | null> => {
         const pClient = refs.publicClientRef.current;
         const targetChain = refs.runtimeChainRef.current;
         const name = refs.playerNameRef.current;
@@ -95,7 +95,7 @@ export function useLobbyActions(deps: LobbyDeps) {
         const lobbyPassword = refs.lobbyPasswordRef.current;
         const avatarUrl = refs.avatarUrlRef.current;
 
-        if (!name || !lobbyName || !pClient || !targetChain) { await showAlert("Enter details and connect wallet!"); return false; }
+        if (!name || !lobbyName || !pClient || !targetChain) { await showAlert("Enter details and connect wallet!"); return null; }
         setIsTxPending(true);
         try {
             // Acquire wallet FIRST so we have the canonical signing address before
@@ -108,7 +108,7 @@ export function useLobbyActions(deps: LobbyDeps) {
             // refs.addressRef.current can be overwritten during unlock.
             const { client: activeWalletClient, account: activeAccount } = await wallet.getActiveWalletClient();
             const activeAddr = (typeof activeAccount === 'string' ? activeAccount : (activeAccount as any)?.address) as `0x${string}` | undefined;
-            if (!activeAddr) { await showAlert("Wallet not ready. Please unlock and try again."); setIsTxPending(false); return false; }
+            if (!activeAddr) { await showAlert("Wallet not ready. Please unlock and try again."); setIsTxPending(false); return null; }
             const myAddr = activeAddr.toLowerCase() as `0x${string}`;
             // Keep refs in sync so any concurrent reader (WaitingRoom polling,
             // useGameDataSync, etc.) sees the same canonical address.
@@ -123,7 +123,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                     { variant: 'danger', title: 'AFK Cooldown' }
                 );
                 setIsTxPending(false);
-                return false;
+                return null;
             }
 
             const nextId = await pClient.readContract({
@@ -167,7 +167,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                 const current = formatEther(balance);
                 await showAlert(`Insufficient balance to fund session. You have ${current} STT but need at least ${required} STT. Please use a Faucet.`, { variant: 'danger', title: 'Insufficient Balance' });
                 setIsTxPending(false);
-                return false;
+                return null;
             }
 
             const gasConfig = await txEngine.getSmartGasConfig({
@@ -285,7 +285,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                     addLog("Room created, but password sync failed — players won't be able to join. Try recreating the room.", "danger");
                     await showAlert(`Room created but password could not be set on GM server: ${lastPasswordErr?.message || 'Unknown error'}. The room is private but inaccessible. Please recreate it.`, { variant: 'danger', title: 'Password Sync Failed' });
                     setIsTxPending(false);
-                    return false;
+                    return null;
                 }
             }
 
@@ -310,12 +310,12 @@ export function useLobbyActions(deps: LobbyDeps) {
 
             addLog("Lobby created successfully!", "success");
             setIsTxPending(false);
-            return true;
+            return finalRoomId;
         } catch (e: any) {
             console.error(e);
             addLog(e.shortMessage || e.message, "danger");
             setIsTxPending(false);
-            return false;
+            return null;
         }
     }, [refs, wallet, txEngine, dataSync, setKeys, setCurrentRoomId, setIsTxPending, addLog, uploadAvatar]);
 
@@ -844,10 +844,81 @@ export function useLobbyActions(deps: LobbyDeps) {
         }
     }, [refs, wallet, txEngine, setCurrentRoomId, setIsTxPending, addLog]);
 
+    // === BROADCAST REMATCH INVITE ===
+    // Sends a rematch-invite WS event to everyone still subscribed to the old
+    // room's channel, so they can see a popup on GameOver and auto-join the
+    // newly-created rematch room. Caller must be the old room's host.
+    const broadcastRematchInvite = useCallback(async (params: {
+        oldRoomId: bigint;
+        newRoomId: bigint;
+        lobbyName: string;
+        maxPlayers: number;
+        isPrivate: boolean;
+    }): Promise<boolean> => {
+        const targetChain = refs.runtimeChainRef.current;
+        if (!targetChain) return false;
+        try {
+            const { client: activeWalletClient, account: activeAccount } = await wallet.getActiveWalletClient();
+            const activeAddr = (typeof activeAccount === 'string' ? activeAccount : (activeAccount as any)?.address) as `0x${string}` | undefined;
+            if (!activeAddr) return false;
+
+            await GM.sendRematchInvite({
+                oldRoomId: params.oldRoomId.toString(),
+                newRoomId: params.newRoomId.toString(),
+                hostAddress: activeAddr.toLowerCase(),
+                walletClient: activeWalletClient,
+                chainId: targetChain.id,
+                lobbyName: params.lobbyName,
+                maxPlayers: params.maxPlayers,
+                isPrivate: params.isPrivate,
+            });
+            return true;
+        } catch (e: any) {
+            console.warn('[Rematch] Failed to broadcast rematch invite:', e);
+            addLog(`Rematch created, but notifying other players failed: ${e?.message || e}`, 'danger');
+            return false;
+        }
+    }, [refs, wallet, addLog]);
+
+    // === CREATE REMATCH LOBBY (host-side entry point for rematch) ===
+    // Clones settings from the current (finished) room into a new lobby and
+    // broadcasts a rematch-invite to the old room's WS channel. Handles the
+    // ref sequencing so GameOver doesn't have to juggle state/ref races.
+    //
+    // Returns the new roomId on success, null on failure. If the lobby was
+    // created but the broadcast failed, still returns the new roomId — the
+    // host can at least enter /waiting, others can manually join by id.
+    const createRematchLobby = useCallback(async (params: {
+        oldRoomId: bigint;
+        lobbyName: string;
+        maxPlayers: number;
+    }): Promise<bigint | null> => {
+        // Drive refs directly — createLobbyOnChain reads from refs, not React
+        // state, so setLobbyName would race with the immediate follow-up call.
+        // Password ref is left untouched so a private lobby clones its password.
+        refs.lobbyNameRef.current = params.lobbyName;
+        const wasPrivate = !!refs.lobbyPasswordRef.current;
+
+        const newRoomId = await createLobbyOnChain(params.maxPlayers);
+        if (!newRoomId) return null;
+
+        await broadcastRematchInvite({
+            oldRoomId: params.oldRoomId,
+            newRoomId,
+            lobbyName: params.lobbyName,
+            maxPlayers: params.maxPlayers,
+            isPrivate: wasPrivate,
+        });
+
+        return newRoomId;
+    }, [refs, createLobbyOnChain, broadcastRematchInvite]);
+
     return {
         createLobbyOnChain,
         joinLobbyOnChain,
         forfeitGameOnChain,
+        broadcastRematchInvite,
+        createRematchLobby,
     };
 }
 

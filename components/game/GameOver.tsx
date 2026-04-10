@@ -9,12 +9,24 @@ import { formatEther } from 'viem';
 import { MAFIA_ABI } from '../../contracts/config';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
+import { gmWs } from '../../services/gmWebSocket';
 
 import { Role, GamePhase } from '../../types';
 import { Button } from '../ui/Button';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye, Coins, Share2, Swords } from 'lucide-react';
 import { MicButton } from './MicButton';
+
+// Payload shape matches somnia-mafia-gm-server/src/routes/roomRoutes.ts (rematch-invite broadcast)
+interface RematchInvitePayload {
+    oldRoomId: string;
+    newRoomId: string;
+    hostAddress: string;
+    lobbyName: string;
+    maxPlayers: number;
+    isPrivate: boolean;
+    chainId: number;
+}
 
 const RoleIcons: Record<Role, React.ReactNode> = {
     [Role.MAFIA]: <Skull className="w-5 h-5 text-[#8B0000]" />,
@@ -53,7 +65,7 @@ const truncateName = (name: string, max: number): string =>
 type Winner = 'MAFIA' | 'TOWN' | 'DRAW' | 'ABORTED';
 
 export const GameOver: React.FC = React.memo(() => {
-    const { gameState, myPlayer, currentRoomId, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain, runtimeChain, fetchOnChainRoles, fetchGMRoles } = useGameContext();
+    const { gameState, myPlayer, currentRoomId, isTestMode, isTxPending, runtimeContractAddress, currencySymbol, distributePrizesOnChain, runtimeChain, fetchOnChainRoles, fetchGMRoles, createRematchLobby, joinLobbyOnChain, setCurrentRoomId } = useGameContext();
 
     // Local reveal timeout — shows "Unknown" instead of "revealing..." after 30s
     const [revealTimedOut, setRevealTimedOut] = useState(false);
@@ -354,25 +366,88 @@ export const GameOver: React.FC = React.memo(() => {
         router.push('/setup');
     }, [stopVictoryMusic, router]);
 
-    const handleRematch = useCallback(() => {
+    // ─── Rematch state ────────────────────────────────────────────────────
+    // Busy guard prevents double-create on fast repeated clicks or duplicate
+    // WS events while a rematch is already in flight for this GameOver mount.
+    const rematchBusyRef = useRef(false);
+    // Incoming invite popup shown to non-host players when the host broadcasts.
+    const [rematchInvite, setRematchInvite] = useState<RematchInvitePayload | null>(null);
+    const [isJoiningRematch, setIsJoiningRematch] = useState(false);
+
+    const handleRematch = useCallback(async () => {
+        if (rematchBusyRef.current) return;
+        if (!currentRoomId) {
+            toast.error('No active room');
+            return;
+        }
+        rematchBusyRef.current = true;
         stopVictoryMusic();
-        // Save current game settings so /create can pre-fill the form
         try {
-            const prevName = sessionStorage.getItem('lobbyName') || 'Rematch';
-            // Increment suffix: "Lobby" → "Lobby #2", "Lobby #2" → "Lobby #3"
-            const match = prevName.match(/^(.+?) #(\d+)$/);
-            const nextName = match
-                ? `${match[1]} #${Number(match[2]) + 1}`
-                : `${prevName} #2`;
-            sessionStorage.setItem('rematch_settings', JSON.stringify({
+            // Name: increment suffix on previous lobby name. "Lobby" → "Lobby #2" → "Lobby #3"
+            const prevName = (typeof window !== 'undefined' && sessionStorage.getItem('lobbyName')) || 'Rematch';
+            const m = prevName.match(/^(.+?) #(\d+)$/);
+            const nextName = m ? `${m[1]} #${Number(m[2]) + 1}` : `${prevName} #2`;
+
+            const newRoomId = await createRematchLobby({
+                oldRoomId: currentRoomId,
                 lobbyName: nextName,
                 maxPlayers: gameState.maxPlayers || 10,
-            }));
-        } catch { /* ignore */ }
-        sessionStorage.removeItem('currentRoomId');
-        localStorage.removeItem('currentRoomId');
-        router.push('/create');
-    }, [stopVictoryMusic, router, gameState.maxPlayers]);
+            });
+
+            if (!newRoomId) {
+                rematchBusyRef.current = false;
+                return;
+            }
+            router.push('/waiting');
+        } catch (e: any) {
+            console.error('[GameOver] Rematch failed:', e);
+            toast.error(`Rematch failed: ${e?.message || 'unknown error'}`);
+            rematchBusyRef.current = false;
+        }
+    }, [stopVictoryMusic, router, gameState.maxPlayers, currentRoomId, createRematchLobby]);
+
+    // ─── Incoming rematch invite (non-host players) ──────────────────────
+    // Host broadcasts via server → every player still subscribed to the old
+    // room's WS channel gets the event here. We filter out self-origin and
+    // stale invites, then show a popup with a Join button.
+    useEffect(() => {
+        const unsub = gmWs.on('rematch-invite', (data) => {
+            const payload = data as RematchInvitePayload | undefined;
+            if (!payload) return;
+            // Ignore own broadcast — host already navigated to /waiting.
+            if (address && payload.hostAddress.toLowerCase() === address.toLowerCase()) return;
+            // Ignore stale invite for a different room.
+            if (currentRoomId && String(currentRoomId) !== payload.oldRoomId) return;
+            setRematchInvite(payload);
+        });
+        return unsub;
+    }, [address, currentRoomId]);
+
+    const handleJoinRematch = useCallback(async () => {
+        if (!rematchInvite || isJoiningRematch) return;
+        setIsJoiningRematch(true);
+        stopVictoryMusic();
+        try {
+            const newRoomIdBig = BigInt(rematchInvite.newRoomId);
+            const ok = await joinLobbyOnChain(newRoomIdBig);
+            if (ok) {
+                // joinLobbyOnChain also sets currentRoomId internally, but
+                // call it again to be explicit in case of timing races.
+                setCurrentRoomId(newRoomIdBig);
+                router.push('/waiting');
+            } else {
+                setIsJoiningRematch(false);
+            }
+        } catch (e: any) {
+            console.error('[GameOver] Join rematch failed:', e);
+            toast.error(`Join failed: ${e?.message || 'unknown error'}`);
+            setIsJoiningRematch(false);
+        }
+    }, [rematchInvite, isJoiningRematch, joinLobbyOnChain, setCurrentRoomId, router, stopVictoryMusic]);
+
+    const handleDismissRematch = useCallback(() => {
+        setRematchInvite(null);
+    }, []);
 
     const handleHome = useCallback(() => {
         stopVictoryMusic();
@@ -512,18 +587,21 @@ export const GameOver: React.FC = React.memo(() => {
                         {abortConfig.description}
                     </p>
                     <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                        <button
-                            onClick={handleRematch}
-                            className="h-12 px-8 rounded-md text-[13px] uppercase tracking-[0.14em] font-bold transition-all active:scale-[0.98] cursor-pointer"
-                            style={{
-                                border: '1px solid #C49A6C',
-                                color: '#0A0A0A',
-                                backgroundColor: '#C49A6C',
-                                boxShadow: '0 6px 18px rgba(196,154,108,0.18)',
-                            }}
-                        >
-                            Rematch
-                        </button>
+                        {!gameState.isTournament && (
+                            <button
+                                onClick={handleRematch}
+                                disabled={isTxPending}
+                                className="h-12 px-8 rounded-md text-[13px] uppercase tracking-[0.14em] font-bold transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                                style={{
+                                    border: '1px solid #C49A6C',
+                                    color: '#0A0A0A',
+                                    backgroundColor: '#C49A6C',
+                                    boxShadow: '0 6px 18px rgba(196,154,108,0.18)',
+                                }}
+                            >
+                                {isTxPending ? 'Creating...' : 'Rematch'}
+                            </button>
+                        )}
                         <button
                             onClick={handlePlayAgain}
                             className="h-12 px-8 rounded-md border border-white/15 text-white/75 text-[13px] uppercase tracking-[0.12em] font-semibold hover:border-white/30 hover:text-white hover:bg-white/[0.04] transition-all active:scale-[0.98] cursor-pointer"
@@ -936,13 +1014,17 @@ export const GameOver: React.FC = React.memo(() => {
                             )}
 
                             <div className="flex gap-3">
-                                <Button
-                                    onClick={handleRematch}
-                                    className="flex-1 h-[60px] text-lg !text-white"
-                                >
-                                    <Swords className="w-5 h-5 mr-2" />
-                                    Rematch
-                                </Button>
+                                {!gameState.isTournament && (
+                                    <Button
+                                        onClick={handleRematch}
+                                        isLoading={isTxPending}
+                                        disabled={isTxPending}
+                                        className="flex-1 h-[60px] text-lg !text-white"
+                                    >
+                                        <Swords className="w-5 h-5 mr-2" />
+                                        Rematch
+                                    </Button>
+                                )}
                                 <Button
                                     onClick={handlePlayAgain}
                                     variant="outline-gold"
@@ -987,6 +1069,70 @@ export const GameOver: React.FC = React.memo(() => {
                     )}
                 </AnimatePresence>
             </div>
+
+            {/* ── Rematch Invite Popup (non-host players) ─────────────────── */}
+            <AnimatePresence>
+                {rematchInvite && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 40 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                        className="fixed left-1/2 -translate-x-1/2 bottom-8 z-[9999] w-[360px] max-w-[92vw]"
+                    >
+                        <div
+                            className="relative rounded-xl overflow-hidden bg-[#0D0D0D] border border-[#C49A6C]/30"
+                            style={{
+                                boxShadow: '0 0 60px rgba(196,154,108,0.18), 0 20px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.04)',
+                            }}
+                        >
+                            <div className="h-[1px] w-full" style={{ background: 'linear-gradient(90deg, transparent, rgba(196,154,108,0.5), transparent)' }} />
+                            <div className="p-5 flex flex-col items-center text-center">
+                                <motion.div
+                                    initial={{ scale: 0, rotate: -20 }}
+                                    animate={{ scale: 1, rotate: 0 }}
+                                    transition={{ type: 'spring', damping: 14, stiffness: 220, delay: 0.1 }}
+                                    className="w-11 h-11 rounded-full bg-[#C49A6C]/10 border border-[#C49A6C]/35 flex items-center justify-center mb-3"
+                                >
+                                    <Swords className="w-5 h-5 text-[#C49A6C]" />
+                                </motion.div>
+                                <h3 className="text-[#C49A6C] text-[11px] font-['Montserrat'] font-bold uppercase tracking-[0.18em] mb-1">
+                                    Rematch Started
+                                </h3>
+                                <p className="text-white/75 text-[13px] font-['Montserrat'] leading-snug mb-1 truncate max-w-full" title={rematchInvite.lobbyName}>
+                                    {rematchInvite.lobbyName || 'New lobby'}
+                                </p>
+                                <p className="text-white/40 text-[10px] font-['Montserrat'] uppercase tracking-[0.15em] mb-4">
+                                    {rematchInvite.maxPlayers} players{rematchInvite.isPrivate ? ' · private' : ''}
+                                </p>
+                                <div className="flex gap-2 w-full">
+                                    <button
+                                        onClick={handleDismissRematch}
+                                        disabled={isJoiningRematch}
+                                        className="flex-1 h-9 rounded-md border border-white/15 text-white/60 text-[11px] font-['Montserrat'] font-bold uppercase tracking-[0.12em] hover:border-white/30 hover:text-white/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        Dismiss
+                                    </button>
+                                    <button
+                                        onClick={handleJoinRematch}
+                                        disabled={isJoiningRematch}
+                                        className="flex-1 h-9 rounded-md text-[11px] font-['Montserrat'] font-bold uppercase tracking-[0.12em] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+                                        style={{
+                                            border: '1px solid #C49A6C',
+                                            color: '#0A0A0A',
+                                            backgroundColor: '#C49A6C',
+                                            boxShadow: '0 6px 18px rgba(196,154,108,0.22)',
+                                        }}
+                                    >
+                                        {isJoiningRematch ? 'Joining...' : 'Join'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Prize Distribution Popup */}
             <AnimatePresence>
                 {showPrizePopup && (
