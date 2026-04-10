@@ -135,6 +135,12 @@ export const GameOver: React.FC = React.memo(() => {
             setShowPrizePopup(true);
             setPrizeDistributionFailed(false);
 
+            // Force-fetch roles so prizePayouts can calculate immediately.
+            // Without this, roles may still be UNKNOWN when the popup opens
+            // (prizesClaimed polling and role polling race each other).
+            fetchOnChainRoles();
+            fetchGMRoles();
+
             // Find distribute tx hash for explorer link (all clients)
             if (currentRoomId && publicClient) {
                 const storedHash = localStorage.getItem(`prize_tx_${currentRoomId}`);
@@ -1047,7 +1053,11 @@ export const GameOver: React.FC = React.memo(() => {
                                     </div>
                                 ) : (
                                     <p className="text-white/60 text-[13px] font-['Montserrat'] leading-relaxed mb-4">
-                                        The prize pool has been distributed to the winning team.
+                                        {gameState.players.some(p => p.role === Role.UNKNOWN) && !revealTimedOut ? (
+                                            <span className="animate-pulse">Loading prize details...</span>
+                                        ) : (
+                                            'The prize pool has been distributed to the winning team.'
+                                        )}
                                     </p>
                                 )}
 

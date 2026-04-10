@@ -8,6 +8,8 @@ import { Button } from '../ui/Button';
 import { BackButton } from '../ui/BackButton';
 import { GamePhase } from '../../types';
 import { formatEther } from 'viem';
+import { usePublicClient } from 'wagmi';
+import { MAFIA_ABI } from '../../contracts/config';
 import { Loader2, HelpCircle } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { SessionKeyBanner } from '../game/SessionKeyBanner';
@@ -27,6 +29,8 @@ export const WaitingRoom: React.FC = () => {
         cancelTournamentOnChain,
         forfeitGameOnChain,
         currencySymbol,
+        runtimeContractAddress,
+        setCurrentRoomId,
     } = useGameContext();
     const { showConfirm } = useNoirDialog();
 
@@ -39,6 +43,37 @@ export const WaitingRoom: React.FC = () => {
     } = useSessionKey(roomIdNumber);
 
     const router = useRouter();
+    const publicClient = usePublicClient();
+
+    // Detect if tournament was cancelled by another player (organizer).
+    // Poll tournament phase every 8s; if CANCELLED → redirect to home.
+    useEffect(() => {
+        if (!gameState.isTournament || !gameState.tournamentId || !publicClient || !currentRoomId) return;
+        if (gameState.phase !== GamePhase.LOBBY) return; // only in waiting room
+
+        const check = async () => {
+            try {
+                const tData = await publicClient.readContract({
+                    address: runtimeContractAddress,
+                    abi: MAFIA_ABI,
+                    functionName: 'getTournament',
+                    args: [gameState.tournamentId!],
+                }) as any;
+                // TournamentPhase enum: 0=REGISTRATION, 1=IN_PROGRESS, 2=COMPLETED, 3=CANCELLED
+                const phase = Array.isArray(tData) ? Number(tData[1]) : Number(tData.phase);
+                if (phase === 3) { // CANCELLED
+                    sessionStorage.removeItem('currentRoomId');
+                    localStorage.removeItem('currentRoomId');
+                    setCurrentRoomId(null);
+                    router.push('/');
+                }
+            } catch { /* ignore */ }
+        };
+
+        check();
+        const iv = setInterval(check, 8000);
+        return () => clearInterval(iv);
+    }, [gameState.isTournament, gameState.tournamentId, gameState.phase, publicClient, currentRoomId, runtimeContractAddress, router, setCurrentRoomId]);
 
     const mountedRef = useRef(false);
     const [eciesRegistered, setEciesRegistered] = useState(false);
@@ -324,6 +359,29 @@ export const WaitingRoom: React.FC = () => {
                                 onClick={async () => {
                                     if (gameState.tournamentId && await showConfirm("Are you sure you want to cancel this tournament? All players will be refunded.", { title: 'Cancel Tournament', variant: 'danger', confirmLabel: 'Cancel Tournament', cancelLabel: 'Keep' })) {
                                         await cancelTournamentOnChain(gameState.tournamentId);
+                                        // Clean up orphaned room + navigate away
+                                        if (currentRoomId && walletClient) {
+                                            try {
+                                                const session = loadSession();
+                                                const signer = session?.privateKey
+                                                    ? (await import('viem/accounts')).privateKeyToAccount(session.privateKey as `0x${string}`)
+                                                    : undefined;
+                                                const { createWalletClient: cwc, http: h } = await import('viem');
+                                                const sc = signer ? cwc({ account: signer, chain: walletClient.chain, transport: h() }) : walletClient;
+                                                await sc.writeContract({
+                                                    address: runtimeContractAddress,
+                                                    abi: MAFIA_ABI,
+                                                    functionName: 'closeRoomIfTournamentCancelled',
+                                                    args: [currentRoomId],
+                                                    chain: walletClient.chain,
+                                                    account: signer || walletClient.account!,
+                                                });
+                                            } catch (e) { console.warn('[CancelTournament] closeRoom failed:', e); }
+                                        }
+                                        sessionStorage.removeItem('currentRoomId');
+                                        localStorage.removeItem('currentRoomId');
+                                        setCurrentRoomId(null);
+                                        router.push('/');
                                     }
                                 }}
                                 disabled={isTxPending}
