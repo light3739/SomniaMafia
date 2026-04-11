@@ -25,7 +25,7 @@ export type Winner = 'MAFIA' | 'TOWN' | 'DRAW' | 'ABORTED';
  */
 export function parseWinCondition(
     rawWinCondition: string | null | undefined,
-    alivePlayers?: ReadonlyArray<Pick<Player, 'role' | 'isAlive'>>,
+    players?: ReadonlyArray<Pick<Player, 'role' | 'isAlive'>>,
 ): Winner {
     const s = (rawWinCondition ?? '').toString().toLowerCase().trim();
     if (!s) return 'DRAW';
@@ -36,10 +36,18 @@ export function parseWinCondition(
     if (s.includes('town')) return 'TOWN';
 
     if (s.includes('last player')) {
-        if (!alivePlayers || alivePlayers.length === 0) return 'DRAW';
-        const survivors = alivePlayers.filter(p => p.isAlive && p.role !== Role.UNKNOWN);
-        if (survivors.length === 0) return 'DRAW';
-        const anyMafia = survivors.some(p => p.role === Role.MAFIA);
+        // Only resolve MAFIA/TOWN when we have COMPLETE info on every alive
+        // player. Partial reveal (some roles still UNKNOWN) can't distinguish
+        // "sole survivor is a mafioso whose role hasn't been revealed yet"
+        // from "sole survivor is town" — silently filtering UNKNOWN flips a
+        // mafia-victory into a false town-victory. If any alive player has
+        // an unrevealed role, bail to DRAW; a later reconciler pass (after
+        // role reveal completes) will re-parse and correct.
+        if (!players) return 'DRAW';
+        const allAlive = players.filter(p => p.isAlive);
+        if (allAlive.length === 0) return 'DRAW';
+        if (allAlive.some(p => p.role === Role.UNKNOWN)) return 'DRAW';
+        const anyMafia = allAlive.some(p => p.role === Role.MAFIA);
         return anyMafia ? 'MAFIA' : 'TOWN';
     }
 
