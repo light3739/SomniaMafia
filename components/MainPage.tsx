@@ -79,7 +79,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         textShadow: '0 2px 20px rgba(0,0,0,1), 0 0 40px rgba(0,0,0,0.5)',
                     }}
                 >
-                    Mafia, where lies pay real money.
+                    Where lies pay real money.
                 </p>
                 <p
                     className="mt-3 text-center text-white/50 font-sans tracking-[0.15em] uppercase"

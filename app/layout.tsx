@@ -31,20 +31,22 @@ const shareTechMono = Share_Tech_Mono({
 });
 
 export const metadata = {
-  title: "Onchain Mafia | Web3 Social Deduction",
-  description: "A synchronized, ZK-powered Mafia game on the Somnia and Avalanche Blockchains. Play directly in your browser with session keys.",
+  title: "Onchain Mafia — Where lies pay real money",
+  description:
+    "Voice mafia with on-chain prizes. Tournaments, 4–16 players, play in your browser. Lie, vote, win the pot.",
   metadataBase: new URL("https://mafiaonchain.live"),
   openGraph: {
-    title: "Onchain Mafia",
-    description: "Join the conspiracy. Identify the Mafia before it's too late.",
+    title: "Onchain Mafia — Where lies pay real money",
+    description:
+      "Voice mafia with on-chain prizes. Tournaments, 4–16 players, play in your browser.",
     url: "https://mafiaonchain.live",
     siteName: "Onchain Mafia",
     images: [
       {
-        url: "/images/mainscreen.png", // Fallback to lobby bg
+        url: "/images/mainscreen.png",
         width: 1200,
         height: 630,
-        alt: "Onchain Mafia Game Board",
+        alt: "Onchain Mafia — Voice mafia with real prizes",
       },
     ],
     locale: "en_US",
@@ -52,8 +54,9 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Onchain Mafia",
-    description: "Web3 Social Deduction",
+    title: "Onchain Mafia — Where lies pay real money",
+    description:
+      "Voice mafia with on-chain prizes. Tournaments, 4–16 players, play in your browser.",
     images: ["/images/mainscreen.png"],
   },
   icons: {
