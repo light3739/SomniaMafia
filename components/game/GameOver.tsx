@@ -16,6 +16,7 @@ import { Button } from '../ui/Button';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye, Coins, Share2, Swords } from 'lucide-react';
 import { MicButton } from './MicButton';
+import { ShareModal } from './ShareModal';
 
 // Payload shape matches somnia-mafia-gm-server/src/routes/roomRoutes.ts (rematch-invite broadcast)
 interface RematchInvitePayload {
@@ -469,7 +470,15 @@ export const GameOver: React.FC = React.memo(() => {
 
     // ─── Share / Screenshot ──────────────────────────────────────────────
     const shareCardRef = useRef<HTMLDivElement>(null);
-    const [isSharing, setIsSharing] = useState(false);
+    const [shareOpen, setShareOpen] = useState(false);
+    const [shareOrigin, setShareOrigin] = useState('https://mafiaonchain.live');
+
+    // Origin is only available on the client; read it once after mount so the
+    // modal's copy-link / deep-link URLs point at the actual host rather than
+    // the hardcoded prod domain.
+    useEffect(() => {
+        if (typeof window !== 'undefined') setShareOrigin(window.location.origin);
+    }, []);
 
     const generateImage = useCallback(async (): Promise<Blob | null> => {
         if (!shareCardRef.current) return null;
@@ -487,50 +496,13 @@ export const GameOver: React.FC = React.memo(() => {
         }
     }, []);
 
-    const handleShare = useCallback(async () => {
-        setIsSharing(true);
-        try {
-            const blob = await generateImage();
-            if (!blob) {
-                toast.error('Failed to generate screenshot');
-                return;
-            }
-            const file = new File([blob], `mafia-onchain-${Date.now()}.png`, { type: 'image/png' });
-            const shareText = winner === 'MAFIA'
-                ? `🔪 The Mafia has won on Mafia OnChain! I played as ${myRole}.`
-                : winner === 'TOWN'
-                    ? `⚖️ Justice prevails on Mafia OnChain! I played as ${myRole}.`
-                    : `🎲 What a game on Mafia OnChain!`;
+    const shareText = winner === 'MAFIA'
+        ? `🔪 The Mafia has won on Mafia OnChain! I played as ${myRole}.`
+        : winner === 'TOWN'
+            ? `⚖️ Justice prevails on Mafia OnChain! I played as ${myRole}.`
+            : `🎲 What a game on Mafia OnChain!`;
 
-            // Try Web Share API with file
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    files: [file],
-                    title: 'Mafia OnChain',
-                    text: shareText,
-                });
-                return;
-            }
-
-            // Fallback: download the image
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `mafia-onchain-${Date.now()}.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            toast.success('Screenshot downloaded');
-        } catch (e: any) {
-            if (e?.name !== 'AbortError') {
-                console.error('[GameOver] Share failed:', e);
-                toast.error('Share failed');
-            }
-        } finally {
-            setIsSharing(false);
-        }
-    }, [generateImage, winner, myRole]);
+    const shareUrl = currentRoomId ? `${shareOrigin}/r/${currentRoomId}` : shareOrigin;
 
     if (!winner) {
         // Quiet placeholder while the chain settles & roles reveal — the endgame
@@ -1036,13 +1008,12 @@ export const GameOver: React.FC = React.memo(() => {
                             </div>
                             <div className="flex gap-3">
                                 <Button
-                                    onClick={handleShare}
-                                    disabled={isSharing}
+                                    onClick={() => setShareOpen(true)}
                                     variant="outline-gold"
                                     className="flex-1 h-[44px] text-sm hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
                                 >
                                     <Share2 className="w-4 h-4 mr-2" />
-                                    {isSharing ? 'Saving...' : 'Share'}
+                                    Share
                                 </Button>
                                 <Button
                                     onClick={handleHome}
@@ -1247,6 +1218,15 @@ export const GameOver: React.FC = React.memo(() => {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            <ShareModal
+                isOpen={shareOpen}
+                onClose={() => setShareOpen(false)}
+                url={shareUrl}
+                text={shareText}
+                title="Mafia OnChain"
+                generateImage={generateImage}
+            />
         </motion.div>
     );
 });
