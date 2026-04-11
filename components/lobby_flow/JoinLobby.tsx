@@ -588,14 +588,23 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, y: -5 }}
                                             transition={{ duration: 0.2 }}
-                                            className="flex flex-col items-center"
+                                            className="flex flex-col items-center px-6"
                                         >
                                             <span className="text-[#C49A3C]/30 mb-3">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                             </span>
-                                            <span className="text-white/60 text-center leading-relaxed">
-                                                No active lobbies found.<br />Be the first to create one!
+                                            <span className="text-white/85 text-center font-['Cinzel'] text-lg md:text-xl tracking-wide leading-snug mb-1">
+                                                No tables open right now.
                                             </span>
+                                            <span className="text-white/45 text-center text-xs md:text-sm leading-relaxed mb-5 max-w-[340px]">
+                                                Be the first to deal a hand. Create a room, invite your crew, win the pot.
+                                            </span>
+                                            <button
+                                                onClick={() => router.push('/create')}
+                                                className="mt-1 px-5 py-2 rounded-md text-[11px] md:text-xs text-[#C49A3C]/80 hover:text-[#C49A3C] uppercase tracking-[0.2em] font-bold font-['Montserrat'] border border-[#C49A3C]/30 hover:border-[#C49A3C]/60 hover:bg-[#C49A3C]/5 transition-colors"
+                                            >
+                                                Create a room
+                                            </button>
                                         </motion.div>
                                     )}
                                 </AnimatePresence>
