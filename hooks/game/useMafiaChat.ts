@@ -57,17 +57,20 @@ export function useMafiaChat(deps: ChatDeps) {
                 localStorage.setItem(`mafia_salt_${roomIdStr}`, salt);
             }
 
+            const chainId = refs.runtimeChainRef.current.id;
             const { client: activeWalletClient } = await wallet.getActiveWalletClient();
             const meta = await signRequest({
                 address: myAddr,
                 roomId: Number(roomId),
                 walletClient: activeWalletClient,
-                buildMessage: (inp) => buildMafiaMembersMessage({ roomId: roomIdStr, ...inp })
+                buildMessage: (inp) => buildMafiaMembersMessage({ roomId: roomIdStr, chainId, ...inp })
             });
 
             const queryParams = new URLSearchParams({
                 roomId: roomIdStr,
-                playerAddress: meta.signerAddress,
+                chainId: String(chainId),
+                playerAddress: myAddr,
+                signerAddress: meta.signerAddress,
                 signature: meta.signature,
                 nonce: meta.nonce,
                 timestamp: meta.timestamp.toString(),
