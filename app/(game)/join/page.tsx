@@ -7,7 +7,9 @@ import { Suspense } from 'react';
 function JoinContent() {
     const searchParams = useSearchParams();
     const roomId = searchParams.get('roomId');
-    return <JoinLobby initialRoomId={roomId} />;
+    const mockParam = searchParams.get('mock');
+    const mockCount = mockParam ? Math.max(0, Math.min(50, parseInt(mockParam, 10) || 0)) : 0;
+    return <JoinLobby initialRoomId={roomId} mockCount={mockCount} />;
 }
 
 export default function JoinPage() {
