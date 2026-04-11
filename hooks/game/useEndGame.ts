@@ -19,6 +19,7 @@ import type { TransactionEngine } from './useTransactionEngine';
 import type { GameDataSync } from './useGameDataSync';
 import type { LogEntry } from '../../types';
 import { gmWs } from '../../services/gmWebSocket';
+import { parseWinCondition } from '../../services/winConditionParser';
 import React from 'react';
 
 // Convert contract Role enum (0-4) to frontend Role
@@ -287,10 +288,7 @@ export function useEndGame(deps: EndGameDeps) {
                     // Re-check phase after waiting — another player may have ended it
                     const phase = await checkOnChainPhase(roomId, pClient);
                     if (phase === GamePhase.ENDED) {
-                        const lowerWf = (data.result || '').toLowerCase();
-                        const wfWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
-                            lowerWf.includes('town') ? 'TOWN' :
-                            lowerWf.includes('mafia') ? 'MAFIA' : 'TOWN';
+                        const wfWinner = parseWinCondition(data.result, refs.playersRef.current);
                         console.log(`[AutoWin] Game already ended during waterfall wait. Winner: ${wfWinner}`);
                         setGameState(prev => ({ ...prev, phase: GamePhase.ENDED, winner: wfWinner }));
                         await dataSync.refreshPlayersList(roomId);
@@ -345,10 +343,7 @@ export function useEndGame(deps: EndGameDeps) {
                     // Check if game already ended (another player beat us)
                     const phase = await checkOnChainPhase(roomId, pClient);
                     if (phase === GamePhase.ENDED) {
-                        const lowerSim = (data.result || '').toLowerCase();
-                        const simWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
-                            lowerSim.includes('town') ? 'TOWN' :
-                            lowerSim.includes('mafia') ? 'MAFIA' : 'TOWN';
+                        const simWinner = parseWinCondition(data.result, refs.playersRef.current);
                         console.log(`[AutoWin] Simulation failed but game already ended. Winner: ${simWinner}`);
                         setGameState(prev => ({ ...prev, phase: GamePhase.ENDED, winner: simWinner }));
                         await dataSync.refreshPlayersList(roomId);
@@ -362,10 +357,7 @@ export function useEndGame(deps: EndGameDeps) {
                 // Final phase re-check right before sending TX
                 const preSubmitPhase = await checkOnChainPhase(roomId, pClient);
                 if (preSubmitPhase === GamePhase.ENDED) {
-                    const lowerSkip = (data.result || '').toLowerCase();
-                    const skipWinner: 'MAFIA' | 'TOWN' | 'DRAW' =
-                        lowerSkip.includes('town') ? 'TOWN' :
-                        lowerSkip.includes('mafia') ? 'MAFIA' : 'TOWN';
+                    const skipWinner = parseWinCondition(data.result, refs.playersRef.current);
                     console.log(`[AutoWin] Game ended between simulation and send. Skipping TX. Winner: ${skipWinner}`);
                     refs.autoWinLockRef.current = false;
                     setIsTxPending(false);
@@ -845,9 +837,13 @@ export function useEndGame(deps: EndGameDeps) {
         // Reveal timeout (30s → show "Unknown")
         const tTimeout = setTimeout(() => setRevealTimedOut(true), 30000);
 
-        // Winner fallback: if gameState.winner is null after 3s, scan logs
+        // Winner reconciliation: ALWAYS scan chain logs 3s after phase→ENDED,
+        // regardless of whether a proactive path already set a winner. Any
+        // mismatch between the local guess and the contract's GameEnded event
+        // gets corrected here — this is why different players used to see
+        // different results when an AutoWin path raced the real event and
+        // set winner from a stale GM response. Chain is the only truth.
         const tWinner = setTimeout(async () => {
-            if (gameState.winner) return;
             const pClient = refs.publicClientRef.current;
             if (!pClient || !rid) return;
             try {
@@ -867,15 +863,21 @@ export function useEndGame(deps: EndGameDeps) {
                 for (let i = allParsed.length - 1; i >= 0; i--) {
                     const log = allParsed[i] as any;
                     if (log.eventName === 'GameEnded') {
-                        const wc = ((log.args?.winCondition as string) || '').toLowerCase();
-                        const resolved = wc.includes('aborted') ? 'ABORTED' : wc.includes('town') ? 'TOWN' : wc.includes('mafia') ? 'MAFIA' : wc.includes('draw') ? 'DRAW' : 'TOWN';
-                        console.log(`[WinnerFallback] Resolved: ${resolved}`);
-                        setGameState(prev => ({ ...prev, phase: GamePhase.ENDED, winner: resolved }));
+                        const wc = (log.args?.winCondition as string) || '';
+                        const resolved = parseWinCondition(wc, refs.playersRef.current);
+                        setGameState(prev => {
+                            if (prev.winner && prev.winner !== resolved) {
+                                console.warn(`[WinnerReconcile] Overriding ${prev.winner} → ${resolved} (chain: "${wc}")`);
+                            } else {
+                                console.log(`[WinnerReconcile] Resolved: ${resolved}`);
+                            }
+                            return { ...prev, phase: GamePhase.ENDED, winner: resolved };
+                        });
                         return;
                     }
                 }
             } catch (e) {
-                console.warn('[WinnerFallback] Failed:', e);
+                console.warn('[WinnerReconcile] Failed:', e);
             }
         }, 3000);
 

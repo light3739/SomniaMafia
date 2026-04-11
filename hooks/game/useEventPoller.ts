@@ -20,6 +20,7 @@ import { GamePhase, GameState } from '../../types';
 import type { GameRefs } from './useGameRefs';
 import type { GameDataSync } from './useGameDataSync';
 import type { LogEntry } from '../../types';
+import { parseWinCondition } from '../../services/winConditionParser';
 import React from 'react';
 import { GM_SERVER_URL } from '../../contracts/config';
 import { useGmWebSocket } from './useGmWebSocket';
@@ -266,39 +267,34 @@ export function useEventPoller(deps: PollerDeps) {
                         break;
 
                     case 'GameEnded': {
-                        if (!isHistorical) {
-                            const winCondition = args.winCondition as string || '';
-                            const lower = winCondition.toLowerCase();
+                        // GameEnded is authoritative — always process it, even
+                        // when the event came in via historical replay after a
+                        // refresh/reconnect. Previously this was gated on
+                        // !isHistorical, which left gameState.winner stuck on
+                        // a proactive (and sometimes wrong) guess when the
+                        // real event arrived "late" relative to liveStartBlock.
+                        const winCondition = (args.winCondition as string) || '';
+                        const gameWinner = parseWinCondition(winCondition, refs.playersRef.current);
+                        const isPreGameAbort = gameWinner === 'ABORTED';
 
-                            // Pre-DAY abort: room ended before reaching DAY,
-                            // no winner, every player (including the one who
-                            // ghosted) got their buy-in + deposit refunded via
-                            // LibGame.abortPreGame.
-                            const isPreGameAbort = lower.includes('aborted');
-
-                            const gameWinner: 'MAFIA' | 'TOWN' | 'DRAW' | 'ABORTED' =
-                                isPreGameAbort ? 'ABORTED' :
-                                    lower.includes('town') ? 'TOWN' :
-                                        lower.includes('mafia') ? 'MAFIA' :
-                                            lower.includes('draw') ? 'DRAW' : 'TOWN';
-
-                            console.log(`[Event] GameEnded! Winner: ${gameWinner}, condition: ${winCondition}`);
-                            setGameState(prev => ({
-                                ...prev,
-                                phase: GamePhase.ENDED,
-                                winner: gameWinner
-                            }));
-
-                            if (isPreGameAbort) {
-                                if (roomId) await dataSync.fetchGameData(roomId);
-                                addLog(
-                                    'Game aborted before start — everyone refunded (deposit + buy-in).',
-                                    'warning',
-                                    undefined,
-                                    undefined,
-                                    stableId(log),
-                                );
+                        console.log(`[Event] GameEnded! Winner: ${gameWinner}, condition: "${winCondition}", historical: ${isHistorical}`);
+                        setGameState(prev => {
+                            // Chain truth always wins over any proactive guess.
+                            if (prev.winner && prev.winner !== gameWinner) {
+                                console.warn(`[Event] Overriding proactive winner ${prev.winner} → ${gameWinner} (chain authoritative)`);
                             }
+                            return { ...prev, phase: GamePhase.ENDED, winner: gameWinner };
+                        });
+
+                        if (isPreGameAbort && !isHistorical) {
+                            if (roomId) await dataSync.fetchGameData(roomId);
+                            addLog(
+                                'Game aborted before start — everyone refunded (deposit + buy-in).',
+                                'warning',
+                                undefined,
+                                undefined,
+                                stableId(log),
+                            );
                         }
                         break;
                     }
