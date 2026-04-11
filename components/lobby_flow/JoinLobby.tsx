@@ -8,6 +8,8 @@ import { useAccount, useChainId } from 'wagmi';
 import { formatEther } from 'viem';
 import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
 import { NetworkSelector } from '../ui/NetworkSelector';
+import { Input } from '../ui/Input';
+import { Button } from '../ui/Button';
 import { FlowLayout } from '../layout/FlowLayout';
 
 // --- ИКОНКИ ---
@@ -28,6 +30,46 @@ const ChevronRight = () => (
 
 interface JoinLobbyProps {
     initialRoomId?: string | null;
+    mockCount?: number;
+}
+
+// Dev-only mock room generator. Triggered via ?mock=N on the /join URL so
+// designers can preview the lobby card at various list lengths without
+// touching the chain. Produces a deterministic mix of public / private /
+// buy-in / free-roll rooms so every style branch is covered.
+function generateMockRooms(count: number): any[] {
+    const names = [
+        'Mafia Syndicate', 'Sunday Night Poker', 'Golden Hand', 'The Speakeasy',
+        'Alpha Table', 'Veterans Only', 'Newbie Zone', 'High Rollers',
+        'Midnight Crew', 'The Vault', 'Lucky 13', 'Last Call',
+    ];
+    const rooms: any[] = [];
+    for (let i = 0; i < count; i++) {
+        const isTournament = i % 3 === 0;
+        const isFreeRoll = isTournament && i % 6 === 0;
+        const isPrivate = !isTournament && i % 4 === 0;
+        const maxPlayers = 10 + (i % 7);
+        const players = Math.max(1, ((i * 3) % maxPlayers) + 1);
+        const suffix = i >= names.length ? ` #${Math.floor(i / names.length) + 1}` : '';
+        const room: any = {
+            id: 1000 + i,
+            host: `0x${i.toString(16).padStart(40, '0')}`,
+            name: names[i % names.length] + suffix,
+            players: Math.min(players, maxPlayers - 1),
+            max: maxPlayers,
+            phase: 0,
+            timestamp: Math.floor(Date.now() / 1000) - i * 30,
+            isPrivate,
+            tournamentId: isTournament ? BigInt(i + 1) : 0n,
+            depositPool: 0n,
+        };
+        if (isTournament) {
+            room.buyIn = isFreeRoll ? 0n : BigInt(i + 1) * 100000000000000000n; // 0.1·(i+1) ETH
+            room.prizePool = isFreeRoll ? 5000000000000000000n : 0n; // 5 ETH for free-roll
+        }
+        rooms.push(room);
+    }
+    return rooms;
 }
 
 // Parse a room struct (handles both tuple-array and object forms from viem)
@@ -75,7 +117,7 @@ function formatPrizePool(amount: bigint): string {
     return '0';
 }
 
-export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
+export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount = 0 }) => {
     const { setLobbyName, joinLobbyOnChain, isTxPending, runtimeContractAddress, publicClient: ctxPublicClient, currencySymbol, isWalletReady, setLobbyPassword } = useGameContext();
     const { showPrompt, showAlert } = useNoirDialog();
     const { login, authenticated } = usePrivy();
@@ -97,7 +139,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     const [filterType, setFilterType] = React.useState<FilterType>('all');
     const [searchQuery, setSearchQuery] = React.useState('');
     const [currentPage, setCurrentPage] = React.useState(1);
-    const PAGE_SIZE = 8;
+    const PAGE_SIZE = 5;
 
     // Re-fetch a single room directly from chain and validate it. Returns the
     // parsed room on success, or null after surfacing a popup error to the
@@ -140,37 +182,55 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         [publicClient, runtimeContractAddress, showAlert]
     );
 
-    // Direct join-by-code: opens the noir prompt, reads + validates the room
-    // directly from chain, and joins it in-place. No intermediate /join?roomId
-    // navigation, no invite banner — invalid codes surface as alert popups so
-    // the lobby browser stays usable behind the modal.
-    const handleJoinByCodeClick = async () => {
+    // Loading flag for numeric on-chain lookup (triggered from the search
+    // fallback CTA when the user types a room id that isn't in the polled
+    // list). Separate from isRefreshing/isTxPending so lookup spinners
+    // don't collide with list polling or tx state.
+    const [isLookingUp, setIsLookingUp] = useState(false);
+
+    // Holds a room fetched via direct RPC lookup so it can be rendered as
+    // a regular card in the list (two-step flow: look up → see card →
+    // click card → join). Survives polling cycles that would otherwise
+    // replace `rooms` without this id. Cleared when the search query
+    // changes so the CTA re-appears for the new query.
+    const [lookedUpRoom, setLookedUpRoom] = useState<any | null>(null);
+
+    useEffect(() => {
+        setLookedUpRoom(null);
+    }, [searchQuery]);
+
+    // Smart fallback triggered when the search query is a pure number and
+    // the local filter returned nothing. Does a direct getRoom RPC and
+    // stores the validated room — it's then merged into the display pool
+    // and shown as a normal card the user can click to join.
+    const handleNumericLookup = async () => {
+        const numeric = searchQuery.trim();
+        if (!/^\d+$/.test(numeric)) return;
         if (!publicClient) return;
-        if (!isConnected || !authenticated) { login(); return; }
-        if (!isWalletReady) return;
 
-        const raw = await showPrompt("Enter room code:", {
-            title: 'Join by Room Code',
-            placeholder: 'e.g. 142',
-            confirmLabel: 'Join',
-        });
-        if (!raw) return;
-        const numeric = raw.replace(/[^0-9]/g, '');
-        if (!numeric) {
-            await showAlert("Room code must be a number.", { title: 'Invalid Code' });
-            return;
+        setIsLookingUp(true);
+        try {
+            const room = await fetchAndValidateRoom(numeric);
+            if (!room) return;
+            setLookedUpRoom(room);
+        } finally {
+            setIsLookingUp(false);
         }
-
-        const room = await fetchAndValidateRoom(numeric);
-        if (!room) return;
-        // handleJoin is defined later in this component scope; safe because
-        // this body only runs from a click handler, well after component init.
-        await handleJoin(room);
     };
+
+    // Display pool = polled rooms + any manually looked-up room (if not
+    // already in the polled list). Looked-up rooms survive polling
+    // cycles so a direct-lookup result doesn't flicker out when the
+    // next scan replaces `rooms`.
+    const displayRooms = React.useMemo(() => {
+        if (!lookedUpRoom) return rooms;
+        if (rooms.some((r) => r.id === lookedUpRoom.id)) return rooms;
+        return [lookedUpRoom, ...rooms];
+    }, [rooms, lookedUpRoom]);
 
     const filteredRooms = React.useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
-        return rooms.filter((r) => {
+        return displayRooms.filter((r) => {
             // Type filter
             const isTournament = r.tournamentId ? r.tournamentId > 0n : false;
             if (filterType === 'public' && r.isPrivate) return false;
@@ -184,7 +244,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
             }
             return true;
         });
-    }, [rooms, filterType, searchQuery]);
+    }, [displayRooms, filterType, searchQuery]);
 
     const pageCount = Math.max(1, Math.ceil(filteredRooms.length / PAGE_SIZE));
     // Clamp current page if filter / refresh shrinks the list under it.
@@ -200,7 +260,14 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         return filteredRooms.slice(start, start + PAGE_SIZE);
     }, [filteredRooms, currentPage]);
 
-    const [lastUpdate, setLastUpdate] = useState<number>(0);
+    // Pure-numeric query fallback: if the user types a room id that isn't
+    // in the locally polled list (only the last ~18 recent rooms are
+    // loaded), we surface a "Look up Room #N" CTA that does a direct
+    // getRoom RPC call. Keeps the search input as the single entry point.
+    const trimmedQuery = searchQuery.trim();
+    const isNumericQuery = /^\d+$/.test(trimmedQuery);
+    const showNumericLookup = !isInitialLoad && isNumericQuery && filteredRooms.length === 0;
+
     const mountedRef = useRef(true);
     const lastFetchRef = useRef(0);
     const MAX_LOBBY_AGE_SEC = 15 * 60;
@@ -208,6 +275,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
     type FetchReason = 'initial' | 'refresh' | 'polling';
 
     const fetchRooms = useCallback(async (reason: FetchReason = 'polling') => {
+        if (mockCount > 0) return; // mock mode bypasses chain reads entirely
         if (!publicClient) return;
 
         const now = Date.now();
@@ -316,7 +384,6 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
 
             if (mountedRef.current) {
                 setRooms(roomList);
-                setLastUpdate(Date.now());
                 setIsInitialLoad(false);
 
                 if (reason === 'refresh') {
@@ -335,7 +402,16 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                 setIsRefreshing(false);
             }
         }
-    }, [publicClient, initialRoomId, runtimeContractAddress]);
+    }, [publicClient, initialRoomId, runtimeContractAddress, mockCount]);
+
+    // Mock mode: inject fake rooms from ?mock=N and skip polling entirely.
+    // Lets designers preview the lobby card at different list lengths
+    // without spinning up a chain or waiting on RPCs.
+    useEffect(() => {
+        if (mockCount <= 0) return;
+        setRooms(generateMockRooms(mockCount));
+        setIsInitialLoad(false);
+    }, [mockCount]);
 
     useEffect(() => {
         if (chainId !== prevChainIdRef.current) {
@@ -463,35 +539,15 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
         >
             <div className="w-full max-w-[600px] flex flex-col items-center gap-4 md:gap-6">
 
+                {/* Main Card */}
+                <div className="w-full bg-[rgba(40,22,8,0.70)] backdrop-blur-md rounded-2xl p-6 md:p-8 border border-white/10 shadow-2xl flex flex-col gap-6 mt-2">
+
                 {/* Заголовок списка */}
-                <div className="flex items-center justify-between w-full mt-2">
-                    <h2 className="text-white/90 text-xl md:text-2xl font-['Cinzel'] uppercase tracking-widest">
+                <div className="flex items-center justify-between w-full border-b border-white/10 pb-4">
+                    <h2 className="text-white text-xl md:text-2xl font-['Cinzel'] tracking-widest">
                         Live Sessions
                     </h2>
                     <div className="flex items-center gap-3">
-                        {lastUpdate > 0 && !isInitialLoad && (
-                            <span className="text-white/50 text-[10px] md:text-xs font-mono">
-                                {new Date(lastUpdate).toLocaleTimeString()}
-                            </span>
-                        )}
-                        {/* Join-by-code icon button — opens noir prompt to
-                            paste a room id and deep-link into /join. */}
-                        {!initialRoomId && (
-                            <button
-                                onClick={handleJoinByCodeClick}
-                                disabled={isTxPending || !isWalletReady}
-                                className="text-[#C49A3C] hover:text-[#A8784F] transition-colors p-1 disabled:opacity-50"
-                                title="Join by Room Code"
-                                aria-label="Join by Room Code"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 md:w-6 md:h-6">
-                                    <line x1="4" y1="9" x2="20" y2="9"></line>
-                                    <line x1="4" y1="15" x2="20" y2="15"></line>
-                                    <line x1="10" y1="3" x2="8" y2="21"></line>
-                                    <line x1="16" y1="3" x2="14" y2="21"></line>
-                                </svg>
-                            </button>
-                        )}
                         <button
                             onClick={() => fetchRooms('refresh')}
                             disabled={isRefreshing || isInitialLoad}
@@ -523,9 +579,9 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                     key={chip.id}
                                     onClick={() => setFilterType(chip.id)}
                                     disabled={isInitialLoad}
-                                    className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-[0.15em] font-['Montserrat'] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${active
+                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-[0.15em] font-['Montserrat'] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${active
                                         ? 'bg-[#C49A3C] text-[#281608] border border-[#C49A3C]'
-                                        : 'bg-[#19130D]/60 text-white/55 border border-white/8 hover:border-white/20 hover:text-white/80'
+                                        : 'bg-black/30 text-white/55 border border-white/10 hover:border-white/20 hover:text-white/80'
                                         }`}
                                 >
                                     {chip.label}
@@ -538,76 +594,100 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                             </span>
                         )}
                     </div>
-                    <input
+                    <Input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search by name or room id…"
                         disabled={isInitialLoad}
-                        className="w-full h-[40px] bg-[#19130D]/60 border border-white/10 rounded-md px-4 text-sm text-white/85 placeholder-white/30 font-['Montserrat'] focus:outline-none focus:border-[#C49A3C]/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        containerClassName="w-full"
+                        className="h-[50px] md:h-[54px] !text-sm !text-left !px-4 !font-['Montserrat'] focus:!border-[#C49A3C]"
                     />
                 </div>
 
-                {/* Список комнат */}
-                <div className="w-full flex flex-col gap-3 min-h-[250px]">
+                {/* Список комнат — фиксированная высота под PAGE_SIZE карточек,
+                    чтобы рамка не прыгала при появлении/исчезновении комнат. */}
+                <div className="w-full flex flex-col gap-3 h-[460px] md:h-[490px]">
                     <AnimatePresence mode="wait">
-                        {isInitialLoad || rooms.length === 0 ? (
+                        {isInitialLoad ? (
                             <motion.div
-                                key="status-box"
+                                key="scanning"
                                 initial={{ opacity: 0, scale: 0.98 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.98 }}
                                 transition={{ duration: 0.2 }}
-                                className="w-full min-h-[250px] flex flex-col items-center justify-center bg-[#19130D]/40 rounded-lg border border-white/5 py-10 relative"
+                                className="w-full h-full flex flex-col items-center justify-center bg-black/30 rounded-xl border border-white/10 py-10 relative"
                             >
-                                <AnimatePresence mode="wait">
-                                    {isInitialLoad ? (
-                                        <motion.div
-                                            key="radar-content"
-                                            initial={{ opacity: 0, y: 5 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: -5 }}
-                                            transition={{ duration: 0.2 }}
-                                            className="flex flex-col items-center"
-                                        >
-                                            <div className="relative flex items-center justify-center mb-6 mt-2">
-                                                <div className="absolute w-16 h-16 border-2 border-[#C49A3C] rounded-full animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-20" />
-                                                <div className="absolute w-10 h-10 border-2 border-[#C49A3C] rounded-full animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-40" style={{ animationDelay: '0.4s' }} />
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C49A3C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
-                                                    <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-                                                </svg>
-                                            </div>
-                                            <span className="text-white/60 font-medium tracking-wide text-sm animate-pulse">
-                                                Scanning Network...
-                                            </span>
-                                        </motion.div>
-                                    ) : (
-                                        <motion.div
-                                            key="empty-content"
-                                            initial={{ opacity: 0, y: 5 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: -5 }}
-                                            transition={{ duration: 0.2 }}
-                                            className="flex flex-col items-center px-6"
-                                        >
-                                            <span className="text-[#C49A3C]/30 mb-3">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                                            </span>
-                                            <span className="text-white/85 text-center font-['Cinzel'] text-lg md:text-xl tracking-wide leading-snug mb-1">
-                                                No tables open right now.
-                                            </span>
-                                            <span className="text-white/45 text-center text-xs md:text-sm leading-relaxed mb-5 max-w-[340px]">
-                                                Be the first to deal a hand. Create a room, invite your crew, win the pot.
-                                            </span>
-                                            <button
-                                                onClick={() => router.push('/create')}
-                                                className="mt-1 px-5 py-2 rounded-md text-[11px] md:text-xs text-[#C49A3C]/80 hover:text-[#C49A3C] uppercase tracking-[0.2em] font-bold font-['Montserrat'] border border-[#C49A3C]/30 hover:border-[#C49A3C]/60 hover:bg-[#C49A3C]/5 transition-colors"
-                                            >
-                                                Create a room
-                                            </button>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
+                                <div className="relative flex items-center justify-center mb-6 mt-2">
+                                    <div className="absolute w-16 h-16 border-2 border-[#C49A3C] rounded-full animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-20" />
+                                    <div className="absolute w-10 h-10 border-2 border-[#C49A3C] rounded-full animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-40" style={{ animationDelay: '0.4s' }} />
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C49A3C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                                        <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                                    </svg>
+                                </div>
+                                <span className="text-white/60 font-medium tracking-wide text-sm animate-pulse">
+                                    Scanning Network...
+                                </span>
+                            </motion.div>
+                        ) : showNumericLookup ? (
+                            <motion.div
+                                key="numeric-lookup"
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.98 }}
+                                transition={{ duration: 0.2 }}
+                                className="w-full h-full flex flex-col items-center justify-center bg-black/30 rounded-xl border border-white/10 py-10 px-6"
+                            >
+                                <span className="text-[#C49A3C]/30 mb-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                </span>
+                                <span className="text-white/85 text-center font-['Cinzel'] text-lg md:text-xl tracking-wide leading-snug mb-1">
+                                    Room #{trimmedQuery} isn't in the live list.
+                                </span>
+                                <span className="text-white/45 text-center text-xs md:text-sm leading-relaxed mb-5 max-w-[340px]">
+                                    It might be an older lobby or one without players yet. Look it up directly on-chain.
+                                </span>
+                                <Button
+                                    onClick={handleNumericLookup}
+                                    variant="primary-lobby"
+                                    isLoading={isLookingUp}
+                                    disabled={isLookingUp || !isWalletReady}
+                                    className="mt-1 h-[48px] md:h-[52px] px-10 text-base md:text-lg tracking-[0.1em]"
+                                >
+                                    {isLookingUp ? 'Looking up…' : `Look up Room #${trimmedQuery}`}
+                                </Button>
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    className="mt-3 text-[10px] text-[#C49A3C]/80 hover:text-[#C49A3C] uppercase tracking-[0.2em] font-bold font-['Montserrat']"
+                                >
+                                    Clear search
+                                </button>
+                            </motion.div>
+                        ) : rooms.length === 0 ? (
+                            <motion.div
+                                key="empty"
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.98 }}
+                                transition={{ duration: 0.2 }}
+                                className="w-full h-full flex flex-col items-center justify-center bg-black/30 rounded-xl border border-white/10 py-10 px-6"
+                            >
+                                <span className="text-[#C49A3C]/30 mb-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                </span>
+                                <span className="text-white/85 text-center font-['Cinzel'] text-lg md:text-xl tracking-wide leading-snug mb-1">
+                                    No tables open right now.
+                                </span>
+                                <span className="text-white/45 text-center text-xs md:text-sm leading-relaxed mb-5 max-w-[340px]">
+                                    Be the first to deal a hand. Create a room, invite your crew, win the pot.
+                                </span>
+                                <Button
+                                    onClick={() => router.push('/create')}
+                                    variant="primary-lobby"
+                                    className="mt-1 h-[48px] md:h-[52px] px-10 text-base md:text-lg tracking-[0.1em]"
+                                >
+                                    Create Game
+                                </Button>
                             </motion.div>
                         ) : filteredRooms.length === 0 ? (
                             <motion.div
@@ -616,7 +696,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.98 }}
                                 transition={{ duration: 0.2 }}
-                                className="w-full min-h-[250px] flex flex-col items-center justify-center bg-[#19130D]/40 rounded-lg border border-white/5 py-10"
+                                className="w-full h-full flex flex-col items-center justify-center bg-black/30 rounded-xl border border-white/10 py-10"
                             >
                                 <span className="text-[#C49A3C]/30 mb-3">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -638,18 +718,13 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 transition={{ duration: 0.2 }}
-                                className="w-full flex flex-col gap-3"
+                                className="w-full h-full flex flex-col gap-3"
                             >
-                                <AnimatePresence>
-                                    {pagedRooms.map((room) => {
+                                {pagedRooms.map((room) => {
                                         const tournament = getTournamentInfo(room);
                                         return (
                                             <motion.button
                                                 key={room.id}
-                                                layout
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, scale: 0.95 }}
                                                 whileHover={{ scale: 1.015 }}
                                                 whileTap={{ scale: 0.98 }}
                                                 onClick={() => handleJoin(room)}
@@ -720,34 +795,41 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId }) => {
                                             </motion.button>
                                         );
                                     })}
-                                </AnimatePresence>
                             </motion.div>
                         )}
                     </AnimatePresence>
                 </div>
 
-                {/* Pagination — only when filteredRooms exceeds one page */}
-                {!isInitialLoad && filteredRooms.length > PAGE_SIZE && (
-                    <div className="w-full flex items-center justify-center gap-3 mt-1">
-                        <button
-                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                            disabled={currentPage <= 1}
-                            className="px-3 py-1.5 rounded-md bg-[#19130D]/60 border border-white/10 text-white/70 text-[10px] uppercase font-bold tracking-[0.15em] font-['Montserrat'] hover:border-[#C49A3C]/40 hover:text-[#C49A3C] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                            ‹ Prev
-                        </button>
-                        <span className="text-white/55 text-[11px] font-mono tabular-nums">
-                            {currentPage} / {pageCount}
-                        </span>
-                        <button
-                            onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
-                            disabled={currentPage >= pageCount}
-                            className="px-3 py-1.5 rounded-md bg-[#19130D]/60 border border-white/10 text-white/70 text-[10px] uppercase font-bold tracking-[0.15em] font-['Montserrat'] hover:border-[#C49A3C]/40 hover:text-[#C49A3C] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                            Next ›
-                        </button>
-                    </div>
-                )}
+                {/* Pagination — место всегда зарезервировано (min-h), кнопки
+                    рендерятся только когда filteredRooms > PAGE_SIZE. Это
+                    убирает ~32px прыжок карточки при листании между разным
+                    количеством страниц. */}
+                <div className="w-full min-h-[32px] flex items-center justify-center gap-3 mt-1">
+                    {!isInitialLoad && filteredRooms.length > PAGE_SIZE && (
+                        <>
+                            <button
+                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                disabled={currentPage <= 1}
+                                className="px-3 py-1.5 rounded-lg bg-black/30 border border-white/10 text-white/70 text-[10px] uppercase font-bold tracking-[0.15em] font-['Montserrat'] hover:border-[#C49A3C]/40 hover:text-[#C49A3C] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                                ‹ Prev
+                            </button>
+                            <span className="text-white/55 text-[11px] font-mono tabular-nums">
+                                {currentPage} / {pageCount}
+                            </span>
+                            <button
+                                onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
+                                disabled={currentPage >= pageCount}
+                                className="px-3 py-1.5 rounded-lg bg-black/30 border border-white/10 text-white/70 text-[10px] uppercase font-bold tracking-[0.15em] font-['Montserrat'] hover:border-[#C49A3C]/40 hover:text-[#C49A3C] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                                Next ›
+                            </button>
+                        </>
+                    )}
+                </div>
+
+                </div>
+                {/* /Main Card */}
 
                 {(!isConnected || !authenticated) && rooms.length > 0 && !initialRoomId && (
                     <div className="mt-2 text-white/60 text-xs italic">
