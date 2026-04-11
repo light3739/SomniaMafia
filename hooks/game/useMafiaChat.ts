@@ -107,6 +107,21 @@ export function useMafiaChat(deps: ChatDeps) {
             );
 
             mafiaKeyRef.current = key;
+
+            // Mark teammates as MAFIA in local state so PlayerSpot/MobilePlayerList
+            // can render them with the mafia-visible styling at night. Client-local
+            // only — non-mafia clients never hit this code path because GM gates
+            // /mafia-members on requester role.
+            const mafiaSet = new Set(sortedMafia);
+            setGameState(prev => ({
+                ...prev,
+                players: prev.players.map(p =>
+                    mafiaSet.has(p.address.toLowerCase()) && p.role !== Role.MAFIA
+                        ? { ...p, role: Role.MAFIA }
+                        : p
+                ),
+            }));
+
             return key;
         } catch (e) {
             console.error('[MafiaChat] Key derivation error:', e);
@@ -114,7 +129,7 @@ export function useMafiaChat(deps: ChatDeps) {
         } finally {
             mafiaKeyVerifyingRef.current = false;
         }
-    }, [refs, wallet]);
+    }, [refs, wallet, setGameState]);
 
     // === FETCH MAFIA CHAT ===
     const fetchMafiaChat = useCallback(async (roomId: bigint) => {
@@ -330,6 +345,20 @@ export function useMafiaChat(deps: ChatDeps) {
 
         return () => clearInterval(interval);
     }, [fetchMafiaChat, refs, currentRoomId]);
+
+    // Proactively derive the mafia chat key (and mark teammates red in the UI)
+    // as soon as we enter NIGHT. /mafia-members is gated to NIGHT/ENDED on the
+    // GM server, so any earlier call would fail — we wait for the transition.
+    useEffect(() => {
+        if (!currentRoomId) return;
+        if (gameState.phase !== GamePhase.NIGHT) return;
+        const myAddr = refs.stableAddress?.toLowerCase();
+        const amMafia = gameState.players.some(
+            p => p.address.toLowerCase() === myAddr && p.role === Role.MAFIA
+        );
+        if (!amMafia) return;
+        getMafiaChatKey(currentRoomId).catch(() => { /* logged inside */ });
+    }, [gameState.phase, gameState.players, currentRoomId, refs.stableAddress, getMafiaChatKey]);
 
     return {
         getMafiaChatKey,
