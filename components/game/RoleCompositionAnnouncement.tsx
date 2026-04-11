@@ -19,11 +19,14 @@ interface RoleEntry {
 export const RoleCompositionAnnouncement = React.memo(({ show, onComplete, playerCount }: RoleCompositionAnnouncementProps) => {
 
     const roles: RoleEntry[] = useMemo(() => {
-        const mafiaCount = Math.max(1, Math.floor(playerCount / 4));
+        // Must mirror LibGame.expectedMafiaCount on-chain and shuffleService.ts.
+        // Contract enforces this at revealRoles — if client shows wrong number,
+        // players feel misled vs. what the game actually deals.
+        const mafiaCount = playerCount <= 5 ? 1 : playerCount <= 8 ? 2 : playerCount <= 11 ? 3 : 4;
         const hasDoctor = playerCount >= 4;
         const hasDetective = playerCount >= 5;
         const specialRoles = mafiaCount + (hasDoctor ? 1 : 0) + (hasDetective ? 1 : 0);
-        const civilianCount = playerCount - specialRoles;
+        const civilianCount = Math.max(0, playerCount - specialRoles);
 
         const result: RoleEntry[] = [];
         // ИСПОЛЬЗУЕМ НАШИ НОВЫЕ СУРОВЫЕ ЦВЕТА И ТОНКИЕ ИКОНКИ

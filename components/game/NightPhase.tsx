@@ -8,7 +8,7 @@ import { signRequest } from '../../services/requestSigning';
 import { MAFIA_ABI } from '../../contracts/config';
 
 import { Role, Player, GamePhase } from '../../types';
-import { buildTeammatesMessage } from '../../services/signingSchema';
+import { buildMafiaMembersMessage } from '../../services/signingSchema';
 
 import { Button } from '../ui/Button';
 import { MafiaChat } from './MafiaChat';
@@ -304,18 +304,22 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         }
     }, [NIGHT_COMMIT_KEY]);
 
-    // Load mafia teammates: ask GM for all room roles (GM has them after SRA key collection)
+    // Load mafia teammates via the dedicated /mafia-members endpoint.
+    // Historical note: this used to hit /room-roles, which is the post-game
+    // public reveal and is hard-gated on phase === ENDED. During NIGHT it
+    // always returned { pending: true } and the teammate widget never
+    // rendered. The correct endpoint is /mafia-members — gated on NIGHT or
+    // ENDED, verifies the caller is actually Mafia, returns only the team.
     const loadMafiaTeammates = useCallback(async () => {
         if (!currentRoomId || !myPlayer || myRole !== Role.MAFIA) return;
         if (nightState.teammates.length > 0) return; // Already loaded
 
         try {
-            // Sign the request to prove we are Mafia (authenticated discovery)
             const signed = await signRequest({
                 address: address as string,
                 roomId: Number(currentRoomId),
                 walletClient,
-                buildMessage: ({ nonce, timestamp }) => buildTeammatesMessage({
+                buildMessage: ({ nonce, timestamp }) => buildMafiaMembersMessage({
                     roomId: currentRoomId.toString(),
                     nonce,
                     timestamp,
@@ -332,21 +336,22 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                 chainId: chainId?.toString() || '',
             }).toString();
 
-            const res = await fetch(`/api/game/room-roles?${query}`);
-            const data = await res.json();
-
-            if (data.pending || !data.roles) {
-                // Roles not computed yet — will retry on next mount/effect cycle
+            const res = await fetch(`/api/game/mafia-members?${query}`);
+            if (!res.ok) {
+                // 403 before NIGHT, 202 pending if roles not resolved yet — retry next cycle
                 return;
             }
+            const data = await res.json();
+            const members = (data?.members as string[] | undefined) ?? [];
+            if (members.length === 0) return;
 
+            const myAddrLower = myPlayer.address.toLowerCase();
             const teammates: string[] = [];
-            for (const [addr, role] of Object.entries(data.roles as Record<string, string>)) {
-                if (role === 'MAFIA' && addr.toLowerCase() !== myPlayer.address.toLowerCase()) {
-                    const player = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
-                    if (player && player.isAlive) {
-                        teammates.push(player.address);
-                    }
+            for (const addr of members) {
+                if (addr.toLowerCase() === myAddrLower) continue;
+                const player = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
+                if (player && player.isAlive) {
+                    teammates.push(player.address);
                 }
             }
 
@@ -360,7 +365,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         } catch (e) {
             console.error("Failed to load mafia teammates:", e);
         }
-    }, [currentRoomId, myPlayer, myRole, gameState.players, nightState.teammates.length, addLog]);
+    }, [currentRoomId, myPlayer, myRole, gameState.players, nightState.teammates.length, addLog, address, walletClient, chainId]);
 
     // Load teammates when mafia enters night phase
     useEffect(() => {
