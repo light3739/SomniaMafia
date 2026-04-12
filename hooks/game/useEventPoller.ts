@@ -230,8 +230,9 @@ export function useEventPoller(deps: PollerDeps) {
                                 addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
                             } else {
                                 const killedPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === killedStr);
-                                const kname = killedPlayer?.name || (args.killed as string).slice(0, 6);
-                                addLog(`Night Result: ${kname} was killed by Mafia!`, 'danger', 'NIGHT_RESULT', { isEliminated: true, playerName: kname }, nightId);
+                                const kname = killedPlayer?.name || `${(args.killed as string).slice(0, 6)}...`;
+                                addLog(`Night Result: ${kname} was killed by Mafia!`, 'danger', 'NIGHT_RESULT',
+                                    { isEliminated: true, playerName: kname, playerAddress: killedStr }, nightId);
                             }
                         } else {
                             addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
@@ -251,8 +252,9 @@ export function useEventPoller(deps: PollerDeps) {
                         if (killed && killed !== '0x0000000000000000000000000000000000000000') {
                             const killedStr = killed.toLowerCase();
                             const killedPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === killedStr);
-                            const kname = killedPlayer?.name || killed.slice(0, 6);
-                            addLog(`Night Result: ${kname} was killed by Mafia!`, 'danger', 'NIGHT_RESULT', { isEliminated: true, playerName: kname }, nightId);
+                            const kname = killedPlayer?.name || `${killed.slice(0, 6)}...`;
+                            addLog(`Night Result: ${kname} was killed by Mafia!`, 'danger', 'NIGHT_RESULT',
+                                { isEliminated: true, playerName: kname, playerAddress: killedStr }, nightId);
                         } else {
                             // Defensive: GM should never call resolveNightAsGameMaster with
                             // victim==0 (it routes to finalizeNight which fires NightFinalized
@@ -310,12 +312,14 @@ export function useEventPoller(deps: PollerDeps) {
 
                             // Fallback: write vote log from client in case server doesn't have VoteCast in ABI.
                             // Stable id → deduplicates with server log if server does write it.
+                            // Addresses travel in eventData so downstream UI can resolve nicknames
+                            // against the live players list instead of brittle name matching.
                             const voter = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === voterStr);
                             const target = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === targetStr);
-                            const voterName = voter?.name || (args.voter as string).slice(0, 6);
-                            const targetName = target?.name || (args.target as string).slice(0, 6);
+                            const voterName = voter?.name || `${(args.voter as string).slice(0, 6)}...`;
+                            const targetName = target?.name || `${(args.target as string).slice(0, 6)}...`;
                             addLog(`${voterName} voted for ${targetName}`, 'info', 'PLAYER_VOTED',
-                                { playerName: voterName, targetName }, stableId(log));
+                                { playerName: voterName, targetName, voterAddress: voterStr, targetAddress: targetStr }, stableId(log));
                         } catch (e) {
                             console.error('[VoteCast] Error:', e);
                         }
@@ -339,9 +343,9 @@ export function useEventPoller(deps: PollerDeps) {
                         if (args.eliminated !== '0x0000000000000000000000000000000000000000') {
                             const elimStr = (args.eliminated as string).toLowerCase();
                             const elimPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === elimStr);
-                            const elimName = elimPlayer?.name || (args.eliminated as string).slice(0, 6);
+                            const elimName = elimPlayer?.name || `${(args.eliminated as string).slice(0, 6)}...`;
                             addLog(`Voting Finalized: ${elimName} was eliminated!`, 'danger', 'VOTING_RESULT',
-                                { isEliminated: true, playerName: elimName }, vfId);
+                                { isEliminated: true, playerName: elimName, playerAddress: elimStr }, vfId);
                         } else {
                             addLog('Voting Finalized: No one was eliminated.', 'warning', 'VOTING_RESULT',
                                 { isSafe: true }, vfId);
@@ -396,6 +400,15 @@ export function useEventPoller(deps: PollerDeps) {
             const log = data as LogEntry;
             if (log && log.message) {
                 addLogs([log]);
+                // pollEvents() only runs every 5s in WS mode, so local voteMap
+                // (which drives the vote-arrow avatars on player spots) would lag
+                // behind WS-delivered PLAYER_VOTED logs. Sync here directly from
+                // the WS push so voters appear the instant the log arrives.
+                if (log.eventType === 'PLAYER_VOTED' && log.eventData?.voterAddress && log.eventData?.targetAddress) {
+                    const v = log.eventData.voterAddress.toLowerCase();
+                    const t = log.eventData.targetAddress.toLowerCase();
+                    setVoteMap(prev => ({ ...prev, [v]: t }));
+                }
             }
         },
         'phase-change': (_data: unknown) => {
@@ -424,7 +437,7 @@ export function useEventPoller(deps: PollerDeps) {
         },
     } as Partial<Record<ServerEventType, (data: unknown) => void>>),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [addLogs, dataSync, refs, handleIncomingMafiaSignal, triggerVotingResultsOverlay]);
+    [addLogs, dataSync, refs, handleIncomingMafiaSignal, triggerVotingResultsOverlay, setVoteMap]);
 
     const { wsConnected } = useGmWebSocket({
         roomId: currentRoomId ? Number(currentRoomId) : null,

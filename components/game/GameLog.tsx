@@ -169,6 +169,17 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     // Uses eventType as primary discriminator, text parsing only for
     // client-only logs (discussion) that have no eventType.
     const dayEvents = useMemo(() => {
+        // Resolve a player's current canonical nickname via address — falls back
+        // to whatever name was baked into the log if the address is missing or
+        // the player has since been removed.
+        const resolveName = (addr: string | undefined, fallback: string | undefined): string | undefined => {
+            if (addr) {
+                const match = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
+                if (match?.name) return match.name;
+            }
+            return fallback;
+        };
+
         let nightResult: { type: 'safe' | 'killed'; playerName?: string } | null = null;
         let discussionStarted = false;
         let discussionFinished = false;
@@ -224,7 +235,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 // Structured path (server eventType)
                 if (l.eventType === 'NIGHT_RESULT') {
                     if (l.eventData?.isSafe) nightResult = { type: 'safe' };
-                    else if (l.eventData?.isEliminated) nightResult = { type: 'killed', playerName: l.eventData.playerName };
+                    else if (l.eventData?.isEliminated) nightResult = { type: 'killed', playerName: resolveName(l.eventData.playerAddress, l.eventData.playerName) };
                     break;
                 }
                 // Text fallback (client log or old format)
@@ -255,7 +266,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                     case 'NIGHT_RESULT':
                         // Can also appear after day start in sorted logs
                         if (log.eventData?.isSafe) nightResult = { type: 'safe' };
-                        else if (log.eventData?.isEliminated) nightResult = { type: 'killed', playerName: log.eventData.playerName };
+                        else if (log.eventData?.isEliminated) nightResult = { type: 'killed', playerName: resolveName(log.eventData.playerAddress, log.eventData.playerName) };
                         break;
                     case 'DISCUSSION_STARTED':
                         discussionStarted = true;
@@ -280,7 +291,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         if (log.eventData?.isSafe) {
                             votingResult = { type: 'no_one' };
                         } else if (log.eventData?.isEliminated) {
-                            votingResult = { type: 'eliminated', playerName: log.eventData.playerName };
+                            votingResult = { type: 'eliminated', playerName: resolveName(log.eventData.playerAddress, log.eventData.playerName) };
                         } else {
                             // eventData is empty/malformed — derive from message text
                             const lower = log.message.toLowerCase();
@@ -375,7 +386,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 const l = logs[i];
                 if (l.eventType === 'VOTING_RESULT') {
                     if (l.eventData?.isSafe) votingResult = { type: 'no_one' };
-                    else if (l.eventData?.isEliminated) votingResult = { type: 'eliminated', playerName: l.eventData.playerName };
+                    else if (l.eventData?.isEliminated) votingResult = { type: 'eliminated', playerName: resolveName(l.eventData.playerAddress, l.eventData.playerName) };
                     else {
                         // Defensive: derive from message if eventData is empty
                         const lower = l.message.toLowerCase();
@@ -411,7 +422,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 const l = logs[i];
                 if (l.eventType === 'NIGHT_RESULT') {
                     if (l.eventData?.isSafe) nightResult = { type: 'safe' };
-                    else if (l.eventData?.isEliminated) nightResult = { type: 'killed', playerName: l.eventData.playerName };
+                    else if (l.eventData?.isEliminated) nightResult = { type: 'killed', playerName: resolveName(l.eventData.playerAddress, l.eventData.playerName) };
                     break;
                 }
                 const lower = l.message.toLowerCase();
@@ -434,7 +445,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             votingResult,
             nightFallen,
         };
-    }, [logs, targetDay, showVotingResults, liveDiscussion, forceVotingActive, hideActions]);
+    }, [logs, targetDay, showVotingResults, liveDiscussion, forceVotingActive, hideActions, gameState.players]);
 
     const targetingDay = (showVotingResults && displayDay > 0) ? displayDay : dayCount;
 
