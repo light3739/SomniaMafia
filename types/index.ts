@@ -115,6 +115,13 @@ export interface GameState {
   mafiaRevealedCount: number; // For night phase (Mafia)
   phaseDeadline: number; // Unix timestamp in seconds
   winner: 'MAFIA' | 'TOWN' | 'DRAW' | 'ABORTED' | null;
+  /** Room host address (lowercased) from the contract's Room.host field.
+   *  Authoritative source for "am I the host?" checks — previously the UI
+   *  assumed players[0] was always the host, which broke force-skip and
+   *  other host-only actions whenever the contract's getPlayers return
+   *  order diverged from join order. Optional so TestPage fixtures that
+   *  predate this field still compile; runtime consumers must null-check. */
+  host?: string | null;
   // Tournament info
   tournamentId?: bigint;
   isTournament?: boolean;
