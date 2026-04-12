@@ -324,11 +324,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { isConnecting, isReconnecting } = useAccount();
     const { ready, authenticated } = usePrivy();
 
+    // Timeout: if Wagmi stays in reconnecting state for >5s, stop blocking
+    // buttons. This prevents "Connecting Wallet..." from hanging indefinitely
+    // when MetaMask is locked or the RPC is unresponsive.
+    const [reconnectTimedOut, setReconnectTimedOut] = useState(false);
+    useEffect(() => {
+        if (!isReconnecting) { setReconnectTimedOut(false); return; }
+        const t = setTimeout(() => setReconnectTimedOut(true), 5000);
+        return () => clearTimeout(t);
+    }, [isReconnecting]);
+
     // True once Privy is initialised + Wagmi has finished reconnecting + address is set.
     // Used to disable action buttons during the brief reconnection window on page load.
+    // After 5s timeout, isReconnecting is ignored to prevent permanent hang.
     const isWalletReady = useMemo(
-        () => ready && authenticated && !isConnecting && !isReconnecting && !!refs.stableAddress,
-        [ready, authenticated, isConnecting, isReconnecting, refs.stableAddress]
+        () => ready && authenticated && !isConnecting && (!isReconnecting || reconnectTimedOut) && !!refs.stableAddress,
+        [ready, authenticated, isConnecting, isReconnecting, reconnectTimedOut, refs.stableAddress]
     );
 
     // ==================== LEVEL 1: INFRASTRUCTURE ====================

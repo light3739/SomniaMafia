@@ -405,7 +405,7 @@ export const SetupProfile: React.FC = () => {
                     variant="primary-lobby"
                     className="w-full h-[54px] md:h-[60px] text-lg md:text-xl tracking-[0.1em]"
                 >
-                    {!hydrated || !isWalletReady ? 'Connecting...' : 'Create Game'}
+                    {!hydrated ? 'Loading...' : !isWalletReady ? 'Connecting Wallet...' : !playerName.trim() ? 'Enter Your Name' : 'Create Game'}
                 </Button>
                 <Button
                     onClick={() => router.push('/join')}
@@ -413,7 +413,7 @@ export const SetupProfile: React.FC = () => {
                     variant="outline-gold-lobby"
                     className="w-full h-[54px] md:h-[60px] text-lg md:text-xl tracking-[0.1em]"
                 >
-                    {!hydrated || !isWalletReady ? 'Connecting...' : 'Connect to Lobby'}
+                    {!hydrated ? 'Loading...' : !isWalletReady ? 'Connecting Wallet...' : !playerName.trim() ? 'Enter Your Name' : 'Connect to Lobby'}
                 </Button>
             </div>
 

@@ -95,7 +95,9 @@ export function useLobbyActions(deps: LobbyDeps) {
         const lobbyPassword = refs.lobbyPasswordRef.current;
         const avatarUrl = refs.avatarUrlRef.current;
 
-        if (!name || !lobbyName || !pClient || !targetChain) { await showAlert("Enter details and connect wallet!"); return null; }
+        if (!name) { await showAlert("Please set your nickname before creating a game."); return null; }
+        if (!lobbyName) { await showAlert("Please enter a lobby name."); return null; }
+        if (!pClient || !targetChain) { await showAlert("Wallet not connected. Please wait for connection or refresh the page."); return null; }
         setIsTxPending(true);
         try {
             // Acquire wallet FIRST so we have the canonical signing address before
@@ -327,7 +329,8 @@ export function useLobbyActions(deps: LobbyDeps) {
         const lobbyPassword = passwordOverride ?? refs.lobbyPasswordRef.current;
         const avatarUrl = refs.avatarUrlRef.current;
 
-        if (!name || !pClient || !targetChain) { await showAlert("Connect wallet and set name first!"); return false; }
+        if (!name) { await showAlert("Please set your nickname before joining."); return false; }
+        if (!pClient || !targetChain) { await showAlert("Wallet not connected. Please wait for connection or refresh the page."); return false; }
 
         const rId = BigInt(roomId);
         setIsTxPending(true);
