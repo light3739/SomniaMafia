@@ -159,7 +159,7 @@ export async function verifySignedRequestBody<TBody extends Record<string, any>>
     // Create network-specific public client if it's different from the default
     const currentDeps = (chainId !== ACTIVE_DEPLOYMENT.chainId)
         ? createSecurityDependencies({
-            publicClient: createPublicClient({ chain: deployment.chain, transport: http() })
+            publicClient: createPublicClient({ chain: deployment.chain as typeof somniaChain, transport: http() })
         })
         : deps;
 

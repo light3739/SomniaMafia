@@ -15,16 +15,49 @@ export const SOMNIA_TESTNET = defineChain({
     testnet: true,
 });
 
+export const SOMNIA_MAINNET = defineChain({
+    id: 5031,
+    name: 'Somnia',
+    nativeCurrency: { name: 'Somnia Token', symbol: 'STT', decimals: 18 },
+    rpcUrls: {
+        default: {
+            http: ['https://api.infra.mainnet.somnia.network/'],
+            webSocket: ['wss://api.infra.mainnet.somnia.network/ws'],
+        },
+    },
+    blockExplorers: { default: { name: 'Somnia Explorer', url: 'https://somnia.socialscan.io' } },
+    testnet: false,
+});
+
 /** @deprecated Avalanche Fuji is no longer used. Kept for backward compatibility of imports. */
 export const AVALANCHE_FUJI = SOMNIA_TESTNET;
 
 export const NETWORKS = {
     somnia_testnet: SOMNIA_TESTNET,
+    somnia_mainnet: SOMNIA_MAINNET,
 } as const;
 
 export type SupportedNetwork = keyof typeof NETWORKS;
 
-export const DEPLOYMENTS = {
+type DeploymentConfig = {
+    chain: ReturnType<typeof defineChain>;
+    chainId: number;
+    explorer: string;
+    contracts: {
+        MafiaDiamond: string;
+        Groth16Verifier: string;
+        LobbyFacet: string;
+        ShuffleFacet: string;
+        VotingFacet: string;
+        NightFacet: string;
+        GameEndFacet: string;
+        TournamentFacet: string;
+        TimeoutsFacet: string;
+        RefundsFacet: string;
+    };
+};
+
+export const DEPLOYMENTS: Record<SupportedNetwork, DeploymentConfig> = {
     somnia_testnet: {
         chain: SOMNIA_TESTNET,
         chainId: 50312,
@@ -42,21 +75,44 @@ export const DEPLOYMENTS = {
             RefundsFacet: '0x7f38c2292df18b77c6d83d7f0f3740aa0c1abcf8',
         },
     },
-} as const;
+    somnia_mainnet: {
+        chain: SOMNIA_MAINNET,
+        chainId: 5031,
+        explorer: 'https://somnia.socialscan.io',
+        contracts: {
+            MafiaDiamond: process.env.NEXT_PUBLIC_MAFIA_DIAMOND || '',
+            Groth16Verifier: process.env.NEXT_PUBLIC_GROTH16_VERIFIER || '',
+            LobbyFacet: '',
+            ShuffleFacet: '',
+            VotingFacet: '',
+            NightFacet: '',
+            GameEndFacet: '',
+            TournamentFacet: '',
+            TimeoutsFacet: '',
+            RefundsFacet: '',
+        },
+    },
+};
 
-export const ACTIVE_NETWORK: SupportedNetwork = 'somnia_testnet';
-export const ACTIVE_DEPLOYMENT = DEPLOYMENTS.somnia_testnet;
+const envNetwork = process.env.NEXT_PUBLIC_ACTIVE_NETWORK as SupportedNetwork | undefined;
+export const ACTIVE_NETWORK: SupportedNetwork =
+    envNetwork && envNetwork in NETWORKS ? envNetwork : 'somnia_testnet';
+export const ACTIVE_DEPLOYMENT = DEPLOYMENTS[ACTIVE_NETWORK];
 
-export function getDeployment(_network: SupportedNetwork) {
-    return ACTIVE_DEPLOYMENT;
+export function getDeployment(networkName: SupportedNetwork) {
+    return DEPLOYMENTS[networkName];
 }
 
-export function getDeploymentByChainId(_chainId?: number | null) {
+export function getDeploymentByChainId(chainId?: number | null) {
+    if (chainId == null) return ACTIVE_DEPLOYMENT;
+    for (const deployment of Object.values(DEPLOYMENTS)) {
+        if (deployment.chainId === chainId) return deployment;
+    }
     return ACTIVE_DEPLOYMENT;
 }
 
 // Convenience aliases (used throughout the app)
-export const somniaChain = SOMNIA_TESTNET;
+export const somniaChain = ACTIVE_NETWORK === 'somnia_mainnet' ? SOMNIA_MAINNET : SOMNIA_TESTNET;
 export const MAFIA_CONTRACT_ADDRESS = ACTIVE_DEPLOYMENT.contracts.MafiaDiamond as `0x${string}`;
 export const MAFIA_ABI = DIAMOND_ABI;
 
