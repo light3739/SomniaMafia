@@ -159,8 +159,15 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (prev.logs[existingIndex].message === message && prev.logs[existingIndex].type === type) {
                     return prev;
                 }
+                // Merge eventData so address fields (playerAddress/voterAddress/targetAddress)
+                // placed by one writer survive when the other writer (client vs server) pushes
+                // a canonical-nickname version of the same log id. Without this merge, the
+                // second write would clobber the first's address fields and downstream UI
+                // (elimination ceremony, voter avatars) would lose its address-based lookup.
+                const existing = prev.logs[existingIndex];
+                const mergedEventData = { ...existing.eventData, ...eventData };
                 const newLogs = [...prev.logs];
-                newLogs[existingIndex] = newEntry;
+                newLogs[existingIndex] = { ...newEntry, eventData: mergedEventData };
                 return { ...prev, logs: newLogs };
             }
 
@@ -178,8 +185,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             for (const log of newLogs) {
                 const existing = logMap.get(log.id);
-                if (!existing || existing.message !== log.message || existing.type !== log.type) {
+                if (!existing) {
                     logMap.set(log.id, log);
+                    hasChanges = true;
+                } else if (existing.message !== log.message || existing.type !== log.type) {
+                    // Merge eventData (see addLog comment): address fields from either
+                    // writer win — the new log provides the canonical message/type,
+                    // but we preserve richer eventData from whichever side had it.
+                    logMap.set(log.id, {
+                        ...log,
+                        eventData: { ...existing.eventData, ...log.eventData },
+                    });
                     hasChanges = true;
                 }
             }

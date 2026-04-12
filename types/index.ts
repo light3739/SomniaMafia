@@ -78,6 +78,8 @@ export interface GameEventData {
   isEliminated?: boolean;
   dayNumber?: number;
   playerAddress?: string;
+  voterAddress?: string;
+  targetAddress?: string;
 }
 
 export interface LogEntry {

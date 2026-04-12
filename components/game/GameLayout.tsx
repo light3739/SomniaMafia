@@ -142,20 +142,51 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
         showHint(hints[myPlayer?.role || ''] ?? 'night_civilian');
     }, [showHint, myPlayer?.role]);
 
-    // Detect elimination from voting results logs
+    // Detect elimination from voting results logs.
+    // IMPORTANT: scope the scan to the CURRENT day via the last DayStarted
+    // marker. Previously this loop walked the entire log buffer and latched
+    // onto whatever the most recent `VOTING_RESULT && isEliminated` entry was
+    // — so a peaceful vote on Day N would still re-fire the ceremony using
+    // the stale Day N-1 elimination (often with a wallet-prefix fallback
+    // name, surfacing as "0x1234 eliminated" on a day nobody was voted out).
     useEffect(() => {
         if (!showVotingResults || lastEliminationDayRef.current === gameState.dayCount) return;
+
+        // Find the current day's start index so we only consider today's result.
+        let dayStartIdx = -1;
         for (let i = gameState.logs.length - 1; i >= 0; i--) {
             const l = gameState.logs[i];
-            if (l.eventType === 'VOTING_RESULT' && l.eventData?.isEliminated && l.eventData?.playerName) {
-                const eliminated = gameState.players.find(p => p.name === l.eventData!.playerName);
-                lastEliminationDayRef.current = gameState.dayCount;
-                setEliminationData({
-                    name: l.eventData.playerName,
-                    role: eliminated?.role || 'UNKNOWN',
-                });
+            if (l.eventType === 'DayStarted' || l.message.match(/Day\s+\d+\s+has begun/i)) {
+                dayStartIdx = i;
                 break;
             }
+        }
+        const dayLogs = dayStartIdx >= 0 ? gameState.logs.slice(dayStartIdx) : gameState.logs;
+
+        for (let i = dayLogs.length - 1; i >= 0; i--) {
+            const l = dayLogs[i];
+            if (l.eventType !== 'VOTING_RESULT') continue;
+
+            // Mark the day as processed regardless of outcome so we don't rescan
+            // on every subsequent re-render of the same voting-results overlay.
+            lastEliminationDayRef.current = gameState.dayCount;
+
+            if (l.eventData?.isEliminated) {
+                // Prefer address-based lookup so the ceremony shows the current
+                // canonical nickname even if the log itself stored a wallet-prefix
+                // fallback. Fall back to name matching for legacy logs.
+                const addr = l.eventData.playerAddress?.toLowerCase();
+                const eliminated = addr
+                    ? gameState.players.find(p => p.address.toLowerCase() === addr)
+                    : gameState.players.find(p => p.name === l.eventData!.playerName);
+                const displayName = eliminated?.name || l.eventData.playerName || 'A player';
+                setEliminationData({
+                    name: displayName,
+                    role: eliminated?.role || 'UNKNOWN',
+                });
+            }
+            // isSafe → peaceful day, no ceremony. Mark handled and exit.
+            break;
         }
     }, [showVotingResults, gameState.logs, gameState.dayCount, gameState.players]);
 
@@ -297,28 +328,34 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                     let voters: any[] = [];
                     if (showVotingResults) {
                          const voteMapFromLogs: Record<string, string> = {};
-                         
-                         // 1. Authoritative scan (Server logs)
+
+                         // 1. Authoritative scan (Server logs), scoped to current day.
                          let lastDayStartIdx = -1;
                          for (let i = gameState.logs.length - 1; i >= 0; i--) {
-                             if (gameState.logs[i].message.includes('has begun')) {
+                             const l = gameState.logs[i];
+                             if (l.eventType === 'DayStarted' || l.message.includes('has begun')) {
                                  lastDayStartIdx = i;
                                  break;
                              }
                          }
                          const dayLogs = lastDayStartIdx >= 0 ? gameState.logs.slice(lastDayStartIdx) : gameState.logs;
-                         
+
                          dayLogs.forEach(l => {
-                             if (l.eventType === 'PLAYER_VOTED' && l.eventData) {
+                             if (l.eventType !== 'PLAYER_VOTED' || !l.eventData) return;
+                             // Prefer address-based resolution: fragile name matching fails
+                             // when a log stored a wallet-prefix fallback as playerName.
+                             let voterAddr = l.eventData.voterAddress?.toLowerCase();
+                             let targetAddr = l.eventData.targetAddress?.toLowerCase();
+                             if (!voterAddr || !targetAddr) {
+                                 // Legacy logs without addresses — fall back to name match.
                                  const vName = l.eventData.playerName;
                                  const tName = l.eventData.targetName;
-                                 if (vName && tName) {
-                                     const voter = gameState.players.find(pl => pl.name === vName);
-                                     const target = gameState.players.find(pl => pl.name === tName);
-                                     if (voter && target) {
-                                         voteMapFromLogs[voter.address.toLowerCase()] = target.address.toLowerCase();
-                                     }
-                                 }
+                                 if (!vName || !tName) return;
+                                 voterAddr = gameState.players.find(pl => pl.name === vName)?.address.toLowerCase();
+                                 targetAddr = gameState.players.find(pl => pl.name === tName)?.address.toLowerCase();
+                             }
+                             if (voterAddr && targetAddr) {
+                                 voteMapFromLogs[voterAddr] = targetAddr;
                              }
                          });
 
