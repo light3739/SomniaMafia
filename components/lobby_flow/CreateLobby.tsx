@@ -3,13 +3,20 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
+import { parseEther, formatEther } from 'viem';
 import { useGameContext } from '../../contexts/GameContext';
+import { MAFIA_ABI } from '../../contracts/config';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
 import { NetworkSelector } from '../ui/NetworkSelector';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { FlowLayout } from '../layout/FlowLayout';
+
+// Matches `LOBBY_FUNDING_VALUE` in useWalletManager.ts — the amount sent to
+// the session wallet on join and refunded via drainSessionGas at game end.
+// Shown as the refundable gas reserve in the fee breakdown below.
+const SESSION_GAS_RESERVE = parseEther('1.5');
 
 type TournamentType = 'buy-in' | 'free-roll';
 
@@ -27,8 +34,30 @@ export const CreateLobby: React.FC = () => {
         currencySymbol,
         publicClient,
         address,
-        playerName
+        playerName,
+        runtimeContractAddress,
     } = useGameContext();
+
+    // Fetch the non-refundable platform entry fee from the diamond so the
+    // breakdown below always matches the actual on-chain value (0.5 STT at
+    // deploy time, but can be changed by admin). Falls back to 0.5 STT on
+    // read failure so the UI still shows a sensible number.
+    const [entryFee, setEntryFee] = useState<bigint>(parseEther('0.5'));
+    useEffect(() => {
+        if (!publicClient || !runtimeContractAddress) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const fee = await publicClient.readContract({
+                    address: runtimeContractAddress,
+                    abi: MAFIA_ABI,
+                    functionName: 'getEntryFee',
+                }) as bigint;
+                if (!cancelled) setEntryFee(fee);
+            } catch { /* leave fallback */ }
+        })();
+        return () => { cancelled = true; };
+    }, [publicClient, runtimeContractAddress]);
 
     const { isConnected } = useAccount();
     const { login } = usePrivy();
@@ -361,6 +390,49 @@ export const CreateLobby: React.FC = () => {
                         </AnimatePresence>
                     </div>
                 </div>
+
+                {/* Fee breakdown — shown above the create button so players
+                    understand what they're signing. Platform fee is a
+                    non-refundable entry charge; gas reserve is put on a
+                    session wallet and returned at game end via drainSessionGas. */}
+                {isConnected && (
+                    <div className="w-full bg-[rgba(15,10,5,0.7)] backdrop-blur-xl rounded-2xl px-4 py-3 border border-white/5 mt-1">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                            <span className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-mono font-bold">Transaction Cost</span>
+                        </div>
+                        <div className="space-y-1.5 text-[11px] font-mono">
+                            <div className="flex items-center justify-between">
+                                <span className="text-white/55">Platform fee</span>
+                                <span className="text-white/85 tabular-nums">{parseFloat(formatEther(entryFee)).toFixed(2)} {currencySymbol}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-white/55">Gas reserve <span className="text-[#5BBB8C]/80">(refundable)</span></span>
+                                <span className="text-white/85 tabular-nums">{parseFloat(formatEther(SESSION_GAS_RESERVE)).toFixed(2)} {currencySymbol}</span>
+                            </div>
+                            {isTournament && tournamentAmount && Number(tournamentAmount) > 0 && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-white/55">
+                                        {tournamentType === 'buy-in' ? 'Your buy-in' : 'Initial prize pool'}
+                                    </span>
+                                    <span className="text-white/85 tabular-nums">{parseFloat(tournamentAmount || '0').toFixed(2)} {currencySymbol}</span>
+                                </div>
+                            )}
+                            <div className="h-px bg-white/10 my-1" />
+                            <div className="flex items-center justify-between">
+                                <span className="text-[#C49A3C]/75 uppercase text-[9px] tracking-[0.15em]">Total upfront</span>
+                                <span className="text-[#C49A3C] font-bold tabular-nums">
+                                    {parseFloat(formatEther(
+                                        entryFee + SESSION_GAS_RESERVE +
+                                        (isTournament && tournamentAmount ? parseEther(tournamentAmount || '0') : 0n)
+                                    )).toFixed(2)} {currencySymbol}
+                                </span>
+                            </div>
+                        </div>
+                        <p className="text-white/35 text-[9px] leading-relaxed mt-2 pt-2 border-t border-white/5">
+                            The {parseFloat(formatEther(SESSION_GAS_RESERVE)).toFixed(1)} {currencySymbol} gas reserve funds a session wallet for in-game transactions; whatever&apos;s left is returned to you when the game ends.
+                        </p>
+                    </div>
+                )}
 
                 <Button
                     onClick={() => {

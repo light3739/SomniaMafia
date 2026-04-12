@@ -93,7 +93,7 @@ export const GameUIOverlay: React.FC = () => {
                 <div className="fixed top-4 left-4 z-[100]">
                     <BackButton
                         to="/setup"
-                        label=""
+                        label={exitContext === 'tournament-game' ? 'Leave Tournament' : 'Leave Game'}
                         exitGame
                         exitContext={exitContext}
                         onExitGame={async () => { await forfeitGameOnChain(); }}
