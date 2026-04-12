@@ -18,14 +18,14 @@ export const SOMNIA_TESTNET = defineChain({
 export const SOMNIA_MAINNET = defineChain({
     id: 5031,
     name: 'Somnia',
-    nativeCurrency: { name: 'Somnia Token', symbol: 'STT', decimals: 18 },
+    nativeCurrency: { name: 'Somnia Token', symbol: 'SOMI', decimals: 18 },
     rpcUrls: {
         default: {
             http: ['https://api.infra.mainnet.somnia.network/'],
             webSocket: ['wss://api.infra.mainnet.somnia.network/ws'],
         },
     },
-    blockExplorers: { default: { name: 'Somnia Explorer', url: 'https://somnia.socialscan.io' } },
+    blockExplorers: { default: { name: 'Somnia Explorer', url: 'https://explorer.somnia.network' } },
     testnet: false,
 });
 
@@ -78,7 +78,7 @@ export const DEPLOYMENTS: Record<SupportedNetwork, DeploymentConfig> = {
     somnia_mainnet: {
         chain: SOMNIA_MAINNET,
         chainId: 5031,
-        explorer: 'https://somnia.socialscan.io',
+        explorer: 'https://explorer.somnia.network',
         contracts: {
             MafiaDiamond: process.env.NEXT_PUBLIC_MAFIA_DIAMOND || '',
             Groth16Verifier: process.env.NEXT_PUBLIC_GROTH16_VERIFIER || '',
