@@ -391,49 +391,6 @@ export const CreateLobby: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Fee breakdown — shown above the create button so players
-                    understand what they're signing. Platform fee is a
-                    non-refundable entry charge; gas reserve is put on a
-                    session wallet and returned at game end via drainSessionGas. */}
-                {isConnected && (
-                    <div className="w-full bg-[rgba(15,10,5,0.7)] backdrop-blur-xl rounded-2xl px-4 py-3 border border-white/5 mt-1">
-                        <div className="flex items-center justify-between gap-3 mb-2">
-                            <span className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-mono font-bold">Transaction Cost</span>
-                        </div>
-                        <div className="space-y-1.5 text-[11px] font-mono">
-                            <div className="flex items-center justify-between">
-                                <span className="text-white/55">Platform fee</span>
-                                <span className="text-white/85 tabular-nums">{parseFloat(formatEther(entryFee)).toFixed(2)} {currencySymbol}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-white/55">Gas reserve <span className="text-[#5BBB8C]/80">(refundable)</span></span>
-                                <span className="text-white/85 tabular-nums">{parseFloat(formatEther(SESSION_GAS_RESERVE)).toFixed(2)} {currencySymbol}</span>
-                            </div>
-                            {isTournament && tournamentAmount && Number(tournamentAmount) > 0 && (
-                                <div className="flex items-center justify-between">
-                                    <span className="text-white/55">
-                                        {tournamentType === 'buy-in' ? 'Your buy-in' : 'Initial prize pool'}
-                                    </span>
-                                    <span className="text-white/85 tabular-nums">{parseFloat(tournamentAmount || '0').toFixed(2)} {currencySymbol}</span>
-                                </div>
-                            )}
-                            <div className="h-px bg-white/10 my-1" />
-                            <div className="flex items-center justify-between">
-                                <span className="text-[#C49A3C]/75 uppercase text-[9px] tracking-[0.15em]">Total upfront</span>
-                                <span className="text-[#C49A3C] font-bold tabular-nums">
-                                    {parseFloat(formatEther(
-                                        entryFee + SESSION_GAS_RESERVE +
-                                        (isTournament && tournamentAmount ? parseEther(tournamentAmount || '0') : 0n)
-                                    )).toFixed(2)} {currencySymbol}
-                                </span>
-                            </div>
-                        </div>
-                        <p className="text-white/35 text-[9px] leading-relaxed mt-2 pt-2 border-t border-white/5">
-                            The {parseFloat(formatEther(SESSION_GAS_RESERVE)).toFixed(1)} {currencySymbol} gas reserve funds a session wallet for in-game transactions; whatever&apos;s left is returned to you when the game ends.
-                        </p>
-                    </div>
-                )}
-
                 <Button
                     onClick={() => {
                         if (!isConnected) {
@@ -461,6 +418,14 @@ export const CreateLobby: React.FC = () => {
                                     : "Create & Enter"
                     }
                 </Button>
+
+                {/* Compact fee hint under the create button. Non-refundable
+                    platform fee + refundable session-wallet gas reserve. */}
+                {isConnected && (
+                    <p className="text-center text-white/45 text-[11px] font-mono mt-2">
+                        Platform fee {parseFloat(formatEther(entryFee)).toFixed(2)} {currencySymbol} · Gas reserve (refundable) {parseFloat(formatEther(SESSION_GAS_RESERVE)).toFixed(2)} {currencySymbol}
+                    </p>
+                )}
             </div>
 
             <style jsx>{`
