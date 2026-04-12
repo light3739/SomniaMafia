@@ -53,6 +53,7 @@ export function useEventPoller(deps: PollerDeps) {
     const votingFinalizedTimerRef = refs.votingFinalizedTimerRef;
     const votingFinalizedInnerRef = useRef<NodeJS.Timeout | null>(null);
     const lastVotingFinalizedDayRef = useRef<string>('');
+    const lastVotingResultLogIdRef = useRef<string>('');
 
     // Helper: show voting results overlay with proper dedup + cleanup.
     // Guarded by dayCount to prevent re-triggering from stale events.
@@ -353,6 +354,7 @@ export function useEventPoller(deps: PollerDeps) {
 
                         // Show voting results overlay (reactive UI state)
                         if (!isHistorical) {
+                            lastVotingResultLogIdRef.current = vfId;
                             triggerVotingResultsOverlay();
                         }
                         break;
@@ -406,7 +408,10 @@ export function useEventPoller(deps: PollerDeps) {
             // preceding VoteCast 'log' messages have already been received (WS is
             // ordered) and their addLogs calls are batched with this one by React,
             // so gameState.logs contains every vote when the overlay first renders.
-            if (log?.eventType === 'VOTING_RESULT') {
+            // Dedup by log ID: watchContractEvent re-deliveries or parallel server
+            // instances can re-broadcast the same log — ignore exact duplicates.
+            if (log?.eventType === 'VOTING_RESULT' && log.id && log.id !== lastVotingResultLogIdRef.current) {
+                lastVotingResultLogIdRef.current = log.id;
                 triggerVotingResultsOverlay();
             }
         },
