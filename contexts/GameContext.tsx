@@ -155,17 +155,20 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             };
 
             if (existingIndex >= 0) {
-                // If the message is the same, don't trigger re-render
-                if (prev.logs[existingIndex].message === message && prev.logs[existingIndex].type === type) {
-                    return prev;
-                }
-                // Merge eventData so address fields (playerAddress/voterAddress/targetAddress)
-                // placed by one writer survive when the other writer (client vs server) pushes
-                // a canonical-nickname version of the same log id. Without this merge, the
-                // second write would clobber the first's address fields and downstream UI
-                // (elimination ceremony, voter avatars) would lose its address-based lookup.
+                // Always merge eventData — address fields (playerAddress /
+                // voterAddress / targetAddress) placed by one writer must survive
+                // when the other writer pushes the same log id. Previously the
+                // merge was gated on `message !== message`, but client pollEvents
+                // and the GM server often produce the IDENTICAL message ("Alice
+                // voted for Bob") after resolving the same nickname — so the
+                // gate held, the incoming richer eventData was dropped, and
+                // downstream UI lost its address-based voter lookup.
                 const existing = prev.logs[existingIndex];
                 const mergedEventData = { ...existing.eventData, ...eventData };
+                const hasNewFields = Object.keys(mergedEventData).length !== Object.keys(existing.eventData || {}).length;
+                if (existing.message === message && existing.type === type && !hasNewFields) {
+                    return prev; // truly nothing new, skip re-render
+                }
                 const newLogs = [...prev.logs];
                 newLogs[existingIndex] = { ...newEntry, eventData: mergedEventData };
                 return { ...prev, logs: newLogs };
@@ -188,16 +191,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (!existing) {
                     logMap.set(log.id, log);
                     hasChanges = true;
-                } else if (existing.message !== log.message || existing.type !== log.type) {
-                    // Merge eventData (see addLog comment): address fields from either
-                    // writer win — the new log provides the canonical message/type,
-                    // but we preserve richer eventData from whichever side had it.
-                    logMap.set(log.id, {
-                        ...log,
-                        eventData: { ...existing.eventData, ...log.eventData },
-                    });
-                    hasChanges = true;
+                    continue;
                 }
+                // Always merge eventData — gating this on `message !== message`
+                // dropped address fields when both client pollEvents and the GM
+                // server produced an identical canonical message (same sender
+                // + same target nickname resolution). See addLog for details.
+                const mergedEventData = { ...existing.eventData, ...log.eventData };
+                const hasNewFields = Object.keys(mergedEventData).length !== Object.keys(existing.eventData || {}).length;
+                const messageChanged = existing.message !== log.message || existing.type !== log.type;
+                if (!messageChanged && !hasNewFields) continue;
+                logMap.set(log.id, { ...log, eventData: mergedEventData });
+                hasChanges = true;
             }
 
             if (!hasChanges) return prev;
@@ -455,6 +460,67 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [gameState.phase, discussionState, setDiscussionState]);
 
+    // ==================== SMOOTH DISCUSSION TIME ====================
+    // Server pushes discussionState every 3-10s. If any UI ticks per-second
+    // (speaker timer on player spots, countdown in the discussion section),
+    // reading discussionState.timeRemaining directly makes the value jump in
+    // 3-10s increments and often skips the <=10s highlight window entirely.
+    //
+    // We interpolate locally here so there's ONE shared smooth value that
+    // every consumer can read (GameLayout player cards + DayPhase discussion
+    // section). Previously only DayPhase computed its own interpolation, so
+    // the player-spot timer rendered from raw server values and appeared
+    // broken.
+    //
+    // Monotonic clamp: never accept a server update that would move the
+    // displayed value BACKWARD unless the speaker actually changed (= new
+    // turn, fresh budget). Stale latency-delayed server pushes would
+    // otherwise rewind the UI by ~1s.
+    const [smoothDiscussionTimeRemaining, setSmoothDiscussionTimeRemaining] = useState<number>(0);
+    const discLastServerTimeRef = React.useRef<number>(0);
+    const discLastUpdateTsRef = React.useRef<number>(0);
+    const discLastSpeakerRef = React.useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!discussionState || discussionState.timeRemaining === undefined) {
+            setSmoothDiscussionTimeRemaining(0);
+            discLastServerTimeRef.current = 0;
+            discLastUpdateTsRef.current = 0;
+            discLastSpeakerRef.current = null;
+            return;
+        }
+        const serverValue = discussionState.timeRemaining;
+        const speaker = discussionState.currentSpeakerAddress || null;
+        const speakerChanged = speaker !== discLastSpeakerRef.current;
+        discLastSpeakerRef.current = speaker;
+
+        if (serverValue === discLastServerTimeRef.current && !speakerChanged) return;
+
+        const elapsed = Math.floor((Date.now() - discLastUpdateTsRef.current) / 1000);
+        const currentInterp = Math.max(0, discLastServerTimeRef.current - elapsed);
+
+        if (serverValue > currentInterp && !speakerChanged) {
+            // Stale server snap would rewind the UI — ignore, but re-anchor
+            // the interp baseline to the current displayed value.
+            discLastServerTimeRef.current = currentInterp;
+            discLastUpdateTsRef.current = Date.now();
+            return;
+        }
+
+        discLastServerTimeRef.current = serverValue;
+        discLastUpdateTsRef.current = Date.now();
+        setSmoothDiscussionTimeRemaining(serverValue);
+    }, [discussionState]);
+
+    useEffect(() => {
+        if (!discussionState?.active || discussionState?.finished) return;
+        const iv = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - discLastUpdateTsRef.current) / 1000);
+            setSmoothDiscussionTimeRemaining(Math.max(0, discLastServerTimeRef.current - elapsed));
+        }, 300);
+        return () => clearInterval(iv);
+    }, [discussionState?.active, discussionState?.finished]);
+
     // ==================== FETCH ROLE ON PHASE CHANGE ====================
     const prevPhaseForRoleRef = React.useRef<GamePhase>(GamePhase.LOBBY);
     useEffect(() => {
@@ -524,6 +590,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         lobbyPassword, setLobbyPassword,
         myPlayer, addLog,
         discussionState, setDiscussionState, fetchDiscussionState,
+        smoothDiscussionTimeRemaining,
 
         // Lobby
         createLobbyOnChain: lobby.createLobbyOnChain,
@@ -592,6 +659,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         refs.runtimeContractAddress, refs.runtimeChain, refs.publicClient, refs.stableAddress,
         lobbyPassword, myPlayer, addLog, setCurrentRoomId,
         discussionState, setDiscussionState, fetchDiscussionState,
+        smoothDiscussionTimeRemaining,
         lobby, shuffle, role, voting, night, chat, tournaments,
         endGame.endGameZK,
         endGame.fetchOnChainRoles, endGame.fetchGMRoles,

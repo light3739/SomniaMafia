@@ -135,6 +135,12 @@ export interface GameContextType {
     discussionState: DiscussionState | null;
     setDiscussionState: React.Dispatch<React.SetStateAction<DiscussionState | null>>;
     fetchDiscussionState: () => Promise<void>;
+    /**
+     * Locally-interpolated `discussionState.timeRemaining` that ticks down
+     * smoothly between server pushes. Use this (not raw discussionState
+     * .timeRemaining) for any per-second UI like speaker timers.
+     */
+    smoothDiscussionTimeRemaining: number;
 
     // Pull-based refund (PR1 DoS fallback UI)
     pendingRefundNative: bigint;

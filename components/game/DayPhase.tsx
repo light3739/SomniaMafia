@@ -43,7 +43,8 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         gameState, currentRoomId, myPlayer, startVotingOnChain, voteOnChain,
         forcePhaseTimeoutOnChain, addLog, isTxPending, selectedTarget,
         setSelectedTarget, isTestMode, setVoteMap, runtimeContractAddress,
-        showVotingResults, discussionState, setDiscussionState, fetchDiscussionState
+        showVotingResults, discussionState, setDiscussionState, fetchDiscussionState,
+        smoothDiscussionTimeRemaining: smoothTimeRemaining,
     } = useGameContext();
 
     const { chainId, address } = useAccount();
@@ -53,7 +54,6 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
 
     const [voteState, setVoteState] = useState({ myVote: null as string | null, voteCounts: new Map<string, number>(), hasVoted: false });
     const [isProcessing, setIsProcessing] = useState(false);
-    const [smoothTimeRemaining, setSmoothTimeRemaining] = useState<number>(0);
 
     const isVotingPhase = gameState.phase === GamePhase.VOTING;
     const isDayPhase = gameState.phase === GamePhase.DAY;
@@ -67,9 +67,6 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
     const latestDayCountRef = useRef(gameState.dayCount);
     const dayTimeoutRef = useRef(false);
     const votingStartedRef = useRef(false);
-
-    const lastServerTimeRef = useRef<number>(0);
-    const lastUpdateTsRef = useRef<number>(0);
 
     useEffect(() => { latestDayCountRef.current = gameState.dayCount; }, [gameState.dayCount]);
 
@@ -264,23 +261,11 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
         return () => clearTimeout(timer);
     }, [isDayPhase, discussionState?.active, gameState.players, myPlayer?.address, startDiscussion]);
 
-    // Update smooth timer when discussionState changes
-    useEffect(() => {
-        if (discussionState && discussionState.timeRemaining !== undefined && discussionState.timeRemaining !== lastServerTimeRef.current) {
-            lastServerTimeRef.current = discussionState.timeRemaining;
-            lastUpdateTsRef.current = Date.now();
-            setSmoothTimeRemaining(discussionState.timeRemaining);
-        }
-    }, [discussionState]);
-
-    useEffect(() => {
-        if (!discussionState?.active || discussionState?.finished) return;
-        const iv = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - lastUpdateTsRef.current) / 1000);
-            setSmoothTimeRemaining(Math.max(0, lastServerTimeRef.current - elapsed));
-        }, 300);
-        return () => clearInterval(iv);
-    }, [discussionState?.active, discussionState?.finished]);
+    // Smooth discussion-time interpolation with monotonic clamp now lives in
+    // GameContext as `smoothDiscussionTimeRemaining`, so GameLayout's player-
+    // spot speaker timer and this component's discussion UI share the exact
+    // same value. Reading it via `smoothTimeRemaining` alias at the top of
+    // this component.
 
     useEffect(() => {
         if (!isDayPhase || isTestMode || votingStartedRef.current || !gameState.phaseDeadline) return;
