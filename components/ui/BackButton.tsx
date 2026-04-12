@@ -15,7 +15,7 @@ interface BackButtonProps {
     /** Whether a transaction is currently pending */
     isLoading?: boolean;
     /** Context for the exit confirmation message */
-    exitContext?: 'lobby' | 'game' | 'tournament-game' | 'pre-game-abort';
+    exitContext?: 'lobby' | 'game' | 'tournament-game' | 'pre-game-abort' | 'dead-player';
 }
 
 export const BackButton: React.FC<BackButtonProps> = ({
@@ -153,7 +153,8 @@ export const BackButton: React.FC<BackButtonProps> = ({
                                     >
                                         {exitContext === 'lobby' ? 'Leave Lobby?'
                                             : exitContext === 'pre-game-abort' ? 'Abort Round?'
-                                                : 'Leave Game?'}
+                                                : exitContext === 'dead-player' ? 'Leave Game?'
+                                                    : 'Leave Game?'}
                                     </h3>
                                 </div>
 
@@ -165,6 +166,10 @@ export const BackButton: React.FC<BackButtonProps> = ({
                                 ) : exitContext === 'pre-game-abort' ? (
                                     <p className="text-white/75 text-[14px] leading-relaxed mb-6">
                                         The round hasn&apos;t started yet, so leaving <span className="text-[#E26B6B] font-semibold">cancels the whole round</span>. Every player (including anyone who went offline) gets a <span className="text-[#5BBB8C] font-semibold">full refund</span> — deposit and tournament buy-in back to their wallet.
+                                    </p>
+                                ) : exitContext === 'dead-player' ? (
+                                    <p className="text-white/75 text-[14px] leading-relaxed mb-6">
+                                        You&apos;re eliminated but the game is still going. If you <span className="text-[#5BBB8C] font-semibold">stay until the end</span>, your session gas will be <span className="text-[#5BBB8C] font-semibold">refunded automatically</span>. If you leave now, your gas <span className="text-[#E26B6B] font-semibold">will not be returned</span>.
                                     </p>
                                 ) : exitContext === 'tournament-game' ? (
                                     <p className="text-white/75 text-[14px] leading-relaxed mb-6">
