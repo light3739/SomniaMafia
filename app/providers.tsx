@@ -7,7 +7,7 @@ import { createConfig } from '@privy-io/wagmi';
 import { PrivyProvider } from '@privy-io/react-auth';
 import { WagmiProvider } from '@privy-io/wagmi';
 
-import { SOMNIA_TESTNET, ACTIVE_DEPLOYMENT } from '../contracts/config';
+import { somniaChain, ACTIVE_DEPLOYMENT } from '../contracts/config';
 import { MotionConfig } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { AudioProvider } from '../contexts/AudioContext';
@@ -17,16 +17,16 @@ import { ChainGate } from '../components/ui/ChainGate';
 
 export const config = createConfig({
     chains: [
-        SOMNIA_TESTNET,
+        somniaChain,
     ],
     transports: {
-        [SOMNIA_TESTNET.id]: fallback([
+        [somniaChain.id]: fallback([
             // WebSocket primary — real-time event subscriptions (watchContractEvent)
-            ...(SOMNIA_TESTNET.rpcUrls.default.webSocket || []).map((url: string) =>
+            ...(somniaChain.rpcUrls.default.webSocket || []).map((url: string) =>
                 webSocket(url, { reconnect: { delay: 2_000, attempts: 10 }, keepAlive: { interval: 25_000 } })
             ),
             // HTTP fallback — reliable for reads/writes, used when WS unavailable
-            ...SOMNIA_TESTNET.rpcUrls.default.http.map((url: string) => http(url)),
+            ...somniaChain.rpcUrls.default.http.map((url: string) => http(url)),
         ]),
     },
     batch: {
@@ -53,11 +53,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     accentColor: '#916A47',
                     logo: '/assets/somniayeal.png',
                 },
-                defaultChain: SOMNIA_TESTNET,
+                defaultChain: somniaChain,
                 embeddedWallets: {
                     createOnLogin: 'users-without-wallets',
                 } as any,
-                supportedChains: [SOMNIA_TESTNET],
+                supportedChains: [somniaChain],
                 externalWallets: {
                     coinbaseWallet: {
                         connectionOptions: 'eoaOnly',

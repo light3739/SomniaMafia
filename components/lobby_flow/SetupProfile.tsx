@@ -7,7 +7,7 @@ import { useNoirDialog } from '../../contexts/NoirDialogContext';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useBalance } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
-import { SOMNIA_TESTNET } from '../../contracts/config';
+import { somniaChain } from '../../contracts/config';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
@@ -194,7 +194,7 @@ export const SetupProfile: React.FC = () => {
 
     const { data: somniaBalance } = useBalance({
         address: embeddedWalletAddress as `0x${string}`,
-        chainId: SOMNIA_TESTNET.id,
+        chainId: somniaChain.id,
         query: { enabled: !!embeddedWalletAddress }
     });
 
@@ -202,7 +202,7 @@ export const SetupProfile: React.FC = () => {
 
     const { data: externalBalance } = useBalance({
         address: externalWallet?.address as `0x${string}` | undefined,
-        chainId: SOMNIA_TESTNET.id,
+        chainId: somniaChain.id,
         query: { enabled: !!externalWallet?.address }
     });
 
@@ -217,7 +217,7 @@ export const SetupProfile: React.FC = () => {
         if (!externalWallet || !embeddedWalletAddress) return;
         try {
             setIsFunding(true);
-            await externalWallet.switchChain(SOMNIA_TESTNET.id);
+            await externalWallet.switchChain(somniaChain.id);
             const provider = await externalWallet.getEthereumProvider() as any;
 
             const valueWei = parseEther(fundAmount);
@@ -251,7 +251,7 @@ export const SetupProfile: React.FC = () => {
         if (!privyEmbeddedWallet) return;
         try {
             setIsWithdrawing(true);
-            await privyEmbeddedWallet.switchChain(SOMNIA_TESTNET.id);
+            await privyEmbeddedWallet.switchChain(somniaChain.id);
             const provider = await privyEmbeddedWallet.getEthereumProvider() as any;
 
             const valueWei = parseEther(withdrawAmount);
