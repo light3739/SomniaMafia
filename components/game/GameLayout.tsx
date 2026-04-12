@@ -126,6 +126,23 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const nightAnnouncementPendingRef = useRef(false);
     const prevShowVotingResultsRef = useRef(false);
 
+    // Day lock for the voter-avatars overlay. We latch the day number at the
+    // moment showVotingResults flips true, so the log scan below uses THIS
+    // round's PLAYER_VOTED entries even if the contract advances dayCount
+    // (very fast on Somnia with 100ms blocks) while the 8s overlay is still
+    // playing. Without the lock, a mid-overlay DayStarted(N+1) would cause
+    // the scan to target Day N+1, finding zero votes and showing no voters.
+    // Refs are mutated during render here on purpose — same pattern used by
+    // GameLog's lockedVotingDayRef for the discussion timer / typewriter.
+    const votersLockedDayRef = useRef<number>(0);
+    const prevShowForVotersLockRef = useRef<boolean>(false);
+    if (showVotingResults && !prevShowForVotersLockRef.current) {
+        votersLockedDayRef.current = gameState.dayCount;
+    } else if (!showVotingResults) {
+        votersLockedDayRef.current = 0;
+    }
+    prevShowForVotersLockRef.current = showVotingResults;
+
     // --- Announcement Callbacks ---
     const handleMorningComplete = useCallback(() => {
         setShowMorningAnnouncement(false);
@@ -322,77 +339,97 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 {playerPositions.map((pos, index) => {
                     const p = visualPlayers[index]; if (!p) return null;
                     
-                    // Logic to find voters who voted FOR the current player spot `p`:
+                    // Build voters who voted FOR player `p` in the current
+                    // voting round. Data sources, in order of trust:
                     //
-                    // voteMap is the authoritative client-local source during the
-                    // voting-results overlay. It is populated by three reliable paths:
-                    //   1. voteOnChain (voter's own optimistic setVoteMap)
-                    //   2. useGameSignaling OPTIMISTIC_VOTE over LiveKit (~50ms)
-                    //   3. useEventPoller pollEvents handling VoteCast events
-                    // and is only cleared once showVotingResults flips back to false.
+                    //   1. gameState.logs PLAYER_VOTED entries — the only source
+                    //      that is BOTH day-scoped (located between DayStarted
+                    //      markers) AND cross-client consistent (Redis on the
+                    //      GM server is the canonical store, identical payloads
+                    //      reach every connected WS client). This is primary.
                     //
-                    // Previously we rebuilt the map from gameState.logs via name
-                    // matching against eventData.playerName / targetName. That path
-                    // was fragile: GM server logs don't carry voter/target addresses
-                    // in eventData, and when multiple local test accounts shared
-                    // similar/empty nicknames the name-based find() pointed voters at
-                    // the wrong player's card. Log-scan is kept as a supplement only
-                    // for any voter not already known via voteMap — using addresses
-                    // from eventData when available, with a name-match fallback.
+                    //   2. voteMap[myAddress] — self-optimistic fallback for the
+                    //      current player, used only until my own PLAYER_VOTED
+                    //      log lands in state. Never used for other players.
+                    //
+                    // voteMap is intentionally NOT used for other voters here.
+                    // It's populated by pollEvents' 10k-block backfill on first
+                    // mount plus LiveKit OPTIMISTIC_VOTE pushes, with no day
+                    // attribution — a voter who voted on Day N-1 but not yet on
+                    // Day N has their N-1 target sitting in voteMap, and we
+                    // can't tell the entry is stale without a day marker.
+                    // Trusting voteMap was the core cause of "some clients see
+                    // votes lagging by a day, some see them correctly" — each
+                    // client's voteMap converges on different data depending on
+                    // LiveKit / WS / pollEvents timing.
                     let voters: any[] = [];
                     if (showVotingResults) {
                         const resolvedVoteMap: Record<string, string> = {};
 
-                        // 1. PRIMARY: live voteMap (LiveKit + pollEvents + optimistic).
-                        //    Filter by `voter.hasVoted === true` — the contract
-                        //    resets this flag at the start of each voting round,
-                        //    so it's a reliable "voted in THIS round" marker.
-                        //    Without this filter, stale voteMap entries from a
-                        //    previous day (replayed by pollEvents's 10k-block
-                        //    backfill on fresh mount, or persisting across day
-                        //    boundaries when processedEventsRef gets GC'd) would
-                        //    display phantom voters on the current day's cards.
-                        Object.entries(voteMap).forEach(([voterAddr, targetAddr]) => {
-                            const voter = gameState.players.find(pl => pl.address.toLowerCase() === voterAddr.toLowerCase());
-                            if (!voter?.hasVoted) return; // stale entry from a prior round
-                            resolvedVoteMap[voterAddr.toLowerCase()] = targetAddr.toLowerCase();
-                        });
-
-                        // 2. SUPPLEMENT: scan current day's PLAYER_VOTED logs ONLY for
-                        //    voters not already in the live voteMap (rare edge case).
-                        let lastDayStartIdx = -1;
-                        for (let i = gameState.logs.length - 1; i >= 0; i--) {
-                            const l = gameState.logs[i];
-                            if (l.eventType === 'DayStarted' || l.message.includes('has begun')) {
-                                lastDayStartIdx = i;
-                                break;
+                        // Locate the DayStarted marker for the locked day,
+                        // then scan forward until the next DayStarted (or end).
+                        // Using the locked day rather than "last DayStarted"
+                        // protects against mid-overlay dayCount advances.
+                        const lockedDay = votersLockedDayRef.current;
+                        let dayStartIdx = -1;
+                        if (lockedDay > 0) {
+                            for (let i = 0; i < gameState.logs.length; i++) {
+                                const l = gameState.logs[i];
+                                if (l.eventType === 'DayStarted' && Number(l.eventData?.dayNumber) === lockedDay) {
+                                    dayStartIdx = i;
+                                    break;
+                                }
                             }
                         }
-                        const dayLogs = lastDayStartIdx >= 0 ? gameState.logs.slice(lastDayStartIdx) : gameState.logs;
-
-                        dayLogs.forEach(l => {
-                            if (l.eventType !== 'PLAYER_VOTED' || !l.eventData) return;
-                            // Address first — only client-written logs have these.
-                            let voterAddr = l.eventData.voterAddress?.toLowerCase();
-                            let targetAddr = l.eventData.targetAddress?.toLowerCase();
-                            if (!voterAddr || !targetAddr) {
-                                // Server logs have only names. Resolve both from the
-                                // live players list; require BOTH matches so an empty
-                                // or duplicate nickname doesn't misroute the vote.
-                                const vName = l.eventData.playerName;
-                                const tName = l.eventData.targetName;
-                                if (!vName || !tName) return;
-                                const voterMatches = gameState.players.filter(pl => pl.name === vName);
-                                const targetMatches = gameState.players.filter(pl => pl.name === tName);
-                                if (voterMatches.length !== 1 || targetMatches.length !== 1) return; // ambiguous
-                                voterAddr = voterMatches[0].address.toLowerCase();
-                                targetAddr = targetMatches[0].address.toLowerCase();
+                        // Fallback: if the locked day marker hasn't arrived in
+                        // state yet (rare timing gap), use the last DayStarted.
+                        if (dayStartIdx < 0) {
+                            for (let i = gameState.logs.length - 1; i >= 0; i--) {
+                                const l = gameState.logs[i];
+                                if (l.eventType === 'DayStarted' || l.message.includes('has begun')) {
+                                    dayStartIdx = i;
+                                    break;
+                                }
                             }
-                            // Only supplement, never override — voteMap wins.
-                            if (voterAddr && targetAddr && !resolvedVoteMap[voterAddr]) {
+                        }
+
+                        if (dayStartIdx >= 0) {
+                            for (let i = dayStartIdx + 1; i < gameState.logs.length; i++) {
+                                const l = gameState.logs[i];
+                                // Stop at the next day boundary so we never
+                                // leak votes from a later round.
+                                if (l.eventType === 'DayStarted' || l.message.match(/Day\s+\d+\s+has begun/i)) break;
+                                if (l.eventType !== 'PLAYER_VOTED' || !l.eventData) continue;
+
+                                // Prefer raw addresses when present (written
+                                // by client pollEvents and by GM server after
+                                // the 9ec3c00 logListener commit). Fall back
+                                // to unique name match for legacy logs only.
+                                let voterAddr = l.eventData.voterAddress?.toLowerCase();
+                                let targetAddr = l.eventData.targetAddress?.toLowerCase();
+                                if (!voterAddr || !targetAddr) {
+                                    const vName = l.eventData.playerName;
+                                    const tName = l.eventData.targetName;
+                                    if (!vName || !tName) continue;
+                                    const vMatches = gameState.players.filter(pl => pl.name === vName);
+                                    const tMatches = gameState.players.filter(pl => pl.name === tName);
+                                    if (vMatches.length !== 1 || tMatches.length !== 1) continue; // ambiguous — drop
+                                    voterAddr = vMatches[0].address.toLowerCase();
+                                    targetAddr = tMatches[0].address.toLowerCase();
+                                }
+                                // Later log for the same voter wins (vote change).
                                 resolvedVoteMap[voterAddr] = targetAddr;
                             }
-                        });
+                        }
+
+                        // Self-optimistic: if I've voted but my PLAYER_VOTED log
+                        // hasn't reached state yet (LiveKit / WS race), surface
+                        // my own vote from voteMap. Only for myself — never for
+                        // other players (see long comment above).
+                        const myAddr = myPlayer?.address?.toLowerCase();
+                        if (myAddr && voteMap[myAddr] && !resolvedVoteMap[myAddr]) {
+                            resolvedVoteMap[myAddr] = voteMap[myAddr].toLowerCase();
+                        }
 
                         voters = Object.entries(resolvedVoteMap)
                             .filter(([_, target]) => target === p.address.toLowerCase())
