@@ -531,11 +531,22 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     useEffect(() => {
         if (!discussionState?.active || discussionState?.finished) return;
-        const iv = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - discLastUpdateTsRef.current) / 1000);
-            setSmoothDiscussionTimeRemaining(Math.max(0, discLastServerTimeRef.current - elapsed));
-        }, 300);
-        return () => clearInterval(iv);
+        // RAF-based interpolation synced with paint cycle. Throttled to ~1fps
+        // (timer shows whole seconds). Eliminates the visual freeze/jump from
+        // setInterval being delayed by heavy React renders.
+        let rafId = 0;
+        let lastSec = -1;
+        const animate = () => {
+            const sec = Math.floor(Date.now() / 1000);
+            if (sec !== lastSec) {
+                lastSec = sec;
+                const elapsed = Math.floor((Date.now() - discLastUpdateTsRef.current) / 1000);
+                setSmoothDiscussionTimeRemaining(Math.max(0, discLastServerTimeRef.current - elapsed));
+            }
+            rafId = requestAnimationFrame(animate);
+        };
+        rafId = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(rafId);
     }, [discussionState?.active, discussionState?.finished]);
 
     // ==================== FETCH ROLE ON PHASE CHANGE ====================

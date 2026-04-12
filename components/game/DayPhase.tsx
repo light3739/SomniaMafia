@@ -163,10 +163,11 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                 address: myPlayer.address, roomId: Number(currentRoomId), walletClient,
                 buildMessage: ({ nonce, timestamp }) => buildDiscussionMessage({ roomId: currentRoomId.toString(), dayCount: gameState.dayCount, action: 'skip', nonce, timestamp, chainId })
             });
-            await fetch('/api/game/discussion', {
+            const res = await fetch('/api/game/discussion', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ roomId: currentRoomId.toString(), dayCount: gameState.dayCount, action: 'skip', playerAddress: myPlayer.address, signature: signed.signature, signerAddress: signed.signerAddress, nonce: signed.nonce, timestamp: signed.timestamp, chainId })
             });
+            if (!res.ok) { console.warn('[skipSpeech] Server rejected skip:', res.status); return; }
             await fetchDiscussionState();
             emitGameSignal({ type: 'OPTIMISTIC_SPEAKER', playerName: myPlayer.name || 'Unknown', playerAddress: myPlayer.address, roomId: currentRoomId.toString() });
         } catch (e) { console.error(e); } finally { setIsProcessing(false); }

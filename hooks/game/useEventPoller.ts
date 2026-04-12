@@ -401,12 +401,14 @@ export function useEventPoller(deps: PollerDeps) {
             if (log && log.message) {
                 addLogs([log]);
             }
-            // Note: earlier this handler tried to sync local voteMap from
-            // PLAYER_VOTED eventData addresses, but the GM server's logListener
-            // doesn't include voterAddress/targetAddress in the pushed eventData
-            // so that branch was dead. voteMap is populated via LiveKit
-            // OPTIMISTIC_VOTE (~50ms, useGameSignaling) and pollEvents VoteCast
-            // replay — both reliable without help from this handler.
+            // Trigger voting results overlay from the VotingFinalized LOG arrival
+            // rather than from the 'player-update' event. This guarantees all
+            // preceding VoteCast 'log' messages have already been received (WS is
+            // ordered) and their addLogs calls are batched with this one by React,
+            // so gameState.logs contains every vote when the overlay first renders.
+            if (log?.eventType === 'VOTING_RESULT') {
+                triggerVotingResultsOverlay();
+            }
         },
         'phase-change': (_data: unknown) => {
             const roomId = refs.currentRoomIdRef.current;
@@ -415,12 +417,8 @@ export function useEventPoller(deps: PollerDeps) {
         'player-update': (data: unknown) => {
             const roomId = refs.currentRoomIdRef.current;
             if (roomId) dataSync.refreshPlayersListDebounced(roomId);
-
-            // Handle VotingFinalized overlay immediately via WS push
-            const d = data as { trigger?: string } | undefined;
-            if (d?.trigger === 'VotingFinalized') {
-                triggerVotingResultsOverlay();
-            }
+            // VotingFinalized overlay is now triggered from the 'log' handler
+            // (see above) to guarantee all VoteCast logs are in state first.
         },
         'night-resolved': (_data: unknown) => {
             const roomId = refs.currentRoomIdRef.current;
