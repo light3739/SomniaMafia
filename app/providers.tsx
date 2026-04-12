@@ -16,11 +16,9 @@ import { WalletAutoConnector } from '../components/ui/WalletAutoConnector';
 import { ChainGate } from '../components/ui/ChainGate';
 
 export const config = createConfig({
-    chains: [
-        somniaChain,
-    ],
+    chains: [somniaChain] as const,
     transports: {
-        [somniaChain.id as number]: fallback([
+        [somniaChain.id]: fallback([
             // WebSocket primary — real-time event subscriptions (watchContractEvent)
             ...(somniaChain.rpcUrls.default.webSocket || []).map((url: string) =>
                 webSocket(url, { reconnect: { delay: 2_000, attempts: 10 }, keepAlive: { interval: 25_000 } })
@@ -28,7 +26,7 @@ export const config = createConfig({
             // HTTP fallback — reliable for reads/writes, used when WS unavailable
             ...somniaChain.rpcUrls.default.http.map((url: string) => http(url)),
         ]),
-    },
+    } as Record<number, ReturnType<typeof fallback>>,
     batch: {
         multicall: {
             // @ts-ignore
