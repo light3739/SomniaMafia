@@ -11,6 +11,7 @@ import { Key, Shield, Clock, Loader2, X, Fuel, Wallet, ChevronUp, ChevronDown, A
 import { useSessionKey } from '../../hooks/useSessionKey';
 import { useSendTransaction, usePublicClient, useAccount } from 'wagmi';
 import { parseEther, formatEther } from 'viem';
+import { somniaChain } from '../../contracts/config';
 import { Button } from '../ui/Button';
 import { createSessionWalletClient, loadSession } from '../../services/sessionKeyService';
 
@@ -39,7 +40,7 @@ export const SessionKeyBanner = React.memo(({
   } = useSessionKey(roomId);
   const { address: mainWalletAddress } = useAccount();
 
-  const publicClient = usePublicClient({ chainId: 50312 }); // Default to Somnia for balance check if not specified, but better use context if possible
+  const publicClient = usePublicClient({ chainId: somniaChain.id });
   const { sendTransactionAsync, isPending: isFunding } = useSendTransaction();
 
   const [sessionBalance, setSessionBalance] = useState<bigint>(0n);
