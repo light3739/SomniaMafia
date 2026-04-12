@@ -58,6 +58,21 @@ export function useEventPoller(deps: PollerDeps) {
     // Helper: show voting results overlay with proper dedup + cleanup.
     // Guarded by dayCount to prevent re-triggering from stale events.
     const triggerVotingResultsOverlay = useCallback(() => {
+        // Block stale triggers that arrive after we've already moved past voting.
+        // WS reconnects re-deliver historical VOTING_RESULT logs — without this
+        // check those logs would re-open the overlay during NIGHT or ENDED phase.
+        const currentPhase = refs.phaseRef.current;
+        if (
+            currentPhase === GamePhase.NIGHT ||
+            currentPhase === GamePhase.ENDED ||
+            currentPhase === GamePhase.LOBBY ||
+            currentPhase === GamePhase.SHUFFLING ||
+            currentPhase === GamePhase.REVEAL
+        ) {
+            console.log('[VotingFinalized] Skipping overlay — already in phase', currentPhase);
+            return;
+        }
+
         const currentDay = refs.dayCountRef.current;
         const dedupKey = `${refs.currentRoomIdRef.current}:${currentDay}`;
         if (lastVotingFinalizedDayRef.current === dedupKey) return; // already triggered this day+room

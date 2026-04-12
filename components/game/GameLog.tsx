@@ -154,15 +154,16 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         ? lockedVotingDayRef.current
         : 0;
 
-    // Use actualLoggedDay (latest day with a log marker) as the source of truth.
-    // dayCount from the contract can advance before the "Day N has begun" log
-    // arrives via WS — using dayCount here caused either "Waiting for events..."
-    // (dayStartIdx not found) or a flash of stale Day N-1 events (fallback to
-    // "Game started" marker). Staying on the last logged day until the marker
-    // arrives is visually correct and avoids both bugs.
+    // Use Math.max(actualLoggedDay, dayCount) as target after voting results end.
+    // dayCount advances on-chain (via fetchGameData after NightFinalized) BEFORE
+    // the DayStarted log arrives via WS/polling. Without the max(), targetDay
+    // stays on the old day after showVotingResults clears, causing the forward
+    // scan to pick up stale Day N-1 events mixed with Day N transition events.
+    // With the max(), if dayCount=N+1 but no DayStarted log exists yet,
+    // dayStartIdx=-1 → early return → "Waiting for events..." (correct behavior).
     const targetDay = (showVotingResults && lockedVotingDayRef.current > 0)
         ? lockedVotingDayRef.current
-        : (actualLoggedDay || 1);
+        : Math.max(actualLoggedDay || 1, dayCount || 1);
 
     // ─── dayEvents: single source of truth from eventType/eventData ──────
     // Scans ALL logs directly instead of relying on todayLogs slice.
@@ -409,9 +410,13 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 // Stop scanning past previous day boundary to avoid picking up wrong day's result
                 if (l.eventType === 'DayStarted' || l.message.match(/Day\s+\d+\s+has begun/i)) break;
             }
-            if (!votingResult && votingStarted) {
+            // Only warn when a result is genuinely missing: during the voting
+            // results overlay (we *must* have the log by then) or after night
+            // has fallen (voting should have concluded). Suppress during active
+            // VOTING phase where votingStarted=true but no result yet is normal.
+            if (!votingResult && votingStarted && (showVotingResults || nightFallen)) {
                 console.warn('[GameLog] No VOTING_RESULT found after voting started!',
-                    { logsCount: logs.length, targetDay, showVotingResults,
+                    { logsCount: logs.length, targetDay, showVotingResults, nightFallen,
                       lastFewLogs: logs.slice(-5).map(l => ({ et: l.eventType, msg: l.message.slice(0, 50), ed: l.eventData })) });
             }
         }

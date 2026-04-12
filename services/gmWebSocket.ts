@@ -54,6 +54,7 @@ class GmWebSocket {
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectAttempt = 0;
   private authRetryCount = 0;
+  private signFailCount = 0;
   private maxReconnectDelay = 30_000;
   private intentionalClose = false;
 
@@ -89,6 +90,7 @@ class GmWebSocket {
     this.currentRoom = { roomId, chainId, playerAddress };
     this.intentionalClose = false;
     this.reconnectAttempt = 0;
+    this.signFailCount = 0;
     this.connect();
   }
 
@@ -214,9 +216,24 @@ class GmWebSocket {
         } catch (err) {
           console.error('[GmWebSocket] Failed to sign join message:', err);
           // Don't send unsigned join — server will reject with 4001.
-          // Close and schedule reconnect (session key may not be ready yet).
-          this.ws?.close(1000, 'Sign failed');
-          this.scheduleReconnect();
+          // Retry a few times (session key may not be ready yet / wallet
+          // switching race condition). After 3 sign failures give up to avoid
+          // an infinite reconnect loop caused by a permanently wrong wallet
+          // address (e.g. an unrelated key imported into the browser wallet).
+          this.signFailCount++;
+          // Guard: don't close an already-closed WS — that triggers the
+          // "WebSocket is closed before the connection is established" warning.
+          if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+            this.ws.close(1000, 'Sign failed');
+          }
+          if (this.signFailCount <= 3) {
+            const delay = 5000 * this.signFailCount; // 5s, 10s, 15s
+            console.warn(`[GmWebSocket] Sign failed, retrying in ${delay}ms (${this.signFailCount}/3)`);
+            this.reconnectTimer = setTimeout(() => this.connect(), delay);
+          } else {
+            console.warn('[GmWebSocket] Sign failed 3× — giving up. Re-join required.');
+            this.signFailCount = 0;
+          }
           return;
         }
       }
