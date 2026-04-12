@@ -178,7 +178,12 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 break;
             }
         }
-        const dayLogs = dayStartIdx >= 0 ? gameState.logs.slice(dayStartIdx) : gameState.logs;
+        // If DayStarted log hasn't arrived yet, scanning all logs would find a
+        // VOTING_RESULT from a previous day and show the wrong elimination ceremony.
+        // Return early — the effect re-runs automatically when gameState.logs updates
+        // (i.e. when pollServerLogs delivers the missing DayStarted entry).
+        if (dayStartIdx < 0) return;
+        const dayLogs = gameState.logs.slice(dayStartIdx);
 
         for (let i = dayLogs.length - 1; i >= 0; i--) {
             const l = dayLogs[i];
