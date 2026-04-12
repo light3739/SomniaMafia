@@ -65,11 +65,15 @@ export const GameUIOverlay: React.FC = () => {
     // Show the exit button in both, with different confirmation copy.
     const showExitButton = isPreDayPhase || isMidGamePhase;
 
-    const exitContext: 'tournament-game' | 'game' | 'pre-game-abort' = isPreDayPhase
+    const isDeadMidGame = isMidGamePhase && myPlayer && !myPlayer.isAlive;
+
+    const exitContext: 'tournament-game' | 'game' | 'pre-game-abort' | 'dead-player' = isPreDayPhase
         ? 'pre-game-abort'
-        : gameState.isTournament
-            ? 'tournament-game'
-            : 'game';
+        : isDeadMidGame
+            ? 'dead-player'
+            : gameState.isTournament
+                ? 'tournament-game'
+                : 'game';
 
     return (
         <>
@@ -96,7 +100,7 @@ export const GameUIOverlay: React.FC = () => {
                         label={exitContext === 'tournament-game' ? 'Leave Tournament' : 'Leave Game'}
                         exitGame
                         exitContext={exitContext}
-                        onExitGame={async () => { await forfeitGameOnChain(); }}
+                        onExitGame={isDeadMidGame ? undefined : async () => { await forfeitGameOnChain(); }}
                         isLoading={isTxPending}
                     />
                 </div>
