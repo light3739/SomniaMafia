@@ -171,8 +171,13 @@ export const WaitingRoom: React.FC = () => {
         }
     }, [gameState.phase, router]);
 
-    // 2. Room creator (first player) can start the game
-    const isRoomCreator = gameState.players[0]?.address.toLowerCase() === myPlayer?.address.toLowerCase();
+    // 2. Room creator authorization — use contract-provided host, not players[0].
+    //    players[0] is fragile: it assumes getPlayers returns in join order AND
+    //    that the host is still the first entry after any leave/kick sequence.
+    //    gameState.host mirrors Room.host from the diamond and is already
+    //    lowercased in useGameDataSync, so the comparison just lowercases the
+    //    client wallet.
+    const isRoomCreator = !!gameState.host && gameState.host === myPlayer?.address.toLowerCase();
     const isParticipant = gameState.players.some(p => p.address.toLowerCase() === myPlayer?.address.toLowerCase());
 
     // V4: Min 4 players for proper mafia game

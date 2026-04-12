@@ -347,7 +347,7 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
                                 smoothTimeRemaining={smoothTimeRemaining} currentSpeaker={currentSpeaker}
                                 currentRoomId={currentRoomId} myPlayer={myPlayer}
                                 isProcessing={isProcessing} onSkip={skipSpeech}
-                                isHost={gameState.players.length > 0 && myPlayer?.address?.toLowerCase() === gameState.players[0]?.address?.toLowerCase()}
+                                isHost={!!gameState.host && myPlayer?.address?.toLowerCase() === gameState.host}
                             />
                         ) : (isVotingPhase || isNightTransition) ? (
                             <VotingSection

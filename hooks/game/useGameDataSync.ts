@@ -107,8 +107,13 @@ export function useGameDataSync(deps: DataSyncDeps) {
             let committedCount: number, revealedCount: number, phaseDeadline: number, maxPlayers: number;
             let tournamentId: bigint = 0n;
             let depositPool: bigint = 0n;
+            let host: string | null = null;
 
             if (Array.isArray(roomData)) {
+                // Room tuple layout: [0] id, [1] host, [2] name, [3] phase, [4] maxPlayers,
+                // [5] playersCount, [6] aliveCount, [7] dayCount, [8] currentShufflerIndex,
+                // [9] lastActionTimestamp, [10] phaseDeadline, ..., [16] depositPool, [19] tournamentId.
+                host = roomData[1] ? String(roomData[1]).toLowerCase() : null;
                 phase = Number(roomData[3]) as GamePhase;
                 aliveCount = Number(roomData[6]);
                 dayCount = Number(roomData[7]);
@@ -119,6 +124,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
                 depositPool = BigInt(roomData[16] || 0);
                 tournamentId = BigInt(roomData[19] || 0);
             } else {
+                host = roomData.host ? String(roomData.host).toLowerCase() : null;
                 phase = Number(roomData.phase) as GamePhase;
                 dayCount = Number(roomData.dayCount);
                 aliveCount = Number(roomData.aliveCount);
@@ -136,7 +142,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
                 phaseDeadline,
                 mafiaCommittedCount: Number(mafiaCommitted),
                 mafiaRevealedCount: Number(mafiaRevealed),
-                tournamentId, maxPlayers, depositPool,
+                tournamentId, maxPlayers, depositPool, host,
             };
         } catch (e: any) {
             console.error("[FetchGameData] Error:", e);
@@ -172,7 +178,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
             const {
                 rawPlayers, phase, dayCount, revealedCount,
                 mafiaCommittedCount, mafiaRevealedCount, phaseDeadline,
-                tournamentId, aliveCount, maxPlayers, depositPool,
+                tournamentId, aliveCount, maxPlayers, depositPool, host,
             } = gameData;
 
             console.log('[DEBUG refreshPlayersList] rawPlayers count:', rawPlayers.length, 'wallets:', rawPlayers.map((p: any) => p.wallet));
@@ -325,6 +331,7 @@ export function useGameDataSync(deps: DataSyncDeps) {
                     buyIn,
                     paymentToken,
                     maxPlayers,
+                    host,
                     winner: prev.winner || resolvedWinner
                 };
             });

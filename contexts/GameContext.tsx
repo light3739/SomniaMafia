@@ -55,6 +55,7 @@ const INITIAL_GAME_STATE: GameState = {
     mafiaRevealedCount: 0,
     phaseDeadline: 0,
     winner: null,
+    host: null,
     maxPlayers: 16
 };
 
