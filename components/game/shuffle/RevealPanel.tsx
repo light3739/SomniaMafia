@@ -27,7 +27,7 @@ export const RevealPanel: React.FC<RevealPanelProps> = ({
     const roleConfig = revealState.myRole ? RoleConfig[revealState.myRole] : RoleConfig[Role.UNKNOWN];
 
     return (
-        <div className="flex-1 flex flex-col items-center justify-center p-8">
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8">
             <AnimatePresence mode="wait">
                 {(!revealState.isRevealed && !isTestMode) ? (
                     // Loading state
@@ -40,8 +40,8 @@ export const RevealPanel: React.FC<RevealPanelProps> = ({
                     >
                         {/* ASCII Spinner */}
                         <div className="h-14 flex items-center justify-center mb-6">
-                            <div className="relative w-14 h-14 flex items-center justify-center border border-white/5 bg-[#0f0e10] rounded-sm">
-                                <AsciiSpinner className="text-[#c8a84b] text-2xl" />
+                            <div className="relative w-14 h-14 flex items-center justify-center border border-white/10 bg-black/30 rounded-md">
+                                <AsciiSpinner className="text-[#C49A3C] text-2xl" />
                             </div>
                         </div>
                         <div>
@@ -49,11 +49,11 @@ export const RevealPanel: React.FC<RevealPanelProps> = ({
                             <p className="font-mono text-[16px] tracking-wide text-white/80 uppercase">
                                 <TypewriterText text="VERIFYING_IDENTITY" />
                                 <motion.span
-                                    className="ml-1 text-[#c8a84b]"
+                                    className="ml-1 text-[#C49A3C]"
                                     animate={{ opacity: [1, 1, 0, 0, 1] }}
-                                    transition={{ 
-                                        duration: 1, 
-                                        repeat: Infinity, 
+                                    transition={{
+                                        duration: 1,
+                                        repeat: Infinity,
                                         times: [0, 0.5, 0.51, 0.99, 1],
                                         ease: "linear"
                                     }}
@@ -63,7 +63,7 @@ export const RevealPanel: React.FC<RevealPanelProps> = ({
                             </p>
                         </div>
                         <div className="w-full max-w-[220px]">
-                            <div className="h-[2px] bg-[#c8a84b]/40 rounded-full" />
+                            <div className="h-[2px] bg-[#C49A3C]/40 rounded-full" />
                         </div>
                     </motion.div>
                 ) : (
@@ -73,7 +73,7 @@ export const RevealPanel: React.FC<RevealPanelProps> = ({
                         initial={{ opacity: 0, rotateY: 90 }}
                         animate={{ opacity: 1, rotateY: 0 }}
                         transition={{ type: "spring", duration: 0.8 }}
-                        className={`bg-gradient-to-br ${roleConfig.bgColor} w-[240px] aspect-[3/4] rounded-sm border ${roleConfig.borderColor} ring-1 ${roleConfig.ringColor} p-6 shadow-[0_30px_60px_rgba(0,0,0,0.98)] relative overflow-hidden flex flex-col justify-between`}
+                        className={`bg-gradient-to-br ${roleConfig.bgColor} w-[200px] sm:w-[240px] aspect-[3/4] rounded-xl border ${roleConfig.borderColor} ring-1 ${roleConfig.ringColor} p-4 sm:p-6 shadow-[0_30px_60px_rgba(0,0,0,0.98)] relative overflow-hidden flex flex-col justify-between`}
                     >
                         {/* SVG Noise */}
                         <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-[0.035]" xmlns="http://www.w3.org/2000/svg">
@@ -106,7 +106,7 @@ export const RevealPanel: React.FC<RevealPanelProps> = ({
 
                         {/* Pulsing border */}
                         <motion.div
-                            className={`absolute inset-0 border ${roleConfig.borderColor}`}
+                            className={`absolute inset-0 border rounded-xl ${roleConfig.borderColor}`}
                             animate={{ opacity: [0.2, 0.5, 0.2] }}
                             transition={{ duration: 4, repeat: Infinity }}
                         />
@@ -153,9 +153,9 @@ export const RevealPanel: React.FC<RevealPanelProps> = ({
                                     onClick={onConfirm}
                                     disabled={isProcessing || isTxPending}
                                     whileTap={{ scale: 0.98 }}
-                                    className={`w-full py-2.5 px-4 rounded-sm border font-[Cinzel] text-[9px] tracking-[0.25em] uppercase transition-all duration-300
-                                        border-white/10 text-white/50
-                                        bg-transparent hover:bg-white/[0.05] hover:border-white/30 hover:text-white/80
+                                    className={`w-full py-2.5 px-4 rounded-md border font-[Cinzel] text-[9px] tracking-[0.25em] uppercase transition-all duration-300
+                                        border-white/15 text-white/60
+                                        bg-transparent hover:bg-[#C49A3C]/10 hover:border-[#C49A3C]/50 hover:text-[#C49A3C]
                                         disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
                                 >
                                     {(isProcessing || isTxPending)

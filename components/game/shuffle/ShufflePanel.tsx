@@ -26,7 +26,7 @@ export const ShufflePanel: React.FC<ShufflePanelProps> = ({
     shuffleState, progress, isProcessing, isTxPending, currentShufflerName, totalPlayers, onRetry
 }) => {
     return (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 gap-12">
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 gap-6 sm:gap-12">
             {/* Status Section */}
             <div className="text-center">
                 <p className="font-mono text-[10px] tracking-[0.35em] text-white/35 uppercase mb-3.5">&gt; STATUS</p>
@@ -49,11 +49,11 @@ export const ShufflePanel: React.FC<ShufflePanelProps> = ({
                     </p>
                     {!shuffleState.isFailed && (
                         <motion.div
-                            className="w-2 h-4 bg-[#c8a84b]"
+                            className="w-2 h-4 bg-[#C49A3C]"
                             animate={{ opacity: [1, 1, 0, 0, 1] }}
-                            transition={{ 
-                                duration: 1, 
-                                repeat: Infinity, 
+                            transition={{
+                                duration: 1,
+                                repeat: Infinity,
                                 times: [0, 0.5, 0.51, 0.99, 1],
                                 ease: "linear"
                             }}
@@ -71,15 +71,15 @@ export const ShufflePanel: React.FC<ShufflePanelProps> = ({
                         return (
                             <div
                                 key={i}
-                                className={`w-8 h-11 border text-[12px] flex items-center justify-center rounded-[2px] transition-all duration-500 overflow-hidden relative ${
-                                    isDone 
-                                        ? 'border-[#c8a84b] text-[#c8a84b] bg-[#c8a84b]/20 shadow-[0_0_12px_rgba(200,168,75,0.25)]'
+                                className={`w-8 h-11 border text-[12px] flex items-center justify-center rounded-md transition-all duration-500 overflow-hidden relative ${
+                                    isDone
+                                        ? 'border-[#C49A3C] text-[#C49A3C] bg-[#C49A3C]/20 shadow-[0_0_12px_rgba(196,154,60,0.25)]'
                                         : isActive
-                                            ? 'border-[#c8a84b] text-[#c8a84b] bg-[#c8a84b]/5 animate-pulse'
+                                            ? 'border-[#C49A3C] text-[#C49A3C] bg-[#C49A3C]/5 animate-pulse'
                                             : 'border-white/10 text-white/10 bg-[#13120f]/50'
                                 }`}
                             >
-                                {(isDone || isActive) && <div className={`absolute top-0 left-0 right-0 h-[3px] bg-[#c8a84b] ${isActive ? 'animate-pulse' : ''}`} />}
+                                {(isDone || isActive) && <div className={`absolute top-0 left-0 right-0 h-[3px] bg-[#C49A3C] ${isActive ? 'animate-pulse' : ''}`} />}
                                 <span className="font-mono">?</span>
                             </div>
                         );
@@ -90,7 +90,7 @@ export const ShufflePanel: React.FC<ShufflePanelProps> = ({
             {shuffleState.isFailed && shuffleState.isMyTurn && (
                 <Button
                     variant="ghost"
-                    className="text-[10px] font-mono tracking-[0.3em] h-10 px-8 border-[#8B0000]/40 text-[#8B0000] hover:bg-[#8B0000]/10 uppercase rounded-sm"
+                    className="text-[10px] font-mono tracking-[0.3em] h-10 px-8 border border-[#8B0000]/40 text-[#8B0000] hover:bg-[#8B0000]/10 uppercase rounded-md"
                     onClick={onRetry}
                 >
                     <RefreshCw className="w-3.5 h-3.5 mr-2" />

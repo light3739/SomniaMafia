@@ -371,48 +371,67 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
     const keysCollected = gameState.players.filter(p => p.hasConfirmedRole).length;
 
     return (
-        <div className="w-full h-[100dvh] flex flex-col items-center justify-center overflow-hidden p-4 pointer-events-auto">
-            <div className="w-full max-w-[820px] bg-[#09080b] rounded-sm border border-white/5 shadow-[0_45px_100px_rgba(0,0,0,0.95)] flex flex-col overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.05] bg-[#0f0e10]">
-                    <div className="flex items-center gap-3">
-                        <span className="font-mono text-[11px] tracking-[0.4em] text-white/50 uppercase">CASE FILE</span>
-                        <span className="text-white/50">//</span>
-                        <span className="font-mono text-[11px] tracking-[0.3em] text-[#c8a84b] uppercase font-bold">ROOM_{currentRoomId?.toString() || '???'}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2.5">
-                            <div className="w-1.5 h-1.5 bg-[#c8a84b] rounded-full animate-pulse" />
-                            <span className="font-mono text-[11px] tracking-[0.3em] text-[#c8a84b] uppercase font-semibold">{isReveal ? 'ROLE REVEAL' : 'SHUFFLE PHASE'}</span>
+        // Outer is a scrollable backdrop. The inner wrapper uses `min-h-full` +
+        // `justify-center` so the card is vertically centered when it fits and
+        // the whole thing scrolls naturally when viewport height < card height.
+        // Previously the outer was `h-[100dvh] ... overflow-hidden` — on short
+        // windows (landscape phones, resized desktop windows, older laptops)
+        // the card's bottom (with the Confirm button) and the tail of the
+        // SUSPECTS list were clipped with no way to reach them.
+        <div className="fixed inset-0 w-full h-[100dvh] overflow-y-auto overscroll-contain pointer-events-auto">
+            <div className="min-h-full w-full flex flex-col items-center justify-center p-2 sm:p-4">
+                <div className="w-full max-w-[820px] bg-[#09080b] rounded-2xl border border-white/10 shadow-[0_45px_100px_rgba(0,0,0,0.95)] flex flex-col overflow-hidden">
+                    <div className="flex items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4 border-b border-white/10 bg-[#0f0e10]">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                            <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.3em] sm:tracking-[0.4em] text-white/50 uppercase">CASE FILE</span>
+                            <span className="text-white/50 hidden sm:inline">//</span>
+                            <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.2em] sm:tracking-[0.3em] text-[#C49A3C] uppercase font-bold truncate">ROOM_{currentRoomId?.toString() || '???'}</span>
                         </div>
-                        {isReveal ? (
-                            <span className="font-mono text-[11px] tracking-[0.2em] text-white/60"><span className="text-[#c8a84b]">{keysCollected}</span>/{totalPlayers} CONFIRMED</span>
-                        ) : (
-                            <button onClick={forceSync} disabled={isSyncing} className="text-white/50 hover:text-[#c8a84b] transition-colors"><RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} /></button>
-                        )}
-                    </div>
-                </div>
-                <div className="flex min-h-[460px] bg-[#09080a]">
-                    <div className="w-[220px] shrink-0 border-r border-white/[0.05] flex flex-col bg-[#0f0e10]/50">
-                        <div className="px-5 py-3.5 border-b border-white/[0.05] flex items-center justify-between">
-                            <span className="font-mono text-[10px] tracking-[0.3em] text-white/50 uppercase">SUSPECTS</span>
-                        </div>
-                        <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
-                            {gameState.players.map((player, index) => (
-                                <SuspectRow key={player.address} player={player} index={index} isReveal={isReveal} isMe={player.address.toLowerCase() === address?.toLowerCase()} shuffleState={shuffleState} />
-                            ))}
-                        </div>
-                    </div>
-                    <AnimatePresence mode="wait">
-                        <motion.div key={isReveal ? 'reveal' : 'shuffle'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex">
+                        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                            <div className="flex items-center gap-2 sm:gap-2.5">
+                                <div className="w-1.5 h-1.5 bg-[#C49A3C] rounded-full animate-pulse" />
+                                <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.2em] sm:tracking-[0.3em] text-[#C49A3C] uppercase font-semibold">{isReveal ? 'ROLE REVEAL' : 'SHUFFLE'}</span>
+                            </div>
                             {isReveal ? (
-                                <RevealPanel revealState={revealState} isProcessing={isRevealProcessing} isTxPending={isTxPending} onConfirm={handleConfirmRole} allConfirmed={keysCollected >= totalPlayers} isTestMode={isTestMode} />
+                                <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.15em] sm:tracking-[0.2em] text-white/60"><span className="text-[#C49A3C]">{keysCollected}</span>/{totalPlayers}</span>
                             ) : (
-                                <ShufflePanel shuffleState={shuffleState} progress={progress} isProcessing={isShuffleProcessing} isTxPending={isTxPending} currentShufflerName={gameState.players[shuffleState.currentShufflerIndex]?.name} totalPlayers={totalPlayers} onRetry={() => { setShuffleState(p => ({ ...p, isFailed: false, retryCount: 0 })); handleMyTurn(); }} />
+                                <button onClick={forceSync} disabled={isSyncing} className="text-white/50 hover:text-[#C49A3C] transition-colors"><RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} /></button>
                             )}
-                        </motion.div>
-                    </AnimatePresence>
+                        </div>
+                    </div>
+                    {/* Body: stacks on narrow screens (sidebar → top strip), side-by-side on sm+.
+                        sm:min-h-[460px] guarantees the RevealPanel/ShufflePanel
+                        have enough vertical space for the role card + confirm
+                        button in the desktop row layout. Without this, the
+                        flex-1 motion wrapper collapses to near-zero height,
+                        the centered role card overflows the card's
+                        overflow-hidden bound, and the bottom half of the panel
+                        (description + button) visually disappears. On narrow
+                        mobile the body stacks with flex-col and sizes to
+                        content — no forced minimum so the layout stays compact. */}
+                    <div className="flex flex-col sm:flex-row sm:min-h-[460px] bg-[#09080a]">
+                        <div className="w-full sm:w-[220px] shrink-0 border-b sm:border-b-0 sm:border-r border-white/10 flex flex-col bg-[#0f0e10]/50">
+                            <div className="px-4 sm:px-5 py-2.5 sm:py-3.5 border-b border-white/10 flex items-center justify-between">
+                                <span className="font-mono text-[10px] tracking-[0.3em] text-white/50 uppercase">SUSPECTS</span>
+                            </div>
+                            <div className="flex-1 flex flex-col max-h-[160px] sm:max-h-none overflow-y-auto custom-scrollbar">
+                                {gameState.players.map((player, index) => (
+                                    <SuspectRow key={player.address} player={player} index={index} isReveal={isReveal} isMe={player.address.toLowerCase() === address?.toLowerCase()} shuffleState={shuffleState} />
+                                ))}
+                            </div>
+                        </div>
+                        <AnimatePresence mode="wait">
+                            <motion.div key={isReveal ? 'reveal' : 'shuffle'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex">
+                                {isReveal ? (
+                                    <RevealPanel revealState={revealState} isProcessing={isRevealProcessing} isTxPending={isTxPending} onConfirm={handleConfirmRole} allConfirmed={keysCollected >= totalPlayers} isTestMode={isTestMode} />
+                                ) : (
+                                    <ShufflePanel shuffleState={shuffleState} progress={progress} isProcessing={isShuffleProcessing} isTxPending={isTxPending} currentShufflerName={gameState.players[shuffleState.currentShufflerIndex]?.name} totalPlayers={totalPlayers} onRetry={() => { setShuffleState(p => ({ ...p, isFailed: false, retryCount: 0 })); handleMyTurn(); }} />
+                                )}
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
+                    {/* Footer removed for branding cleanup */}
                 </div>
-                {/* Footer removed for branding cleanup */}
             </div>
         </div>
     );
