@@ -237,6 +237,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // These are read by WS callbacks (triggerVotingResultsOverlay) that can fire
     // between render and useEffect execution on Somnia's 100ms blocks.
     // Moving them to the render body ensures they are always current.
+    // Must remain unconditional — written every render so WS callbacks always see current value.
     refs.phaseRef.current = gameState.phase;
     refs.dayCountRef.current = gameState.dayCount;
     // playersRef is only read inside pollEvents intervals — useEffect timing is fine.

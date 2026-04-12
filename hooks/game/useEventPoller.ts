@@ -409,6 +409,20 @@ export function useEventPoller(deps: PollerDeps) {
         });
     }, [refs, pollEvents, dataSync]);
 
+    // === WS RECONNECT: fetch missed logs immediately ===
+    // gm-ws-reconnected fires from gmWebSocket.ts when the WS connection
+    // is re-established after a gap. useGameDataSync handles game state
+    // refresh on reconnect, but pollServerLogs is not called there —
+    // leaving up to 5s before the next scheduled poll fills the log gap.
+    useEffect(() => {
+        const onReconnect = () => {
+            console.log('[EventPoller] WS reconnected — fetching missed server logs immediately');
+            pollServerLogs();
+        };
+        window.addEventListener('gm-ws-reconnected', onReconnect);
+        return () => window.removeEventListener('gm-ws-reconnected', onReconnect);
+    }, [pollServerLogs]);
+
     // === WEBSOCKET EVENT HANDLERS ===
     // GM server pushes logs, phase changes, and player updates via WS.
     // When connected, we skip the polling interval entirely.
