@@ -44,30 +44,41 @@ button:disabled,
 /* Custom Scrollbar for Mafia Chat and Lists */
 .scrollbar-thin::-webkit-scrollbar,
 .custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
+  width: 4px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-track,
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(145, 106, 71, 0.05);
+  background: transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb,
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(145, 106, 71, 0.3);
-  border-radius: 10px;
+  background: rgba(196, 154, 60, 0.15);
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.scrollbar-thin:hover::-webkit-scrollbar-thumb,
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(196, 154, 60, 0.35);
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(145, 106, 71, 0.5);
+  background: rgba(196, 154, 60, 0.5);
 }
 
 /* Firefox Support for Scrollbars */
 .scrollbar-thin,
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(145, 106, 71, 0.3) rgba(145, 106, 71, 0.05);
+  scrollbar-color: rgba(196, 154, 60, 0.15) transparent;
+}
+
+.scrollbar-thin:hover,
+.custom-scrollbar:hover {
+  scrollbar-color: rgba(196, 154, 60, 0.35) transparent;
 }
 
 /* RainbowKit Custom Overrides */

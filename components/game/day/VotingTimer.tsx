@@ -134,8 +134,27 @@ export const VotingTimer: React.FC = React.memo(() => {
         };
 
         tick();
-        const interval = setInterval(tick, 1000);
-        return () => clearInterval(interval);
+
+        // Hybrid timer: RAF for smooth display, setInterval for background tabs.
+        // RAF stops in background tabs, but auto-vote must still fire — the
+        // 2s setInterval covers that. Dual tick() calls are safe: setState
+        // bails on same value, auto-vote is guarded by hasAutoVotedRef.
+        // RAF is throttled to ~1fps via lastRafSecRef (timer shows seconds,
+        // not ms — no need to tick 60 times per second).
+        const lastRafSecRef = { current: -1 };
+        const rafRef = { current: 0 };
+        const animate = () => {
+            const sec = Math.floor(Date.now() / 1000);
+            if (sec !== lastRafSecRef.current) {
+                lastRafSecRef.current = sec;
+                tick();
+            }
+            rafRef.current = requestAnimationFrame(animate);
+        };
+        rafRef.current = requestAnimationFrame(animate);
+        const bgInterval = setInterval(tick, 2000);
+
+        return () => { cancelAnimationFrame(rafRef.current); clearInterval(bgInterval); };
         // Intentionally narrow deps: only the phase-lifecycle pieces. Everything
         // reactive that tick() reads is piped through latestRef.current so
         // players/hasVoted/isAlive updates don't restart the interval.
