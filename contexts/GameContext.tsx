@@ -233,10 +233,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => { refs.lobbyPasswordRef.current = lobbyPassword; }, [lobbyPassword]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { refs.avatarUrlRef.current = avatarUrl; }, [avatarUrl]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { refs.phaseRef.current = gameState.phase; }, [gameState.phase]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { refs.dayCountRef.current = gameState.dayCount; }, [gameState.dayCount]);
+    // Sync phase and dayCount refs synchronously during render.
+    // These are read by WS callbacks (triggerVotingResultsOverlay) that can fire
+    // between render and useEffect execution on Somnia's 100ms blocks.
+    // Moving them to the render body ensures they are always current.
+    refs.phaseRef.current = gameState.phase;
+    refs.dayCountRef.current = gameState.dayCount;
+    // playersRef is only read inside pollEvents intervals — useEffect timing is fine.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { refs.playersRef.current = gameState.players; }, [gameState.players]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
