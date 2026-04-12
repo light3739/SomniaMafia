@@ -49,14 +49,6 @@ export function useMafiaChat(deps: ChatDeps) {
         try {
             mafiaKeyVerifyingRef.current = true;
 
-            let salt = localStorage.getItem(`mafia_salt_${roomIdStr}`);
-            if (!salt) {
-                salt = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-                    .map(b => b.toString(16).padStart(2, '0'))
-                    .join('');
-                localStorage.setItem(`mafia_salt_${roomIdStr}`, salt);
-            }
-
             const chainId = refs.runtimeChainRef.current.id;
             const { client: activeWalletClient } = await wallet.getActiveWalletClient();
             const meta = await signRequest({
@@ -92,9 +84,22 @@ export function useMafiaChat(deps: ChatDeps) {
             if (!mafia || mafia.length === 0) return null;
 
             const sortedMafia = [...mafia].map(a => a.toLowerCase()).sort();
+            // Key derivation inputs MUST be deterministic across all mafia clients
+            // or AES-GCM decrypt fails with "The operation failed for an
+            // operation-specific reason" (auth tag mismatch). The previous impl
+            // read a per-client random salt from localStorage — every client got
+            // a different salt, so every client derived a different key, and no
+            // mafia could decrypt another mafia's LiveKit signals. Mafia chat was
+            // silently broken whenever more than one mafia was on the team.
+            //
+            // Salt adds no real security here: sortedMafia is already secret
+            // (the /mafia-members endpoint is role-gated, non-mafia never see
+            // the list), and roomId gives per-room uniqueness. Drop the salt,
+            // derive the key from (roomId, sortedMafia) only — this is stable
+            // across clients because both inputs are identical per room.
             const inputHash = keccak256(encodePacked(
-                ['uint256', 'string', 'address[]'],
-                [roomId, salt, sortedMafia as `0x${string}`[]]
+                ['uint256', 'address[]'],
+                [roomId, sortedMafia as `0x${string}`[]]
             ));
 
             const keyBytes = new Uint8Array(32);
