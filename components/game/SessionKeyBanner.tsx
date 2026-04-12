@@ -221,7 +221,7 @@ export const SessionKeyBanner = React.memo(({
                   <span>{shortenAddress(sessionAddress || '')}</span>
                   <span className="text-white/40">·</span>
                   <Wallet className="w-2.5 h-2.5" />
-                  <span className={isLowBalance ? 'text-[#D4724A]' : ''}>{formatBalance(sessionBalance)} STT</span>
+                  <span className={isLowBalance ? 'text-[#D4724A]' : ''}>{formatBalance(sessionBalance)} SOMI</span>
                   <span className="text-white/40">·</span>
                   <Clock className="w-2.5 h-2.5" />
                   <span>{formatTimeLeft(expiresAt)}</span>
@@ -247,7 +247,7 @@ export const SessionKeyBanner = React.memo(({
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-bold tracking-wide font-['Montserrat'] uppercase transition-all ${theme.btnPrimary} disabled:opacity-50`}
                 >
                   {isFunding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Fuel className="w-3.5 h-3.5" />}
-                  +0.02 STT
+                  +0.02 SOMI
                 </button>
               )}
               <button

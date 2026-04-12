@@ -7,7 +7,7 @@ import { useNoirDialog } from '../../contexts/NoirDialogContext';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useBalance } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
-import { SOMNIA_TESTNET } from '../../contracts/config';
+import { somniaChain } from '../../contracts/config';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
@@ -194,7 +194,7 @@ export const SetupProfile: React.FC = () => {
 
     const { data: somniaBalance } = useBalance({
         address: embeddedWalletAddress as `0x${string}`,
-        chainId: SOMNIA_TESTNET.id,
+        chainId: somniaChain.id,
         query: { enabled: !!embeddedWalletAddress }
     });
 
@@ -202,7 +202,7 @@ export const SetupProfile: React.FC = () => {
 
     const { data: externalBalance } = useBalance({
         address: externalWallet?.address as `0x${string}` | undefined,
-        chainId: SOMNIA_TESTNET.id,
+        chainId: somniaChain.id,
         query: { enabled: !!externalWallet?.address }
     });
 
@@ -217,7 +217,7 @@ export const SetupProfile: React.FC = () => {
         if (!externalWallet || !embeddedWalletAddress) return;
         try {
             setIsFunding(true);
-            await externalWallet.switchChain(SOMNIA_TESTNET.id);
+            await externalWallet.switchChain(somniaChain.id);
             const provider = await externalWallet.getEthereumProvider() as any;
 
             const valueWei = parseEther(fundAmount);
@@ -251,7 +251,7 @@ export const SetupProfile: React.FC = () => {
         if (!privyEmbeddedWallet) return;
         try {
             setIsWithdrawing(true);
-            await privyEmbeddedWallet.switchChain(SOMNIA_TESTNET.id);
+            await privyEmbeddedWallet.switchChain(somniaChain.id);
             const provider = await privyEmbeddedWallet.getEthereumProvider() as any;
 
             const valueWei = parseEther(withdrawAmount);
@@ -525,7 +525,7 @@ export const SetupProfile: React.FC = () => {
                                                 <span className="text-white font-montserrat text-sm font-medium tracking-wide">Somnia <span className="text-white/60 text-[10px] font-bold uppercase ml-2 tracking-wider">Testnet</span></span>
                                             </div>
                                             <span className="text-white font-mono text-base font-medium tabular-nums">
-                                                {somniaBalance ? Number(formatEther(somniaBalance.value)).toFixed(3) : '0.000'} <span className="text-white/60 text-sm ml-1 font-semibold">STT</span>
+                                                {somniaBalance ? Number(formatEther(somniaBalance.value)).toFixed(3) : '0.000'} <span className="text-white/60 text-sm ml-1 font-semibold">SOMI</span>
                                             </span>
                                         </div>
 
@@ -592,12 +592,12 @@ export const SetupProfile: React.FC = () => {
                                                                     ? (externalBalance ? Number(formatEther(externalBalance.value)).toFixed(3) : '0.000')
                                                                     : (somniaBalance ? Number(formatEther(somniaBalance.value)).toFixed(3) : '0.000')
                                                                 }
-                                                            </span> STT
+                                                            </span> SOMI
                                                         </span>
                                                     </div>
                                                     <div className="flex gap-2 w-full">
                                                         <div className="relative w-[80px] flex items-center justify-center">
-                                                            <span className="text-white font-montserrat text-sm font-semibold">STT</span>
+                                                            <span className="text-white font-montserrat text-sm font-semibold">SOMI</span>
                                                         </div>
                                                         <div className="relative flex-1 group">
                                                             <button
@@ -643,7 +643,7 @@ export const SetupProfile: React.FC = () => {
                                                         </button>
                                                     )}
                                                     <p className="text-center text-white/40 text-[10px] font-semibold uppercase tracking-widest mt-1">
-                                                        Est. Network Fee: <span className="font-mono text-white/50 tabular-nums">~0.001 STT</span>
+                                                        Est. Network Fee: <span className="font-mono text-white/50 tabular-nums">~0.001 SOMI</span>
                                                     </p>
                                                 </div>
                                             </>

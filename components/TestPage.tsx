@@ -2562,7 +2562,7 @@ const MockSessionKeyBanner: React.FC<{
                                 <span>{shortenAddress(sessionAddress)}</span>
                                 <span className="text-white/20">·</span>
                                 <Wallet className="w-2.5 h-2.5" />
-                                <span className={isLowBalance ? 'text-[#D4724A]' : ''}>{formatBalance(sessionBalance)} STT</span>
+                                <span className={isLowBalance ? 'text-[#D4724A]' : ''}>{formatBalance(sessionBalance)} SOMI</span>
                                 <span className="text-white/20">·</span>
                                 <Clock className="w-2.5 h-2.5" />
                                 <span>{expiresAt}</span>
@@ -2582,7 +2582,7 @@ const MockSessionKeyBanner: React.FC<{
                     <div className="flex items-center gap-2">
                         {isLowBalance && (
                             <button className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-bold tracking-wide font-['Montserrat'] uppercase transition-all ${theme.btnPrimary}`}>
-                                <Fuel className="w-3.5 h-3.5" /> +0.02 STT
+                                <Fuel className="w-3.5 h-3.5" /> +0.02 SOMI
                             </button>
                         )}
                         <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/8 bg-white/4 hover:bg-white/8 text-white/40 hover:text-[#C8904A] text-[11px] font-medium font-['Montserrat'] transition-all">

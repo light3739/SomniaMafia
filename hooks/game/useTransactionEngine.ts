@@ -62,6 +62,25 @@ export function useTransactionEngine(deps: TxEngineDeps) {
         return result;
     }, []);
 
+    // === GAS PRICE CACHE (adaptive buffer) ===
+    const gasPriceCache = useRef<{ price: bigint; timestamp: number }>({ price: 0n, timestamp: 0 });
+
+    function getAdaptiveBuffer(currentPrice: bigint): bigint {
+        const { price: lastPrice, timestamp: lastTs } = gasPriceCache.current;
+        const cacheAge = Date.now() - lastTs;
+
+        // No previous data or stale (>5 min) → conservative +60%
+        if (lastPrice === 0n || cacheAge > 300_000) return 160n;
+        // Price stable or dropped → normal +30%
+        if (currentPrice <= lastPrice) return 130n;
+
+        const increase = ((currentPrice - lastPrice) * 100n) / lastPrice;
+        if (increase < 20n) return 130n;   // <20%  → +30%
+        if (increase < 50n) return 160n;   // 20-50% → +60%
+        if (increase < 100n) return 200n;  // 50-100% → +100%
+        return 250n;                        // >100% (x2+ spike) → +150%
+    }
+
     // === SMART GAS CONFIG ===
     const getSmartGasConfig = useCallback(async (params: {
         functionName: string;
@@ -77,31 +96,37 @@ export function useTransactionEngine(deps: TxEngineDeps) {
 
         const isSomnia = Number(targetChain.id) === 50312 || Number(targetChain.id) === 5031;
 
-        // 1. Fetch Fee Data
+        // 1. Fetch Fee Data (adaptive buffer based on price trend)
         let feeConfig: any = {};
         let currentGasPrice = isSomnia ? 6_000_000_000n : 30_000_000_000n;
 
         try {
             const feeData = await pClient.estimateFeesPerGas();
             if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+                currentGasPrice = feeData.maxFeePerGas;
+                const buffer = getAdaptiveBuffer(currentGasPrice);
                 feeConfig = {
-                    maxFeePerGas: (feeData.maxFeePerGas * 130n) / 100n,
-                    maxPriorityFeePerGas: (feeData.maxPriorityFeePerGas * 130n) / 100n,
+                    maxFeePerGas: (feeData.maxFeePerGas * buffer) / 100n,
+                    maxPriorityFeePerGas: (feeData.maxPriorityFeePerGas * buffer) / 100n,
                     type: 2 as any
                 };
-                currentGasPrice = feeData.maxFeePerGas;
             } else {
                 const price = await pClient.getGasPrice();
                 if (price > 0n) currentGasPrice = price;
+                const buffer = getAdaptiveBuffer(currentGasPrice);
                 feeConfig = {
-                    gasPrice: (currentGasPrice * 130n) / 100n,
+                    gasPrice: (currentGasPrice * buffer) / 100n,
                     type: 0 as any
                 };
             }
         } catch (e) {
             console.warn('[Gas] Fee fetch failed, using fallback:', e);
-            feeConfig = { gasPrice: (currentGasPrice * 130n) / 100n, type: 0 as any };
+            const buffer = getAdaptiveBuffer(currentGasPrice);
+            feeConfig = { gasPrice: (currentGasPrice * buffer) / 100n, type: 0 as any };
         }
+
+        // Update cache for next adaptive buffer calculation
+        gasPriceCache.current = { price: currentGasPrice, timestamp: Date.now() };
 
         // 2. Known Gas Limits
         const KNOWN_LIMITS: Record<string, bigint> = {

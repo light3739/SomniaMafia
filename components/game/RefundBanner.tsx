@@ -27,7 +27,7 @@ export const RefundBanner: React.FC = () => {
                 <div className="text-xs sm:text-sm text-[#E5D5B7] whitespace-nowrap">
                     Stuck refund:{' '}
                     <span className="text-[#D4A97A] font-semibold">
-                        {formatEther(pendingRefundNative)} {currencySymbol || 'STT'}
+                        {formatEther(pendingRefundNative)} {currencySymbol || 'SOMI'}
                     </span>
                 </div>
                 <button

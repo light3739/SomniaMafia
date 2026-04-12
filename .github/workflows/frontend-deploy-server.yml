@@ -46,7 +46,7 @@ jobs:
         env:
           NEXT_PUBLIC_GM_SERVER_URL: https://gm.mafiaonchain.live
           NEXT_PUBLIC_LIVEKIT_URL: wss://livekit.mafiaonchain.live
-          NEXT_PUBLIC_ACTIVE_NETWORK: somnia_testnet
+          NEXT_PUBLIC_ACTIVE_NETWORK: somnia_mainnet
           NEXT_PUBLIC_MAFIA_DIAMOND: ${{ vars.NEXT_PUBLIC_MAFIA_DIAMOND }}
 
       - name: Set up Docker Buildx

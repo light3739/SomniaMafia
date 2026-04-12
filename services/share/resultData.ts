@@ -8,7 +8,7 @@
  */
 
 import { createPublicClient, http } from 'viem';
-import { SOMNIA_TESTNET, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL } from '../../contracts/config';
+import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, GM_SERVER_URL } from '../../contracts/config';
 import { Role } from '../../types';
 
 export type Winner = 'MAFIA' | 'TOWN' | 'DRAW' | 'ABORTED';
@@ -37,7 +37,7 @@ const PHASE_ENDED = 6;
 const FLAG_ACTIVE = 2;
 
 const publicClient = createPublicClient({
-    chain: SOMNIA_TESTNET,
+    chain: somniaChain,
     transport: http(),
 });
 
@@ -53,7 +53,7 @@ function computeWinner(players: ResultPlayer[]): Winner {
 
 async function fetchRoomRoles(roomId: string): Promise<Record<string, Role>> {
     try {
-        const url = `${GM_SERVER_URL}/room-roles/${encodeURIComponent(roomId)}?chainId=${SOMNIA_TESTNET.id}`;
+        const url = `${GM_SERVER_URL}/room-roles/${encodeURIComponent(roomId)}?chainId=${somniaChain.id}`;
         const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, cache: 'no-store' });
         if (!res.ok) return {};
         const data = await res.json() as { roles?: Record<string, string | number> };
@@ -108,7 +108,7 @@ export async function fetchResultData(roomId: string): Promise<ResultData | null
     } | null;
 
     if (!roomObj || Number(roomObj.id) === 0) {
-        return { exists: false, ended: false, winner: null, players: [], roomName: '', roomId, dayCount: 0, chainId: SOMNIA_TESTNET.id };
+        return { exists: false, ended: false, winner: null, players: [], roomName: '', roomId, dayCount: 0, chainId: somniaChain.id };
     }
 
     const phase = Number(roomObj.phase);
@@ -137,6 +137,6 @@ export async function fetchResultData(roomId: string): Promise<ResultData | null
         roomName: roomObj.name || `Room #${roomId}`,
         roomId,
         dayCount: Number(roomObj.dayCount),
-        chainId: SOMNIA_TESTNET.id,
+        chainId: somniaChain.id,
     };
 }

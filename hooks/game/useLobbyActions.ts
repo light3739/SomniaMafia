@@ -167,7 +167,7 @@ export function useLobbyActions(deps: LobbyDeps) {
             if (balance < txValue) {
                 const required = formatEther(txValue);
                 const current = formatEther(balance);
-                await showAlert(`Insufficient balance to fund session. You have ${current} STT but need at least ${required} STT. Please use a Faucet.`, { variant: 'danger', title: 'Insufficient Balance' });
+                await showAlert(`Insufficient balance to fund session. You have ${current} SOMI but need at least ${required} SOMI. Please use a Faucet.`, { variant: 'danger', title: 'Insufficient Balance' });
                 setIsTxPending(false);
                 return null;
             }
@@ -263,7 +263,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                         // confirmation modal on embedded-wallet flows. That modal
                         // contains a buggy useGetTokenPrice path that throws
                         // React error #300 ("Rendered fewer hooks than expected")
-                        // when the Somnia STT price 404s on auth.privy.io —
+                        // when the Somnia SOMI price 404s on auth.privy.io —
                         // which is exactly why this error only appeared on
                         // password lobbies + Privy embedded.
                         await GM.setRoomPassword({
@@ -462,7 +462,7 @@ export function useLobbyActions(deps: LobbyDeps) {
 
                             const balance = await pClient.getBalance({ address: myAddr as `0x${string}` });
                             if (balance < wallet.LOBBY_FUNDING_VALUE) {
-                                await showAlert(`Insufficient balance to re-sync session. You need at least ${formatEther(wallet.LOBBY_FUNDING_VALUE)} STT.`, { variant: 'danger', title: 'Insufficient Balance' });
+                                await showAlert(`Insufficient balance to re-sync session. You need at least ${formatEther(wallet.LOBBY_FUNDING_VALUE)} SOMI.`, { variant: 'danger', title: 'Insufficient Balance' });
                                 return false;
                             }
 
@@ -641,7 +641,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                 if (balance < txValue) {
                     const required = formatEther(txValue);
                     const current = formatEther(balance);
-                    await showAlert(`Insufficient balance. You need at least ${required} STT to join and fund your session. You have ${current} STT.`, { variant: 'danger', title: 'Insufficient Balance' });
+                    await showAlert(`Insufficient balance. You need at least ${required} SOMI to join and fund your session. You have ${current} SOMI.`, { variant: 'danger', title: 'Insufficient Balance' });
                     return false;
                 }
             }
@@ -693,7 +693,7 @@ export function useLobbyActions(deps: LobbyDeps) {
                     const depArgs = (depositLogs[0] as any).args;
                     console.log(`[Deposit Debug] joinRoom DepositCollected:`, {
                         player: depArgs.player,
-                        amount: formatEther(depArgs.amount) + ' STT',
+                        amount: formatEther(depArgs.amount) + ' SOMI',
                     });
                 } else {
                     console.log(`[Deposit Debug] No DepositCollected in joinRoom receipt.`);

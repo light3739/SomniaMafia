@@ -87,9 +87,9 @@ export function useEndGame(deps: EndGameDeps) {
             const depositPool = Array.isArray(room) ? room[room.length - 2] : room.depositPool;
             const depositPerPlayer = Array.isArray(room) ? room[room.length - 1] : room.depositPerPlayer;
             console.log(`[Deposit Debug] ${label}:`, {
-                myDeposit: formatEther(deposit) + ' STT',
-                depositPool: formatEther(depositPool) + ' STT',
-                depositPerPlayer: formatEther(depositPerPlayer) + ' STT',
+                myDeposit: formatEther(deposit) + ' SOMI',
+                depositPool: formatEther(depositPool) + ' SOMI',
+                depositPerPlayer: formatEther(depositPerPlayer) + ' SOMI',
                 canClaimRefund: deposit > 0n,
                 autoRefunded: deposit === 0n,
             });

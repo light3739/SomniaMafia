@@ -114,15 +114,14 @@ export const GameUIOverlay: React.FC = () => {
                 </div>
             )}
             
-            {/* Session Key Banner (Sessionic) 
+            {/* Session Key Banner */}
             {currentRoomId && gameState.phase !== GamePhase.LOBBY && (
                 <div className="fixed bottom-6 left-6 z-[100]">
-                    <SessionKeyBanner 
-                        roomId={Number(currentRoomId)} 
+                    <SessionKeyBanner
+                        roomId={Number(currentRoomId)}
                     />
                 </div>
             )}
-            */}
 
             {/* BackgroundMusic with Chat button integrated for slide animation */}
             <BackgroundMusic

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useAccount, useSwitchChain } from 'wagmi';
-import { SOMNIA_TESTNET } from '../../contracts/config';
+import { somniaChain } from '../../contracts/config';
 import { AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -14,7 +14,7 @@ export const ChainGate: React.FC<{ children: React.ReactNode }> = ({ children })
     const { isConnected, chainId } = useAccount();
     const { switchChain, isPending } = useSwitchChain();
 
-    const isWrongChain = isConnected && chainId !== undefined && chainId !== SOMNIA_TESTNET.id;
+    const isWrongChain = isConnected && chainId !== undefined && chainId !== somniaChain.id;
 
     return (
         <>
@@ -42,16 +42,16 @@ export const ChainGate: React.FC<{ children: React.ReactNode }> = ({ children })
                                 </h3>
                             </div>
                             <p className="text-white/70 text-[13px] mb-6 leading-relaxed" style={{ fontFamily: 'var(--font-sans)' }}>
-                                Please switch to <strong className="text-white">Somnia Testnet</strong> to continue playing.
+                                Please switch to <strong className="text-white">{somniaChain.name}</strong> to continue playing.
                                 You are currently connected to chain {chainId}.
                             </p>
                             <button
-                                onClick={() => switchChain({ chainId: SOMNIA_TESTNET.id })}
+                                onClick={() => switchChain({ chainId: somniaChain.id })}
                                 disabled={isPending}
                                 className="w-full py-3 rounded-sm border border-[#916A47]/50 text-[#C8904A] text-[12px] uppercase tracking-[0.12em] font-semibold transition-all hover:bg-[#916A47]/15 hover:border-[#916A47] active:scale-[0.97] disabled:opacity-50"
                                 style={{ fontFamily: 'var(--font-cinzel)', backgroundColor: 'rgba(145,106,71,0.08)' }}
                             >
-                                {isPending ? 'Switching...' : 'Switch to Somnia Testnet'}
+                                {isPending ? 'Switching...' : `Switch to ${somniaChain.name}`}
                             </button>
                         </motion.div>
                     </motion.div>

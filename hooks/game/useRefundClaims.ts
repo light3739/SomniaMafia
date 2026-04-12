@@ -17,7 +17,7 @@
  *    main wallet (session key can't be used — RefundsFacet.claimRefund reads
  *    msg.sender directly and the refund was credited to the main wallet)
  *
- * Only tracks native STT for now — ERC20 tournament payment tokens aren't
+ * Only tracks native SOMI for now — ERC20 tournament payment tokens aren't
  * used yet, but the same pattern extends trivially via a `token` parameter.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -79,10 +79,10 @@ export function useRefundClaims(deps: RefundDeps) {
         if (amount > 0n && amount !== lastNotifiedAmountRef.current) {
             lastNotifiedAmountRef.current = amount;
             toast.info(
-                `You have ${formatEther(amount)} STT waiting to be claimed. Open the refund panel to withdraw.`,
+                `You have ${formatEther(amount)} SOMI waiting to be claimed. Open the refund panel to withdraw.`,
                 { duration: 8000, id: 'pending-refund' },
             );
-            addLog?.(`Pending refund: ${formatEther(amount)} STT`, 'info');
+            addLog?.(`Pending refund: ${formatEther(amount)} SOMI`, 'info');
         }
         if (amount === 0n) {
             // Reset notification cursor so a new refund later re-notifies.
@@ -103,7 +103,7 @@ export function useRefundClaims(deps: RefundDeps) {
 
         setIsClaiming(true);
         const toastId = 'claim-refund';
-        toast.loading(`Claiming ${formatEther(pendingNative)} STT…`, { id: toastId });
+        toast.loading(`Claiming ${formatEther(pendingNative)} SOMI…`, { id: toastId });
         try {
             const { client, account } = await wallet.getActiveWalletClient();
             const accountAddress = typeof account === 'string' ? account : (account as any).address;
@@ -122,11 +122,11 @@ export function useRefundClaims(deps: RefundDeps) {
                 await pc.waitForTransactionReceipt({ hash });
             }
 
-            toast.success(`Refund claimed — ${formatEther(pendingNative)} STT sent to your wallet`, {
+            toast.success(`Refund claimed — ${formatEther(pendingNative)} SOMI sent to your wallet`, {
                 id: toastId,
                 duration: 5000,
             });
-            addLog?.(`Refund claimed: ${formatEther(pendingNative)} STT`, 'success');
+            addLog?.(`Refund claimed: ${formatEther(pendingNative)} SOMI`, 'success');
             await trigger();
             return true;
         } catch (e: any) {
