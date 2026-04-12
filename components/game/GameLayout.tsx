@@ -344,7 +344,17 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                         const resolvedVoteMap: Record<string, string> = {};
 
                         // 1. PRIMARY: live voteMap (LiveKit + pollEvents + optimistic).
+                        //    Filter by `voter.hasVoted === true` — the contract
+                        //    resets this flag at the start of each voting round,
+                        //    so it's a reliable "voted in THIS round" marker.
+                        //    Without this filter, stale voteMap entries from a
+                        //    previous day (replayed by pollEvents's 10k-block
+                        //    backfill on fresh mount, or persisting across day
+                        //    boundaries when processedEventsRef gets GC'd) would
+                        //    display phantom voters on the current day's cards.
                         Object.entries(voteMap).forEach(([voterAddr, targetAddr]) => {
+                            const voter = gameState.players.find(pl => pl.address.toLowerCase() === voterAddr.toLowerCase());
+                            if (!voter?.hasVoted) return; // stale entry from a prior round
                             resolvedVoteMap[voterAddr.toLowerCase()] = targetAddr.toLowerCase();
                         });
 

@@ -480,6 +480,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const discLastServerTimeRef = React.useRef<number>(0);
     const discLastUpdateTsRef = React.useRef<number>(0);
     const discLastSpeakerRef = React.useRef<string | null>(null);
+    const discLastPhaseRef = React.useRef<string | null>(null);
 
     useEffect(() => {
         if (!discussionState || discussionState.timeRemaining === undefined) {
@@ -487,6 +488,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             discLastServerTimeRef.current = 0;
             discLastUpdateTsRef.current = 0;
             discLastSpeakerRef.current = null;
+            discLastPhaseRef.current = null;
             return;
         }
         const serverValue = discussionState.timeRemaining;
@@ -499,9 +501,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const elapsed = Math.floor((Date.now() - discLastUpdateTsRef.current) / 1000);
         const currentInterp = Math.max(0, discLastServerTimeRef.current - elapsed);
 
-        if (serverValue > currentInterp && !speakerChanged) {
-            // Stale server snap would rewind the UI — ignore, but re-anchor
-            // the interp baseline to the current displayed value.
+        // Stale-server clamp: ignore server updates that would rewind the UI
+        // backwards unless we have a legitimate reason to jump up.
+        //
+        // Legitimate reasons to accept a higher server value:
+        //   1. Speaker changed — new turn, fresh budget.
+        //   2. Current interp is 0 — we're at rest, any new value is fine.
+        //      This specifically covers the `initial_delay` → `turn_in_progress`
+        //      transition where the server counts down 5..0 during the 5-second
+        //      pre-discussion delay, then sends `timeRemaining=60` for the real
+        //      turn without necessarily changing speaker. Without this guard
+        //      the timer would stick at 0 for the entire actual discussion.
+        //   3. Phase field changed (e.g. initial_delay → something else).
+        const phaseChanged = discussionState.phase !== discLastPhaseRef.current;
+        discLastPhaseRef.current = discussionState.phase || null;
+
+        if (serverValue > currentInterp && !speakerChanged && !phaseChanged && currentInterp > 0) {
+            // Truly stale — re-anchor to current displayed value.
             discLastServerTimeRef.current = currentInterp;
             discLastUpdateTsRef.current = Date.now();
             return;
@@ -531,6 +547,21 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setTimeout(() => { role.fetchMyRoleFromGM(); }, 2000);
         }
     }, [gameState.phase, role.fetchMyRoleFromGM]);
+
+    // ==================== CLEAR MAFIA CHAT ON NIGHT ENTRY ====================
+    // Each night is a separate mafia discussion. Previously mafiaMessages
+    // accumulated across the whole game — Night 1 messages were still visible
+    // to mafia on Night 2, 3, etc. Reset the list whenever we transition INTO
+    // a new NIGHT phase (not just when the game first enters NIGHT).
+    const prevPhaseForMafiaChatRef = React.useRef<GamePhase>(GamePhase.LOBBY);
+    useEffect(() => {
+        const prev = prevPhaseForMafiaChatRef.current;
+        const curr = gameState.phase;
+        prevPhaseForMafiaChatRef.current = curr;
+        if (curr === GamePhase.NIGHT && prev !== GamePhase.NIGHT) {
+            setGameState(prev => ({ ...prev, mafiaMessages: [] }));
+        }
+    }, [gameState.phase]);
 
     // ==================== UI HELPERS ====================
     const canActOnPlayer = useCallback((target: Player) => {
