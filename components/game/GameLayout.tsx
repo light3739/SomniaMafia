@@ -38,7 +38,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     const {
         gameState, myPlayer, currentRoomId, selectedTarget, handlePlayerAction,
         canActOnPlayer, playerMarks, setPlayerMark, showVotingResults, voteMap,
-        isTestMode, refreshPlayersList, discussionState, setDiscussionState
+        isTestMode, refreshPlayersList, discussionState, setDiscussionState, smoothDiscussionTimeRemaining
     } = useGameContext();
     const { playNightTransition, playMorningTransition } = useSoundEffects();
     const { showHint } = useGameHints(currentRoomId?.toString());
@@ -322,60 +322,77 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 {playerPositions.map((pos, index) => {
                     const p = visualPlayers[index]; if (!p) return null;
                     
-                    // Logic to find voters:
-                    // 1. When not showing results, only use local voteMap (optimistic)
-                    // 2. When showing results, scan authoritative logs for all votes
+                    // Logic to find voters who voted FOR the current player spot `p`:
+                    //
+                    // voteMap is the authoritative client-local source during the
+                    // voting-results overlay. It is populated by three reliable paths:
+                    //   1. voteOnChain (voter's own optimistic setVoteMap)
+                    //   2. useGameSignaling OPTIMISTIC_VOTE over LiveKit (~50ms)
+                    //   3. useEventPoller pollEvents handling VoteCast events
+                    // and is only cleared once showVotingResults flips back to false.
+                    //
+                    // Previously we rebuilt the map from gameState.logs via name
+                    // matching against eventData.playerName / targetName. That path
+                    // was fragile: GM server logs don't carry voter/target addresses
+                    // in eventData, and when multiple local test accounts shared
+                    // similar/empty nicknames the name-based find() pointed voters at
+                    // the wrong player's card. Log-scan is kept as a supplement only
+                    // for any voter not already known via voteMap — using addresses
+                    // from eventData when available, with a name-match fallback.
                     let voters: any[] = [];
                     if (showVotingResults) {
-                         const voteMapFromLogs: Record<string, string> = {};
+                        const resolvedVoteMap: Record<string, string> = {};
 
-                         // 1. Authoritative scan (Server logs), scoped to current day.
-                         let lastDayStartIdx = -1;
-                         for (let i = gameState.logs.length - 1; i >= 0; i--) {
-                             const l = gameState.logs[i];
-                             if (l.eventType === 'DayStarted' || l.message.includes('has begun')) {
-                                 lastDayStartIdx = i;
-                                 break;
-                             }
-                         }
-                         const dayLogs = lastDayStartIdx >= 0 ? gameState.logs.slice(lastDayStartIdx) : gameState.logs;
+                        // 1. PRIMARY: live voteMap (LiveKit + pollEvents + optimistic).
+                        Object.entries(voteMap).forEach(([voterAddr, targetAddr]) => {
+                            resolvedVoteMap[voterAddr.toLowerCase()] = targetAddr.toLowerCase();
+                        });
 
-                         dayLogs.forEach(l => {
-                             if (l.eventType !== 'PLAYER_VOTED' || !l.eventData) return;
-                             // Prefer address-based resolution: fragile name matching fails
-                             // when a log stored a wallet-prefix fallback as playerName.
-                             let voterAddr = l.eventData.voterAddress?.toLowerCase();
-                             let targetAddr = l.eventData.targetAddress?.toLowerCase();
-                             if (!voterAddr || !targetAddr) {
-                                 // Legacy logs without addresses — fall back to name match.
-                                 const vName = l.eventData.playerName;
-                                 const tName = l.eventData.targetName;
-                                 if (!vName || !tName) return;
-                                 voterAddr = gameState.players.find(pl => pl.name === vName)?.address.toLowerCase();
-                                 targetAddr = gameState.players.find(pl => pl.name === tName)?.address.toLowerCase();
-                             }
-                             if (voterAddr && targetAddr) {
-                                 voteMapFromLogs[voterAddr] = targetAddr;
-                             }
-                         });
+                        // 2. SUPPLEMENT: scan current day's PLAYER_VOTED logs ONLY for
+                        //    voters not already in the live voteMap (rare edge case).
+                        let lastDayStartIdx = -1;
+                        for (let i = gameState.logs.length - 1; i >= 0; i--) {
+                            const l = gameState.logs[i];
+                            if (l.eventType === 'DayStarted' || l.message.includes('has begun')) {
+                                lastDayStartIdx = i;
+                                break;
+                            }
+                        }
+                        const dayLogs = lastDayStartIdx >= 0 ? gameState.logs.slice(lastDayStartIdx) : gameState.logs;
 
-                         // 2. Hybrid Merge: Add local optimistic votes if not present in server logs
-                         // This is crucial for the Host who sees results before the server processes the block
-                         Object.entries(voteMap).forEach(([voterAddr, targetAddr]) => {
-                             if (!voteMapFromLogs[voterAddr.toLowerCase()]) {
-                                 voteMapFromLogs[voterAddr.toLowerCase()] = targetAddr.toLowerCase();
-                             }
-                         });
+                        dayLogs.forEach(l => {
+                            if (l.eventType !== 'PLAYER_VOTED' || !l.eventData) return;
+                            // Address first — only client-written logs have these.
+                            let voterAddr = l.eventData.voterAddress?.toLowerCase();
+                            let targetAddr = l.eventData.targetAddress?.toLowerCase();
+                            if (!voterAddr || !targetAddr) {
+                                // Server logs have only names. Resolve both from the
+                                // live players list; require BOTH matches so an empty
+                                // or duplicate nickname doesn't misroute the vote.
+                                const vName = l.eventData.playerName;
+                                const tName = l.eventData.targetName;
+                                if (!vName || !tName) return;
+                                const voterMatches = gameState.players.filter(pl => pl.name === vName);
+                                const targetMatches = gameState.players.filter(pl => pl.name === tName);
+                                if (voterMatches.length !== 1 || targetMatches.length !== 1) return; // ambiguous
+                                voterAddr = voterMatches[0].address.toLowerCase();
+                                targetAddr = targetMatches[0].address.toLowerCase();
+                            }
+                            // Only supplement, never override — voteMap wins.
+                            if (voterAddr && targetAddr && !resolvedVoteMap[voterAddr]) {
+                                resolvedVoteMap[voterAddr] = targetAddr;
+                            }
+                        });
 
-                         voters = Object.entries(voteMapFromLogs)
-                             .filter(([_, target]) => target === p.address.toLowerCase())
-                             .map(([v]) => gameState.players.find(pl => pl.address.toLowerCase() === v))
-                             .filter((pl): pl is any => !!pl);
+                        voters = Object.entries(resolvedVoteMap)
+                            .filter(([_, target]) => target === p.address.toLowerCase())
+                            .map(([v]) => gameState.players.find(pl => pl.address.toLowerCase() === v))
+                            .filter((pl): pl is any => !!pl);
                     }
 
                     return (
                         <div key={p.id} className={`absolute transition-all duration-500 ${isOverlayPhase ? 'opacity-20 pointer-events-none' : ''}`} style={{ left: pos.x, top: pos.y }}>
-                            <PlayerSpot player={p} isMe={p.address.toLowerCase() === myPlayer?.address.toLowerCase()} onAction={handlePlayerAction} canAct={canActOnPlayer(p)} isSelected={selectedTarget?.toLowerCase() === p.address.toLowerCase()} isNight={isNightPhase} myRole={myPlayer?.role} mark={playerMarks[p.address.toLowerCase()] || null} onSetMark={setPlayerMark} isSpeaking={activePhase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === p.address.toLowerCase()} speechTimeRemaining={activePhase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === p.address.toLowerCase() ? discussionState.timeRemaining : 0} voters={voters} />
+                            <PlayerSpot player={p} isMe={p.address.toLowerCase() === myPlayer?.address.toLowerCase()} onAction={handlePlayerAction} canAct={canActOnPlayer(p)} isSelected={selectedTarget?.toLowerCase() === p.address.toLowerCase()} isNight={isNightPhase} myRole={myPlayer?.role} mark={playerMarks[p.address.toLowerCase()] || null} onSetMark={setPlayerMark} isSpeaking={activePhase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === p.address.toLowerCase()} speechTimeRemaining={activePhase === GamePhase.DAY && discussionState?.currentSpeakerAddress?.toLowerCase() === p.address.toLowerCase() ? smoothDiscussionTimeRemaining : 0} voters={voters} />
                         </div>
                     );
                 })}

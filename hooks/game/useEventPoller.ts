@@ -400,16 +400,13 @@ export function useEventPoller(deps: PollerDeps) {
             const log = data as LogEntry;
             if (log && log.message) {
                 addLogs([log]);
-                // pollEvents() only runs every 5s in WS mode, so local voteMap
-                // (which drives the vote-arrow avatars on player spots) would lag
-                // behind WS-delivered PLAYER_VOTED logs. Sync here directly from
-                // the WS push so voters appear the instant the log arrives.
-                if (log.eventType === 'PLAYER_VOTED' && log.eventData?.voterAddress && log.eventData?.targetAddress) {
-                    const v = log.eventData.voterAddress.toLowerCase();
-                    const t = log.eventData.targetAddress.toLowerCase();
-                    setVoteMap(prev => ({ ...prev, [v]: t }));
-                }
             }
+            // Note: earlier this handler tried to sync local voteMap from
+            // PLAYER_VOTED eventData addresses, but the GM server's logListener
+            // doesn't include voterAddress/targetAddress in the pushed eventData
+            // so that branch was dead. voteMap is populated via LiveKit
+            // OPTIMISTIC_VOTE (~50ms, useGameSignaling) and pollEvents VoteCast
+            // replay — both reliable without help from this handler.
         },
         'phase-change': (_data: unknown) => {
             const roomId = refs.currentRoomIdRef.current;
@@ -437,7 +434,7 @@ export function useEventPoller(deps: PollerDeps) {
         },
     } as Partial<Record<ServerEventType, (data: unknown) => void>>),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [addLogs, dataSync, refs, handleIncomingMafiaSignal, triggerVotingResultsOverlay, setVoteMap]);
+    [addLogs, dataSync, refs, handleIncomingMafiaSignal, triggerVotingResultsOverlay]);
 
     const { wsConnected } = useGmWebSocket({
         roomId: currentRoomId ? Number(currentRoomId) : null,

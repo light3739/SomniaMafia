@@ -137,84 +137,23 @@ export function useMafiaChat(deps: ChatDeps) {
     }, [refs, wallet, setGameState]);
 
     // === FETCH MAFIA CHAT ===
-    const fetchMafiaChat = useCallback(async (roomId: bigint) => {
-        const pClient = refs.publicClientRef.current;
-        if (!pClient) return;
-        try {
-            // getMafiaChat is no longer in the ABI, we rely on LiveKit signals for real-time mafia chat
-            // and we can potentially use getContractEvents if we need historical messages.
-            const messages: any[] = [];
-
-            const formattedMessages: MafiaChatMessage[] = await Promise.all(messages.map(async (msg: any, index: number) => {
-                const hexContent = msg.encryptedMessage as string;
-                let content = { type: 'text' as const, text: '' };
-
-                try {
-                    const myAddr = refs.addressRef.current;
-                    const isMafia = refs.playersRef.current.some(p => p.address.toLowerCase() === myAddr?.toLowerCase() && p.role === Role.MAFIA);
-
-                    let decryptedStr = '';
-                    if (isMafia && hexContent.length > 24) {
-                        const key = await getMafiaChatKey(roomId);
-                        if (key) {
-                            try {
-                                const fullBytes = new Uint8Array(
-                                    hexContent.startsWith('0x') ?
-                                        hexContent.slice(2).match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)) :
-                                        hexContent.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16))
-                                );
-
-                                const iv = fullBytes.slice(-12);
-                                const ciphertext = fullBytes.slice(0, -12);
-
-                                const decrypted = await crypto.subtle.decrypt(
-                                    { name: 'AES-GCM', iv }, key, ciphertext
-                                );
-                                decryptedStr = new TextDecoder().decode(decrypted);
-                            } catch (decError) {
-                                console.debug('[MafiaChat] Decryption failed (old message?):', decError);
-                            }
-                        }
-                    }
-
-                    let str = '';
-                    if (decryptedStr) {
-                        str = decryptedStr;
-                    } else if (hexContent.startsWith('0x')) {
-                        const hex = hexContent.slice(2);
-                        for (let i = 0; i < hex.length; i += 2) {
-                            str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
-                        }
-                    } else {
-                        str = hexContent;
-                    }
-
-                    if (str.trim().startsWith('{')) {
-                        content = JSON.parse(str);
-                    } else {
-                        content = { type: 'text', text: str };
-                    }
-                } catch (e) {
-                    content = { type: 'text', text: hexContent };
-                }
-
-                const senderPlayer = refs.playersRef.current.find(p => p.address.toLowerCase() === msg.sender.toLowerCase());
-                const playerName = senderPlayer?.name || msg.sender.slice(0, 6);
-
-                return {
-                    id: `${index}-${msg.timestamp}`,
-                    sender: msg.sender,
-                    playerName,
-                    content,
-                    timestamp: Number(msg.timestamp) * 1000
-                };
-            }));
-
-            setGameState(prev => ({ ...prev, mafiaMessages: formattedMessages }));
-        } catch (e) {
-            console.error("Error fetching mafia chat:", e);
-        }
-    }, [refs, getMafiaChatKey, setGameState]);
+    //
+    // Historical note: this used to pull messages from the getMafiaChat view
+    // function, but that function was removed from the diamond ABI when the
+    // chat moved off-chain onto the GM WebSocket relay. The old implementation
+    // kept running down through an empty-array branch and called
+    // `setGameState(..., mafiaMessages: [])` every 3 seconds via the polling
+    // interval — which wiped the entire live message history that
+    // handleIncomingMafiaSignal was building up from WS pushes. Observable
+    // symptom: messages disappeared for the receiving mafia roughly every 3s.
+    //
+    // Reduced to a no-op. Real-time chat flows through:
+    //   sender:  sendMafiaMessageOnChain → gmWs.relay('mafia-chat')
+    //   server:  wsManager.ts relays to other mafia in the room
+    //   receiver: useEventPoller WS handler → handleIncomingMafiaSignal
+    const fetchMafiaChat = useCallback(async (_roomId: bigint) => {
+        // No-op. Kept only so the return shape of this hook stays stable.
+    }, []);
 
     // === SEND MAFIA MESSAGE ===
     const sendMafiaMessageOnChain = useCallback(async (content: MafiaChatMessage['content']) => {
@@ -302,9 +241,20 @@ export function useMafiaChat(deps: ChatDeps) {
                 const content = JSON.parse(decryptedStr);
                 const senderPlayer = refs.playersRef.current.find(p => p.address.toLowerCase() === sender.toLowerCase());
                 setGameState(prev => {
-                    const signalId = `signal-${sender}-${Date.now()}`;
-                    const isDuplicate = prev.mafiaMessages.slice(-5).some(m =>
+                    const now = Date.now();
+                    const signalId = `signal-${sender}-${now}`;
+                    // Narrow time-window dedupe: only drop as a duplicate if an
+                    // identical message from the same sender arrived within the
+                    // last 800 ms — the only realistic window for a WS retry /
+                    // reconnect echo to fire twice. The previous impl scanned
+                    // the last 5 messages without any time guard and silently
+                    // ate legitimate repeat sends ("да" → "да" → "да").
+                    // Server-side (wsManager.ts) doesn't echo mafia-chat back
+                    // to the sender, so dedupe here only guards against rare
+                    // reconnect duplicates, not normal flow.
+                    const isDuplicate = prev.mafiaMessages.some(m =>
                         m.sender.toLowerCase() === sender.toLowerCase() &&
+                        now - m.timestamp < 800 &&
                         JSON.stringify(m.content) === JSON.stringify(content)
                     );
                     if (isDuplicate) return prev;
@@ -315,7 +265,7 @@ export function useMafiaChat(deps: ChatDeps) {
                             sender,
                             playerName: senderPlayer?.name || sender.slice(0, 6),
                             content,
-                            timestamp: Date.now(),
+                            timestamp: now,
                         }]
                     };
                 });
@@ -325,31 +275,10 @@ export function useMafiaChat(deps: ChatDeps) {
         }
     }, [refs, getMafiaChatKey, setGameState]);
 
-    // === POLLING ===
-    const isMafiaRef = useRef(false);
-    const gamePhaseRef = useRef(gameState.phase);
-    useEffect(() => {
-        const myAddr = refs.stableAddress?.toLowerCase();
-        isMafiaRef.current = refs.playersRef.current.some(
-            p => p.address.toLowerCase() === myAddr && p.role === Role.MAFIA
-        );
-        gamePhaseRef.current = gameState.phase;
-    }, [gameState.players, gameState.phase, refs.stableAddress]);
-
-    useEffect(() => {
-        if (!currentRoomId || !refs.publicClientRef.current) return;
-
-        const CHECK_INTERVAL = 3000;
-        const roomIdForChat = currentRoomId;
-
-        const interval = setInterval(() => {
-            if (isMafiaRef.current && gamePhaseRef.current >= GamePhase.DAY) {
-                fetchMafiaChat(roomIdForChat);
-            }
-        }, CHECK_INTERVAL);
-
-        return () => clearInterval(interval);
-    }, [fetchMafiaChat, refs, currentRoomId]);
+    // No polling — real-time chat is pushed over the GM WebSocket relay and
+    // the receive path (handleIncomingMafiaSignal) owns the mafiaMessages list.
+    // The previous 3s poll called fetchMafiaChat which wiped the entire list
+    // on every tick, eating live WS-delivered messages in between.
 
     // Proactively derive the mafia chat key (and mark teammates red in the UI)
     // as soon as we enter NIGHT. /mafia-members is gated to NIGHT/ENDED on the
