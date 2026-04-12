@@ -20,7 +20,7 @@ export const config = createConfig({
         somniaChain,
     ],
     transports: {
-        [somniaChain.id]: fallback([
+        [somniaChain.id as number]: fallback([
             // WebSocket primary — real-time event subscriptions (watchContractEvent)
             ...(somniaChain.rpcUrls.default.webSocket || []).map((url: string) =>
                 webSocket(url, { reconnect: { delay: 2_000, attempts: 10 }, keepAlive: { interval: 25_000 } })
