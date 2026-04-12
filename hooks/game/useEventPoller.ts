@@ -24,6 +24,7 @@ import { parseWinCondition } from '../../services/winConditionParser';
 import React from 'react';
 import { GM_SERVER_URL } from '../../contracts/config';
 import { useGmWebSocket } from './useGmWebSocket';
+import { gmWs } from '../../services/gmWebSocket';
 import type { ServerEventType } from '../../services/gmWebSocket';
 
 interface PollerDeps {
@@ -410,17 +411,19 @@ export function useEventPoller(deps: PollerDeps) {
     }, [refs, pollEvents, dataSync]);
 
     // === WS RECONNECT: fetch missed logs immediately ===
-    // gm-ws-reconnected fires from gmWebSocket.ts when the WS connection
-    // is re-established after a gap. useGameDataSync handles game state
-    // refresh on reconnect, but pollServerLogs is not called there —
-    // leaving up to 5s before the next scheduled poll fills the log gap.
+    // gmWs.onStateChange fires with 'connected' only after the server confirms
+    // the 'joined' handshake — safe to fetch logs at this point.
+    // useGameDataSync handles game state refresh on reconnect, but
+    // pollServerLogs is not called there — leaving up to 5s before the next
+    // scheduled poll fills the log gap.
     useEffect(() => {
-        const onReconnect = () => {
-            console.log('[EventPoller] WS reconnected — fetching missed server logs immediately');
-            pollServerLogs();
-        };
-        window.addEventListener('gm-ws-reconnected', onReconnect);
-        return () => window.removeEventListener('gm-ws-reconnected', onReconnect);
+        const unsub = gmWs.onStateChange((state) => {
+            if (state === 'connected') {
+                console.log('[EventPoller] WS connected — fetching missed server logs immediately');
+                pollServerLogs();
+            }
+        });
+        return unsub;
     }, [pollServerLogs]);
 
     // === WEBSOCKET EVENT HANDLERS ===
