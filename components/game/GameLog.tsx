@@ -154,32 +154,19 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         ? lockedVotingDayRef.current
         : 0;
 
-    // Use actualLoggedDay (latest day with a log marker) as the source of truth.
-    // dayCount from the contract can advance before the "Day N has begun" log
-    // arrives via WS — using dayCount here caused either "Waiting for events..."
-    // (dayStartIdx not found) or a flash of stale Day N-1 events (fallback to
-    // "Game started" marker). Staying on the last logged day until the marker
-    // arrives is visually correct and avoids both bugs.
+    // Always advance to the latest known day so old-day events do not linger
+    // when a new day has begun on-chain but the "Day N has begun" server log
+    // hasn't been delivered yet. The dayEvents memo below treats a missing log
+    // marker as a clean state (no leak) instead of falling back to all logs.
     const targetDay = (showVotingResults && lockedVotingDayRef.current > 0)
         ? lockedVotingDayRef.current
-        : (actualLoggedDay || 1);
+        : Math.max(actualLoggedDay || 0, dayCount || 0, 1);
 
     // ─── dayEvents: single source of truth from eventType/eventData ──────
     // Scans ALL logs directly instead of relying on todayLogs slice.
     // Uses eventType as primary discriminator, text parsing only for
     // client-only logs (discussion) that have no eventType.
     const dayEvents = useMemo(() => {
-        // Resolve a player's current canonical nickname via address — falls back
-        // to whatever name was baked into the log if the address is missing or
-        // the player has since been removed.
-        const resolveName = (addr: string | undefined, fallback: string | undefined): string | undefined => {
-            if (addr) {
-                const match = gameState.players.find(p => p.address.toLowerCase() === addr.toLowerCase());
-                if (match?.name) return match.name;
-            }
-            return fallback;
-        };
-
         let nightResult: { type: 'safe' | 'killed'; playerName?: string } | null = null;
         let discussionStarted = false;
         let discussionFinished = false;
@@ -235,7 +222,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 // Structured path (server eventType)
                 if (l.eventType === 'NIGHT_RESULT') {
                     if (l.eventData?.isSafe) nightResult = { type: 'safe' };
-                    else if (l.eventData?.isEliminated) nightResult = { type: 'killed', playerName: resolveName(l.eventData.playerAddress, l.eventData.playerName) };
+                    else if (l.eventData?.isEliminated) nightResult = { type: 'killed', playerName: l.eventData.playerName };
                     break;
                 }
                 // Text fallback (client log or old format)
@@ -266,7 +253,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                     case 'NIGHT_RESULT':
                         // Can also appear after day start in sorted logs
                         if (log.eventData?.isSafe) nightResult = { type: 'safe' };
-                        else if (log.eventData?.isEliminated) nightResult = { type: 'killed', playerName: resolveName(log.eventData.playerAddress, log.eventData.playerName) };
+                        else if (log.eventData?.isEliminated) nightResult = { type: 'killed', playerName: log.eventData.playerName };
                         break;
                     case 'DISCUSSION_STARTED':
                         discussionStarted = true;
@@ -291,7 +278,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                         if (log.eventData?.isSafe) {
                             votingResult = { type: 'no_one' };
                         } else if (log.eventData?.isEliminated) {
-                            votingResult = { type: 'eliminated', playerName: resolveName(log.eventData.playerAddress, log.eventData.playerName) };
+                            votingResult = { type: 'eliminated', playerName: log.eventData.playerName };
                         } else {
                             // eventData is empty/malformed — derive from message text
                             const lower = log.message.toLowerCase();
@@ -386,7 +373,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 const l = logs[i];
                 if (l.eventType === 'VOTING_RESULT') {
                     if (l.eventData?.isSafe) votingResult = { type: 'no_one' };
-                    else if (l.eventData?.isEliminated) votingResult = { type: 'eliminated', playerName: resolveName(l.eventData.playerAddress, l.eventData.playerName) };
+                    else if (l.eventData?.isEliminated) votingResult = { type: 'eliminated', playerName: l.eventData.playerName };
                     else {
                         // Defensive: derive from message if eventData is empty
                         const lower = l.message.toLowerCase();
@@ -422,7 +409,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
                 const l = logs[i];
                 if (l.eventType === 'NIGHT_RESULT') {
                     if (l.eventData?.isSafe) nightResult = { type: 'safe' };
-                    else if (l.eventData?.isEliminated) nightResult = { type: 'killed', playerName: resolveName(l.eventData.playerAddress, l.eventData.playerName) };
+                    else if (l.eventData?.isEliminated) nightResult = { type: 'killed', playerName: l.eventData.playerName };
                     break;
                 }
                 const lower = l.message.toLowerCase();
@@ -445,7 +432,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             votingResult,
             nightFallen,
         };
-    }, [logs, targetDay, showVotingResults, liveDiscussion, forceVotingActive, hideActions, gameState.players]);
+    }, [logs, targetDay, showVotingResults, liveDiscussion, forceVotingActive, hideActions]);
 
     const targetingDay = (showVotingResults && displayDay > 0) ? displayDay : dayCount;
 
@@ -514,7 +501,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         <div className="flex flex-col h-full bg-transparent overflow-hidden">
             <div className="flex-shrink-0 flex items-center justify-center px-5 py-3 border-b border-white/5 bg-[#0A0A0A]">
                 <h2 className="text-sm font-mono font-bold text-[#916A47] tracking-[0.3em] uppercase">
-                    [ DAY {displayDay || targetDay} ]
+                    [ DAY {displayDay || dayCount || actualLoggedDay || 1} ]
                 </h2>
             </div>
 
