@@ -51,6 +51,14 @@ function computeWinner(players: ResultPlayer[]): Winner {
     return 'DRAW';
 }
 
+const ROLE_STRING_MAP: Record<string, Role> = {
+    'MAFIA': Role.MAFIA, 'DOCTOR': Role.DOCTOR,
+    'DETECTIVE': Role.DETECTIVE, 'CIVILIAN': Role.CIVILIAN,
+};
+const ROLE_NUM_MAP: Record<number, Role> = {
+    1: Role.MAFIA, 2: Role.DOCTOR, 3: Role.DETECTIVE, 4: Role.CIVILIAN,
+};
+
 async function fetchRoomRoles(roomId: string): Promise<Record<string, Role>> {
     try {
         const url = `${GM_SERVER_URL}/room-roles/${encodeURIComponent(roomId)}?chainId=${somniaChain.id}`;
@@ -60,14 +68,11 @@ async function fetchRoomRoles(roomId: string): Promise<Record<string, Role>> {
         if (!data.roles) return {};
         const out: Record<string, Role> = {};
         for (const [addr, raw] of Object.entries(data.roles)) {
-            const n = typeof raw === 'number' ? raw : Number(raw);
-            switch (n) {
-                case 1: out[addr.toLowerCase()] = Role.MAFIA; break;
-                case 2: out[addr.toLowerCase()] = Role.DOCTOR; break;
-                case 3: out[addr.toLowerCase()] = Role.DETECTIVE; break;
-                case 4: out[addr.toLowerCase()] = Role.CIVILIAN; break;
-                default: out[addr.toLowerCase()] = Role.UNKNOWN;
-            }
+            // GM server returns string names ('MAFIA', 'DOCTOR', etc.)
+            const role = typeof raw === 'string'
+                ? (ROLE_STRING_MAP[raw] ?? Role.UNKNOWN)
+                : (ROLE_NUM_MAP[raw] ?? Role.UNKNOWN);
+            out[addr.toLowerCase()] = role;
         }
         return out;
     } catch {
@@ -99,33 +104,32 @@ export async function fetchResultData(roomId: string): Promise<ResultData | null
         return null;
     }
 
-    const roomObj = room as {
-        id: bigint;
-        name: string;
-        phase: number;
-        dayCount: number;
-        playersCount: number;
-    } | null;
+    // getRoom returns a tuple (array) or named object depending on ABI/viem version.
+    const r = room as any;
+    const roomId_ = Array.isArray(r) ? r[0] : r.id;
+    const roomName = Array.isArray(r) ? (r[1] || '') : (r.name || '');
+    const phase = Number(Array.isArray(r) ? r[3] : r.phase);
+    const dayCount = Number(Array.isArray(r) ? r[5] : r.dayCount);
 
-    if (!roomObj || Number(roomObj.id) === 0) {
+    if (!r || Number(roomId_) === 0) {
         return { exists: false, ended: false, winner: null, players: [], roomName: '', roomId, dayCount: 0, chainId: somniaChain.id };
     }
 
-    const phase = Number(roomObj.phase);
     const ended = phase === PHASE_ENDED;
 
     const roles = ended ? await fetchRoomRoles(roomId) : {};
 
-    const players: ResultPlayer[] = (rawPlayers as Array<{
-        wallet: `0x${string}`;
-        nickname: string;
-        flags: number;
-    }>).map(p => ({
-        address: p.wallet.toLowerCase(),
-        nickname: p.nickname || `${p.wallet.slice(0, 6)}…${p.wallet.slice(-4)}`,
-        isAlive: (Number(p.flags) & FLAG_ACTIVE) !== 0,
-        role: roles[p.wallet.toLowerCase()] ?? Role.UNKNOWN,
-    }));
+    const players: ResultPlayer[] = (rawPlayers as Array<any>).map(p => {
+        const wallet = (p.wallet || p[0] || '') as string;
+        const nickname = p.nickname || p[1] || `${wallet.slice(0, 6)}…${wallet.slice(-4)}`;
+        const flags = Number(p.flags ?? p[2] ?? 0);
+        return {
+            address: wallet.toLowerCase(),
+            nickname,
+            isAlive: (flags & FLAG_ACTIVE) !== 0,
+            role: roles[wallet.toLowerCase()] ?? Role.UNKNOWN,
+        };
+    });
 
     const winner = ended ? computeWinner(players) : null;
 
@@ -134,9 +138,9 @@ export async function fetchResultData(roomId: string): Promise<ResultData | null
         ended,
         winner,
         players,
-        roomName: roomObj.name || `Room #${roomId}`,
+        roomName: roomName || `Room #${roomId}`,
         roomId,
-        dayCount: Number(roomObj.dayCount),
+        dayCount,
         chainId: somniaChain.id,
     };
 }
