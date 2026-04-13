@@ -454,6 +454,16 @@ export function useEndGame(deps: EndGameDeps) {
 
         const runEndGameCleanup = async () => {
             const pClient = refs.publicClientRef.current!;
+
+            // Verify game actually ended on-chain — guards against stale
+            // React state where phase is still ENDED from a previous room.
+            const onChainPhase = await checkOnChainPhase(currentRoomId!, pClient);
+            if (onChainPhase !== GamePhase.ENDED) {
+                endGameCleanupRoomRef.current = null; // allow retry when game actually ends
+                return;
+            }
+            endGameCleanupRoomRef.current = currentRoomId;
+
             const session = loadSession();
             const chain = refs.runtimeChainRef.current;
 
@@ -685,8 +695,8 @@ export function useEndGame(deps: EndGameDeps) {
             }
         };
 
-        endGameCleanupRoomRef.current = currentRoomId;
-        // Delay to let endGame settle and roles load
+        // Delay to let endGame settle and roles load.
+        // Ref is set INSIDE runEndGameCleanup after on-chain verification.
         const t = setTimeout(runEndGameCleanup, 3000);
         return () => clearTimeout(t);
     }, [gameState.phase, gameState.isTournament, currentRoomId, refs, addLog]);
@@ -804,8 +814,7 @@ export function useEndGame(deps: EndGameDeps) {
     // === ROLE REVEAL TRIGGER (on phase → ENDED) ===
     React.useEffect(() => {
         if (gameState.phase !== GamePhase.ENDED || roleRevealRoomRef.current === currentRoomId) return;
-        if (!refs.publicClientRef.current) return;
-        roleRevealRoomRef.current = currentRoomId;
+        if (!refs.publicClientRef.current || !currentRoomId) return;
 
         // Snapshot roomId
         const rid = currentRoomId || roomIdRef.current;
@@ -813,6 +822,11 @@ export function useEndGame(deps: EndGameDeps) {
 
         // Start reveal process
         const startReveal = async () => {
+            // Verify on-chain before committing — stale ENDED from previous room
+            const onChainPhase = await checkOnChainPhase(currentRoomId!, refs.publicClientRef.current!);
+            if (onChainPhase !== GamePhase.ENDED) return;
+            roleRevealRoomRef.current = currentRoomId;
+
             if (isRevealingRef.current) return;
             isRevealingRef.current = true;
             setIsRevealingRoles(true);
