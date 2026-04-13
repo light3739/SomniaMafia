@@ -211,14 +211,12 @@ export function useEventPoller(deps: PollerDeps) {
                         if (roomId) {
                             dataSync.fetchGameData(roomId);
                         }
-                        // Clear stale logs from previous game in the same room.
-                        // Server Redis stores all logs for a room across games;
-                        // pollServerLogs fetches them all. Without this clear,
-                        // previous game's DayStarted/VoteCast/etc. persist in
-                        // gameState.logs and pollute the new game's GameLog.
-                        if (!isHistorical) {
-                            setGameState(prev => ({ ...prev, logs: [] }));
-                        }
+                        // DO NOT clear logs here. setGameState({logs:[]}) races
+                        // with pollServerLogs — if pollServerLogs resolves first,
+                        // the clear wipes ALL server logs (DayStarted, VoteCast,
+                        // etc.) leaving only client UI logs with no eventType.
+                        // Previous-game log pollution is handled by !isHistorical
+                        // guards on blockchain addLog calls.
                         break;
 
                     case 'DayStarted': {
