@@ -144,7 +144,9 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     const lockedVotingDayRef = React.useRef<number>(0);
     const prevShowVotingResultsRef = React.useRef(false);
     if (showVotingResults && !prevShowVotingResultsRef.current) {
-        lockedVotingDayRef.current = actualLoggedDay;
+        // Use dayCount as floor: if logs haven't arrived yet, actualLoggedDay
+        // returns 1 (fallback). dayCount from on-chain state is always current.
+        lockedVotingDayRef.current = Math.max(actualLoggedDay, dayCount || 1);
     } else if (!showVotingResults) {
         lockedVotingDayRef.current = 0;
     }
