@@ -318,7 +318,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             const signed = await signRequest({
                 address: address as string,
                 roomId: Number(currentRoomId),
-                walletClient,
+                walletClient: null,
                 buildMessage: ({ nonce, timestamp }) => buildMafiaMembersMessage({
                     roomId: currentRoomId.toString(),
                     nonce,
@@ -366,7 +366,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
         } catch (e) {
             console.error("Failed to load mafia teammates:", e);
         }
-    }, [currentRoomId, myPlayer, myRole, gameState.players, nightState.teammates.length, addLog, address, walletClient, chainId]);
+    }, [currentRoomId, myPlayer, myRole, gameState.players, nightState.teammates.length, addLog, address, chainId]);
 
     // Load teammates when mafia enters night phase
     useEffect(() => {
