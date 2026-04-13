@@ -445,6 +445,13 @@ export function useEndGame(deps: EndGameDeps) {
     // === AUTO-DISTRIBUTE PRIZES + AUTO-DRAIN SESSION WALLET ON GAME END ===
     const endGameCleanupDoneRef = React.useRef(false);
 
+    // Reset end-game refs when entering a new room so cleanup/reveal
+    // can fire again without requiring a full page reload.
+    React.useEffect(() => {
+        endGameCleanupDoneRef.current = false;
+        roleRevealStartedRef.current = false;
+    }, [currentRoomId]);
+
     React.useEffect(() => {
         if (gameState.phase !== GamePhase.ENDED || endGameCleanupDoneRef.current) return;
         if (!refs.publicClientRef.current || !refs.addressRef.current) return;
