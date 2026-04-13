@@ -63,7 +63,17 @@ export function useEndGame(deps: EndGameDeps) {
 
     React.useEffect(() => { playersRef.current = gameState.players; }, [gameState.players]);
     React.useEffect(() => { revealedRolesRef.current = revealedRoles; }, [revealedRoles]);
-    React.useEffect(() => { if (currentRoomId) roomIdRef.current = currentRoomId; }, [currentRoomId]);
+    React.useEffect(() => {
+        if (currentRoomId) roomIdRef.current = currentRoomId;
+        // Clear stale role data from previous room — same players get different
+        // roles each game, so old data must not leak into the new room.
+        setRevealedRoles(new Map());
+        setOnChainRoles(new Map());
+        onChainRolesRef.current = new Map();
+        revealedRolesRef.current = new Map();
+        setRevealTimedOut(false);
+        isRevealingRef.current = false;
+    }, [currentRoomId]);
 
     // Helper: debug deposit after endGame
     const debugDepositAfterEnd = useCallback(async (roomId: bigint, myAddr: string, label: string) => {
