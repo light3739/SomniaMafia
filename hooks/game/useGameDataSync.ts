@@ -372,19 +372,19 @@ export function useGameDataSync(deps: DataSyncDeps) {
     // When WS is disconnected, fall back to the original fast polling (3s).
     const [wsConnected, setWsConnected] = useState(false);
     useEffect(() => {
-        const unsub = gmWs.onStateChange((state) => setWsConnected(state === 'connected'));
-        // Force-refresh on WS reconnect to catch events missed during disconnect
-        const onReconnect = () => {
-            if (currentRoomId) {
-                console.log('[DataSync] WS reconnected — force-refreshing game state');
+        // gmWs.onStateChange fires 'connected' ONLY after the server confirms
+        // 'joined' — safe to read game state at this point. The legacy
+        // 'gm-ws-reconnected' CustomEvent fired in onopen (before auth
+        // confirmation), which caused refreshPlayersList to run before the
+        // server had accepted the join, potentially reading a stale phase.
+        const unsub = gmWs.onStateChange((state) => {
+            setWsConnected(state === 'connected');
+            if (state === 'connected' && currentRoomId) {
+                console.log('[DataSync] WS connected — force-refreshing game state');
                 refreshPlayersList(currentRoomId);
             }
-        };
-        window.addEventListener('gm-ws-reconnected', onReconnect);
-        return () => {
-            unsub();
-            window.removeEventListener('gm-ws-reconnected', onReconnect);
-        };
+        });
+        return unsub;
     }, [currentRoomId, refreshPlayersList]);
 
     useEffect(() => {

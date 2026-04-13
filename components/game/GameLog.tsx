@@ -144,9 +144,13 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
     const lockedVotingDayRef = React.useRef<number>(0);
     const prevShowVotingResultsRef = React.useRef(false);
     if (showVotingResults && !prevShowVotingResultsRef.current) {
-        // Use dayCount as floor: if logs haven't arrived yet, actualLoggedDay
-        // returns 1 (fallback). dayCount from on-chain state is always current.
-        lockedVotingDayRef.current = Math.max(actualLoggedDay, dayCount || 1);
+        // Lock to the day whose logs have already arrived (actualLoggedDay).
+        // Do NOT use Math.max(actualLoggedDay, dayCount): on Somnia NightStarted
+        // fires in the same tx as VotingFinalized (100ms blocks), so dayCount
+        // can already be N+1 when showVotingResults first renders. Locking to N+1
+        // would make targetDay=N+1, find no DayStarted(N+1), and show
+        // "Waiting for events..." for the full 8s overlay.
+        lockedVotingDayRef.current = actualLoggedDay;
     } else if (!showVotingResults) {
         lockedVotingDayRef.current = 0;
     }

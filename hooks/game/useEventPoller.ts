@@ -53,18 +53,19 @@ export function useEventPoller(deps: PollerDeps) {
     const liveStartBlockRef = useRef<bigint | null>(null);
     const votingFinalizedTimerRef = refs.votingFinalizedTimerRef;
     const votingFinalizedInnerRef = useRef<NodeJS.Timeout | null>(null);
-    const lastVotingFinalizedDayRef = useRef<string>('');
     const lastVotingResultLogIdRef = useRef<string>('');
 
-    // Helper: show voting results overlay with proper dedup + cleanup.
-    // Guarded by dayCount to prevent re-triggering from stale events.
+    // Helper: show voting results overlay.
+    // Dedup (same log ID) is handled by each caller before invoking this.
     const triggerVotingResultsOverlay = useCallback(() => {
-        // Block stale triggers that arrive after we've already moved past voting.
-        // WS reconnects re-deliver historical VOTING_RESULT logs — without this
-        // check those logs would re-open the overlay during NIGHT or ENDED phase.
+        // Block stale triggers during terminal/pre-game phases.
+        // NIGHT is intentionally NOT blocked: on Somnia with 100ms blocks,
+        // NightStarted fires in the same tx as VotingFinalized. By the time the
+        // VOTING_RESULT WS log arrives, fetchGameData may have already read NIGHT
+        // and updated phaseRef. Blocking on NIGHT would prevent the overlay from
+        // ever showing. Dedup by log ID (in each caller) prevents re-delivery.
         const currentPhase = refs.phaseRef.current;
         if (
-            currentPhase === GamePhase.NIGHT ||
             currentPhase === GamePhase.ENDED ||
             currentPhase === GamePhase.LOBBY ||
             currentPhase === GamePhase.SHUFFLING ||
@@ -74,12 +75,7 @@ export function useEventPoller(deps: PollerDeps) {
             return;
         }
 
-        const currentDay = refs.dayCountRef.current;
-        const dedupKey = `${refs.currentRoomIdRef.current}:${currentDay}`;
-        if (lastVotingFinalizedDayRef.current === dedupKey) return; // already triggered this day+room
-        lastVotingFinalizedDayRef.current = dedupKey;
-
-        console.log('[VotingFinalized] Triggering results phase for day', currentDay);
+        console.log('[VotingFinalized] Triggering results phase (phase:', currentPhase, ')');
         setShowVotingResults(true);
 
         // Clear both outer and inner timers before starting new sequence
@@ -382,8 +378,12 @@ export function useEventPoller(deps: PollerDeps) {
                                 { isSafe: true }, vfId);
                         }
 
-                        // Show voting results overlay (reactive UI state)
-                        if (!isHistorical) {
+                        // Show voting results overlay (reactive UI state).
+                        // Dedup by log ID: the same VotingFinalized event can arrive
+                        // via both the blockchain handler (here) and the WS 'log'
+                        // handler. The first one to fire sets lastVotingResultLogIdRef
+                        // and triggers the overlay; the second is blocked.
+                        if (!isHistorical && vfId !== lastVotingResultLogIdRef.current) {
                             lastVotingResultLogIdRef.current = vfId;
                             triggerVotingResultsOverlay();
                         }
