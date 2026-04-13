@@ -123,6 +123,9 @@ export function useEventPoller(deps: PollerDeps) {
     }, [refs, addLogs]);
 
     // === POLL EVENTS ===
+    const BLOCK_REGRESSION_TOLERANCE = 5n;
+
+    // === POLL EVENTS ===
     const pollEvents = useCallback(async () => {
         if (isPollingRef.current) return;
 
@@ -135,11 +138,12 @@ export function useEventPoller(deps: PollerDeps) {
             const currentBlock = await pClient.getBlockNumber();
             if (currentBlock < lastProcessedBlockRef.current) {
                 const regression = lastProcessedBlockRef.current - currentBlock;
-                if (regression <= 5n) {
-                    // Common RPC load balancer lag (different nodes 1-5 blocks apart).
-                    // Reset ref to current block and continue — processedEventsRef
-                    // deduplicates any events already handled in prior cycles.
-                    console.warn(`[EventPoller] Block regression by ${regression} block(s), re-scanning from ${currentBlock}.`);
+                if (regression <= BLOCK_REGRESSION_TOLERANCE) {
+                    // Common RPC load balancer lag (different nodes diverging by 1-5 blocks).
+                    // Reset ref to currentBlock so this cycle scans from there forward;
+                    // the prior cycle already processed everything above currentBlock.
+                    // processedEventsRef deduplicates any overlap if the node catches up mid-cycle.
+                    console.warn(`[EventPoller] Block regression by ${regression} block(s), continuing from ${currentBlock}.`);
                     lastProcessedBlockRef.current = currentBlock;
                 } else {
                     // Large regression — potential reorg or major RPC issue. Skip cycle.
