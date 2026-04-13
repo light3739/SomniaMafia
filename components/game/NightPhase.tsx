@@ -330,6 +330,7 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
             const query = new URLSearchParams({
                 roomId: currentRoomId.toString(),
                 playerAddress: address as string,
+                signerAddress: signed.signerAddress,
                 signature: signed.signature,
                 nonce: signed.nonce,
                 timestamp: signed.timestamp.toString(),
