@@ -594,7 +594,10 @@ export function useEndGame(deps: EndGameDeps) {
 
             // --- Step 2: Drain session wallet via drainSessionGas (GM share deducted, rest refunded) ---
             try {
-                if (!session?.registeredOnChain || !session.privateKey || !session.address) return;
+                if (!session?.privateKey || !session.address) {
+                    console.log('[SessionDrain] No session key available, skipping drain');
+                    return;
+                }
 
                 const bal = await pClient.getBalance({ address: session.address as `0x${string}` });
                 if (bal === 0n) {
