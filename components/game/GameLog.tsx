@@ -170,6 +170,15 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         ? lockedVotingDayRef.current
         : (actualLoggedDay || 1);
 
+    // Clear typewriter animation cache when day changes so texts like
+    // "Discussion concluded" re-animate on each new day instead of
+    // appearing instantly (which looks like "stuck old logs").
+    const prevTargetDayRef = React.useRef(0);
+    if (targetDay !== prevTargetDayRef.current) {
+        typedTextCache.clear();
+        prevTargetDayRef.current = targetDay;
+    }
+
     // ─── dayEvents: single source of truth from eventType/eventData ──────
     // Scans ALL logs directly instead of relying on todayLogs slice.
     // Uses eventType as primary discriminator, text parsing only for
