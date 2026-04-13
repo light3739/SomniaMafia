@@ -217,26 +217,25 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             }
         }
 
-        // No marker for the current day yet → return a clean state so the UI
-        // doesn't render stale events from earlier days while we wait.
+        // When dayStartIdx === -1 the DayStarted marker for targetDay hasn't
+        // arrived yet. Previously this was a hard early-return that blocked ALL
+        // downstream processing — including forced states (step 5) and full-log
+        // fallback scans (steps 6-7). During the voting-results overlay this
+        // caused "Waiting for events..." even when logs HAD the VOTING_RESULT.
+        // Now: skip the day-scoped scan (steps 2-3) but let everything else run.
         if (dayStartIdx < 0) {
-            return {
-                nightResult: null,
-                discussionStarted: false,
-                discussionFinished: false,
-                currentSpeaker: null,
-                votingStarted: false,
-                voteCasts: [],
-                votingResult: null,
-                nightFallen: false,
-            };
+            console.warn('[GameLog] dayStartIdx=-1 for targetDay', targetDay,
+                '| actualLoggedDay', actualLoggedDay, '| dayCount', dayCount,
+                '| logsCount', logs.length, '| showVotingResults', showVotingResults,
+                '| last 5:', logs.slice(-5).map(l => ({ et: l.eventType, msg: l.message.slice(0, 40), ed: l.eventData })));
         }
 
         // 2. Search BACKWARDS from dayStartIdx for NIGHT_RESULT.
         //    Night result occurs at the end of the previous night, before the
         //    current day starts. Search up to 15 entries back to handle
         //    interleaved PlayerEliminated / other logs.
-        if (targetDay > 1) {
+        //    Skip when dayStartIdx === -1 (no anchor point to scan from).
+        if (targetDay > 1 && dayStartIdx >= 0) {
             for (let i = dayStartIdx - 1; i >= Math.max(0, dayStartIdx - 30); i--) {
                 const l = logs[i];
                 // Structured path (server eventType)
@@ -264,7 +263,9 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         }
 
         // 3. Scan from dayStartIdx to end for current day events.
-        for (let i = dayStartIdx; i < logs.length; i++) {
+        //    Skip when dayStartIdx === -1 — fallback scans (steps 6-7) will
+        //    still recover votingResult and nightResult from the full log array.
+        for (let i = dayStartIdx; i >= 0 && i < logs.length; i++) {
             const log = logs[i];
 
             // ── Structured eventType path (PRIMARY — server is source of truth) ──
