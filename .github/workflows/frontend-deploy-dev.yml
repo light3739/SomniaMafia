@@ -66,6 +66,10 @@ jobs:
           file: ops/frontend-server/Dockerfile
           push: true
           tags: ghcr.io/light3739/somniamafia:dev
+          build-args: |
+            NEXT_PUBLIC_GM_SERVER_URL=https://gm-test.mafiaonchain.live
+            NEXT_PUBLIC_LIVEKIT_URL=wss://livekit.mafiaonchain.live
+            NEXT_PUBLIC_ACTIVE_NETWORK=somnia_mainnet
 
       - name: Setup SSH key
         run: |

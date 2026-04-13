@@ -58,11 +58,29 @@ export function loadSession(): StoredSession | null {
 
     // Check if expired
     if (Date.now() > session.expiresAt) {
-      clearSession();
+      // Don't clearSession() here — the private key is still needed for
+      // drainSessionGas even after the session "expires" on the frontend.
+      // The contract's drainSessionGas does NOT check session expiry.
       return null;
     }
 
     return session;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load session ignoring expiry — used for post-game gas drain.
+ * The contract's drainSessionGas only checks sessionToMain mapping,
+ * NOT session expiry, so an "expired" session key can still drain.
+ */
+export function loadSessionForDrain(): StoredSession | null {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (!stored) return null;
+
+  try {
+    return JSON.parse(stored) as StoredSession;
   } catch {
     return null;
   }

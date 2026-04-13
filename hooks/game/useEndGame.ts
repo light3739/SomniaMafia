@@ -12,7 +12,7 @@ import { useCallback, useRef, useState, useEffect } from 'react';
 import { formatEther, pad, toHex } from 'viem';
 import { MAFIA_ABI, GM_SERVER_URL } from '../../contracts/config';
 import { generateEndGameProof } from '../../services/zkProof';
-import { loadSession } from '../../services/sessionKeyService';
+import { loadSession, loadSessionForDrain } from '../../services/sessionKeyService';
 import { GamePhase, GameState, Role } from '../../types';
 import type { GameRefs } from './useGameRefs';
 import type { TransactionEngine } from './useTransactionEngine';
@@ -491,9 +491,8 @@ export function useEndGame(deps: EndGameDeps) {
 
                         if (!isFirstInWaterfall) {
                             console.log(`[AutoDistribute] Not first in waterfall (position ${myIndex + 1}/${alivePlayers.length}), skipping — will poll for prizesClaimed`);
-                        } else if (session?.registeredOnChain && session.privateKey) {
-                            // Only the first player does reveal + distribute
-                            // Step 1a: Ask GM to reveal roles on-chain
+                        } else {
+                            // Step 1a: Ask GM to reveal roles on-chain (no session key needed — GM uses its own key)
                             try {
                                 const chainId = chain.id || 50312;
                                 console.log('[AutoDistribute] Requesting GM to reveal roles on-chain...');
@@ -512,47 +511,50 @@ export function useEndGame(deps: EndGameDeps) {
                                 console.warn('[AutoDistribute] Role reveal request failed (continuing anyway):', revealErr);
                             }
 
-                            // Step 1b: Re-check if already claimed (reveal might have triggered another player's distribute)
-                            if (tournamentId > 0n) {
-                                const tDataCheck = await pClient.readContract({
+                            // Step 1b: Distribute prizes (requires session key)
+                            if (session?.registeredOnChain && session.privateKey) {
+                                // Re-check if already claimed (reveal might have triggered another player's distribute)
+                                if (tournamentId > 0n) {
+                                    const tDataCheck = await pClient.readContract({
+                                        address: refs.contractAddressRef.current,
+                                        abi: MAFIA_ABI,
+                                        functionName: 'getTournament',
+                                        args: [tournamentId],
+                                    }) as any;
+                                    const claimedNow = Array.isArray(tDataCheck) ? Boolean(tDataCheck[13]) : Boolean(tDataCheck.prizesClaimed);
+                                    if (claimedNow) {
+                                        console.log('[AutoDistribute] Prizes claimed while revealing roles');
+                                        throw new Error('ALREADY_CLAIMED');
+                                    }
+                                }
+
+                                console.log('[AutoDistribute] Submitting distributeMafiaPrizes via session key...');
+                                const { createWalletClient, http: viemHttp } = await import('viem');
+                                const { privateKeyToAccount } = await import('viem/accounts');
+                                const account = privateKeyToAccount(session.privateKey as `0x${string}`);
+
+                                const sessionClient = createWalletClient({
+                                    account, chain,
+                                    transport: viemHttp(chain.rpcUrls.default.http[0]),
+                                });
+
+                                const hash = await sessionClient.writeContract({
                                     address: refs.contractAddressRef.current,
                                     abi: MAFIA_ABI,
-                                    functionName: 'getTournament',
-                                    args: [tournamentId],
-                                }) as any;
-                                const claimedNow = Array.isArray(tDataCheck) ? Boolean(tDataCheck[13]) : Boolean(tDataCheck.prizesClaimed);
-                                if (claimedNow) {
-                                    console.log('[AutoDistribute] Prizes claimed while revealing roles');
-                                    throw new Error('ALREADY_CLAIMED');
+                                    functionName: 'distributeMafiaPrizes',
+                                    args: [currentRoomId],
+                                    account,
+                                    chain,
+                                });
+
+                                await pClient.waitForTransactionReceipt({ hash });
+                                console.log('[AutoDistribute] Prizes distributed successfully!');
+                                addLog('Prizes distributed automatically', 'success');
+
+                                // Store tx hash for GameOver popup (all clients can read)
+                                if (currentRoomId) {
+                                    localStorage.setItem(`prize_tx_${currentRoomId}`, hash);
                                 }
-                            }
-
-                            console.log('[AutoDistribute] Submitting distributeMafiaPrizes via session key...');
-                            const { createWalletClient, http: viemHttp } = await import('viem');
-                            const { privateKeyToAccount } = await import('viem/accounts');
-                            const account = privateKeyToAccount(session.privateKey as `0x${string}`);
-
-                            const sessionClient = createWalletClient({
-                                account, chain,
-                                transport: viemHttp(chain.rpcUrls.default.http[0]),
-                            });
-
-                            const hash = await sessionClient.writeContract({
-                                address: refs.contractAddressRef.current,
-                                abi: MAFIA_ABI,
-                                functionName: 'distributeMafiaPrizes',
-                                args: [currentRoomId],
-                                account,
-                                chain,
-                            });
-
-                            await pClient.waitForTransactionReceipt({ hash });
-                            console.log('[AutoDistribute] Prizes distributed successfully!');
-                            addLog('Prizes distributed automatically', 'success');
-
-                            // Store tx hash for GameOver popup (all clients can read)
-                            if (currentRoomId) {
-                                localStorage.setItem(`prize_tx_${currentRoomId}`, hash);
                             }
                         }
                     }
@@ -570,7 +572,7 @@ export function useEndGame(deps: EndGameDeps) {
             // --- Step 1.5: For non-tournament games, still call reveal-roles so GM
             //     can record roles on-chain and report gas costs (reportRoomGasCost).
             //     Only the first player in waterfall does this.
-            if (!gameState.isTournament && currentRoomId && session?.privateKey) {
+            if (!gameState.isTournament && currentRoomId) {
                 const myAddr = refs.addressRef.current!.toLowerCase();
                 const alivePlayers = gameState.players
                     .filter(p => p.isAlive)
@@ -593,13 +595,16 @@ export function useEndGame(deps: EndGameDeps) {
             }
 
             // --- Step 2: Drain session wallet via drainSessionGas (GM share deducted, rest refunded) ---
+            // Use loadSessionForDrain which ignores expiry — the contract's drainSessionGas
+            // only checks sessionToMain mapping, NOT session expiry.
             try {
-                if (!session?.privateKey || !session.address) {
+                const drainSession = loadSessionForDrain();
+                if (!drainSession?.privateKey || !drainSession.address) {
                     console.log('[SessionDrain] No session key available, skipping drain');
                     return;
                 }
 
-                const bal = await pClient.getBalance({ address: session.address as `0x${string}` });
+                const bal = await pClient.getBalance({ address: drainSession.address as `0x${string}` });
                 if (bal === 0n) {
                     console.log('[SessionDrain] Session wallet already empty');
                     return;
@@ -626,7 +631,7 @@ export function useEndGame(deps: EndGameDeps) {
 
                 const { createWalletClient, http: viemHttp } = await import('viem');
                 const { privateKeyToAccount } = await import('viem/accounts');
-                const account = privateKeyToAccount(session.privateKey as `0x${string}`);
+                const account = privateKeyToAccount(drainSession.privateKey as `0x${string}`);
 
                 const sessionClient = createWalletClient({
                     account, chain,
@@ -644,7 +649,7 @@ export function useEndGame(deps: EndGameDeps) {
                 // Use half the balance as a trial value for estimation
                 const trialValue = bal / 2n;
                 const gasEstimate = await pClient.estimateGas({
-                    account: session.address as `0x${string}`,
+                    account: drainSession.address as `0x${string}`,
                     to: refs.contractAddressRef.current,
                     data: calldata,
                     value: trialValue,
