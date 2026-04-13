@@ -55,6 +55,17 @@ export const DayPhase: React.FC<DayPhaseProps> = React.memo(({
     const [voteState, setVoteState] = useState({ myVote: null as string | null, voteCounts: new Map<string, number>(), hasVoted: false });
     const [isProcessing, setIsProcessing] = useState(false);
 
+    // Reset local voting state when room changes — prevents stale votes
+    // from previous game showing on day 1 of new game.
+    useEffect(() => {
+        setVoteState({ myVote: null, voteCounts: new Map(), hasVoted: false });
+        setIsProcessing(false);
+        discussionStartedRef.current = false;
+        votingTimeoutRef.current = false;
+        dayTimeoutRef.current = false;
+        votingStartedRef.current = false;
+    }, [currentRoomId]);
+
     const isVotingPhase = gameState.phase === GamePhase.VOTING;
     const isDayPhase = gameState.phase === GamePhase.DAY;
     const alivePlayers = gameState.players.filter(p => p.isAlive);

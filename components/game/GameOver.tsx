@@ -95,6 +95,18 @@ export const GameOver: React.FC = React.memo(() => {
     useEffect(() => { playersRef.current = gameState.players; }, [gameState.players]);
     const [winner, setWinner] = useState<Winner | null>((gameState.winner as Winner) || null);
 
+    // Listen for prize-distributed WS event so ALL players get the tx hash
+    // (not just the one who called distributeMafiaPrizes).
+    useEffect(() => {
+        const unsub = gmWs.on('prize-distributed', (data: any) => {
+            if (data?.txHash && currentRoomId && String(data.roomId) === String(currentRoomId)) {
+                setPrizeTxHash(data.txHash);
+                localStorage.setItem(`prize_tx_${currentRoomId}`, data.txHash);
+            }
+        });
+        return unsub;
+    }, [currentRoomId]);
+
     // Sync local winner state when gameState.winner changes
     useEffect(() => {
         if (gameState.winner) {
