@@ -134,8 +134,18 @@ export function useEventPoller(deps: PollerDeps) {
         try {
             const currentBlock = await pClient.getBlockNumber();
             if (currentBlock < lastProcessedBlockRef.current) {
-                console.warn(`[EventPoller] Block regression: RPC returned ${currentBlock}, expected >= ${lastProcessedBlockRef.current}. Skipping cycle.`);
-                return;
+                const regression = lastProcessedBlockRef.current - currentBlock;
+                if (regression <= 5n) {
+                    // Common RPC load balancer lag (different nodes 1-5 blocks apart).
+                    // Reset ref to current block and continue — processedEventsRef
+                    // deduplicates any events already handled in prior cycles.
+                    console.warn(`[EventPoller] Block regression by ${regression} block(s), re-scanning from ${currentBlock}.`);
+                    lastProcessedBlockRef.current = currentBlock;
+                } else {
+                    // Large regression — potential reorg or major RPC issue. Skip cycle.
+                    console.warn(`[EventPoller] Block regression: RPC returned ${currentBlock}, expected >= ${lastProcessedBlockRef.current}. Skipping cycle.`);
+                    return;
+                }
             }
 
             const roomIdTopic = pad(toHex(roomId), { size: 32 });
