@@ -59,7 +59,7 @@ export function useEndGame(deps: EndGameDeps) {
     const playersRef = React.useRef(gameState.players);
     const roomIdRef = React.useRef<bigint | null>(currentRoomId);
     const pollIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
-    const roleRevealStartedRef = React.useRef(false);
+    // roleRevealStartedRef replaced by roleRevealRoomRef (tracks per-room)
 
     React.useEffect(() => { playersRef.current = gameState.players; }, [gameState.players]);
     React.useEffect(() => { revealedRolesRef.current = revealedRoles; }, [revealedRoles]);
@@ -443,17 +443,13 @@ export function useEndGame(deps: EndGameDeps) {
     }, [refs, isTestMode, currentRoomId]);
 
     // === AUTO-DISTRIBUTE PRIZES + AUTO-DRAIN SESSION WALLET ON GAME END ===
-    const endGameCleanupDoneRef = React.useRef(false);
-
-    // Reset end-game refs when entering a new room so cleanup/reveal
-    // can fire again without requiring a full page reload.
-    React.useEffect(() => {
-        endGameCleanupDoneRef.current = false;
-        roleRevealStartedRef.current = false;
-    }, [currentRoomId]);
+    // Track which room was cleaned up — prevents re-running for same room
+    // while allowing cleanup for a new room without page reload.
+    const endGameCleanupRoomRef = React.useRef<bigint | null>(null);
+    const roleRevealRoomRef = React.useRef<bigint | null>(null);
 
     React.useEffect(() => {
-        if (gameState.phase !== GamePhase.ENDED || endGameCleanupDoneRef.current) return;
+        if (gameState.phase !== GamePhase.ENDED || endGameCleanupRoomRef.current === currentRoomId) return;
         if (!refs.publicClientRef.current || !refs.addressRef.current) return;
 
         const runEndGameCleanup = async () => {
@@ -689,7 +685,7 @@ export function useEndGame(deps: EndGameDeps) {
             }
         };
 
-        endGameCleanupDoneRef.current = true;
+        endGameCleanupRoomRef.current = currentRoomId;
         // Delay to let endGame settle and roles load
         const t = setTimeout(runEndGameCleanup, 3000);
         return () => clearTimeout(t);
@@ -807,9 +803,9 @@ export function useEndGame(deps: EndGameDeps) {
 
     // === ROLE REVEAL TRIGGER (on phase → ENDED) ===
     React.useEffect(() => {
-        if (gameState.phase !== GamePhase.ENDED || roleRevealStartedRef.current) return;
+        if (gameState.phase !== GamePhase.ENDED || roleRevealRoomRef.current === currentRoomId) return;
         if (!refs.publicClientRef.current) return;
-        roleRevealStartedRef.current = true;
+        roleRevealRoomRef.current = currentRoomId;
 
         // Snapshot roomId
         const rid = currentRoomId || roomIdRef.current;
