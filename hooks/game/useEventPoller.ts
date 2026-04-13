@@ -220,14 +220,10 @@ export function useEventPoller(deps: PollerDeps) {
                         break;
 
                     case 'DayStarted': {
-                        // Write a client-side day marker log immediately so GameLog
-                        // can target the new day without waiting for pollServerLogs.
-                        // Only for LIVE events — historical logs from previous games
-                        // in the same room would get current timestamps and pollute
-                        // the log array. Server logs via pollServerLogs are authoritative
-                        // for historical events.
+                        // Write client-side day marker immediately. Stable id
+                        // deduplicates with server log when it arrives.
                         const dayNum = args.dayNumber ? Number(args.dayNumber) : 0;
-                        if (dayNum > 0 && !isHistorical) {
+                        if (dayNum > 0) {
                             addLog(
                                 `Day ${dayNum} has begun.`,
                                 'phase',
@@ -240,15 +236,11 @@ export function useEventPoller(deps: PollerDeps) {
                     }
 
                     case 'VotingStarted':
-                        if (!isHistorical) {
-                            addLog('Voting Phase Started. Cast your votes.', 'warning', 'VOTING_STARTED' as any, {}, stableId(log));
-                        }
+                        addLog('Voting Phase Started. Cast your votes.', 'warning', 'VOTING_STARTED' as any, {}, stableId(log));
                         break;
 
                     case 'NightStarted':
-                        if (!isHistorical) {
-                            addLog('Night has fallen...', 'night' as any, 'NIGHT_FALLS' as any, {}, stableId(log));
-                        }
+                        addLog('Night has fallen...', 'night' as any, 'NIGHT_FALLS' as any, {}, stableId(log));
                         break;
 
                     case 'NightFinalized': {
@@ -261,7 +253,7 @@ export function useEventPoller(deps: PollerDeps) {
                         // NightResolvedByGM (handled in the next case). Either way we
                         // surface a NIGHT_RESULT log entry so GameLog can render the
                         // morning recap on the next day.
-                        if (!isHistorical) {
+                        {
                             const nightId = stableId(log);
                             if (args.killed && args.killed !== '0x0000000000000000000000000000000000000000') {
                                 const killedStr = (args.killed as string).toLowerCase();
@@ -288,7 +280,7 @@ export function useEventPoller(deps: PollerDeps) {
                         // morning recap on the next day stays empty.
                         if (roomId) await dataSync.fetchGameData(roomId);
 
-                        if (!isHistorical) {
+                        {
                             const nightId = stableId(log);
                             const killed = args.killed as string | undefined;
                             if (killed && killed !== '0x0000000000000000000000000000000000000000') {
@@ -349,9 +341,8 @@ export function useEventPoller(deps: PollerDeps) {
                             const targetStr = (args.target as string).toLowerCase();
                             setVoteMap(prev => ({ ...prev, [voterStr]: targetStr }));
 
-                            // Write vote log only for live events. Historical votes
-                            // come from pollServerLogs with correct timestamps.
-                            if (!isHistorical) {
+                            // Write vote log with stable id (deduplicates with server).
+                            {
                                 const voter = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === voterStr);
                                 const target = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === targetStr);
                                 const voterName = voter?.name || `${(args.voter as string).slice(0, 6)}...`;
@@ -379,18 +370,16 @@ export function useEventPoller(deps: PollerDeps) {
                     case 'VotingFinalized': {
                         // Write result log immediately with stable id for deduplication.
                         const vfId = stableId(log);
-                        // Write result log only for live events.
-                        if (!isHistorical) {
-                            if (args.eliminated !== '0x0000000000000000000000000000000000000000') {
-                                const elimStr = (args.eliminated as string).toLowerCase();
-                                const elimPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === elimStr);
-                                const elimName = elimPlayer?.name || `${(args.eliminated as string).slice(0, 6)}...`;
-                                addLog(`Voting Finalized: ${elimName} was eliminated!`, 'danger', 'VOTING_RESULT',
-                                    { isEliminated: true, playerName: elimName, playerAddress: elimStr }, vfId);
-                            } else {
-                                addLog('Voting Finalized: No one was eliminated.', 'warning', 'VOTING_RESULT',
-                                    { isSafe: true }, vfId);
-                            }
+                        // Write result log with stable id (deduplicates with server).
+                        if (args.eliminated !== '0x0000000000000000000000000000000000000000') {
+                            const elimStr = (args.eliminated as string).toLowerCase();
+                            const elimPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === elimStr);
+                            const elimName = elimPlayer?.name || `${(args.eliminated as string).slice(0, 6)}...`;
+                            addLog(`Voting Finalized: ${elimName} was eliminated!`, 'danger', 'VOTING_RESULT',
+                                { isEliminated: true, playerName: elimName, playerAddress: elimStr }, vfId);
+                        } else {
+                            addLog('Voting Finalized: No one was eliminated.', 'warning', 'VOTING_RESULT',
+                                { isSafe: true }, vfId);
                         }
 
                         // Show voting results overlay (reactive UI state).
