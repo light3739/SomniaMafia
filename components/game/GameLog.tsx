@@ -235,7 +235,7 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
             console.warn('[GameLog] dayStartIdx=-1 for targetDay', targetDay,
                 '| actualLoggedDay', actualLoggedDay, '| dayCount', dayCount,
                 '| logsCount', logs.length, '| showVotingResults', showVotingResults,
-                '| last 5:', logs.slice(-5).map(l => ({ et: l.eventType, msg: l.message.slice(0, 40), ed: l.eventData })));
+                '| ALL logs:', logs.map(l => ({ id: l.id?.slice(0, 12), et: l.eventType, msg: l.message.slice(0, 35), ed: l.eventData })));
         }
 
         // 2. Search BACKWARDS from dayStartIdx for NIGHT_RESULT.
