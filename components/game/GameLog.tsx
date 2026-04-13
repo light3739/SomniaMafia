@@ -160,16 +160,15 @@ export const GameLog: React.FC<GameLogProps> = React.memo(({ liveDiscussion, for
         ? lockedVotingDayRef.current
         : 0;
 
-    // Use Math.max(actualLoggedDay, dayCount) as target after voting results end.
-    // dayCount advances on-chain (via fetchGameData after NightFinalized) BEFORE
-    // the DayStarted log arrives via WS/polling. Without the max(), targetDay
-    // stays on the old day after showVotingResults clears, causing the forward
-    // scan to pick up stale Day N-1 events mixed with Day N transition events.
-    // With the max(), if dayCount=N+1 but no DayStarted log exists yet,
-    // dayStartIdx=-1 → early return → "Waiting for events..." (correct behavior).
+    // Always target actualLoggedDay — the highest day whose DayStarted log
+    // actually EXISTS in the logs array. Using dayCount here caused persistent
+    // dayStartIdx=-1: fetchGameData reads dayCount=N+1 from chain BEFORE
+    // DayStarted(N+1) log arrives via pollServerLogs/WS, so the search for
+    // DayStarted(N+1) fails. Better to show Day N's events until Day N+1's
+    // log arrives than to show nothing.
     const targetDay = (showVotingResults && lockedVotingDayRef.current > 0)
         ? lockedVotingDayRef.current
-        : Math.max(actualLoggedDay || 1, dayCount || 1);
+        : (actualLoggedDay || 1);
 
     // ─── dayEvents: single source of truth from eventType/eventData ──────
     // Scans ALL logs directly instead of relying on todayLogs slice.

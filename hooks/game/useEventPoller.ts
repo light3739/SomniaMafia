@@ -216,8 +216,12 @@ export function useEventPoller(deps: PollerDeps) {
                     case 'DayStarted': {
                         // Write a client-side day marker log immediately so GameLog
                         // can target the new day without waiting for pollServerLogs.
+                        // Only for LIVE events — historical logs from previous games
+                        // in the same room would get current timestamps and pollute
+                        // the log array. Server logs via pollServerLogs are authoritative
+                        // for historical events.
                         const dayNum = args.dayNumber ? Number(args.dayNumber) : 0;
-                        if (dayNum > 0) {
+                        if (dayNum > 0 && !isHistorical) {
                             addLog(
                                 `Day ${dayNum} has begun.`,
                                 'phase',
@@ -230,13 +234,15 @@ export function useEventPoller(deps: PollerDeps) {
                     }
 
                     case 'VotingStarted':
-                        // Write client-side log immediately (deduplicates with server log by stable id)
-                        addLog('Voting Phase Started. Cast your votes.', 'warning', 'VOTING_STARTED' as any, {}, stableId(log));
+                        if (!isHistorical) {
+                            addLog('Voting Phase Started. Cast your votes.', 'warning', 'VOTING_STARTED' as any, {}, stableId(log));
+                        }
                         break;
 
                     case 'NightStarted':
-                        // Write client-side log immediately (deduplicates with server log by stable id)
-                        addLog('Night has fallen...', 'night' as any, 'NIGHT_FALLS' as any, {}, stableId(log));
+                        if (!isHistorical) {
+                            addLog('Night has fallen...', 'night' as any, 'NIGHT_FALLS' as any, {}, stableId(log));
+                        }
                         break;
 
                     case 'NightFinalized': {
@@ -249,20 +255,22 @@ export function useEventPoller(deps: PollerDeps) {
                         // NightResolvedByGM (handled in the next case). Either way we
                         // surface a NIGHT_RESULT log entry so GameLog can render the
                         // morning recap on the next day.
-                        const nightId = stableId(log);
-                        if (args.killed && args.killed !== '0x0000000000000000000000000000000000000000') {
-                            const killedStr = (args.killed as string).toLowerCase();
-                            const healedStr = args.healed ? (args.healed as string).toLowerCase() : '0x00';
-                            if (killedStr === healedStr) {
-                                addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
+                        if (!isHistorical) {
+                            const nightId = stableId(log);
+                            if (args.killed && args.killed !== '0x0000000000000000000000000000000000000000') {
+                                const killedStr = (args.killed as string).toLowerCase();
+                                const healedStr = args.healed ? (args.healed as string).toLowerCase() : '0x00';
+                                if (killedStr === healedStr) {
+                                    addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
+                                } else {
+                                    const killedPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === killedStr);
+                                    const kname = killedPlayer?.name || `${(args.killed as string).slice(0, 6)}...`;
+                                    addLog(`Night Result: ${kname} was killed by Mafia!`, 'danger', 'NIGHT_RESULT',
+                                        { isEliminated: true, playerName: kname, playerAddress: killedStr }, nightId);
+                                }
                             } else {
-                                const killedPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === killedStr);
-                                const kname = killedPlayer?.name || `${(args.killed as string).slice(0, 6)}...`;
-                                addLog(`Night Result: ${kname} was killed by Mafia!`, 'danger', 'NIGHT_RESULT',
-                                    { isEliminated: true, playerName: kname, playerAddress: killedStr }, nightId);
+                                addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
                             }
-                        } else {
-                            addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
                         }
                         break;
                     }
@@ -274,19 +282,18 @@ export function useEventPoller(deps: PollerDeps) {
                         // morning recap on the next day stays empty.
                         if (roomId) await dataSync.fetchGameData(roomId);
 
-                        const nightId = stableId(log);
-                        const killed = args.killed as string | undefined;
-                        if (killed && killed !== '0x0000000000000000000000000000000000000000') {
-                            const killedStr = killed.toLowerCase();
-                            const killedPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === killedStr);
-                            const kname = killedPlayer?.name || `${killed.slice(0, 6)}...`;
-                            addLog(`Night Result: ${kname} was killed by Mafia!`, 'danger', 'NIGHT_RESULT',
-                                { isEliminated: true, playerName: kname, playerAddress: killedStr }, nightId);
-                        } else {
-                            // Defensive: GM should never call resolveNightAsGameMaster with
-                            // victim==0 (it routes to finalizeNight which fires NightFinalized
-                            // instead), but log a peaceful result just in case.
-                            addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
+                        if (!isHistorical) {
+                            const nightId = stableId(log);
+                            const killed = args.killed as string | undefined;
+                            if (killed && killed !== '0x0000000000000000000000000000000000000000') {
+                                const killedStr = killed.toLowerCase();
+                                const killedPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === killedStr);
+                                const kname = killedPlayer?.name || `${killed.slice(0, 6)}...`;
+                                addLog(`Night Result: ${kname} was killed by Mafia!`, 'danger', 'NIGHT_RESULT',
+                                    { isEliminated: true, playerName: kname, playerAddress: killedStr }, nightId);
+                            } else {
+                                addLog('Night Result: No one died last night.', 'success', 'NIGHT_RESULT', { isSafe: true }, nightId);
+                            }
                         }
                         break;
                     }
@@ -330,23 +337,22 @@ export function useEventPoller(deps: PollerDeps) {
 
                     case 'VoteCast': {
                         // Update the visual vote-map (arrows on player circles).
-                        // Text log is written by the server. If server ABI doesn't have VoteCast,
-                        // write a fallback client log with stable id.
+                        // Reactive state — always process, even historical.
                         try {
                             const voterStr = (args.voter as string).toLowerCase();
                             const targetStr = (args.target as string).toLowerCase();
                             setVoteMap(prev => ({ ...prev, [voterStr]: targetStr }));
 
-                            // Fallback: write vote log from client in case server doesn't have VoteCast in ABI.
-                            // Stable id → deduplicates with server log if server does write it.
-                            // Addresses travel in eventData so downstream UI can resolve nicknames
-                            // against the live players list instead of brittle name matching.
-                            const voter = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === voterStr);
-                            const target = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === targetStr);
-                            const voterName = voter?.name || `${(args.voter as string).slice(0, 6)}...`;
-                            const targetName = target?.name || `${(args.target as string).slice(0, 6)}...`;
-                            addLog(`${voterName} voted for ${targetName}`, 'info', 'PLAYER_VOTED',
-                                { playerName: voterName, targetName, voterAddress: voterStr, targetAddress: targetStr }, stableId(log));
+                            // Write vote log only for live events. Historical votes
+                            // come from pollServerLogs with correct timestamps.
+                            if (!isHistorical) {
+                                const voter = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === voterStr);
+                                const target = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === targetStr);
+                                const voterName = voter?.name || `${(args.voter as string).slice(0, 6)}...`;
+                                const targetName = target?.name || `${(args.target as string).slice(0, 6)}...`;
+                                addLog(`${voterName} voted for ${targetName}`, 'info', 'PLAYER_VOTED',
+                                    { playerName: voterName, targetName, voterAddress: voterStr, targetAddress: targetStr }, stableId(log));
+                            }
                         } catch (e) {
                             console.error('[VoteCast] Error:', e);
                         }
@@ -367,15 +373,18 @@ export function useEventPoller(deps: PollerDeps) {
                     case 'VotingFinalized': {
                         // Write result log immediately with stable id for deduplication.
                         const vfId = stableId(log);
-                        if (args.eliminated !== '0x0000000000000000000000000000000000000000') {
-                            const elimStr = (args.eliminated as string).toLowerCase();
-                            const elimPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === elimStr);
-                            const elimName = elimPlayer?.name || `${(args.eliminated as string).slice(0, 6)}...`;
-                            addLog(`Voting Finalized: ${elimName} was eliminated!`, 'danger', 'VOTING_RESULT',
-                                { isEliminated: true, playerName: elimName, playerAddress: elimStr }, vfId);
-                        } else {
-                            addLog('Voting Finalized: No one was eliminated.', 'warning', 'VOTING_RESULT',
-                                { isSafe: true }, vfId);
+                        // Write result log only for live events.
+                        if (!isHistorical) {
+                            if (args.eliminated !== '0x0000000000000000000000000000000000000000') {
+                                const elimStr = (args.eliminated as string).toLowerCase();
+                                const elimPlayer = refs.playersRef.current.find((p: any) => p.address.toLowerCase() === elimStr);
+                                const elimName = elimPlayer?.name || `${(args.eliminated as string).slice(0, 6)}...`;
+                                addLog(`Voting Finalized: ${elimName} was eliminated!`, 'danger', 'VOTING_RESULT',
+                                    { isEliminated: true, playerName: elimName, playerAddress: elimStr }, vfId);
+                            } else {
+                                addLog('Voting Finalized: No one was eliminated.', 'warning', 'VOTING_RESULT',
+                                    { isSafe: true }, vfId);
+                            }
                         }
 
                         // Show voting results overlay (reactive UI state).
