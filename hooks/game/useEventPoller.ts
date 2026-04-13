@@ -487,6 +487,13 @@ export function useEventPoller(deps: PollerDeps) {
         'phase-change': (_data: unknown) => {
             const roomId = refs.currentRoomIdRef.current;
             if (roomId) dataSync.refreshPlayersListDebounced(roomId);
+            // Server sends 'log' (DayStarted) BEFORE 'phase-change' (see
+            // logListener.ts:274 vs 284). But if the 'log' event was missed
+            // or delayed, fetchGameData from the debounced refresh will read
+            // dayCount=N+1 before DayStarted(N+1) log arrives — causing a
+            // brief targetDay mismatch. Fetching server logs immediately on
+            // phase-change closes this gap.
+            pollServerLogs();
         },
         'player-update': (data: unknown) => {
             const roomId = refs.currentRoomIdRef.current;
