@@ -435,6 +435,20 @@ export function useEventPoller(deps: PollerDeps) {
             if (log && log.message) {
                 addLogs([log]);
             }
+            // Update vote arrows immediately from WS server log.
+            // The GM server includes voterAddress + targetAddress in PLAYER_VOTED
+            // eventData and pushes this log via WS as soon as VoteCast fires on-chain.
+            // This makes vote arrows appear via WS rather than waiting for pollEvents
+            // (which runs every 5s when WS connected and can be delayed by block regression).
+            if (
+                log?.eventType === 'PLAYER_VOTED' &&
+                log.eventData?.voterAddress &&
+                log.eventData?.targetAddress
+            ) {
+                const voter = (log.eventData.voterAddress as string).toLowerCase();
+                const target = (log.eventData.targetAddress as string).toLowerCase();
+                setVoteMap(prev => ({ ...prev, [voter]: target }));
+            }
             // Trigger voting results overlay from the VotingFinalized LOG arrival
             // rather than from the 'player-update' event. This guarantees all
             // preceding VoteCast 'log' messages have already been received (WS is
@@ -469,7 +483,7 @@ export function useEventPoller(deps: PollerDeps) {
         },
     } as Partial<Record<ServerEventType, (data: unknown) => void>>),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [addLogs, dataSync, refs, handleIncomingMafiaSignal, triggerVotingResultsOverlay]);
+    [addLogs, dataSync, refs, handleIncomingMafiaSignal, triggerVotingResultsOverlay, setVoteMap]);
 
     const { wsConnected } = useGmWebSocket({
         roomId: currentRoomId ? Number(currentRoomId) : null,
