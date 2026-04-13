@@ -570,7 +570,7 @@ export function useEndGame(deps: EndGameDeps) {
             // --- Step 1.5: For non-tournament games, still call reveal-roles so GM
             //     can record roles on-chain and report gas costs (reportRoomGasCost).
             //     Only the first player in waterfall does this.
-            if (!gameState.isTournament && currentRoomId && session?.registeredOnChain && session.privateKey) {
+            if (!gameState.isTournament && currentRoomId && session?.privateKey) {
                 const myAddr = refs.addressRef.current!.toLowerCase();
                 const alivePlayers = gameState.players
                     .filter(p => p.isAlive)
