@@ -687,19 +687,33 @@ export function useEndGame(deps: EndGameDeps) {
 
                 const sendAmount = bal - gasCost;
 
-                const hash = await sessionClient.writeContract({
-                    address: refs.contractAddressRef.current,
-                    abi: MAFIA_ABI,
-                    functionName: 'drainSessionGas',
-                    args: [currentRoomId!],
-                    value: sendAmount,
-                    account,
-                    chain,
-                });
+                // Retry up to 3 times — contract guard prevents double-drain
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        const hash = await sessionClient.writeContract({
+                            address: refs.contractAddressRef.current,
+                            abi: MAFIA_ABI,
+                            functionName: 'drainSessionGas',
+                            args: [currentRoomId!],
+                            value: sendAmount,
+                            account,
+                            chain,
+                        });
 
-                await pClient.waitForTransactionReceipt({ hash });
-                console.log(`[SessionDrain] Drained ${sendAmount} wei via drainSessionGas`);
-                addLog('Session gas refunded', 'success');
+                        await pClient.waitForTransactionReceipt({ hash });
+                        console.log(`[SessionDrain] Drained ${sendAmount} wei via drainSessionGas (attempt ${attempt})`);
+                        addLog('Session gas refunded', 'success');
+                        break; // success
+                    } catch (drainErr: any) {
+                        const msg = drainErr?.shortMessage || drainErr?.message || '';
+                        if (msg.includes('Already drained')) {
+                            console.log('[SessionDrain] Already drained (contract guard)');
+                            break;
+                        }
+                        console.warn(`[SessionDrain] Attempt ${attempt} failed:`, msg);
+                        if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
+                    }
+                }
             } catch (e) {
                 console.warn('[SessionDrain] Failed to drain session wallet:', e);
             }
