@@ -131,6 +131,14 @@ describe('/api/token Daily migration', () => {
             text: async () => 'already-exists',
         });
     }
+    function mockDailyRooms400AlreadyExists() {
+        fetchMock.mockResolvedValueOnce({
+            ok: false,
+            status: 400,
+            json: async () => ({ error: 'invalid-request-error', info: 'a room named test-123 already exists' }),
+            text: async () => '{"error":"invalid-request-error","info":"a room named test-123 already exists"}',
+        });
+    }
     function mockDailyTokenOk(token = 'daily-token-123') {
         fetchMock.mockResolvedValueOnce({
             ok: true,
@@ -172,6 +180,18 @@ describe('/api/token Daily migration', () => {
 
         expect(res.status).toBe(200);
         expect(body.token).toBe('token-after-conflict');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('still mints token when Daily /rooms returns 400 with "already exists"', async () => {
+        mockDailyRooms400AlreadyExists();
+        mockDailyTokenOk('token-after-400-existing');
+
+        const res = await POST(buildRequest() as any);
+        const body = await res.json();
+
+        expect(res.status).toBe(200);
+        expect(body.token).toBe('token-after-400-existing');
         expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 

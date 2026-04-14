@@ -51,9 +51,10 @@ async function createDailyRoom(apiKey: string, name: string): Promise<void> {
     });
 
     if (resp.ok) return;
-    if (resp.status === 409) return;
 
     const text = await resp.text().catch(() => '');
+    if (resp.status === 409 || /already exists/i.test(text)) return;
+
     throw new Error(`Daily /rooms failed: ${resp.status} ${text}`);
 }
 
