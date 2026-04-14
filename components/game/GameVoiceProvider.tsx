@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from 'react';
-import { DailyAudio, DailyProvider, useCallObject, useDaily, useMeetingState } from '@daily-co/daily-react';
+import { DailyAudio, DailyProvider, useCallObject, useDaily } from '@daily-co/daily-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { useGameContext } from '../../contexts/GameContext';
 import { GamePhase } from '../../types';
@@ -16,9 +16,10 @@ interface TokenResponse {
     roomName: string;
 }
 
+const JOINED_STATES = new Set(['joining-meeting', 'joined-meeting']);
+
 function VoiceJoiner() {
     const call = useDaily();
-    const meetingState = useMeetingState();
     const { currentRoomId, gameState, myPlayer, playerName } = useGameContext();
     const { address, chainId } = useAccount();
     const { data: walletClient } = useWalletClient();
@@ -28,35 +29,40 @@ function VoiceJoiner() {
         currentRoomId != null &&
         (phase === GamePhase.DAY || phase === GamePhase.VOTING || phase === GamePhase.NIGHT);
 
+    // Monotonic generation — any async path that finds its generation stale bails out.
+    const genRef = useRef(0);
     const joinedForRoomRef = useRef<string | null>(null);
+    const joinInFlightRef = useRef(false);
 
     useEffect(() => {
         if (!call) return;
+        const myGen = ++genRef.current;
+
         if (!shouldBeActive) {
-            if (joinedForRoomRef.current) {
-                void call.leave();
-                joinedForRoomRef.current = null;
+            // Only leave if we ever reached a joined/joining state.
+            if (joinedForRoomRef.current && JOINED_STATES.has(call.meetingState())) {
+                void call.leave().catch(() => { /* ignore */ });
             }
+            joinedForRoomRef.current = null;
             return;
         }
+
         const roomKey = currentRoomId!.toString();
         if (joinedForRoomRef.current === roomKey) return;
-        if (meetingState !== 'new' && meetingState !== 'left-meeting' && meetingState !== 'error') return;
+        if (joinInFlightRef.current) return;
 
-        let cancelled = false;
+        joinInFlightRef.current = true;
 
         (async () => {
             try {
                 const room = `${roomKey}-game`;
                 const username = playerName || myPlayer?.name || 'Player';
-                const playerAddress = (() => {
-                    const session = loadSession();
-                    const parsed = Number(roomKey);
-                    if (session && Number.isFinite(parsed) && session.roomId === parsed && Date.now() < session.expiresAt) {
-                        return session.mainWallet;
-                    }
-                    return address || '';
-                })();
+                const session = loadSession();
+                const parsed = Number(roomKey);
+                const playerAddress =
+                    session && Number.isFinite(parsed) && session.roomId === parsed && Date.now() < session.expiresAt
+                        ? session.mainWallet
+                        : address || '';
 
                 if (!playerAddress) return;
 
@@ -74,7 +80,7 @@ function VoiceJoiner() {
                     }),
                 });
 
-                if (cancelled) return;
+                if (genRef.current !== myGen) return;
 
                 const resp = await fetch('/api/token', {
                     method: 'POST',
@@ -91,19 +97,33 @@ function VoiceJoiner() {
                     }),
                 });
 
+                if (genRef.current !== myGen) return;
                 if (!resp.ok) throw new Error(`token request failed: ${resp.status}`);
+
                 const data = (await resp.json()) as TokenResponse;
-                if (cancelled) return;
-                joinedForRoomRef.current = roomKey;
+                if (genRef.current !== myGen) return;
+
                 await call.join({ url: data.roomUrl, token: data.token, userName: username });
+
+                // Only mark joined if this generation is still current — otherwise
+                // a newer effect already took over and will leave/rejoin as needed.
+                if (genRef.current === myGen) {
+                    joinedForRoomRef.current = roomKey;
+                } else {
+                    void call.leave().catch(() => {});
+                }
             } catch (e) {
-                if (!cancelled) console.warn('[GameVoiceProvider] join failed', e);
-                joinedForRoomRef.current = null;
+                if (genRef.current === myGen) {
+                    console.warn('[GameVoiceProvider] join failed', e);
+                    joinedForRoomRef.current = null;
+                }
+            } finally {
+                if (genRef.current === myGen) {
+                    joinInFlightRef.current = false;
+                }
             }
         })();
-
-        return () => { cancelled = true; };
-    }, [call, shouldBeActive, currentRoomId, meetingState, address, chainId, walletClient, playerName, myPlayer?.name]);
+    }, [call, shouldBeActive, currentRoomId, address, chainId, walletClient, playerName, myPlayer?.name]);
 
     return <DailyAudio />;
 }
