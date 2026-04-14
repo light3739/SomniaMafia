@@ -9,6 +9,7 @@ import { GamePhase } from '../../types';
 import { signRequest } from '../../services/requestSigning';
 import { buildTokenMessage } from '../../services/signingSchema';
 import { loadSession } from '../../services/sessionKeyService';
+import { useGameSignaling, type GameSignal } from '../../hooks/useGameSignaling';
 
 interface TokenResponse {
     token: string;
@@ -108,6 +109,19 @@ function VoiceJoiner() {
     return <DailyAudio />;
 }
 
+function GameSignalingBridge() {
+    const { broadcast } = useGameSignaling();
+    useEffect(() => {
+        const handleSignal = (e: Event) => {
+            const customEvent = e as CustomEvent<GameSignal>;
+            broadcast(customEvent.detail);
+        };
+        window.addEventListener('send-game-signal', handleSignal);
+        return () => window.removeEventListener('send-game-signal', handleSignal);
+    }, [broadcast]);
+    return null;
+}
+
 export function GameVoiceProvider({ children }: { children: React.ReactNode }) {
     const [callObject, setCallObject] = useState<DailyCall | null>(null);
 
@@ -129,6 +143,7 @@ export function GameVoiceProvider({ children }: { children: React.ReactNode }) {
     return (
         <DailyProvider callObject={callObject}>
             <VoiceJoiner />
+            <GameSignalingBridge />
             {children}
         </DailyProvider>
     );

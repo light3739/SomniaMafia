@@ -27,6 +27,8 @@ interface DailyVoiceChatProps {
     className?: string;
     onClose?: () => void;
     showTextChat?: boolean;
+    /** Mount the GameContext signal bridge. Must be false when rendered outside <GameProvider>. */
+    enableGameSignaling?: boolean;
 }
 
 interface TokenResponse {
@@ -194,6 +196,7 @@ function DailyVoiceChatInner({
     onClose,
     showTextChat = false,
     userName = 'Player',
+    enableGameSignaling = false,
     token,
     roomUrl,
     sessionIdentity,
@@ -257,7 +260,7 @@ function DailyVoiceChatInner({
                             <MicToggle />
                             <span className="text-xs text-gray-400">{connected ? 'Connected' : String(meetingState)}</span>
                         </div>
-                        <GameSignalingBridge />
+                        {enableGameSignaling && <GameSignalingBridge />}
                         {showTextChat && <SafeTextChat displayName={userName} />}
                         <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
                             <Users className="w-3 h-3" />
