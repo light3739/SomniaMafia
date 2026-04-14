@@ -1005,37 +1005,27 @@ export const GameOver: React.FC = React.memo(() => {
                                         disabled={isTxPending}
                                         className="flex-1 h-[60px] text-lg !text-white"
                                     >
-                                        <Swords className="w-5 h-5 mr-2" />
+                                        <RotateCcw className="w-5 h-5 mr-2" />
                                         Rematch
                                     </Button>
                                 )}
                                 <Button
-                                    onClick={handlePlayAgain}
+                                    onClick={handleHome}
                                     variant="outline-gold"
                                     className="flex-1 h-[60px] text-lg hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
                                 >
-                                    <RotateCcw className="w-5 h-5 mr-2" />
-                                    Play Again
-                                </Button>
-                            </div>
-                            <div className="flex gap-3">
-                                <Button
-                                    onClick={() => setShareOpen(true)}
-                                    variant="outline-gold"
-                                    className="flex-1 h-[44px] text-sm hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
-                                >
-                                    <Share2 className="w-4 h-4 mr-2" />
-                                    Share
-                                </Button>
-                                <Button
-                                    onClick={handleHome}
-                                    variant="outline-gold"
-                                    className="flex-1 h-[44px] text-sm hover:bg-[#916A47] hover:border-[#916A47] hover:text-white"
-                                >
-                                    <Home className="w-4 h-4 mr-2" />
+                                    <Home className="w-5 h-5 mr-2" />
                                     Home
                                 </Button>
                             </div>
+
+                            <button
+                                onClick={() => setShareOpen(true)}
+                                className="flex items-center justify-center gap-1.5 text-xs text-white/40 hover:text-[#C5A059] transition-colors mt-1"
+                            >
+                                <Share2 className="w-3.5 h-3.5" />
+                                Share Result
+                            </button>
 
                             {/* Refresh roles (if some are still unknown) */}
                             {!revealTimedOut && gameState.players.some(p => p.role === Role.UNKNOWN) && (

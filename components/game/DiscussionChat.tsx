@@ -392,16 +392,19 @@ export const ChatToggleButton: React.FC<{
                                     {isConnecting ? 'Connecting...' : 'No messages yet'}
                                 </div>
                             ) : (
-                                messages.map((msg) => {
+                                messages.map((msg, idx, all) => {
                                     const isMe = msg.senderAddress.toLowerCase() === myPlayer?.address.toLowerCase();
+                                    const sameSenderAsPrev = idx > 0 && all[idx - 1].senderAddress === msg.senderAddress;
                                     return (
                                         <div
                                             key={msg.id}
-                                            className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                                            className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} ${sameSenderAsPrev ? 'mt-0.5' : ''}`}
                                         >
-                                            <span className="text-[10px] text-white/60 mb-0.5 px-2">
-                                                {msg.sender}
-                                            </span>
+                                            {!sameSenderAsPrev && (
+                                                <span className="text-[10px] text-white/60 mb-0.5 px-2">
+                                                    {msg.sender}
+                                                </span>
+                                            )}
                                             <div
                                                 className={`max-w-[80%] px-3 py-2 rounded-sm text-sm border ${isMe
                                                     ? 'bg-[#1A130A] border-[#916A47]/50 text-white/90'
