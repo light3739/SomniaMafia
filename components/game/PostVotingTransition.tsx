@@ -23,7 +23,7 @@ export const PostVotingTransition: React.FC<PostVotingTransitionProps> = ({ init
 
     return (
         <motion.div
-            className="w-full"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[50] pointer-events-none w-[min(90vw,400px)]"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 12 }}
