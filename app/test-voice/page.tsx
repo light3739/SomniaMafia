@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LiveKitVoiceChat } from '@/components/game/LiveKitVoiceChat';
+import { DailyVoiceChat } from '@/components/game/DailyVoiceChat';
 import { Button } from '@/components/ui/Button';
 import { ArrowLeft, Volume2 } from 'lucide-react';
 import Link from 'next/link';
@@ -37,7 +37,7 @@ export default function TestVoicePage() {
                         </h1>
                     </div>
                     <p className="text-gray-400">
-                        Test LiveKit voice chat with your friends
+                        Test Daily.co voice chat with your friends
                     </p>
                 </div>
 
@@ -105,7 +105,7 @@ export default function TestVoicePage() {
                     ) : (
                         <div className="space-y-4">
                             {/* Active Voice Chat */}
-                            <LiveKitVoiceChat
+                            <DailyVoiceChat
                                 roomId={normalizedRoomId}
                                 userName={userName}
                                 isActive={isActive}

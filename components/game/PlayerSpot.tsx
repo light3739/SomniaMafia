@@ -47,25 +47,14 @@ export const PlayerSpot = memo<PlayerSpotProps>(({ player, onAction, isMe, canAc
 
     const handleVolumeChange = (newVolume: number) => {
         setVolume(newVolume);
-        // Try to find LiveKit audio element for this player
-        // MicButton creates elements with id="audio-{identity}" where identity matches userName
-        let audioEl = document.getElementById(`audio-${player.name}`) as HTMLAudioElement | null;
-
-        // Fallback: try finding by address if identity strategy changes
-        if (!audioEl) {
-            audioEl = document.getElementById(`audio-${player.address}`) as HTMLAudioElement | null;
-        }
-
-        // Fallback: search by data-participant attribute
-        if (!audioEl) {
-            audioEl = document.querySelector(`audio[data-participant="${player.name}"]`) as HTMLAudioElement | null;
-        }
-
-        if (audioEl) {
-            audioEl.volume = newVolume;
-            console.log(`[PlayerSpot] Volume set to ${newVolume} for ${player.name}`);
-        } else {
-            console.log(`[PlayerSpot] No audio element found for ${player.name} (address: ${player.address})`);
+        // DailyAudio renders <audio data-session-id="..."> per participant.
+        // Per-address mapping requires participant roster lookup, which PlayerSpot doesn't hold.
+        // Best-effort: iterate audio elements and match by data-user-name if set.
+        const audioEls = Array.from(document.querySelectorAll('audio[data-session-id]')) as HTMLAudioElement[];
+        for (const el of audioEls) {
+            if (el.dataset.userName === player.name || el.dataset.userId === player.address) {
+                el.volume = newVolume;
+            }
         }
     };
 

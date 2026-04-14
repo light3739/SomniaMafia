@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount } from 'wagmi';
 import { useGameContext } from '../../contexts/GameContext';
+import { GameVoiceProvider } from './GameVoiceProvider';
 import { PlayerSpot } from './PlayerSpot';
 import { VotingAnnouncement } from './VotingAnnouncement';
 import { NightAnnouncement } from './NightAnnouncement';
@@ -309,6 +310,7 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
     );
 
     return (
+        <GameVoiceProvider>
         <div className="relative w-full h-screen overflow-hidden bg-[#050505] font-['Montserrat'] flex items-center justify-center">
             <GameBackground isNightPhase={isNightPhase} dayBg={dayBg} nightBg={nightBg} />
             <GameUIOverlay />
@@ -476,5 +478,6 @@ export const GameLayout: React.FC<{ initialNightState?: any; initialDiscussionSt
                 )}
             </AnimatePresence>
         </div>
+        </GameVoiceProvider>
     );
 };

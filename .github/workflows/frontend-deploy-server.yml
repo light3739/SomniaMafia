@@ -45,7 +45,7 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_GM_SERVER_URL: https://gm.mafiaonchain.live
-          NEXT_PUBLIC_LIVEKIT_URL: wss://livekit.mafiaonchain.live
+          NEXT_PUBLIC_DAILY_DOMAIN: ${{ vars.NEXT_PUBLIC_DAILY_DOMAIN }}
           NEXT_PUBLIC_ACTIVE_NETWORK: somnia_mainnet
           NEXT_PUBLIC_MAFIA_DIAMOND: ${{ vars.NEXT_PUBLIC_MAFIA_DIAMOND }}
 
@@ -82,6 +82,8 @@ jobs:
           SSH_USER: ${{ secrets.GM_SSH_USER }}
           SSH_PORT: ${{ secrets.GM_SSH_PORT }}
           REMOTE_DIR: ${{ secrets.FRONT_REMOTE_DIR }}
+          DAILY_API_KEY: ${{ secrets.DAILY_API_KEY }}
+          NEXT_PUBLIC_DAILY_DOMAIN: ${{ vars.NEXT_PUBLIC_DAILY_DOMAIN }}
         run: |
           HOST="${SSH_HOST}"
           USER="${SSH_USER:-root}"
@@ -90,6 +92,22 @@ jobs:
 
           echo "📦 Updating compose file on remote..."
           scp -P "$PORT" ops/frontend-server/docker-compose.yaml "${USER}@${HOST}:${REMOTE}/ops/frontend-server/docker-compose.yaml"
+
+          echo "🔐 Syncing Daily env vars into remote .env.production..."
+          ssh -p "$PORT" "${USER}@${HOST}" "
+            set -e
+            ENV_FILE='${REMOTE}/ops/frontend-server/.env.production'
+            touch \$ENV_FILE
+            for PAIR in 'DAILY_API_KEY=${DAILY_API_KEY}' 'NEXT_PUBLIC_DAILY_DOMAIN=${NEXT_PUBLIC_DAILY_DOMAIN}'; do
+              KEY=\${PAIR%%=*}
+              if grep -q \"^\${KEY}=\" \"\$ENV_FILE\"; then
+                sed -i \"s|^\${KEY}=.*|\${PAIR}|\" \"\$ENV_FILE\"
+              else
+                echo \"\${PAIR}\" >> \"\$ENV_FILE\"
+              fi
+            done
+            chmod 600 \"\$ENV_FILE\"
+          "
 
           echo "🔄 Pulling and restarting containers..."
           ssh -p "$PORT" "${USER}@${HOST}" "

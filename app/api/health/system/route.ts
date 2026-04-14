@@ -23,13 +23,13 @@ function normalizeHttpUrl(raw: string | undefined, fallback: string): string {
   return `https://${value}`;
 }
 
-async function checkHttp(url: string, timeoutMs = 3000): Promise<ServiceCheck> {
+async function checkHttp(url: string, timeoutMs = 3000, headers: Record<string, string> = {}): Promise<ServiceCheck> {
   const startedAt = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, { method: 'GET', signal: controller.signal, cache: 'no-store' });
+    const response = await fetch(url, { method: 'GET', signal: controller.signal, cache: 'no-store', headers });
     return {
       ok: response.ok || response.status === 401,
       status: response.status,
@@ -87,44 +87,44 @@ async function checkRedis(redisUrl?: string): Promise<ServiceCheck & { configure
 export async function GET() {
   const redisUrl = process.env.REDIS_URL;
   const gmUrl = normalizeHttpUrl(process.env.NEXT_PUBLIC_GM_SERVER_URL, 'https://gm.mafiaonchain.live');
-  const livekitUrl = normalizeHttpUrl(process.env.NEXT_PUBLIC_LIVEKIT_URL, 'https://livekit.mafiaonchain.live');
+  const dailyApiKey = process.env.DAILY_API_KEY;
 
   const env = {
     nodeEnv: process.env.NODE_ENV || 'unknown',
     frontendPublic: {
       nextPublicActiveNetwork: hasValue(process.env.NEXT_PUBLIC_ACTIVE_NETWORK),
       nextPublicGmServerUrl: hasValue(process.env.NEXT_PUBLIC_GM_SERVER_URL),
-      nextPublicLivekitUrl: hasValue(process.env.NEXT_PUBLIC_LIVEKIT_URL),
+      nextPublicDailyDomain: hasValue(process.env.NEXT_PUBLIC_DAILY_DOMAIN),
     },
     frontendServer: {
       redisUrl: hasValue(process.env.REDIS_URL),
-      livekitApiKey: hasValue(process.env.LIVEKIT_API_KEY),
-      livekitApiSecret: hasValue(process.env.LIVEKIT_API_SECRET),
+      dailyApiKey: hasValue(dailyApiKey),
     },
   };
 
-  const [redis, gmHealth, livekitHealth] = await Promise.all([
+  const [redis, gmHealth, dailyHealth] = await Promise.all([
     checkRedis(redisUrl),
     checkHttp(`${gmUrl.replace(/\/$/, '')}/health`),
-    checkHttp(`${livekitUrl.replace(/\/$/, '')}/rtc/validate`),
+    dailyApiKey
+      ? checkHttp('https://api.daily.co/v1/', 3000, { Authorization: `Bearer ${dailyApiKey}` })
+      : Promise.resolve({ ok: false, error: 'DAILY_API_KEY missing' } as ServiceCheck),
   ]);
 
   const checks = {
     redis,
     gmBackend: gmHealth,
-    livekitSignaling: livekitHealth,
+    dailyApi: dailyHealth,
   };
 
   const ok =
     env.frontendPublic.nextPublicActiveNetwork &&
     env.frontendPublic.nextPublicGmServerUrl &&
-    env.frontendPublic.nextPublicLivekitUrl &&
+    env.frontendPublic.nextPublicDailyDomain &&
     env.frontendServer.redisUrl &&
-    env.frontendServer.livekitApiKey &&
-    env.frontendServer.livekitApiSecret &&
+    env.frontendServer.dailyApiKey &&
     checks.redis.ok &&
     checks.gmBackend.ok &&
-    checks.livekitSignaling.ok;
+    checks.dailyApi.ok;
 
   return NextResponse.json(
     {

@@ -1,15 +1,13 @@
-import crypto from 'crypto';
-import { AccessToken } from 'livekit-server-sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
-import { somniaChain, MAFIA_CONTRACT_ADDRESS, MAFIA_ABI, ACTIVE_DEPLOYMENT, getDeploymentByChainId } from '@/contracts/config';
+import { MAFIA_ABI, ACTIVE_DEPLOYMENT, getDeploymentByChainId } from '@/contracts/config';
 import { verifySignedRequestBody } from '@/app/api/_lib/security';
 import { buildTokenMessage } from '@/services/signingSchema';
 
-const publicClient = createPublicClient({
-    chain: somniaChain,
-    transport: http()
-});
+const DAILY_API_BASE = 'https://api.daily.co/v1';
+const DEFAULT_ROOM_TTL_SEC = 2 * 60 * 60;
+const DEFAULT_TOKEN_TTL_SEC = 60 * 60;
+const MAX_PARTICIPANTS = 12;
 
 function parseRoomId(room: string): string | null {
     const prefix = room.split('-')[0];
@@ -21,26 +19,87 @@ function parseRoomId(room: string): string | null {
     }
 }
 
+function sanitizeRoomName(raw: string): string {
+    return raw.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 64) || 'room';
+}
+
+function buildDailyRoomName(chainId: number, roomId: string | null, fallback: string): string {
+    if (roomId) return sanitizeRoomName(`mafia-${chainId}-${roomId}`);
+    return sanitizeRoomName(fallback);
+}
+
+async function createDailyRoom(apiKey: string, name: string): Promise<void> {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const resp = await fetch(`${DAILY_API_BASE}/rooms`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            name,
+            privacy: 'private',
+            properties: {
+                exp: nowSec + DEFAULT_ROOM_TTL_SEC,
+                eject_at_room_exp: true,
+                max_participants: MAX_PARTICIPANTS,
+                start_audio_off: false,
+                start_video_off: true,
+                enable_prejoin_ui: false,
+            },
+        }),
+    });
+
+    if (resp.ok) return;
+    if (resp.status === 409) return;
+
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Daily /rooms failed: ${resp.status} ${text}`);
+}
+
+async function createDailyToken(apiKey: string, params: { room: string; userName: string; userId?: string; }): Promise<string> {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const resp = await fetch(`${DAILY_API_BASE}/meeting-tokens`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            properties: {
+                room_name: params.room,
+                user_name: params.userName,
+                user_id: params.userId,
+                exp: nowSec + DEFAULT_TOKEN_TTL_SEC,
+                is_owner: false,
+            },
+        }),
+    });
+
+    if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(`Daily /meeting-tokens failed: ${resp.status} ${text}`);
+    }
+
+    const data = await resp.json();
+    if (!data?.token) throw new Error('Daily /meeting-tokens returned no token');
+    return data.token as string;
+}
+
 export async function POST(req: NextRequest) {
     try {
-        const userAgent = req.headers.get('user-agent')?.toLowerCase() || '';
-        const isFirefox = userAgent.includes('firefox');
         const reqBody = await req.json();
         const {
             room,
             username,
             playerAddress,
-            signerAddress,
             signature,
             nonce,
             timestamp,
         } = reqBody;
 
         if (!room || !username) {
-            return NextResponse.json(
-                { error: 'Missing room or username' },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: 'Missing room or username' }, { status: 400 });
         }
 
         const roomId = parseRoomId(String(room));
@@ -58,7 +117,7 @@ export async function POST(req: NextRequest) {
             normalizedPlayer = String(playerAddress).toLowerCase();
             const verified = await verifySignedRequestBody({
                 scope: 'token-issue',
-                body: { ...reqBody, roomId }, // Ensure roomId is included for security check
+                body: { ...reqBody, roomId },
                 requiredFields: ['room', 'username', 'roomId', 'playerAddress', 'signature', 'nonce', 'timestamp'],
                 getRoomId: (body) => body.roomId,
                 getActorAddress: (body) => body.playerAddress,
@@ -78,10 +137,9 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: verified.error }, { status: verified.status });
             }
 
-            // Create temporary public client for the correct chain
             const chainClient = createPublicClient({
                 chain: deployment.chain,
-                transport: http()
+                transport: http(),
             });
 
             const players = await chainClient.readContract({
@@ -97,67 +155,31 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        const apiKey = process.env.LIVEKIT_API_KEY;
-        const apiSecret = process.env.LIVEKIT_API_SECRET;
+        const apiKey = process.env.DAILY_API_KEY;
+        const domain = process.env.NEXT_PUBLIC_DAILY_DOMAIN;
 
-        if (!apiKey || !apiSecret) {
-            console.error('[LiveKit Token API] Missing environment variables:', {
+        if (!apiKey || !domain) {
+            console.error('[Daily Token API] Server misconfigured:', {
                 hasApiKey: !!apiKey,
-                hasApiSecret: !!apiSecret,
+                hasDomain: !!domain,
             });
-            return NextResponse.json(
-                { error: 'Server misconfigured' },
-                { status: 500 }
-            );
+            return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
         }
 
-        // Create access token
-        const at = new AccessToken(apiKey, apiSecret, { identity: username });
+        const dailyRoomName = buildDailyRoomName(chainId, roomId, String(room));
+        await createDailyRoom(apiKey, dailyRoomName);
 
-        // Add permissions for the room
-        at.addGrant({
-            room,
-            roomJoin: true,
-            canPublish: true,
-            canSubscribe: true,
+        const token = await createDailyToken(apiKey, {
+            room: dailyRoomName,
+            userName: String(username),
+            userId: normalizedPlayer || undefined,
         });
 
-        const token = await at.toJwt();
-
-        // Generate TURN credentials (HMAC-SHA256 matching LiveKit's internal auth)
-        // so the frontend can add a TURNS:443/tcp ICE server for VPN/firewall users
-        const turnDomain = process.env.LIVEKIT_TURN_DOMAIN || 'turn.mafiaonchain.live';
-        const turnUsername = crypto.randomBytes(12).toString('base64url');
-        const turnCredential = crypto
-            .createHmac('sha256', apiSecret)
-            .update(turnUsername)
-            .digest('base64');
-
-        console.log('[LiveKit Token API] Token generated:', {
-            room,
-            username,
-            tokenLength: token.length,
-            turnDomain,
-        });
-
-        return NextResponse.json({
-            token,
-            turnServers: [
-                {
-                    urls: [
-                        `turns:${turnDomain}:443?transport=tcp`,
-                        ...(isFirefox ? [] : [`turn:${turnDomain}:443?transport=tcp`]),
-                    ],
-                    username: turnUsername,
-                    credential: turnCredential,
-                },
-            ],
-        });
+        const roomUrl = `https://${domain}.daily.co/${dailyRoomName}`;
+        return NextResponse.json({ token, roomUrl, roomName: dailyRoomName });
     } catch (error) {
-        console.error('[LiveKit Token API] Error:', error);
-        return NextResponse.json(
-            { error: 'Failed to generate token' },
-            { status: 500 }
-        );
+        console.error('[Daily Token API] Error:', error);
+        const message = error instanceof Error ? error.message : 'Failed to generate token';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
