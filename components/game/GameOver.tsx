@@ -509,12 +509,12 @@ export const GameOver: React.FC = React.memo(() => {
     }, []);
 
     const shareText = winner === 'MAFIA'
-        ? `🔪 The Mafia has won on Mafia OnChain! I played as ${myRole}.`
+        ? `🔪 The Mafia has won! I played as ${myRole}. @MafiaOnChain`
         : winner === 'TOWN'
-            ? `⚖️ Justice prevails on Mafia OnChain! I played as ${myRole}.`
-            : `🎲 What a game on Mafia OnChain!`;
+            ? `⚖️ Justice prevails! I played as ${myRole}. @MafiaOnChain`
+            : `🎲 What a game! @MafiaOnChain`;
 
-    const shareUrl = currentRoomId ? `${shareOrigin}/r/${currentRoomId}` : shareOrigin;
+    const shareUrl = `${shareOrigin}`;
 
     if (!winner) {
         // Quiet placeholder while the chain settles & roles reveal — the endgame
@@ -1020,7 +1020,31 @@ export const GameOver: React.FC = React.memo(() => {
                             </div>
 
                             <button
-                                onClick={() => setShareOpen(true)}
+                                onClick={async () => {
+                                    try {
+                                        const blob = await generateImage();
+                                        if (!blob) { toast.error('Failed to generate screenshot'); return; }
+                                        const text = `${shareText}\n${shareUrl}`;
+                                        // Try copying image + text to clipboard
+                                        if (typeof ClipboardItem !== 'undefined') {
+                                            await navigator.clipboard.write([
+                                                new ClipboardItem({
+                                                    'image/png': blob,
+                                                    'text/plain': new Blob([text], { type: 'text/plain' }),
+                                                }),
+                                            ]);
+                                            toast.success('Image & text copied! Paste in Twitter/Telegram');
+                                        } else {
+                                            // Fallback: copy just text
+                                            await navigator.clipboard.writeText(text);
+                                            toast.success('Text copied (image not supported in this browser)');
+                                        }
+                                    } catch (e) {
+                                        console.warn('[Share] Clipboard write failed:', e);
+                                        // Fallback to share modal
+                                        setShareOpen(true);
+                                    }
+                                }}
                                 className="flex items-center justify-center gap-1.5 text-xs text-white/40 hover:text-[#C5A059] transition-colors mt-1"
                             >
                                 <Share2 className="w-3.5 h-3.5" />
