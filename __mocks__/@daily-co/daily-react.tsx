@@ -48,6 +48,9 @@ export const useAppMessage = jest.fn(({ onAppMessage }: { onAppMessage?: AppMess
     return { sendAppMessage: call.sendAppMessage };
 });
 
+export const useCallObject = jest.fn(() => call);
+export const useCallFrame = jest.fn(() => call);
+
 export const useMeetingState = jest.fn(() => 'joined-meeting');
 export const useLocalSessionId = jest.fn(() => 'local-session');
 export const useParticipantIds = jest.fn(() => [] as string[]);

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import DailyIframe, { DailyCall } from '@daily-co/daily-js';
-import { DailyAudio, DailyProvider, useDaily, useMeetingState } from '@daily-co/daily-react';
+import { useCallback, useEffect, useRef } from 'react';
+import { DailyAudio, DailyProvider, useCallObject, useDaily, useMeetingState } from '@daily-co/daily-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { useGameContext } from '../../contexts/GameContext';
 import { GamePhase } from '../../types';
@@ -123,20 +122,9 @@ function GameSignalingBridge() {
 }
 
 export function GameVoiceProvider({ children }: { children: React.ReactNode }) {
-    const [callObject, setCallObject] = useState<DailyCall | null>(null);
-
-    const factory = useMemo(() => {
-        if (typeof window === 'undefined') return null;
-        return DailyIframe.createCallObject();
-    }, []);
-
-    useEffect(() => {
-        if (!factory) return;
-        setCallObject(factory);
-        return () => {
-            try { void factory.destroy(); } catch { /* ignore */ }
-        };
-    }, [factory]);
+    const callObject = useCallObject({
+        shouldCreateInstance: useCallback(() => typeof window !== 'undefined', []),
+    });
 
     if (!callObject) return <>{children}</>;
 

@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import DailyIframe, { DailyCall } from '@daily-co/daily-js';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     DailyAudio,
     DailyProvider,
     useAppMessage,
+    useCallObject,
     useDaily,
     useLocalSessionId,
     useMeetingState,
@@ -293,18 +293,9 @@ export function DailyVoiceChat(props: DailyVoiceChatProps) {
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
 
-    const callObject = useMemo<DailyCall | null>(() => {
-        if (!isActive || typeof window === 'undefined') return null;
-        return DailyIframe.createCallObject();
-    }, [isActive]);
-
-    useEffect(() => {
-        return () => {
-            if (callObject) {
-                void callObject.destroy();
-            }
-        };
-    }, [callObject]);
+    const callObject = useCallObject({
+        shouldCreateInstance: useCallback(() => isActive, [isActive]),
+    });
 
     useEffect(() => {
         if (!isActive || !roomId || !sessionIdentity) {
