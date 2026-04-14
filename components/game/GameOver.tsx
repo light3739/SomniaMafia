@@ -383,6 +383,7 @@ export const GameOver: React.FC = React.memo(() => {
     // Busy guard prevents double-create on fast repeated clicks or duplicate
     // WS events while a rematch is already in flight for this GameOver mount.
     const rematchBusyRef = useRef(false);
+    const [rematchLoading, setRematchLoading] = useState(false);
     // Incoming invite popup shown to non-host players when the host broadcasts.
     const [rematchInvite, setRematchInvite] = useState<RematchInvitePayload | null>(null);
     const [isJoiningRematch, setIsJoiningRematch] = useState(false);
@@ -394,6 +395,7 @@ export const GameOver: React.FC = React.memo(() => {
             return;
         }
         rematchBusyRef.current = true;
+        setRematchLoading(true);
         stopVictoryMusic();
         try {
             // Name: increment suffix on previous lobby name. "Lobby" → "Lobby #2" → "Lobby #3"
@@ -409,6 +411,7 @@ export const GameOver: React.FC = React.memo(() => {
 
             if (!newRoomId) {
                 rematchBusyRef.current = false;
+                setRematchLoading(false);
                 return;
             }
             router.push('/waiting');
@@ -416,6 +419,7 @@ export const GameOver: React.FC = React.memo(() => {
             console.error('[GameOver] Rematch failed:', e);
             toast.error(`Rematch failed: ${e?.message || 'unknown error'}`);
             rematchBusyRef.current = false;
+            setRematchLoading(false);
         }
     }, [stopVictoryMusic, router, gameState.maxPlayers, currentRoomId, createRematchLobby]);
 
@@ -1001,8 +1005,8 @@ export const GameOver: React.FC = React.memo(() => {
                                 {!gameState.isTournament && (
                                     <Button
                                         onClick={handleRematch}
-                                        isLoading={isTxPending}
-                                        disabled={isTxPending}
+                                        isLoading={rematchLoading}
+                                        disabled={rematchLoading}
                                         className="flex-1 h-[60px] text-lg !text-white"
                                     >
                                         <RotateCcw className="w-5 h-5 mr-2" />
@@ -1040,7 +1044,7 @@ export const GameOver: React.FC = React.memo(() => {
                                 className="flex items-center justify-center gap-1.5 text-xs text-white/40 hover:text-[#C5A059] transition-colors mt-1"
                             >
                                 <Share2 className="w-3.5 h-3.5" />
-                                Share on X
+                                Share Result
                             </button>
 
                             {/* Refresh roles (if some are still unknown) */}
