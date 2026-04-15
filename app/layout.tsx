@@ -4,6 +4,7 @@ import { Providers } from "./providers";
 import "./globals.css";
 import { LazyAudio } from "@/components/ui/LazyAudio";
 import { SmokeOverlay } from '@/components/ui/SmokeOverlay';
+import { TwitterFloating } from '@/components/ui/TwitterFloating';
 
 const cinzel = Cinzel({
   subsets: ["latin", "latin-ext"],
@@ -81,6 +82,7 @@ export default function RootLayout({
           <DynamicBackground />
           {/* Persistent smoke — lives outside router, never remounts on navigation */}
           <SmokeOverlay />
+          <TwitterFloating />
           {children}
         </Providers>
       </body>
