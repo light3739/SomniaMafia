@@ -150,10 +150,10 @@ jobs:
 
       - name: Health check
         run: |
-          echo "🏥 Checking https://test.mafiaonchain.live..."
+          echo "🏥 Checking https://mafiaonchain.live..."
           sleep 10
           for i in 1 2 3 4 5; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://test.mafiaonchain.live" || true)
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://mafiaonchain.live" || true)
             if [ "$STATUS" = "200" ]; then
               echo "✅ Health check passed (attempt $i)"
               exit 0
@@ -170,7 +170,7 @@ jobs:
           if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
             curl -sS -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-              -d text="✅ Frontend dev deploy success: ${{ github.repository }} @ ${{ github.ref_name }} | https://test.mafiaonchain.live"
+              -d text="✅ Frontend dev deploy success: ${{ github.repository }} @ ${{ github.ref_name }} | https://mafiaonchain.live"
           fi
 
       - name: Notify failure (Telegram)

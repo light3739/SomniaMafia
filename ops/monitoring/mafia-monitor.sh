@@ -140,7 +140,7 @@ check_load() {
 }
 
 # ── TEST (primary environment on mafiatest) ──────────────────────────────────
-check_http      "site_test"            "https://test.mafiaonchain.live/"          "Frontend TEST"
+check_http      "site_test"            "https://mafiaonchain.live/"               "Frontend DEV"
 check_http      "gm_test_health"       "https://gm-test.mafiaonchain.live/health" "GM TEST API"
 check_http      "daily_api"            "https://api.daily.co/v1/"                 "Daily API"
 # Rollback-only — re-enable when switching back to self-hosted LiveKit:

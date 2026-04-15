@@ -7,7 +7,7 @@ import { buildTokenMessage } from '@/services/signingSchema';
 const DAILY_API_BASE = 'https://api.daily.co/v1';
 const DEFAULT_ROOM_TTL_SEC = 2 * 60 * 60;
 const DEFAULT_TOKEN_TTL_SEC = 60 * 60;
-const MAX_PARTICIPANTS = 12;
+const MAX_PARTICIPANTS = 16;
 
 function parseRoomId(room: string): string | null {
     const prefix = room.split('-')[0];
