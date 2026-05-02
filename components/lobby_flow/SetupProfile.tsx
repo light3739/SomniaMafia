@@ -511,7 +511,7 @@ export const SetupProfile: React.FC = () => {
                             {hasEmbeddedWallet && (
                                 <div className="flex flex-col gap-3">
                                     <div className="flex items-center mx-2 mb-1">
-                                        <h4 className="text-white/60 text-[10px] font-montserrat font-bold uppercase tracking-[0.2em] whitespace-nowrap">Testnet Balances</h4>
+                                        <h4 className="text-white/60 text-[10px] font-montserrat font-bold uppercase tracking-[0.2em] whitespace-nowrap">{somniaChain.testnet ? 'Testnet' : 'Mainnet'} Balances</h4>
                                         <div className="h-[1px] w-full bg-gradient-to-r from-white/20 to-transparent ml-6"></div>
                                     </div>
 
@@ -522,10 +522,10 @@ export const SetupProfile: React.FC = () => {
                                                 <div className="w-8 h-8 rounded-full bg-[#19130D] flex items-center justify-center border border-white/10 shadow-inner p-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
                                                     <img src="/assets/somnia-logomark.svg" alt="Somnia" className="w-full h-full object-contain" />
                                                 </div>
-                                                <span className="text-white font-montserrat text-sm font-medium tracking-wide">Somnia <span className="text-white/60 text-[10px] font-bold uppercase ml-2 tracking-wider">Testnet</span></span>
+                                                <span className="text-white font-montserrat text-sm font-medium tracking-wide">Somnia <span className="text-white/60 text-[10px] font-bold uppercase ml-2 tracking-wider">{somniaChain.testnet ? 'Testnet' : 'Mainnet'}</span></span>
                                             </div>
                                             <span className="text-white font-mono text-base font-medium tabular-nums">
-                                                {somniaBalance ? Number(formatEther(somniaBalance.value)).toFixed(3) : '0.000'} <span className="text-white/60 text-sm ml-1 font-semibold">SOMI</span>
+                                                {somniaBalance ? Number(formatEther(somniaBalance.value)).toFixed(3) : '0.000'} <span className="text-white/60 text-sm ml-1 font-semibold">{somniaChain.nativeCurrency.symbol}</span>
                                             </span>
                                         </div>
 
@@ -540,7 +540,7 @@ export const SetupProfile: React.FC = () => {
                                                     <Wallet className="w-4 h-4 text-[#C19A6B]" /> Transfer Tokens
                                                 </h4>
                                                 <p className="text-white/50 text-xs text-center font-montserrat leading-relaxed max-w-[80%]">
-                                                    Connect your external wallet securely to transfer testnet tokens.
+                                                    Connect your external wallet securely to transfer {somniaChain.nativeCurrency.symbol} tokens.
                                                 </p>
                                                 <button
                                                     onClick={() => linkWallet()}

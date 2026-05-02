@@ -1,8 +1,6 @@
 import React from 'react';
-import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { usePrivy } from '@privy-io/react-auth';
-const somniaLogo = "/assets/somnia-logomark.svg";
 
 const LightRays = dynamic(() => import('./ui/LightRays'), { ssr: false });
 
@@ -119,7 +117,6 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         >
                             On Somnia Network
                         </span>
-                        <Image src={somniaLogo} alt="Somnia" width={28} height={28} className="h-7 w-7 object-contain drop-shadow-md" />
                     </div>
                 </div>
 
