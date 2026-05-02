@@ -2,7 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { usePrivy } from '@privy-io/react-auth';
-const somniaLogo = "/assets/somniayeal.png";
+const somniaLogo = "/assets/somnia-logomark.svg";
 
 const LightRays = dynamic(() => import('./ui/LightRays'), { ssr: false });
 

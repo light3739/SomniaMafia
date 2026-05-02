@@ -49,7 +49,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 appearance: {
                     theme: 'dark',
                     accentColor: '#916A47',
-                    logo: '/assets/somniayeal.png',
+                    logo: '/assets/somnia-logomark.svg',
                 },
                 defaultChain: somniaChain,
                 embeddedWallets: {

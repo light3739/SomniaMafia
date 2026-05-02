@@ -520,7 +520,7 @@ export const SetupProfile: React.FC = () => {
                                         <div className="flex items-center justify-between bg-black/40 rounded-md p-3 px-4 border border-white/5 group">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-8 h-8 rounded-full bg-[#19130D] flex items-center justify-center border border-white/10 shadow-inner p-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
-                                                    <img src="/assets/somniayeal.png" alt="Somnia" className="w-full h-full object-contain grayscale-[30%] group-hover:grayscale-0 transition-all" />
+                                                    <img src="/assets/somnia-logomark.svg" alt="Somnia" className="w-full h-full object-contain" />
                                                 </div>
                                                 <span className="text-white font-montserrat text-sm font-medium tracking-wide">Somnia <span className="text-white/60 text-[10px] font-bold uppercase ml-2 tracking-wider">Testnet</span></span>
                                             </div>
