@@ -64,6 +64,32 @@ export async function signRequest(params: {
         throw new Error('No wallet available to sign request');
     }
 
+    try {
+        const rawStored = typeof localStorage !== 'undefined' ? localStorage.getItem('somnia_mafia_session') : null;
+        const raw = rawStored ? JSON.parse(rawStored) : null;
+        let roomMatch: boolean | null = null;
+        if (raw && roomId !== undefined) {
+            try { roomMatch = BigInt(raw.roomId) === BigInt(roomId as any); } catch { roomMatch = null; }
+        }
+        console.warn('[signRequest] FALLBACK to wallet popup', {
+            forceWallet: !!params.forceWallet,
+            roomIdProvided: roomId !== undefined,
+            expectedRoom: roomId?.toString(),
+            storedRoom: raw?.roomId?.toString(),
+            roomMatch,
+            expectedAddr: normalizedAddress,
+            storedAddr: raw?.mainWallet?.toLowerCase(),
+            addrMatch: raw?.mainWallet?.toLowerCase() === normalizedAddress,
+            expired: raw?.expiresAt ? Date.now() >= raw.expiresAt : null,
+            expiresInMs: raw?.expiresAt ? raw.expiresAt - Date.now() : null,
+            registered: raw?.registeredOnChain,
+            chainId: raw?.chainId,
+            msgPreview: message.slice(0, 80),
+        });
+    } catch (e) {
+        console.warn('[signRequest] FALLBACK (diagnostic failed)', e);
+    }
+
     const signature = await walletClient.signMessage({ message });
     return {
         signature,
