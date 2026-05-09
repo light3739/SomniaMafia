@@ -20,7 +20,7 @@ interface SessionKeyBannerProps {
 }
 
 const MIN_SESSION_BALANCE = parseEther('0.01');
-const FUND_AMOUNT = parseEther('0.02');
+const FUND_AMOUNT = parseEther('1');
 
 export const SessionKeyBanner = React.memo(({
   roomId,
@@ -207,7 +207,7 @@ export const SessionKeyBanner = React.memo(({
               >
                 {isFunding
                   ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Funding...</>
-                  : <><Fuel className="w-3.5 h-3.5" /> Top up +0.02 SOMI</>}
+                  : <><Fuel className="w-3.5 h-3.5" /> Top up +1 SOMI</>}
               </button>
             ) : (
               <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${theme.divider} ${theme.footerBg}`}>
