@@ -14,6 +14,7 @@ import { AudioProvider } from '../contexts/AudioContext';
 import { NoirDialogProvider } from '../contexts/NoirDialogContext';
 import { WalletAutoConnector } from '../components/ui/WalletAutoConnector';
 import { ChainGate } from '../components/ui/ChainGate';
+import { TabProbeListener } from '../components/ui/TabProbeListener';
 
 export const config = createConfig({
     chains: [somniaChain] as const,
@@ -69,6 +70,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     <AudioProvider>
                         <NoirDialogProvider>
                             <WalletAutoConnector />
+                            <TabProbeListener />
                             <ChainGate>
                             {children}
                             </ChainGate>

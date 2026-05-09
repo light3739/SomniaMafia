@@ -71,7 +71,25 @@ export async function signRequest(params: {
         if (raw && roomId !== undefined) {
             try { roomMatch = BigInt(raw.roomId) === BigInt(roomId as any); } catch { roomMatch = null; }
         }
-        const diagnostic = {
+
+        let mafiaKeys: string[] = [];
+        try {
+            if (typeof localStorage !== 'undefined') {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && (k.startsWith('mafia_') || k.startsWith('somnia_mafia'))) mafiaKeys.push(k);
+                }
+            }
+        } catch {}
+
+        const sessionAgeMs = typeof raw?.createdAt === 'number' ? Date.now() - raw.createdAt : null;
+
+        const eventId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+            ? crypto.randomUUID()
+            : `evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+        const diagnostic: Record<string, any> = {
+            eventId,
             forceWallet: !!params.forceWallet,
             roomIdProvided: roomId !== undefined,
             expectedRoom: roomId?.toString(),
@@ -82,10 +100,32 @@ export async function signRequest(params: {
             addrMatch: raw?.mainWallet?.toLowerCase() === normalizedAddress,
             expired: typeof raw?.expiresAt === 'number' ? Date.now() >= raw.expiresAt : null,
             expiresInMs: typeof raw?.expiresAt === 'number' ? raw.expiresAt - Date.now() : null,
+            createdAt: raw?.createdAt ?? null,
+            sessionAgeMs,
             registered: raw?.registeredOnChain,
             chainId: raw?.chainId,
+            mafiaKeys,
+            visibilityState: typeof document !== 'undefined' ? document.visibilityState : null,
             msgPreview: message.slice(0, 80),
         };
+
+        // Multi-tab probe via BroadcastChannel — count peers that respond within 200ms.
+        if (typeof BroadcastChannel !== 'undefined') {
+            try {
+                const ch = new BroadcastChannel('somnia_mafia_tab_probe');
+                let peers = 0;
+                ch.onmessage = (ev) => { if (ev.data === 'pong') peers++; };
+                ch.postMessage('ping');
+                await new Promise((res) => setTimeout(res, 200));
+                diagnostic.tabPeers = peers;
+                ch.close();
+            } catch {
+                diagnostic.tabPeers = null;
+            }
+        } else {
+            diagnostic.tabPeers = null;
+        }
+
         console.warn('[signRequest] FALLBACK to wallet popup', diagnostic);
 
         if (typeof fetch !== 'undefined' && typeof window !== 'undefined') {

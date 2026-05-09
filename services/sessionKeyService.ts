@@ -18,6 +18,7 @@ interface StoredSession {
   chainId: number;
   expiresAt: number;
   registeredOnChain: boolean;
+  createdAt?: number;
 }
 
 const STORAGE_KEY = 'somnia_mafia_session';
@@ -182,14 +183,16 @@ export function createNewSession(
 ): { sessionAddress: `0x${string}`; privateKey: `0x${string}`; session: StoredSession } {
   const { privateKey, address } = generateSessionKey();
 
+  const now = Date.now();
   const session: StoredSession = {
     privateKey,
     address,
     mainWallet,
     roomId,
     chainId,
-    expiresAt: Date.now() + durationMs,
+    expiresAt: now + durationMs,
     registeredOnChain: false,
+    createdAt: now,
   };
 
   if (!skipStore) {

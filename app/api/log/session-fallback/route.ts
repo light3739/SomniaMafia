@@ -67,16 +67,22 @@ export async function POST(request: Request) {
 
             const expiresInMs = typeof body?.expiresInMs === 'number' ? body.expiresInMs : null;
             const expiresMin = expiresInMs !== null ? (expiresInMs / 60000).toFixed(1) : 'n/a';
+            const ageMin = typeof body?.sessionAgeMs === 'number' ? (body.sessionAgeMs / 60000).toFixed(1) : 'n/a';
+            const tabPeers = body?.tabPeers ?? 'n/a';
+            const visState = body?.visibilityState || 'n/a';
+            const keysCount = Array.isArray(body?.mafiaKeys) ? body.mafiaKeys.length : 0;
+            const eventId = String(body?.eventId || '').slice(0, 8);
 
             const lines = [
                 `*Session\\-key fallback*`,
+                `Event: \`${escapeMd(eventId)}\``,
                 `Reason: \`${escapeMd(reason)}\``,
                 `Addr: \`${escapeMd(addr.slice(0, 10))}...\``,
-                `Room: \`${escapeMd(String(body?.expectedRoom || '?'))}\``,
-                `Stored room: \`${escapeMd(String(body?.storedRoom || 'none'))}\``,
+                `Room: \`${escapeMd(String(body?.expectedRoom || '?'))}\` / stored: \`${escapeMd(String(body?.storedRoom || 'none'))}\``,
                 `Registered: \`${escapeMd(String(body?.registered))}\``,
                 `Chain: \`${escapeMd(String(body?.chainId || '?'))}\``,
-                `ExpiresIn: \`${escapeMd(expiresMin)}min\``,
+                `Age: \`${escapeMd(ageMin)}min\` / ExpiresIn: \`${escapeMd(expiresMin)}min\``,
+                `TabPeers: \`${escapeMd(String(tabPeers))}\` / Vis: \`${escapeMd(visState)}\` / Keys: \`${escapeMd(String(keysCount))}\``,
                 `IP: \`${escapeMd(ip)}\``,
             ];
             await sendTelegram(lines.join('\n'));
