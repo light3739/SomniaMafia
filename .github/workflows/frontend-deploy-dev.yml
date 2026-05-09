@@ -90,6 +90,8 @@ jobs:
           FRONT_REMOTE_DIR: /root/mafia-dev/frontend
           DAILY_API_KEY: ${{ secrets.DAILY_API_KEY }}
           NEXT_PUBLIC_DAILY_DOMAIN: ${{ vars.NEXT_PUBLIC_DAILY_DOMAIN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ -z "${FRONT_SSH_HOST}" ]; then
             export FRONT_SSH_HOST="${{ secrets.GM_SSH_HOST }}"
@@ -110,7 +112,7 @@ jobs:
             set -e
             ENV_FILE='${FRONT_REMOTE_DIR}/ops/frontend-server/.env.dev'
             touch \$ENV_FILE
-            for PAIR in 'DAILY_API_KEY=${DAILY_API_KEY}' 'NEXT_PUBLIC_DAILY_DOMAIN=${NEXT_PUBLIC_DAILY_DOMAIN}'; do
+            for PAIR in 'DAILY_API_KEY=${DAILY_API_KEY}' 'NEXT_PUBLIC_DAILY_DOMAIN=${NEXT_PUBLIC_DAILY_DOMAIN}' 'TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}' 'TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}'; do
               KEY=\${PAIR%%=*}
               if grep -q \"^\${KEY}=\" \"\$ENV_FILE\"; then
                 sed -i \"s|^\${KEY}=.*|\${PAIR}|\" \"\$ENV_FILE\"
