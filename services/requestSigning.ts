@@ -71,7 +71,7 @@ export async function signRequest(params: {
         if (raw && roomId !== undefined) {
             try { roomMatch = BigInt(raw.roomId) === BigInt(roomId as any); } catch { roomMatch = null; }
         }
-        console.warn('[signRequest] FALLBACK to wallet popup', {
+        const diagnostic = {
             forceWallet: !!params.forceWallet,
             roomIdProvided: roomId !== undefined,
             expectedRoom: roomId?.toString(),
@@ -85,7 +85,24 @@ export async function signRequest(params: {
             registered: raw?.registeredOnChain,
             chainId: raw?.chainId,
             msgPreview: message.slice(0, 80),
-        });
+        };
+        console.warn('[signRequest] FALLBACK to wallet popup', diagnostic);
+
+        if (typeof fetch !== 'undefined' && typeof window !== 'undefined') {
+            try {
+                fetch('/api/log/session-fallback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ts: Date.now(),
+                        ua: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+                        url: window.location?.href,
+                        ...diagnostic,
+                    }),
+                    keepalive: true,
+                }).catch(() => {});
+            } catch {}
+        }
     } catch (e) {
         console.warn('[signRequest] FALLBACK (diagnostic failed)', e);
     }
