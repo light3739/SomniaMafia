@@ -4,6 +4,7 @@ import { Clock } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { MicButton } from '../MicButton';
 import { VotingTimer } from './VotingTimer';
+import { SessionStatusBanner } from '../SessionStatusBanner';
 
 interface VotingSectionProps {
     isVotingPhase: boolean;
@@ -69,6 +70,8 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
                     </div>
                 )}
             </div>
+
+            <SessionStatusBanner address={myPlayer?.address} roomId={currentRoomId} />
 
             <Button
                 onClick={onVote}

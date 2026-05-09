@@ -12,6 +12,7 @@ import { buildMafiaMembersMessage } from '../../services/signingSchema';
 
 import { Button } from '../ui/Button';
 import { MafiaChat } from './MafiaChat';
+import { SessionStatusBanner } from './SessionStatusBanner';
 import { useSoundEffects } from '../ui/SoundEffects';
 import { Moon, Skull, Shield, Search, Eye, Check, Clock, User, Lock, AlertCircle, Users, RefreshCw } from 'lucide-react';
 import { CinematicNightFeedback } from './CinematicNightFeedback';
@@ -927,6 +928,9 @@ export const NightPhase: React.FC<NightPhaseProps> = React.memo(({ initialNightS
                                         </motion.div>
                                     )}
                                 </AnimatePresence>
+                            </div>
+                            <div className="mb-2">
+                                <SessionStatusBanner address={myPlayer?.address} roomId={currentRoomId} isTestMode={isTestMode} />
                             </div>
                             <Button
                                 onClick={handleCommit}

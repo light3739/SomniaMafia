@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
-import { Clock, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Clock, ChevronRight } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { MicButton } from '../MicButton';
+import { SessionStatusBanner } from '../SessionStatusBanner';
 
 interface DiscussionSectionProps {
     discussionState: any;
@@ -19,41 +20,6 @@ interface DiscussionSectionProps {
 export const DiscussionSection: React.FC<DiscussionSectionProps> = ({
     discussionState, isTestMode, smoothTimeRemaining, currentSpeaker, currentRoomId, myPlayer, isProcessing, onSkip, isHost = false
 }) => {
-    const [sessionInvalid, setSessionInvalid] = useState<{ bad: boolean; reason: string }>({ bad: false, reason: '' });
-
-    useEffect(() => {
-        if (isTestMode || !myPlayer?.address || !currentRoomId) {
-            setSessionInvalid({ bad: false, reason: '' });
-            return;
-        }
-        const check = () => {
-            try {
-                const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('somnia_mafia_session') : null;
-                const raw = stored ? JSON.parse(stored) : null;
-                if (!raw) return setSessionInvalid({ bad: true, reason: 'missing' });
-                if (raw.mainWallet?.toLowerCase() !== myPlayer.address.toLowerCase()) {
-                    return setSessionInvalid({ bad: true, reason: 'wallet mismatch' });
-                }
-                try {
-                    if (BigInt(raw.roomId) !== BigInt(currentRoomId)) {
-                        return setSessionInvalid({ bad: true, reason: 'room mismatch' });
-                    }
-                } catch {
-                    return setSessionInvalid({ bad: true, reason: 'room invalid' });
-                }
-                if (typeof raw.expiresAt !== 'number' || Date.now() >= raw.expiresAt) {
-                    return setSessionInvalid({ bad: true, reason: 'expired' });
-                }
-                setSessionInvalid({ bad: false, reason: '' });
-            } catch {
-                setSessionInvalid({ bad: true, reason: 'parse error' });
-            }
-        };
-        check();
-        const iv = setInterval(check, 3000);
-        return () => clearInterval(iv);
-    }, [isTestMode, myPlayer?.address, currentRoomId]);
-
     if (!discussionState?.active && !isTestMode) {
         if (discussionState?.finished) {
             return (
@@ -105,14 +71,11 @@ export const DiscussionSection: React.FC<DiscussionSectionProps> = ({
                 )}
             </div>
 
-            {sessionInvalid.bad && (
-                <div className="w-full px-3 py-2 rounded-md border border-orange-500/40 bg-orange-500/10 flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
-                    <p className="text-orange-200 text-[11px] leading-tight">
-                        Session lost ({sessionInvalid.reason}). Game actions will require a wallet signature popup. Refresh the page or rejoin the room to restore auto-signing.
-                    </p>
-                </div>
-            )}
+            <SessionStatusBanner
+                address={myPlayer?.address}
+                roomId={currentRoomId}
+                isTestMode={isTestMode}
+            />
 
             {(discussionState?.isMyTurn || isTestMode) && (
                 <Button
