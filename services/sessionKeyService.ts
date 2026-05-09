@@ -172,6 +172,42 @@ export function markSessionRegistered(): void {
 }
 
 /**
+ * Remove room-scoped mafia_* keys that belong to rooms other than the current one.
+ * Preserves settings keys and the active session row.
+ */
+export function cleanupStaleRoomKeys(currentRoomId: number | string | bigint): void {
+  if (typeof localStorage === 'undefined') return;
+  const keepGlobal = new Set([
+    'somnia_mafia_session',
+    'mafia_master_vol',
+    'mafia_use_embedded_wallet',
+    'mafia_abandoned_rooms',
+  ]);
+  const roomScopedPrefixes = [
+    'mafia_night_commit_',
+    'mafia_keys_',
+    'mafia_shuffle_commit_',
+  ];
+  const currentRoomStr = String(currentRoomId);
+
+  const toDelete: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || keepGlobal.has(key)) continue;
+    const matchedPrefix = roomScopedPrefixes.find((p) => key.startsWith(p));
+    if (!matchedPrefix) continue;
+    const rest = key.slice(matchedPrefix.length);
+    const keyRoom = rest.split('_')[0];
+    if (keyRoom && keyRoom !== currentRoomStr) {
+      toDelete.push(key);
+    }
+  }
+  for (const k of toDelete) {
+    try { localStorage.removeItem(k); } catch {}
+  }
+}
+
+/**
  * Create a new session (generates key, stores it, returns address for contract registration)
  */
 export function createNewSession(
@@ -196,6 +232,7 @@ export function createNewSession(
   };
 
   if (!skipStore) {
+    try { cleanupStaleRoomKeys(roomId); } catch {}
     storeSession(session);
   }
 
