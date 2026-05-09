@@ -1,19 +1,17 @@
 /**
  * SessionKeyBanner Component
  *
- * Shows session key status and allows player to register/revoke session keys.
- * Collapsible banner displayed in the bottom-left corner of the game screen.
+ * Shows session key status. Collapsible banner displayed in the bottom-left
+ * corner of the game screen.
  */
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Key, Shield, Clock, Loader2, X, Fuel, Wallet, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react';
+import { Key, Shield, Clock, Loader2, Fuel, Wallet, ChevronUp, ChevronDown, AlertTriangle, Sparkles } from 'lucide-react';
 import { useSessionKey } from '../../hooks/useSessionKey';
-import { useSendTransaction, usePublicClient, useAccount } from 'wagmi';
+import { useSendTransaction, usePublicClient } from 'wagmi';
 import { parseEther, formatEther } from 'viem';
 import { somniaChain } from '../../contracts/config';
-import { Button } from '../ui/Button';
-import { createSessionWalletClient, loadSession } from '../../services/sessionKeyService';
 
 interface SessionKeyBannerProps {
   roomId: number;
@@ -36,17 +34,13 @@ export const SessionKeyBanner = React.memo(({
     isRegistering,
     error,
     registerSession,
-    revokeSession,
   } = useSessionKey(roomId);
-  const { address: mainWalletAddress } = useAccount();
-
   const publicClient = usePublicClient({ chainId: somniaChain.id });
   const { sendTransactionAsync, isPending: isFunding } = useSendTransaction();
 
   const [sessionBalance, setSessionBalance] = useState<bigint>(0n);
   const [isLowBalance, setIsLowBalance] = useState(false);
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-  const [isSweeping, setIsSweeping] = useState(false);
 
   useEffect(() => {
     if (!sessionAddress || !publicClient) return;
@@ -70,41 +64,6 @@ export const SessionKeyBanner = React.memo(({
       await sendTransactionAsync({ to: sessionAddress as `0x${string}`, value: FUND_AMOUNT });
     } catch (e) {
       console.error('Failed to fund session:', e);
-    }
-  };
-
-  const handleSweepSessionBalance = async () => {
-    if (!publicClient || !mainWalletAddress) return;
-    const session = loadSession();
-    if (!session || !session.registeredOnChain) return;
-    const sessionClient = createSessionWalletClient();
-    if (!sessionClient || !sessionClient.account) return;
-    try {
-      setIsSweeping(true);
-      const [balance, gasPrice] = await Promise.all([
-        publicClient.getBalance({ address: session.address as `0x${string}` }),
-        publicClient.getGasPrice(),
-      ]);
-      const gasLimit = 21_000n;
-      const feeReserve = gasLimit * gasPrice;
-      if (balance <= feeReserve) return;
-      const valueToSend = balance - feeReserve;
-      const hash = await sessionClient.sendTransaction({
-        account: sessionClient.account,
-        to: mainWalletAddress as `0x${string}`,
-        value: valueToSend,
-        gas: gasLimit,
-        gasPrice,
-        chain: sessionClient.chain,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-      const updatedBalance = await publicClient.getBalance({ address: session.address as `0x${string}` });
-      setSessionBalance(updatedBalance);
-      setIsLowBalance(updatedBalance < MIN_SESSION_BALANCE);
-    } catch (e) {
-      console.error('Failed to sweep session balance:', e);
-    } finally {
-      setIsSweeping(false);
     }
   };
 
@@ -240,33 +199,24 @@ export const SessionKeyBanner = React.memo(({
         {/* ── Actions ── */}
         <div className="px-4 pb-4 flex flex-col gap-2">
           {hasSession ? (
-            <div className="flex items-center gap-2">
-              {isLowBalance && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleFundSession(); }}
-                  disabled={isFunding}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-bold tracking-wide font-['Montserrat'] uppercase transition-all ${theme.btnPrimary} disabled:opacity-50`}
-                >
-                  {isFunding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Fuel className="w-3.5 h-3.5" />}
-                  +0.02 SOMI
-                </button>
-              )}
+            isLowBalance ? (
               <button
-                onClick={(e) => { e.stopPropagation(); handleSweepSessionBalance(); }}
-                disabled={isSweeping || !mainWalletAddress || sessionBalance <= 0n}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/8 bg-white/4 hover:bg-white/8 text-white/40 hover:text-[#C8904A] text-[11px] font-medium font-['Montserrat'] transition-all disabled:opacity-40"
+                onClick={(e) => { e.stopPropagation(); handleFundSession(); }}
+                disabled={isFunding}
+                className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-[12px] font-bold tracking-widest font-['Cinzel'] uppercase transition-all ${theme.btnPrimary} disabled:opacity-50`}
               >
-                {isSweeping ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                Withdraw
+                {isFunding
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Funding...</>
+                  : <><Fuel className="w-3.5 h-3.5" /> Top up +0.02 SOMI</>}
               </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); revokeSession(); }}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-white/8 bg-white/4 hover:bg-white/8 text-white/40 hover:text-[#C94040] text-[11px] font-medium font-['Montserrat'] transition-all"
-              >
-                <X className="w-3 h-3" />
-                Revoke
-              </button>
-            </div>
+            ) : (
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${theme.divider} ${theme.footerBg}`}>
+                <Sparkles className={`w-3.5 h-3.5 shrink-0 ${theme.accent}`} />
+                <p className={`text-[10px] font-['Montserrat'] leading-snug ${theme.label}`}>
+                  Auto-sign active. Every game action signs silently — no popup until the session expires.
+                </p>
+              </div>
+            )
           ) : (
             <button
               onClick={(e) => { e.stopPropagation(); registerSession(roomId); }}
