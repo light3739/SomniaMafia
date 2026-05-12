@@ -422,8 +422,8 @@ export const CreateLobby: React.FC = () => {
                 {/* Compact fee hint under the create button. Non-refundable
                     platform fee + refundable session-wallet gas reserve. */}
                 {isConnected && (
-                    <p className="text-center text-white/45 text-[11px] font-mono mt-2">
-                        Platform fee {parseFloat(formatEther(entryFee)).toFixed(2)} {currencySymbol} · Gas reserve (refundable) {parseFloat(formatEther(SESSION_GAS_RESERVE)).toFixed(2)} {currencySymbol}
+                    <p className="text-center text-white/70 text-xs font-mono mt-2">
+                        Platform fee {parseFloat(formatEther(entryFee)).toFixed(2)} {currencySymbol} · Gas reserve (refundable) {parseFloat(formatEther(SESSION_GAS_RESERVE)).toFixed(2)} {currencySymbol} · Tx fee ~0.001 {currencySymbol}
                     </p>
                 )}
             </div>

@@ -270,7 +270,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
 
     const mountedRef = useRef(true);
     const lastFetchRef = useRef(0);
-    const MAX_LOBBY_AGE_SEC = 2 * 60 * 60;
+    const MAX_LOBBY_AGE_SEC = 4 * 60 * 60;
 
     type FetchReason = 'initial' | 'refresh' | 'polling';
 
