@@ -148,7 +148,10 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
     // the validation rules / error wording stay in one place.
     const fetchAndValidateRoom = React.useCallback(
         async (numericId: string): Promise<ReturnType<typeof parseRoom> | null> => {
-            if (!publicClient) return null;
+            if (!publicClient) {
+                await showAlert("Wallet client isn't ready yet. Please wait a moment and try again.", { variant: 'danger', title: 'Not Ready' });
+                return null;
+            }
             let idBig: bigint;
             try { idBig = BigInt(numericId); } catch {
                 await showAlert("That room code isn't valid.", { title: 'Invalid Code' });
@@ -196,12 +199,22 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
     // changes so the CTA re-appears for the new query.
     const [lookedUpRoom, setLookedUpRoom] = useState<any | null>(null);
 
-    // Join-by-ID modal (panel-level action — drops the entered ID into the
-    // search query so the existing numeric-lookup flow renders inline).
+    // Join-by-ID modal (panel-level action — fetches the room on-chain
+    // directly and drops it into the list as a card the user can confirm
+    // and click, skipping the search-bar "Look up Room #X" intermediate).
     const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+    const [isCodeLookingUp, setIsCodeLookingUp] = useState(false);
 
     useEffect(() => {
-        setLookedUpRoom(null);
+        // Clear the looked-up room when search changes, EXCEPT when the new
+        // query still matches its id — otherwise programmatically setting
+        // searchQuery alongside lookedUpRoom (e.g. from the Join-by-ID modal)
+        // would immediately wipe the room we just set.
+        setLookedUpRoom((prev) => {
+            if (!prev) return prev;
+            if (String(prev.id) === searchQuery.trim()) return prev;
+            return null;
+        });
     }, [searchQuery]);
 
     // Smart fallback triggered when the search query is a pure number and
@@ -211,7 +224,10 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
     const handleNumericLookup = async () => {
         const numeric = searchQuery.trim();
         if (!/^\d+$/.test(numeric)) return;
-        if (!publicClient) return;
+        if (!publicClient) {
+            await showAlert("Wallet client isn't ready yet. Please wait a moment and try again.", { variant: 'danger', title: 'Not Ready' });
+            return;
+        }
 
         setIsLookingUp(true);
         try {
@@ -558,9 +574,9 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
                             onClick={() => setIsCodeModalOpen(true)}
                             disabled={!isWalletReady}
                             title="Join a room directly by its ID"
-                            className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#C49A3C]/35 bg-gradient-to-b from-[#C49A3C]/10 to-[#C49A3C]/5 text-[#E8CBA3] hover:border-[#C49A3C]/70 hover:from-[#C49A3C]/20 hover:to-[#C49A3C]/10 hover:text-white transition-all shadow-[inset_0_1px_0_rgba(232,203,163,0.12)] disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#1A1510] border border-[#B88A5E] text-[#B88A5E] hover:bg-[#6B5038] hover:border-[#6B5038] hover:text-[#F0E6D8] active:scale-[0.98] transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                            <span className="text-[#C49A3C] text-base leading-none font-['Cinzel'] translate-y-[-0.5px] group-hover:text-[#E8CBA3] transition-colors">#</span>
+                            <span className="text-base leading-none font-['Cinzel'] translate-y-[-0.5px]">#</span>
                             <span className="text-[10px] font-bold uppercase tracking-[0.22em] font-['Montserrat']">
                                 <span className="hidden sm:inline">Join by ID</span>
                                 <span className="sm:hidden">By ID</span>
@@ -626,17 +642,21 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
                 </div>
 
                 {/* Список комнат — фиксированная высота под PAGE_SIZE карточек,
-                    чтобы рамка не прыгала при появлении/исчезновении комнат. */}
-                <div className="w-full flex flex-col gap-3 h-[460px] md:h-[490px]">
+                    чтобы рамка не прыгала при появлении/исчезновении комнат.
+                    Панель (bg + border + rounded) живёт на ВНЕШНЕМ контейнере,
+                    чтобы не пересоздавалась при смене состояния — иначе вся
+                    рамка моргала на каждом search-toggle. AnimatePresence
+                    кросс-фейдит только контент внутри. */}
+                <div className="relative w-full h-[460px] md:h-[490px] bg-black/30 rounded-xl border border-white/10 overflow-hidden">
                     <AnimatePresence mode="wait">
                         {isInitialLoad ? (
                             <motion.div
                                 key="scanning"
-                                initial={{ opacity: 0, scale: 0.98 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.98 }}
-                                transition={{ duration: 0.2 }}
-                                className="w-full h-full flex flex-col items-center justify-center bg-black/30 rounded-xl border border-white/10 py-10 relative"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.18 }}
+                                className="absolute inset-0 flex flex-col items-center justify-center py-10"
                             >
                                 <div className="relative flex items-center justify-center mb-6 mt-2">
                                     <div className="absolute w-16 h-16 border-2 border-[#C49A3C] rounded-full animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite] opacity-20" />
@@ -652,11 +672,11 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
                         ) : showNumericLookup ? (
                             <motion.div
                                 key="numeric-lookup"
-                                initial={{ opacity: 0, scale: 0.98 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.98 }}
-                                transition={{ duration: 0.2 }}
-                                className="w-full h-full flex flex-col items-center justify-center bg-black/30 rounded-xl border border-white/10 py-10 px-6"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.18 }}
+                                className="absolute inset-0 flex flex-col items-center justify-center py-10 px-6"
                             >
                                 <span className="text-[#C49A3C]/30 mb-3">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -683,14 +703,14 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
                                     Clear search
                                 </button>
                             </motion.div>
-                        ) : rooms.length === 0 ? (
+                        ) : displayRooms.length === 0 ? (
                             <motion.div
                                 key="empty"
-                                initial={{ opacity: 0, scale: 0.98 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.98 }}
-                                transition={{ duration: 0.2 }}
-                                className="w-full h-full flex flex-col items-center justify-center bg-black/30 rounded-xl border border-white/10 py-10 px-6"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.18 }}
+                                className="absolute inset-0 flex flex-col items-center justify-center py-10 px-6"
                             >
                                 <span className="text-[#C49A3C]/30 mb-3">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -712,11 +732,11 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
                         ) : filteredRooms.length === 0 ? (
                             <motion.div
                                 key="filter-empty"
-                                initial={{ opacity: 0, scale: 0.98 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.98 }}
-                                transition={{ duration: 0.2 }}
-                                className="w-full h-full flex flex-col items-center justify-center bg-black/30 rounded-xl border border-white/10 py-10"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.18 }}
+                                className="absolute inset-0 flex flex-col items-center justify-center py-10"
                             >
                                 <span className="text-[#C49A3C]/30 mb-3">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -737,15 +757,14 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="w-full h-full flex flex-col gap-3"
+                                transition={{ duration: 0.18 }}
+                                className="absolute inset-0 flex flex-col gap-3 p-3 overflow-y-auto"
                             >
                                 {pagedRooms.map((room) => {
                                         const tournament = getTournamentInfo(room);
                                         return (
                                             <motion.button
                                                 key={room.id}
-                                                whileHover={{ scale: 1.015 }}
                                                 whileTap={{ scale: 0.98 }}
                                                 onClick={() => handleJoin(room)}
                                                 disabled={isTxPending || !isWalletReady}
@@ -859,17 +878,24 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
             </div>
             <JoinByIdModal
                 open={isCodeModalOpen}
+                isLoading={isCodeLookingUp}
                 onClose={() => setIsCodeModalOpen(false)}
                 onSubmit={async (id) => {
-                    // Hand off to the same flow the search bar uses: drop the
-                    // ID into searchQuery and close the modal. If the room is
-                    // already in the live list, it shows up filtered to that
-                    // single card; otherwise the existing numeric-lookup screen
-                    // ("Room #X isn't in the live list — Look up Room #X")
-                    // renders inline so the user can fetch it on-chain.
-                    setLookedUpRoom(null);
-                    setSearchQuery(id);
-                    setIsCodeModalOpen(false);
+                    // Fetch the room on-chain right inside the modal, then
+                    // surface it as a card in the list (via lookedUpRoom +
+                    // searchQuery filter). User then clicks the card to
+                    // actually join — they get one visual confirmation step
+                    // instead of being thrown straight into a tx popup.
+                    setIsCodeLookingUp(true);
+                    try {
+                        const room = await fetchAndValidateRoom(id);
+                        if (!room) return; // fetchAndValidateRoom showed the alert; keep modal open
+                        setLookedUpRoom(room);
+                        setSearchQuery(id);
+                        setIsCodeModalOpen(false);
+                    } finally {
+                        setIsCodeLookingUp(false);
+                    }
                 }}
             />
         </FlowLayout>
