@@ -119,37 +119,65 @@ export const BackButton: React.FC<BackButtonProps> = ({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        transition={{ duration: 0.18 }}
-                        className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/74 backdrop-blur-md font-['Montserrat']"
+                        transition={{ duration: 0.2 }}
+                        className="fixed inset-0 z-[9999] flex items-center justify-center px-4 font-['Montserrat']"
+                        style={{
+                            backgroundImage:
+                                'radial-gradient(ellipse at center, rgba(40,22,8,0.55) 0%, rgba(0,0,0,0.9) 80%)',
+                            backdropFilter: 'blur(8px)',
+                        }}
                         onClick={handleCancelExit}
                     >
                         <motion.div
-                            initial={{ opacity: 0, y: 8 }}
+                            initial={{ opacity: 0, y: -14 }}
                             animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 6 }}
-                            transition={{ duration: 0.18, ease: 'easeOut' }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2, ease: 'easeOut' }}
                             onClick={(e) => e.stopPropagation()}
-                            className="relative w-full max-w-md bg-[#0B0908] rounded-lg overflow-hidden"
+                            className="relative w-full max-w-md rounded-[12px] overflow-hidden"
                             style={{
-                                border: '1px solid rgba(226,107,107,0.42)',
-                                boxShadow: '0 0 80px rgba(226,107,107,0.16), 0 24px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.04)',
+                                background:
+                                    'linear-gradient(155deg, #1A0F05 0%, #2A1A0A 45%, #1A0F05 100%)',
+                                border: '1px solid rgba(226,107,107,0.32)',
+                                boxShadow: '0 24px 60px -18px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.04)',
                             }}
                         >
-                            {/* Top accent line */}
+                            {/* Brass corner ornaments (danger tint) */}
+                            <BackButtonCorner className="absolute top-2 left-2" />
+                            <BackButtonCorner className="absolute top-2 right-2 rotate-90" />
+                            <BackButtonCorner className="absolute bottom-2 left-2 -rotate-90" />
+                            <BackButtonCorner className="absolute bottom-2 right-2 rotate-180" />
+
+                            {/* Subtle film grain */}
                             <div
-                                className="absolute top-0 left-0 right-0 h-[2px]"
-                                style={{ background: 'linear-gradient(90deg, transparent, #E26B6B, transparent)' }}
+                                className="pointer-events-none absolute inset-0 opacity-[0.06] mix-blend-overlay"
+                                style={{
+                                    backgroundImage:
+                                        "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.6'/></svg>\")",
+                                }}
                             />
 
-                            <div className="relative p-6">
+                            {/* Top accent rule */}
+                            <div
+                                className="h-px w-full"
+                                style={{ background: 'linear-gradient(90deg, transparent, rgba(226,107,107,0.5), transparent)' }}
+                            />
+
+                            <div className="relative p-7">
                                 {/* Header */}
                                 <div className="flex items-center gap-3 mb-4">
-                                    <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[#E26B6B]/14">
+                                    <span
+                                        className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 border"
+                                        style={{
+                                            backgroundColor: 'rgba(226,107,107,0.12)',
+                                            borderColor: 'rgba(226,107,107,0.44)',
+                                        }}
+                                    >
                                         <AlertTriangle className="w-[18px] h-[18px] text-[#E26B6B]" />
                                     </span>
                                     <h3
-                                        className="text-[15px] font-semibold tracking-wide text-[#E26B6B]"
-                                        style={{ fontFamily: 'var(--font-cinzel)' }}
+                                        className="text-[19px] md:text-[20px] tracking-[0.14em] leading-tight text-[#E26B6B]"
+                                        style={{ fontFamily: 'var(--font-cinzel), Cinzel, serif' }}
                                     >
                                         {exitContext === 'lobby' ? 'Leave Lobby?'
                                             : exitContext === 'pre-game-abort' ? 'Abort Round?'
@@ -181,27 +209,22 @@ export const BackButton: React.FC<BackButtonProps> = ({
                                     </p>
                                 )}
 
-                                {/* Buttons */}
+                                {/* Buttons — matches the game's secondary-lobby
+                                    / primary-lobby button language. Solid mid-
+                                    tone bg, darker on hover, no glow, no scale-
+                                    up. */}
                                 <div className="flex gap-2.5">
                                     <button
                                         onClick={handleCancelExit}
                                         disabled={isExiting}
-                                        className="flex-1 h-11 rounded-md border border-white/10 text-white/65 text-[12px] uppercase tracking-[0.12em] font-semibold hover:border-white/25 hover:text-white hover:bg-white/[0.04] transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                        className="flex-1 h-11 rounded-md border border-white/5 bg-[#19130D] text-white/80 text-[12px] uppercase tracking-[0.14em] font-medium hover:bg-[#2a2118] active:scale-[0.98] transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                     >
                                         Stay
                                     </button>
                                     <button
                                         onClick={handleConfirmExit}
                                         disabled={isExiting}
-                                        className="flex-1 h-11 rounded-md text-[12px] uppercase tracking-[0.14em] font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
-                                        style={{
-                                            border: '1px solid #E26B6B',
-                                            color: '#0A0A0A',
-                                            backgroundColor: '#E26B6B',
-                                            boxShadow: '0 6px 18px rgba(226,107,107,0.16)',
-                                        }}
-                                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.08)'; }}
-                                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.filter = ''; }}
+                                        className="flex-1 h-11 rounded-md border border-white/10 bg-[#8B2424] hover:bg-[#6B1818] text-white text-[12px] uppercase tracking-[0.14em] font-bold active:scale-[0.98] transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
                                     >
                                         {isExiting ? (
                                             <>
@@ -217,6 +240,12 @@ export const BackButton: React.FC<BackButtonProps> = ({
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Bottom accent rule */}
+                            <div
+                                className="h-px w-full"
+                                style={{ background: 'linear-gradient(90deg, transparent, rgba(226,107,107,0.32), transparent)' }}
+                            />
                         </motion.div>
                     </motion.div>
                 )}
@@ -225,3 +254,19 @@ export const BackButton: React.FC<BackButtonProps> = ({
         </>
     );
 };
+
+// Decorative brass L-corners (red-tinted to match the danger context).
+const BackButtonCorner: React.FC<{ className?: string }> = ({ className = '' }) => (
+    <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        className={`pointer-events-none ${className}`}
+        style={{ color: '#E26B6B', opacity: 0.5 }}
+        aria-hidden
+    >
+        <path d="M2 9 V3 H8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        <circle cx="3" cy="3" r="1" fill="currentColor" opacity="0.7" />
+    </svg>
+);

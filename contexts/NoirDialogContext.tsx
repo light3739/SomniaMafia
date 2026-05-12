@@ -51,36 +51,46 @@ interface ModalProps {
 }
 
 // Variant palette — single source of truth so the redesigned modal stays
-// consistent and easy to extend.
+// consistent and easy to extend. Button colors mirror the game's existing
+// primary-lobby pattern (solid mid-tone, darker on hover) so dialogs feel
+// native to the rest of the UI.
 const VARIANT_STYLES: Record<DialogVariant, {
-    accent: string;
-    accentSoft: string;
-    border: string;
-    glow: string;
+    accent: string;       // title + icon color (lighter tint)
+    accentSoft: string;   // icon-circle bg
+    border: string;       // panel border tint
+    btnBg: string;        // confirm button base bg
+    btnBgHover: string;   // confirm button hover bg
+    btnText: string;      // confirm button label
     icon: React.ComponentType<{ className?: string }>;
     iconClass: string;
 }> = {
     default: {
         accent: '#C5A059',
         accentSoft: 'rgba(197,160,89,0.12)',
-        border: 'rgba(197,160,89,0.32)',
-        glow: 'rgba(197,160,89,0.10)',
+        border: 'rgba(197,160,89,0.28)',
+        btnBg: '#A8784F',
+        btnBgHover: '#8A6340',
+        btnText: '#FFFFFF',
         icon: Info,
         iconClass: 'text-[#C5A059]',
     },
     danger: {
         accent: '#E26B6B',
-        accentSoft: 'rgba(226,107,107,0.14)',
-        border: 'rgba(226,107,107,0.42)',
-        glow: 'rgba(226,107,107,0.16)',
+        accentSoft: 'rgba(226,107,107,0.12)',
+        border: 'rgba(226,107,107,0.32)',
+        btnBg: '#8B2424',
+        btnBgHover: '#6B1818',
+        btnText: '#FFE4E4',
         icon: AlertTriangle,
         iconClass: 'text-[#E26B6B]',
     },
     success: {
         accent: '#5BBB8C',
-        accentSoft: 'rgba(91,187,140,0.14)',
-        border: 'rgba(91,187,140,0.32)',
-        glow: 'rgba(91,187,140,0.10)',
+        accentSoft: 'rgba(91,187,140,0.12)',
+        border: 'rgba(91,187,140,0.28)',
+        btnBg: '#3F8458',
+        btnBgHover: '#2D6440',
+        btnText: '#FFFFFF',
         icon: CheckCircle,
         iconClass: 'text-[#5BBB8C]',
     },
@@ -121,107 +131,167 @@ function NoirModal({ dialog, onResolve }: ModalProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
+            transition={{ duration: 0.2 }}
             className="fixed inset-0 z-[9999] flex items-center justify-center px-4 font-['Montserrat']"
-            style={{ backgroundColor: 'rgba(0,0,0,0.74)', backdropFilter: 'blur(6px)' }}
+            style={{
+                backgroundImage:
+                    'radial-gradient(ellipse at center, rgba(40,22,8,0.55) 0%, rgba(0,0,0,0.9) 80%)',
+                backdropFilter: 'blur(8px)',
+            }}
             onKeyDown={handleKeyDown}
             onClick={handleCancel}
         >
             <motion.div
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: -14 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 6 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
-                className="w-full max-w-md bg-[#0B0B0B] rounded-lg relative overflow-hidden"
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="w-full max-w-md rounded-[12px] relative overflow-hidden"
                 style={{
+                    background:
+                        'linear-gradient(155deg, #1A0F05 0%, #2A1A0A 45%, #1A0F05 100%)',
                     border: `1px solid ${styles.border}`,
-                    boxShadow: `0 0 80px ${styles.glow}, 0 24px 60px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.04)`,
+                    boxShadow: '0 24px 60px -18px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.04)',
                 }}
                 onClick={e => e.stopPropagation()}
             >
-                {/* Top accent line */}
+                {/* Brass corner ornaments (variant-tinted) */}
+                <CornerOrnament accent={styles.accent} className="absolute top-2 left-2" />
+                <CornerOrnament accent={styles.accent} className="absolute top-2 right-2 rotate-90" />
+                <CornerOrnament accent={styles.accent} className="absolute bottom-2 left-2 -rotate-90" />
+                <CornerOrnament accent={styles.accent} className="absolute bottom-2 right-2 rotate-180" />
+
+                {/* Subtle film grain */}
                 <div
-                    className="absolute top-0 left-0 right-0 h-[2px]"
-                    style={{ background: `linear-gradient(90deg, transparent, ${styles.accent}, transparent)` }}
+                    className="pointer-events-none absolute inset-0 opacity-[0.06] mix-blend-overlay"
+                    style={{
+                        backgroundImage:
+                            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.6'/></svg>\")",
+                    }}
                 />
 
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 pt-6 pb-1">
-                    <div className="flex items-center gap-3">
-                        <span
-                            className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: styles.accentSoft }}
-                        >
-                            <Icon className={`w-[18px] h-[18px] ${styles.iconClass}`} />
-                        </span>
-                        <h3
-                            className="text-[15px] font-semibold tracking-wide"
-                            style={{ color: styles.accent, fontFamily: 'var(--font-cinzel)' }}
-                        >
-                            {dialog.title ?? defaultTitle}
-                        </h3>
-                    </div>
-                    <button
-                        onClick={handleCancel}
-                        className="w-9 h-9 flex items-center justify-center rounded-full text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition-all shrink-0"
-                        aria-label="Close"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
+                {/* Top accent rule */}
+                <div
+                    className="h-px w-full"
+                    style={{ background: `linear-gradient(90deg, transparent, ${styles.accent}66, transparent)` }}
+                />
 
-                {/* Body */}
-                <div className="px-6 pt-4 pb-5">
-                    <p className="text-white/75 text-[14px] leading-relaxed">
-                        {dialog.message}
-                    </p>
-
-                    {dialog.type === 'prompt' && (
-                        <input
-                            ref={inputRef}
-                            autoFocus
-                            type="text"
-                            value={inputValue}
-                            onChange={e => setInputValue(e.target.value)}
-                            placeholder={dialog.placeholder ?? ''}
-                            className="mt-5 w-full bg-black/60 border border-white/10 rounded-md px-4 py-3 text-white text-[14px] outline-none transition-all placeholder:text-white/35 focus:border-[#C5A059]/60 focus:shadow-[0_0_0_3px_rgba(197,160,89,0.12)]"
-                        />
-                    )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2.5 px-6 pb-6">
-                    {dialog.type !== 'alert' && (
+                <div className="relative">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-7 pt-6 pb-2">
+                        <div className="flex items-center gap-3">
+                            <span
+                                className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 border"
+                                style={{
+                                    backgroundColor: styles.accentSoft,
+                                    borderColor: `${styles.accent}44`,
+                                }}
+                            >
+                                <Icon className={`w-[18px] h-[18px] ${styles.iconClass}`} />
+                            </span>
+                            <h3
+                                className="text-[19px] md:text-[20px] tracking-[0.14em] leading-tight"
+                                style={{ color: styles.accent, fontFamily: 'var(--font-cinzel), Cinzel, serif' }}
+                            >
+                                {dialog.title ?? defaultTitle}
+                            </h3>
+                        </div>
                         <button
                             onClick={handleCancel}
-                            className="flex-1 h-11 rounded-md border border-white/10 text-white/65 text-[12px] uppercase tracking-[0.12em] font-semibold hover:border-white/25 hover:text-white hover:bg-white/[0.04] transition-all active:scale-[0.98]"
+                            className="w-8 h-8 flex items-center justify-center rounded-full text-white/40 hover:text-white/90 hover:bg-white/[0.06] transition-all shrink-0"
+                            aria-label="Close"
                         >
-                            {dialog.cancelLabel ?? 'Cancel'}
+                            <X className="w-4 h-4" />
                         </button>
-                    )}
-                    <button
-                        onClick={handleConfirm}
-                        className="flex-1 h-11 rounded-md text-[12px] uppercase tracking-[0.14em] font-bold transition-all active:scale-[0.98]"
-                        style={{
-                            border: `1px solid ${styles.accent}`,
-                            color: '#0A0A0A',
-                            backgroundColor: styles.accent,
-                            boxShadow: `0 6px 18px ${styles.glow}`,
-                        }}
-                        onMouseEnter={e => {
-                            (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.08)';
-                        }}
-                        onMouseLeave={e => {
-                            (e.currentTarget as HTMLButtonElement).style.filter = '';
-                        }}
-                    >
-                        {dialog.confirmLabel ?? (dialog.type === 'confirm' ? 'Confirm' : 'OK')}
-                    </button>
+                    </div>
+
+                    {/* Body */}
+                    <div className="px-7 pt-3 pb-5">
+                        <p className="text-white/75 text-[14px] leading-relaxed">
+                            {dialog.message}
+                        </p>
+
+                        {dialog.type === 'prompt' && (
+                            <input
+                                ref={inputRef}
+                                autoFocus
+                                type="text"
+                                value={inputValue}
+                                onChange={e => setInputValue(e.target.value)}
+                                placeholder={dialog.placeholder ?? ''}
+                                className="mt-5 w-full bg-black/55 border rounded-md px-4 py-3 text-white text-[14px] outline-none transition-all placeholder:text-white/35"
+                                style={{
+                                    borderColor: 'rgba(255,255,255,0.10)',
+                                }}
+                                onFocus={e => {
+                                    e.currentTarget.style.borderColor = `${styles.accent}99`;
+                                    e.currentTarget.style.boxShadow = `0 0 0 3px ${styles.accent}1f`;
+                                }}
+                                onBlur={e => {
+                                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)';
+                                    e.currentTarget.style.boxShadow = '';
+                                }}
+                            />
+                        )}
+                    </div>
+
+                    {/* Actions — match the game's existing primary-lobby /
+                        secondary-lobby button language: solid mid-tone bg,
+                        darker on hover, no glow, no scale-up. */}
+                    <div className="flex gap-2.5 px-7 pb-6">
+                        {dialog.type !== 'alert' && (
+                            <button
+                                onClick={handleCancel}
+                                className="flex-1 h-11 rounded-md border border-white/5 bg-[#19130D] text-white/80 text-[12px] uppercase tracking-[0.14em] font-medium font-['Montserrat'] hover:bg-[#2a2118] active:scale-[0.98] transition-colors"
+                            >
+                                {dialog.cancelLabel ?? 'Cancel'}
+                            </button>
+                        )}
+                        <button
+                            onClick={handleConfirm}
+                            className="flex-1 h-11 rounded-md border border-white/10 text-[12px] uppercase tracking-[0.14em] font-bold font-['Montserrat'] active:scale-[0.98] transition-colors"
+                            style={{
+                                color: styles.btnText,
+                                backgroundColor: styles.btnBg,
+                            }}
+                            onMouseEnter={e => {
+                                (e.currentTarget as HTMLButtonElement).style.backgroundColor = styles.btnBgHover;
+                            }}
+                            onMouseLeave={e => {
+                                (e.currentTarget as HTMLButtonElement).style.backgroundColor = styles.btnBg;
+                            }}
+                        >
+                            {dialog.confirmLabel ?? (dialog.type === 'confirm' ? 'Confirm' : 'OK')}
+                        </button>
+                    </div>
                 </div>
+
+                {/* Bottom accent rule */}
+                <div
+                    className="h-px w-full"
+                    style={{ background: `linear-gradient(90deg, transparent, ${styles.accent}44, transparent)` }}
+                />
             </motion.div>
         </motion.div>
     );
 }
+
+// Decorative L-shaped brass corner brackets — tinted with variant accent
+const CornerOrnament: React.FC<{ accent: string; className?: string }> = ({ accent, className = '' }) => (
+    <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        className={`pointer-events-none ${className}`}
+        style={{ color: accent, opacity: 0.5 }}
+        aria-hidden
+    >
+        <path d="M2 9 V3 H8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        <circle cx="3" cy="3" r="1" fill="currentColor" opacity="0.7" />
+    </svg>
+);
+
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 

@@ -11,6 +11,7 @@ import { NetworkSelector } from '../ui/NetworkSelector';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { FlowLayout } from '../layout/FlowLayout';
+import { JoinByIdModal } from './JoinByIdModal';
 
 // --- ИКОНКИ ---
 const RefreshIcon = ({ className }: { className?: string }) => (
@@ -195,6 +196,10 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
     // changes so the CTA re-appears for the new query.
     const [lookedUpRoom, setLookedUpRoom] = useState<any | null>(null);
 
+    // Join-by-ID modal (panel-level action — drops the entered ID into the
+    // search query so the existing numeric-lookup flow renders inline).
+    const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+
     useEffect(() => {
         setLookedUpRoom(null);
     }, [searchQuery]);
@@ -270,6 +275,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
 
     const mountedRef = useRef(true);
     const lastFetchRef = useRef(0);
+    const searchInputRef = useRef<HTMLInputElement>(null);
     const MAX_LOBBY_AGE_SEC = 4 * 60 * 60;
 
     type FetchReason = 'initial' | 'refresh' | 'polling';
@@ -547,7 +553,20 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
                     <h2 className="text-white text-xl md:text-2xl font-['Cinzel'] tracking-widest">
                         Live Sessions
                     </h2>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5 md:gap-3">
+                        <button
+                            onClick={() => setIsCodeModalOpen(true)}
+                            disabled={!isWalletReady}
+                            title="Join a room directly by its ID"
+                            className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#C49A3C]/35 bg-gradient-to-b from-[#C49A3C]/10 to-[#C49A3C]/5 text-[#E8CBA3] hover:border-[#C49A3C]/70 hover:from-[#C49A3C]/20 hover:to-[#C49A3C]/10 hover:text-white transition-all shadow-[inset_0_1px_0_rgba(232,203,163,0.12)] disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            <span className="text-[#C49A3C] text-base leading-none font-['Cinzel'] translate-y-[-0.5px] group-hover:text-[#E8CBA3] transition-colors">#</span>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.22em] font-['Montserrat']">
+                                <span className="hidden sm:inline">Join by ID</span>
+                                <span className="sm:hidden">By ID</span>
+                            </span>
+                        </button>
+                        <div className="w-px h-5 bg-white/10" aria-hidden />
                         <button
                             onClick={() => fetchRooms('refresh')}
                             disabled={isRefreshing || isInitialLoad}
@@ -595,6 +614,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
                         )}
                     </div>
                     <Input
+                        ref={searchInputRef}
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
@@ -837,6 +857,21 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
                     </div>
                 )}
             </div>
+            <JoinByIdModal
+                open={isCodeModalOpen}
+                onClose={() => setIsCodeModalOpen(false)}
+                onSubmit={async (id) => {
+                    // Hand off to the same flow the search bar uses: drop the
+                    // ID into searchQuery and close the modal. If the room is
+                    // already in the live list, it shows up filtered to that
+                    // single card; otherwise the existing numeric-lookup screen
+                    // ("Room #X isn't in the live list — Look up Room #X")
+                    // renders inline so the user can fetch it on-chain.
+                    setLookedUpRoom(null);
+                    setSearchQuery(id);
+                    setIsCodeModalOpen(false);
+                }}
+            />
         </FlowLayout>
     );
 };

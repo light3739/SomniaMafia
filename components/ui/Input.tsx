@@ -1,16 +1,16 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     label?: string;
     containerClassName?: string;
 }
 
-export const Input: React.FC<InputProps> = ({
+export const Input = forwardRef<HTMLInputElement, InputProps>(({
     label,
     className = "",
     containerClassName = "",
     ...props
-}) => {
+}, ref) => {
     return (
         <div className={`flex flex-col gap-2 ${containerClassName}`}>
             {label && (
@@ -19,9 +19,12 @@ export const Input: React.FC<InputProps> = ({
                 </label>
             )}
             <input
+                ref={ref}
                 className={`w-full h-[50px] bg-[#19130D]/60 rounded-[10px] border border-white/10 text-center text-white text-xl placeholder:text-white/40 focus:outline-none focus:border-[#916A47] transition-all font-sans ${className}`}
                 {...props}
             />
         </div>
     );
-};
+});
+
+Input.displayName = 'Input';
