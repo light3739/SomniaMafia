@@ -210,7 +210,7 @@ export const JoinLobby: React.FC<JoinLobbyProps> = ({ initialRoomId, mockCount =
         // query still matches its id — otherwise programmatically setting
         // searchQuery alongside lookedUpRoom (e.g. from the Join-by-ID modal)
         // would immediately wipe the room we just set.
-        setLookedUpRoom((prev) => {
+        setLookedUpRoom((prev: any | null) => {
             if (!prev) return prev;
             if (String(prev.id) === searchQuery.trim()) return prev;
             return null;
