@@ -63,17 +63,20 @@ export const DEPLOYMENTS: Record<SupportedNetwork, DeploymentConfig> = {
         chainId: 50312,
         explorer: 'https://shannon-explorer.somnia.network',
         contracts: {
-            // No env override — multi-chain swap needs each entry pinned to its own diamond.
-            MafiaDiamond: '0x0406a14729b0c77c187ac5229c8c2317589e73c0',
-            Groth16Verifier: '0xc5ece9781099a959626ca26529472af19cbc166f',
-            LobbyFacet: '0x7bd7971f37fb455f4b38b9461e7b3f9e8c5a3787',
-            ShuffleFacet: '0xdd1b4cdb7e647ac96cd7b34c971bba9f3390458d',
-            VotingFacet: '0x277ca1b0123f4facff59830ae461086b64ba4719',
-            NightFacet: '0x5475c783e17c65bb819db62b7ad29860d35cabc7',
-            GameEndFacet: '0xe839ad0effcdc5c7090ab2da462a2e2b075edc57',
-            TournamentFacet: '0x0a0870a5c0946c3386f485828958336e4917ff5e',
-            TimeoutsFacet: '0x1c393242879ab7bda579d7bffe4bc6200eab08c9',
-            RefundsFacet: '0x7f38c2292df18b77c6d83d7f0f3740aa0c1abcf8',
+            // Redeployed 2026-05-16 from clean wallet 0x3D9297... (the old
+            // testnet diamond 0x0406...c0 was owned by a drainer-compromised
+            // wallet — addresses happen to match mainnet because the clean
+            // wallet was nonce-zero on testnet at deploy time).
+            MafiaDiamond: '0x031b6746155ce11c7b533935f4674f5fc4682338',
+            Groth16Verifier: '0x69a17a154cf175c2e3488fb663c57b97fa0c06a1',
+            LobbyFacet: '0x23e4d9b559c8c2b3fa57ce122617a8825132577d',
+            ShuffleFacet: '0x3ff67d6ae70226bb2372c5c49ee69ba05b7bd392',
+            VotingFacet: '0xa4831b9bf490441c65d1729d00ee25cfaf92ea23',
+            NightFacet: '0x1938d49d78672a207ee6655ca3779e92f6d4f019',
+            GameEndFacet: '0xb55d1bafd3bdda7f0683525b13832fe80c57bc9f',
+            TournamentFacet: '0x93564b82c38d747573c1849e557b67c1c057207e',
+            TimeoutsFacet: '0x754723f7d414cddda4f26b41ed8857567d54150d',
+            RefundsFacet: '0x1faafda8ef301f5ae61e5bf2ec292df81ce478c1',
         },
     },
     somnia_mainnet: {
