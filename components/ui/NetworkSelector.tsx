@@ -1,41 +1,91 @@
+'use client';
+
 import React from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { Wallet, ChevronDown, User } from 'lucide-react';
+import { useAccount, useSwitchChain } from 'wagmi';
+import { Wallet, ChevronDown, User, Lock } from 'lucide-react';
+import { SOMNIA_TESTNET, SOMNIA_MAINNET } from '../../contracts/config';
+import { useGameContext } from '../../contexts/GameContext';
 
 interface NetworkSelectorProps {
   compact?: boolean;
   showWallet?: boolean;
 }
 
+const CHAINS = [
+  { chain: SOMNIA_TESTNET, label: 'Testnet' },
+  { chain: SOMNIA_MAINNET, label: 'Mainnet' },
+];
+
 /**
- * NetworkSelector — now simplified to a single-network Somnia badge.
- * No switching needed since the app only supports Somnia Testnet.
+ * NetworkSelector — pill toggle between Somnia Testnet and Mainnet.
+ * Calls wagmi switchChain so Privy embedded + external wallets both follow.
+ * Locked while the user is inside an active room (currentRoomId != null) —
+ * mid-game swap would invalidate the session key and break game state.
  */
 export const NetworkSelector: React.FC<NetworkSelectorProps> = ({
   compact = false,
-  showWallet = false
+  showWallet = false,
 }) => {
   const { login, authenticated, user, logout } = usePrivy();
+  const { chainId } = useAccount();
+  const { switchChain, isPending, variables } = useSwitchChain();
+  const { currentRoomId } = useGameContext();
+
+  const inRoom = currentRoomId != null;
+  const activeId = chainId ?? SOMNIA_TESTNET.id;
+
+  const handleSwitch = (targetId: number) => {
+    if (inRoom || targetId === activeId) return;
+    switchChain({ chainId: targetId });
+  };
 
   return (
-    <div className={`flex items-center justify-center ${(compact || !showWallet) ? 'w-fit' : 'w-full max-w-[500px] mb-2'}`}>
-      <div className="relative flex items-center p-1 bg-[rgba(15,10,5,0.85)] backdrop-blur-xl border border-white/10 rounded-[20px] shadow-2xl overflow-hidden">
-
-        {/* Somnia Network Badge */}
-        <div className="relative flex p-0.5 shrink-0">
-          <div className="relative py-2.5 px-4 font-sans font-bold text-[11px] md:text-xs z-10 flex items-center justify-center gap-2 rounded-[14px] whitespace-nowrap min-w-[100px] md:min-w-[120px] text-[#ffb01d] drop-shadow-md bg-[#4A3222] border border-white/5">
-            <div className="w-1.5 h-1.5 shrink-0 rounded-full bg-[#ffb01d] shadow-[0_0_8px_#ffb01d]" />
-            Somnia
-          </div>
+    <div
+      className={`flex items-center justify-center ${(compact || !showWallet) ? 'w-fit' : 'w-full max-w-[500px] mb-2'}`}
+    >
+      <div
+        className="relative flex items-center p-1 bg-[rgba(15,10,5,0.85)] backdrop-blur-xl border border-white/10 rounded-[20px] shadow-2xl overflow-hidden"
+        title={inRoom ? 'Network locked while in room' : undefined}
+      >
+        {/* Two-chain pill toggle */}
+        <div className="relative flex p-0.5 shrink-0 gap-0.5">
+          {CHAINS.map(({ chain, label }) => {
+            const isActive = chain.id === activeId;
+            const pending = isPending && variables?.chainId === chain.id;
+            return (
+              <button
+                key={chain.id}
+                onClick={() => handleSwitch(chain.id)}
+                disabled={inRoom || pending}
+                className={[
+                  'relative py-2.5 px-3 md:px-4 font-sans font-bold text-[11px] md:text-xs z-10',
+                  'flex items-center justify-center gap-2 rounded-[14px] whitespace-nowrap',
+                  'min-w-[88px] md:min-w-[104px] transition-all',
+                  isActive
+                    ? 'text-[#ffb01d] drop-shadow-md bg-[#4A3222] border border-white/5'
+                    : 'text-white/50 hover:text-white/80 border border-transparent',
+                  (inRoom || pending) ? 'cursor-not-allowed' : 'cursor-pointer',
+                  pending ? 'opacity-60' : '',
+                ].join(' ')}
+              >
+                {inRoom && isActive ? (
+                  <Lock className="w-3 h-3 shrink-0 text-[#ffb01d]" />
+                ) : (
+                  <div
+                    className={`w-1.5 h-1.5 shrink-0 rounded-full ${isActive ? 'bg-[#ffb01d] shadow-[0_0_8px_#ffb01d]' : 'bg-white/30'}`}
+                  />
+                )}
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Optional Wallet Section */}
         {showWallet && (
           <>
-            {/* Divider */}
             <div className="w-[1px] h-6 bg-white/10 mx-1 shrink-0" />
-
-            {/* Wallet Section */}
             {!authenticated ? (
               <button
                 onClick={() => login()}

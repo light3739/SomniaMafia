@@ -46,7 +46,7 @@ jobs:
         env:
           NEXT_PUBLIC_GM_SERVER_URL: https://gm-test.mafiaonchain.live
           NEXT_PUBLIC_DAILY_DOMAIN: ${{ vars.NEXT_PUBLIC_DAILY_DOMAIN }}
-          NEXT_PUBLIC_ACTIVE_NETWORK: somnia_mainnet
+          NEXT_PUBLIC_ACTIVE_NETWORK: somnia_testnet
           NEXT_PUBLIC_MAFIA_DIAMOND: ${{ vars.NEXT_PUBLIC_MAFIA_DIAMOND }}
 
       - name: Set up Docker Buildx
@@ -69,7 +69,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_GM_SERVER_URL=https://gm-test.mafiaonchain.live
             NEXT_PUBLIC_DAILY_DOMAIN=${{ vars.NEXT_PUBLIC_DAILY_DOMAIN }}
-            NEXT_PUBLIC_ACTIVE_NETWORK=somnia_mainnet
+            NEXT_PUBLIC_ACTIVE_NETWORK=somnia_testnet
 
       - name: Setup SSH key
         run: |

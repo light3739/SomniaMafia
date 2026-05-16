@@ -9,9 +9,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Key, Shield, Clock, Loader2, Fuel, Wallet, ChevronUp, ChevronDown, AlertTriangle, Sparkles } from 'lucide-react';
 import { useSessionKey } from '../../hooks/useSessionKey';
-import { useSendTransaction, usePublicClient } from 'wagmi';
+import { useSendTransaction, usePublicClient, useChainId } from 'wagmi';
 import { parseEther, formatEther } from 'viem';
-import { somniaChain } from '../../contracts/config';
 
 interface SessionKeyBannerProps {
   roomId: number;
@@ -35,7 +34,8 @@ export const SessionKeyBanner = React.memo(({
     error,
     registerSession,
   } = useSessionKey(roomId);
-  const publicClient = usePublicClient({ chainId: somniaChain.id });
+  const activeChainId = useChainId();
+  const publicClient = usePublicClient({ chainId: activeChainId });
   const { sendTransactionAsync, isPending: isFunding } = useSendTransaction();
 
   const [sessionBalance, setSessionBalance] = useState<bigint>(0n);

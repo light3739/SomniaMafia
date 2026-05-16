@@ -21,9 +21,9 @@ const subscribe = (cb: () => void) => {
  * Ensures the correct wallet (embedded vs external) is set as active
  * based on user's "Use In-Game Wallet" preference.
  *
- * Chain switching is NOT needed here because Privy is configured with
- * defaultChain: SOMNIA_TESTNET and supportedChains: [SOMNIA_TESTNET] only,
- * so both embedded and external wallets will be on Somnia by default.
+ * Chain switching is NOT handled here. Privy supportedChains includes both
+ * Somnia Testnet (default) and Somnia Mainnet; the active chain is driven
+ * by NetworkSelector → wagmi useSwitchChain. This hook only picks the wallet.
  */
 export function WalletAutoConnector() {
     const useEmbeddedWallet = useSyncExternalStore(subscribe, getEmbeddedWalletPref, () => true);

@@ -5,9 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameContext } from '../../contexts/GameContext';
 import { useNoirDialog } from '../../contexts/NoirDialogContext';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { useBalance } from 'wagmi';
+import { useBalance, useChainId } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
-import { somniaChain } from '../../contracts/config';
+import { getChainById } from '../../contracts/config';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BackButton } from '../ui/BackButton';
@@ -87,6 +87,8 @@ export const SetupProfile: React.FC = () => {
     const { playerName, setPlayerName, avatarUrl, setAvatarUrl, useEmbeddedWallet, setUseEmbeddedWallet, isWalletReady } = useGameContext();
     const { user, logout, linkGoogle, linkTwitter, linkDiscord, unlinkGoogle, unlinkTwitter, unlinkDiscord, createWallet, linkWallet } = usePrivy();
     const { wallets } = useWallets();
+    const activeChainId = useChainId();
+    const activeChain = getChainById(activeChainId);
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [hydrated, setHydrated] = useState(false);
@@ -194,7 +196,7 @@ export const SetupProfile: React.FC = () => {
 
     const { data: somniaBalance } = useBalance({
         address: embeddedWalletAddress as `0x${string}`,
-        chainId: somniaChain.id,
+        chainId: activeChain.id,
         query: { enabled: !!embeddedWalletAddress }
     });
 
@@ -202,7 +204,7 @@ export const SetupProfile: React.FC = () => {
 
     const { data: externalBalance } = useBalance({
         address: externalWallet?.address as `0x${string}` | undefined,
-        chainId: somniaChain.id,
+        chainId: activeChain.id,
         query: { enabled: !!externalWallet?.address }
     });
 
@@ -217,7 +219,7 @@ export const SetupProfile: React.FC = () => {
         if (!externalWallet || !embeddedWalletAddress) return;
         try {
             setIsFunding(true);
-            await externalWallet.switchChain(somniaChain.id);
+            await externalWallet.switchChain(activeChain.id);
             const provider = await externalWallet.getEthereumProvider() as any;
 
             const valueWei = parseEther(fundAmount);
@@ -251,7 +253,7 @@ export const SetupProfile: React.FC = () => {
         if (!privyEmbeddedWallet) return;
         try {
             setIsWithdrawing(true);
-            await privyEmbeddedWallet.switchChain(somniaChain.id);
+            await privyEmbeddedWallet.switchChain(activeChain.id);
             const provider = await privyEmbeddedWallet.getEthereumProvider() as any;
 
             const valueWei = parseEther(withdrawAmount);
@@ -511,7 +513,7 @@ export const SetupProfile: React.FC = () => {
                             {hasEmbeddedWallet && (
                                 <div className="flex flex-col gap-3">
                                     <div className="flex items-center mx-2 mb-1">
-                                        <h4 className="text-white/60 text-[10px] font-montserrat font-bold uppercase tracking-[0.2em] whitespace-nowrap">{somniaChain.testnet ? 'Testnet' : 'Mainnet'} Balances</h4>
+                                        <h4 className="text-white/60 text-[10px] font-montserrat font-bold uppercase tracking-[0.2em] whitespace-nowrap">{activeChain.testnet ? 'Testnet' : 'Mainnet'} Balances</h4>
                                         <div className="h-[1px] w-full bg-gradient-to-r from-white/20 to-transparent ml-6"></div>
                                     </div>
 
@@ -522,10 +524,10 @@ export const SetupProfile: React.FC = () => {
                                                 <div className="w-8 h-8 rounded-full bg-[#19130D] flex items-center justify-center border border-white/10 shadow-inner p-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
                                                     <img src="/assets/somnia-logomark.svg" alt="Somnia" className="w-full h-full object-contain" />
                                                 </div>
-                                                <span className="text-white font-montserrat text-sm font-medium tracking-wide">Somnia <span className="text-white/60 text-[10px] font-bold uppercase ml-2 tracking-wider">{somniaChain.testnet ? 'Testnet' : 'Mainnet'}</span></span>
+                                                <span className="text-white font-montserrat text-sm font-medium tracking-wide">Somnia <span className="text-white/60 text-[10px] font-bold uppercase ml-2 tracking-wider">{activeChain.testnet ? 'Testnet' : 'Mainnet'}</span></span>
                                             </div>
                                             <span className="text-white font-mono text-base font-medium tabular-nums">
-                                                {somniaBalance ? Number(formatEther(somniaBalance.value)).toFixed(3) : '0.000'} <span className="text-white/60 text-sm ml-1 font-semibold">{somniaChain.nativeCurrency.symbol}</span>
+                                                {somniaBalance ? Number(formatEther(somniaBalance.value)).toFixed(3) : '0.000'} <span className="text-white/60 text-sm ml-1 font-semibold">{activeChain.nativeCurrency.symbol}</span>
                                             </span>
                                         </div>
 
@@ -540,7 +542,7 @@ export const SetupProfile: React.FC = () => {
                                                     <Wallet className="w-4 h-4 text-[#C19A6B]" /> Transfer Tokens
                                                 </h4>
                                                 <p className="text-white/50 text-xs text-center font-montserrat leading-relaxed max-w-[80%]">
-                                                    Connect your external wallet securely to transfer {somniaChain.nativeCurrency.symbol} tokens.
+                                                    Connect your external wallet securely to transfer {activeChain.nativeCurrency.symbol} tokens.
                                                 </p>
                                                 <button
                                                     onClick={() => linkWallet()}

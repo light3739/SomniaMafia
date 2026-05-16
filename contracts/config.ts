@@ -94,9 +94,16 @@ export const DEPLOYMENTS: Record<SupportedNetwork, DeploymentConfig> = {
     },
 };
 
+// First-visit default when user has no chain preference yet.
+// Runtime swap (NetworkSelector + wagmi useChainId) overrides this per-React-tree.
+export const DEFAULT_NETWORK: SupportedNetwork = 'somnia_testnet';
+
 const envNetwork = process.env.NEXT_PUBLIC_ACTIVE_NETWORK as SupportedNetwork | undefined;
+// ACTIVE_NETWORK is the build-time fallback used only by non-React code paths
+// (SSR, API routes that have no chainId in body). React code MUST resolve the
+// current chain via useChainId() + getDeploymentByChainId().
 export const ACTIVE_NETWORK: SupportedNetwork =
-    envNetwork && envNetwork in NETWORKS ? envNetwork : 'somnia_testnet';
+    envNetwork && envNetwork in NETWORKS ? envNetwork : DEFAULT_NETWORK;
 export const ACTIVE_DEPLOYMENT = DEPLOYMENTS[ACTIVE_NETWORK];
 
 export function getDeployment(networkName: SupportedNetwork) {
@@ -111,7 +118,23 @@ export function getDeploymentByChainId(chainId?: number | null) {
     return ACTIVE_DEPLOYMENT;
 }
 
-// Convenience aliases (used throughout the app)
+export function chainIdToNetwork(chainId?: number | null): SupportedNetwork {
+    if (chainId === SOMNIA_MAINNET.id) return 'somnia_mainnet';
+    if (chainId === SOMNIA_TESTNET.id) return 'somnia_testnet';
+    return ACTIVE_NETWORK;
+}
+
+export function getChainById(chainId?: number | null) {
+    if (chainId === SOMNIA_MAINNET.id) return SOMNIA_MAINNET;
+    if (chainId === SOMNIA_TESTNET.id) return SOMNIA_TESTNET;
+    return DEPLOYMENTS[ACTIVE_NETWORK].chain;
+}
+
+export const SUPPORTED_CHAIN_IDS = [SOMNIA_MAINNET.id, SOMNIA_TESTNET.id] as const;
+
+// Convenience aliases — STATIC, derived from build-time ACTIVE_NETWORK.
+// Safe in SSR / non-React contexts. In React code prefer useChainId() +
+// getDeploymentByChainId() so the user's current chain wins over the default.
 export const somniaChain = ACTIVE_NETWORK === 'somnia_mainnet' ? SOMNIA_MAINNET : SOMNIA_TESTNET;
 export const MAFIA_CONTRACT_ADDRESS = ACTIVE_DEPLOYMENT.contracts.MafiaDiamond as `0x${string}`;
 export const MAFIA_ABI = DIAMOND_ABI;

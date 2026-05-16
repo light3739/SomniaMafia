@@ -8,7 +8,7 @@
 
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { createWalletClient, http, type Account, type WalletClient } from 'viem';
-import { ACTIVE_NETWORK, NETWORKS, type SupportedNetwork } from '../contracts/config';
+import { getChainById } from '../contracts/config';
 
 interface StoredSession {
   privateKey: `0x${string}`;
@@ -22,10 +22,6 @@ interface StoredSession {
 }
 
 const STORAGE_KEY = 'somnia_mafia_session';
-
-function getSessionChain() {
-  return NETWORKS[ACTIVE_NETWORK];
-}
 
 /**
  * Generate a new session key pair (done client-side)
@@ -121,7 +117,10 @@ export function createSessionWalletClient(ignoreRegistration: boolean = false): 
   if (!session.registeredOnChain && !ignoreRegistration) return null;
 
   const account = privateKeyToAccount(session.privateKey);
-  const chain = getSessionChain();
+  // Use the chain the session was created on (stored at createNewSession time),
+  // NOT the build-time ACTIVE_NETWORK — otherwise a swap to testnet leaves
+  // a mainnet session client pointing at the wrong RPC.
+  const chain = getChainById(session.chainId);
 
   return createWalletClient({
     account,

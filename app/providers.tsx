@@ -2,12 +2,12 @@
 
 import * as React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { http, webSocket, fallback } from 'viem';
+import { http, webSocket, fallback, type Chain } from 'viem';
 import { createConfig } from '@privy-io/wagmi';
 import { PrivyProvider } from '@privy-io/react-auth';
 import { WagmiProvider } from '@privy-io/wagmi';
 
-import { somniaChain, ACTIVE_DEPLOYMENT } from '../contracts/config';
+import { SOMNIA_MAINNET, SOMNIA_TESTNET } from '../contracts/config';
 import { MotionConfig } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { AudioProvider } from '../contexts/AudioContext';
@@ -16,17 +16,22 @@ import { WalletAutoConnector } from '../components/ui/WalletAutoConnector';
 import { ChainGate } from '../components/ui/ChainGate';
 import { TabProbeListener } from '../components/ui/TabProbeListener';
 
+function chainTransport(chain: Chain) {
+    return fallback([
+        // WebSocket primary — real-time event subscriptions (watchContractEvent)
+        ...(chain.rpcUrls.default.webSocket || []).map((url: string) =>
+            webSocket(url, { reconnect: { delay: 2_000, attempts: 10 }, keepAlive: { interval: 25_000 } })
+        ),
+        // HTTP fallback — reliable for reads/writes, used when WS unavailable
+        ...chain.rpcUrls.default.http.map((url: string) => http(url)),
+    ]);
+}
+
 export const config = createConfig({
-    chains: [somniaChain] as const,
+    chains: [SOMNIA_TESTNET, SOMNIA_MAINNET] as const,
     transports: {
-        [somniaChain.id]: fallback([
-            // WebSocket primary — real-time event subscriptions (watchContractEvent)
-            ...(somniaChain.rpcUrls.default.webSocket || []).map((url: string) =>
-                webSocket(url, { reconnect: { delay: 2_000, attempts: 10 }, keepAlive: { interval: 25_000 } })
-            ),
-            // HTTP fallback — reliable for reads/writes, used when WS unavailable
-            ...somniaChain.rpcUrls.default.http.map((url: string) => http(url)),
-        ]),
+        [SOMNIA_TESTNET.id]: chainTransport(SOMNIA_TESTNET),
+        [SOMNIA_MAINNET.id]: chainTransport(SOMNIA_MAINNET),
     } as Record<number, ReturnType<typeof fallback>>,
     batch: {
         multicall: {
@@ -52,11 +57,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     accentColor: '#916A47',
                     logo: '/assets/somnia-logomark.svg',
                 },
-                defaultChain: somniaChain,
+                defaultChain: SOMNIA_TESTNET,
                 embeddedWallets: {
                     createOnLogin: 'users-without-wallets',
                 } as any,
-                supportedChains: [somniaChain],
+                supportedChains: [SOMNIA_TESTNET, SOMNIA_MAINNET],
                 externalWallets: {
                     coinbaseWallet: {
                         connectionOptions: 'eoaOnly',

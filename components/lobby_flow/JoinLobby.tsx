@@ -6,7 +6,7 @@ import { useGameContext } from '../../contexts/GameContext';
 import { useNoirDialog } from '../../contexts/NoirDialogContext';
 import { useAccount, useChainId } from 'wagmi';
 import { formatEther } from 'viem';
-import { MAFIA_CONTRACT_ADDRESS, MAFIA_ABI } from '../../contracts/config';
+import { MAFIA_ABI } from '../../contracts/config';
 import { NetworkSelector } from '../ui/NetworkSelector';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
