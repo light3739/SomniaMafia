@@ -47,7 +47,6 @@ jobs:
           NEXT_PUBLIC_GM_SERVER_URL: https://gm-test.mafiaonchain.live
           NEXT_PUBLIC_DAILY_DOMAIN: ${{ vars.NEXT_PUBLIC_DAILY_DOMAIN }}
           NEXT_PUBLIC_ACTIVE_NETWORK: somnia_testnet
-          NEXT_PUBLIC_MAFIA_DIAMOND: ${{ vars.NEXT_PUBLIC_MAFIA_DIAMOND }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

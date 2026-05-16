@@ -63,7 +63,8 @@ export const DEPLOYMENTS: Record<SupportedNetwork, DeploymentConfig> = {
         chainId: 50312,
         explorer: 'https://shannon-explorer.somnia.network',
         contracts: {
-            MafiaDiamond: (process.env.NEXT_PUBLIC_MAFIA_DIAMOND || '0x0406a14729b0c77c187ac5229c8c2317589e73c0') as string,
+            // No env override — multi-chain swap needs each entry pinned to its own diamond.
+            MafiaDiamond: '0x0406a14729b0c77c187ac5229c8c2317589e73c0',
             Groth16Verifier: '0xc5ece9781099a959626ca26529472af19cbc166f',
             LobbyFacet: '0x7bd7971f37fb455f4b38b9461e7b3f9e8c5a3787',
             ShuffleFacet: '0xdd1b4cdb7e647ac96cd7b34c971bba9f3390458d',
@@ -80,7 +81,7 @@ export const DEPLOYMENTS: Record<SupportedNetwork, DeploymentConfig> = {
         chainId: 5031,
         explorer: 'https://explorer.somnia.network',
         contracts: {
-            MafiaDiamond: (process.env.NEXT_PUBLIC_MAFIA_DIAMOND || '0x031b6746155ce11c7b533935f4674f5fc4682338') as string,
+            MafiaDiamond: '0x031b6746155ce11c7b533935f4674f5fc4682338',
             Groth16Verifier: '0x69a17a154cf175c2e3488fb663c57b97fa0c06a1',
             LobbyFacet: '0x23e4d9b559c8c2b3fa57ce122617a8825132577d',
             ShuffleFacet: '0x3ff67d6ae70226bb2372c5c49ee69ba05b7bd392',
