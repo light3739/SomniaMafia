@@ -59,7 +59,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                             lineHeight: '1.2'
                         }}
                     >
-                        Onchain Mafia
+                        Mafia Onchain
                     </h1>
                 </div>
 
@@ -77,7 +77,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         textShadow: '0 2px 20px rgba(0,0,0,1), 0 0 40px rgba(0,0,0,0.5)',
                     }}
                 >
-                    Where lies pay real money.
+                    Where every lie has a price
                 </p>
                 <p
                     className="mt-3 text-center text-white/50 font-sans tracking-[0.15em] uppercase"
@@ -87,7 +87,7 @@ export const MainPage: React.FC<MainPageProps> = ({ onStart }) => {
                         animation: 'landing-slide-up 1s ease-out 0.5s both',
                     }}
                 >
-                    Tournaments · Voice chat · 4–16 players · On-chain prizes
+                    Hidden Roles · Voice Chat · Fully On-Chain · 4–16 Players
                 </p>
 
                 {/* Corner ribbon — On Somnia Network */}

@@ -32,22 +32,22 @@ const shareTechMono = Share_Tech_Mono({
 });
 
 export const metadata = {
-  title: "Onchain Mafia — Where lies pay real money",
+  title: "Mafia Onchain — Where every lie has a price",
   description:
-    "Voice mafia with on-chain prizes. Tournaments, 4–16 players, play in your browser. Lie, vote, win the pot.",
+    "Hidden roles, voice chat, fully on-chain prizes, 4–16 players. Lie, vote, win the pot.",
   metadataBase: new URL("https://mafiaonchain.live"),
   openGraph: {
-    title: "Onchain Mafia — Where lies pay real money",
+    title: "Mafia Onchain — Where every lie has a price",
     description:
-      "Voice mafia with on-chain prizes. Tournaments, 4–16 players, play in your browser.",
+      "Hidden roles, voice chat, fully on-chain prizes, 4–16 players.",
     url: "https://mafiaonchain.live",
-    siteName: "Onchain Mafia",
+    siteName: "Mafia Onchain",
     images: [
       {
         url: "/images/mainscreen.png",
         width: 1200,
         height: 630,
-        alt: "Onchain Mafia — Voice mafia with real prizes",
+        alt: "Mafia Onchain — Where every lie has a price",
       },
     ],
     locale: "en_US",
@@ -55,9 +55,9 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Onchain Mafia — Where lies pay real money",
+    title: "Mafia Onchain — Where every lie has a price",
     description:
-      "Voice mafia with on-chain prizes. Tournaments, 4–16 players, play in your browser.",
+      "Hidden roles, voice chat, fully on-chain prizes, 4–16 players.",
     images: ["/images/mainscreen.png"],
   },
   icons: {
