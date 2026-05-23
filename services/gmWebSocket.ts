@@ -27,6 +27,8 @@ export type ServerEventType =
   | 'player-update'
   | 'roles-revealed'
   | 'mafia-chat'
+  | 'agent-chat'
+  | 'discussion-chat'
   | 'game-signal'
   | 'rematch-invite'
   | 'prize-distributed'
