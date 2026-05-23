@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Loader2, MessageCircle, Send, X } from 'lucide-react';
 import { useGameContext } from '@/contexts/GameContext';
 import { GamePhase } from '@/types';
-import { useAppMessage, useDaily, useMeetingState } from '@daily-co/daily-react';
+import { gmWs } from '@/services/gmWebSocket';
 import { useSoundEffects } from '@/components/ui/SoundEffects';
 
 interface ChatMessage {
@@ -16,13 +16,6 @@ interface ChatMessage {
     timestamp: number;
 }
 
-type IncomingChat = {
-    type?: string;
-    senderName?: string;
-    senderAddress?: string;
-    content?: string;
-    timestamp?: number;
-};
 
 export const ChatToggleButton: React.FC<{
     isExpanded: boolean;
@@ -31,8 +24,6 @@ export const ChatToggleButton: React.FC<{
     canWrite?: boolean;
 }> = ({ isExpanded, onToggle, canWrite = false }) => {
     const { gameState, myPlayer } = useGameContext();
-    const call = useDaily();
-    const meetingState = useMeetingState();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -42,8 +33,10 @@ export const ChatToggleButton: React.FC<{
     const { playChatMessageSound } = useSoundEffects();
     const [internalUnreadCount, setInternalUnreadCount] = useState(0);
 
-    const isConnected = meetingState === 'joined-meeting';
-    const isConnecting = meetingState === 'joining-meeting' || meetingState === 'loading';
+    const [wsState, setWsState] = useState(gmWs.state);
+    useEffect(() => gmWs.onStateChange(setWsState), []);
+    const isConnected = wsState === 'connected';
+    const isConnecting = wsState === 'connecting';
 
     useEffect(() => {
         if (isExpanded) setInternalUnreadCount(0);
@@ -76,43 +69,42 @@ export const ChatToggleButton: React.FC<{
         }
     }, [gameState.phase]);
 
-    useAppMessage<IncomingChat>({
-        onAppMessage: (ev) => {
-            const data = ev?.data;
-            if (!data || data.type !== 'discussion-chat' || typeof data.content !== 'string') return;
-            const senderAddress = String(data.senderAddress ?? ev.fromId ?? '').toLowerCase();
-            if (!senderAddress || senderAddress === myPlayer?.address.toLowerCase()) return;
-            setMessages((prev) => {
-                const id = `${data.timestamp ?? Date.now()}_${senderAddress}`;
-                if (prev.some((m) => m.id === id)) return prev;
-                return [
-                    ...prev,
-                    {
-                        id,
-                        sender: data.senderName || senderAddress.slice(0, 8),
-                        senderAddress,
-                        content: data.content ?? '',
-                        timestamp: data.timestamp ?? Date.now(),
-                    },
-                ];
-            });
-        },
-    });
+    useEffect(() => {
+        const unAgent = gmWs.on('agent-chat', (data: unknown) => {
+            const d = data as { by?: string; text?: string; persona?: string; messageHash?: string } | undefined;
+            if (!d?.by || !d?.text) return;
+            const senderAddress = d.by.toLowerCase();
+            const id = d.messageHash || `${Date.now()}_${senderAddress}`;
+            setMessages((prev) => prev.some((m) => m.id === id) ? prev : [
+                ...prev,
+                { id, sender: d.persona || senderAddress.slice(0, 8), senderAddress, content: d.text!, timestamp: Date.now() },
+            ]);
+        });
+        const unHuman = gmWs.on('discussion-chat', (data: unknown) => {
+            const d = data as { by?: string; name?: string; text?: string; ts?: number } | undefined;
+            if (!d?.by || !d?.text) return;
+            const senderAddress = d.by.toLowerCase();
+            if (senderAddress === myPlayer?.address.toLowerCase()) return; // our own message is already shown optimistically
+            const id = `${d.ts ?? Date.now()}_${senderAddress}`;
+            setMessages((prev) => prev.some((m) => m.id === id) ? prev : [
+                ...prev,
+                { id, sender: d.name || senderAddress.slice(0, 8), senderAddress, content: d.text!, timestamp: d.ts ?? Date.now() },
+            ]);
+        });
+        return () => { unAgent(); unHuman(); };
+    }, [myPlayer?.address]);
 
     const handleSend = useCallback(async () => {
-        if (!inputValue.trim() || !canWrite || !call || !myPlayer) return;
+        if (!inputValue.trim() || !canWrite || !myPlayer) return;
         const content = inputValue.trim();
         const timestamp = Date.now();
         setInputValue('');
         setIsSending(true);
         try {
-            call.sendAppMessage({
+            gmWs.relay({
                 type: 'discussion-chat',
-                senderName: myPlayer.name,
-                senderAddress: myPlayer.address,
-                content,
-                timestamp,
-            }, '*');
+                data: { by: myPlayer.address, name: myPlayer.name, text: content, day: gameState.dayCount },
+            });
             setMessages((prev) => [
                 ...prev,
                 {
@@ -126,7 +118,7 @@ export const ChatToggleButton: React.FC<{
         } finally {
             setIsSending(false);
         }
-    }, [call, canWrite, inputValue, myPlayer]);
+    }, [canWrite, gameState.dayCount, inputValue, myPlayer]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
