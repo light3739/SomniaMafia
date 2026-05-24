@@ -258,7 +258,13 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
         try {
             await registerEciesPubkey(currentRoomId.toString(), playerAddr, walletClient, chainId, false);
             setRevealState(prev => ({ ...prev, eciesRegistered: true }));
-        } catch { /* silent */ } finally { registerInFlightRef.current = false; }
+        } catch (e: any) {
+            // registerEciesPubkey already retries with the main wallet on a stale
+            // session 403. Reaching here means both failed — surface it instead of
+            // stalling the reveal handshake silently (the cause of roles=NONE).
+            console.error('[reveal] register-pubkey failed after wallet fallback:', e?.message);
+            addLog('Reveal: key registration failed — will retry.', 'danger');
+        } finally { registerInFlightRef.current = false; }
     }, [currentRoomId, walletClient, chainId, revealState.eciesRegistered, resolvePlayerAddress]);
 
     const handleShareKey = useCallback(async () => {
@@ -268,10 +274,21 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
         submitInFlightRef.current = true; setIsRevealProcessing(true);
         try {
             const svc = getShuffleService();
-            if (!svc.hasKeys() && !svc.loadKeys(currentRoomId.toString(), playerAddr)) return;
+            if (!svc.hasKeys() && !svc.loadKeys(currentRoomId.toString(), playerAddr)) {
+                // No SRA keys to share → the GM can never peel our deck layer →
+                // roles resolve to NONE for everyone. Make it loud, don't bail silently.
+                console.error('[reveal] no SRA keys to share for', playerAddr);
+                addLog('Reveal: your encryption keys are missing — try rejoining the room.', 'danger');
+                return;
+            }
             await submitSraKeyToGm({ roomId: currentRoomId.toString(), address: playerAddr, sraKey: svc.getDecryptionKey(), walletClient, chainId });
             setRevealState(prev => ({ ...prev, hasSharedKeys: true }));
-        } catch { /* silent */ } finally { setIsRevealProcessing(false); submitInFlightRef.current = false; }
+        } catch (e: any) {
+            // submitSraKeyToGm already retries with the main wallet on a stale
+            // session 403. Reaching here means both failed — surface, keep retrying.
+            console.error('[reveal] submit-sra-key failed after wallet fallback:', e?.message);
+            addLog('Reveal: sharing your key failed — will retry.', 'danger');
+        } finally { setIsRevealProcessing(false); submitInFlightRef.current = false; }
     }, [currentRoomId, walletClient, chainId, revealState.hasSharedKeys, resolvePlayerAddress]);
 
     const handleFetchRole = useCallback(async () => {
@@ -306,6 +323,10 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
     useEffect(() => {
         if (!gameState.phaseDeadline) return;
         const iv = setInterval(() => {
+            // In REVEAL, never force-advance the phase until WE have shared our SRA
+            // key. If the phase flips to DAY first, the GM can't peel our deck layer
+            // and every role resolves to NONE → role-blind game (prod room 31).
+            if (isReveal && !revealState.hasSharedKeys) return;
             const now = Math.floor(Date.now() / 1000);
             if (now > gameState.phaseDeadline + 5 && !isShuffleProcessing && !isRevealProcessing && !isTxPending) {
                 // Stagger by player index to avoid simultaneous calls, but ANY player can kick
@@ -322,7 +343,7 @@ export const ShuffleAndReveal: React.FC = React.memo(() => {
             }
         }, 3000);
         return () => clearInterval(iv);
-    }, [gameState.phaseDeadline, gameState.players, address, currentRoomId, isShuffleProcessing, isRevealProcessing, isTxPending, handleTimeoutKick]);
+    }, [gameState.phaseDeadline, gameState.players, address, currentRoomId, isShuffleProcessing, isRevealProcessing, isTxPending, handleTimeoutKick, isReveal, revealState.hasSharedKeys]);
 
     useEffect(() => {
         if (!isReveal) {

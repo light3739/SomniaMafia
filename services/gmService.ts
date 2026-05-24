@@ -23,33 +23,42 @@ export async function registerEciesPubkey(
     const keypair = await loadOrCreateKeypair(roomId, address);
     const pubkeyHex = await exportPublicKeyHex(keypair.publicKey);
 
-    const meta = await signRequest({
-        address,
-        roomId: Number(roomId),
-        walletClient,
-        forceWallet,
-        buildMessage: ({ nonce, timestamp }) =>
-            new SignatureBuilder('register-pubkey', chainId, roomId)
-                .withAddress(address)
-                .withParam(pubkeyHex)
-                .withModern(nonce, timestamp)
-                .build(),
-    });
+    const post = async (fw: boolean) => {
+        const meta = await signRequest({
+            address,
+            roomId: Number(roomId),
+            walletClient,
+            forceWallet: fw,
+            buildMessage: ({ nonce, timestamp }) =>
+                new SignatureBuilder('register-pubkey', chainId, roomId)
+                    .withAddress(address)
+                    .withParam(pubkeyHex)
+                    .withModern(nonce, timestamp)
+                    .build(),
+        });
+        return fetch(`${GM_SERVER_URL}/register-pubkey`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roomId,
+                playerAddress: address,
+                pubkey: pubkeyHex,
+                signature: meta.signature,
+                signerAddress: meta.signerAddress,
+                nonce: meta.nonce,
+                timestamp: meta.timestamp,
+                chainId,
+            }),
+        });
+    };
 
-    const res = await fetch(`${GM_SERVER_URL}/register-pubkey`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            roomId,
-            playerAddress: address,
-            pubkey: pubkeyHex,
-            signature: meta.signature,
-            signerAddress: meta.signerAddress,
-            nonce: meta.nonce,
-            timestamp: meta.timestamp,
-            chainId,
-        }),
-    });
+    let res = await post(!!forceWallet);
+    // Stale session-key 403 (unlogged server-side) → retry self-signed with the
+    // main wallet. This is step 1 of the reveal handshake; if it silently fails
+    // the cascade never reaches submit-sra-key and roles resolve to NONE.
+    if (!res.ok && (res.status === 401 || res.status === 403)) {
+        res = await post(true);
+    }
 
     if (!res.ok) {
         const error = await res.json().catch(() => ({ error: 'Unknown error' }));
@@ -124,31 +133,44 @@ export async function submitSraKeyToGm(params: {
 }): Promise<void> {
     const { roomId, address, sraKey, walletClient, chainId } = params;
 
-    const meta = await signRequest({
-        address,
-        roomId: Number(roomId),
-        walletClient,
-        buildMessage: ({ nonce, timestamp }) =>
-            new SignatureBuilder('submit-key', chainId, roomId)
-                .withParam(sraKey)
-                .withModern(nonce, timestamp)
-                .build(),
-    });
+    const post = async (forceWallet: boolean) => {
+        const meta = await signRequest({
+            address,
+            roomId: Number(roomId),
+            walletClient,
+            forceWallet,
+            buildMessage: ({ nonce, timestamp }) =>
+                new SignatureBuilder('submit-key', chainId, roomId)
+                    .withParam(sraKey)
+                    .withModern(nonce, timestamp)
+                    .build(),
+        });
+        return fetch(`${GM_SERVER_URL}/submit-sra-key`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roomId,
+                playerAddress: address,
+                sraKey,
+                signature: meta.signature,
+                signerAddress: meta.signerAddress,
+                nonce: meta.nonce,
+                timestamp: meta.timestamp,
+                chainId,
+            }),
+        });
+    };
 
-    const res = await fetch(`${GM_SERVER_URL}/submit-sra-key`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            roomId,
-            playerAddress: address,
-            sraKey,
-            signature: meta.signature,
-            signerAddress: meta.signerAddress,
-            nonce: meta.nonce,
-            timestamp: meta.timestamp,
-            chainId,
-        }),
-    });
+    let res = await post(false);
+    // A stale session key (signed with a PREVIOUS room's key) makes the GM return
+    // 401/403 — and that branch isn't logged server-side. Without a retry the
+    // browser's silent catch drops it and the human's SRA key never reaches the
+    // GM → it can't peel the human's deck layer → every role decodes to NONE
+    // (prod room 31). Retry self-signed with the main wallet to bypass the stale
+    // session key so the key reliably lands.
+    if (!res.ok && (res.status === 401 || res.status === 403)) {
+        res = await post(true);
+    }
 
     if (!res.ok) {
         const error = await res.json().catch(() => ({ error: 'Unknown error' }));
