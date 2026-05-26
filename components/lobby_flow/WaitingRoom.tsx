@@ -218,7 +218,13 @@ export const WaitingRoom: React.FC = () => {
             const filled = outcomes.filter((o: any) =>
                 o?.status === 'filled' || o?.status === 'skipped-already-in-room'
             ).length;
-            setAgentFillMessage(`Agents ready: ${filled}/3`);
+            const alreadyReady =
+                typeof data?.agentsInRoomBefore === 'number' ? data.agentsInRoomBefore : 0;
+            const readyCount =
+                typeof data?.targetAgentsInRoom === 'number' && data?.agentsToAdd === 0
+                    ? data.targetAgentsInRoom
+                    : Math.min(3, alreadyReady + filled);
+            setAgentFillMessage(`Agents ready: ${readyCount}/3`);
             await refreshPlayersList(currentRoomId);
         } catch (err: any) {
             setAgentFillError(String(err?.message ?? err));
