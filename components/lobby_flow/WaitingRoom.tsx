@@ -10,7 +10,7 @@ import { GamePhase } from '../../types';
 import { formatEther } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { MAFIA_ABI } from '../../contracts/config';
-import { Loader2 } from 'lucide-react';
+import { Bot, Loader2 } from 'lucide-react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { SessionKeyBanner } from '../game/SessionKeyBanner';
 import * as GM from '../../services/gmService';
@@ -33,13 +33,10 @@ export const WaitingRoom: React.FC = () => {
     } = useGameContext();
     const { showConfirm } = useNoirDialog();
 
-    const { address, chainId } = useAccount();
+    const { chainId } = useAccount();
     const { data: walletClient } = useWalletClient();
     const roomIdNumber = currentRoomId ? Number(currentRoomId) : null;
-    const {
-        hasSession,
-        error: sessionError
-    } = useSessionKey(roomIdNumber);
+    useSessionKey(roomIdNumber);
 
     const router = useRouter();
     const publicClient = usePublicClient();
@@ -76,6 +73,9 @@ export const WaitingRoom: React.FC = () => {
 
     const mountedRef = useRef(false);
     const [eciesRegistered, setEciesRegistered] = useState(false);
+    const [isAddingAgents, setIsAddingAgents] = useState(false);
+    const [agentFillMessage, setAgentFillMessage] = useState<string | null>(null);
+    const [agentFillError, setAgentFillError] = useState<string | null>(null);
     const eciesRegisteringRef = useRef(false);
 
     useEffect(() => {
@@ -183,10 +183,48 @@ export const WaitingRoom: React.FC = () => {
     // V4: Min 4 players for proper mafia game
     const minPlayers = 4;
     const canStartGame = isRoomCreator && gameState.players.length >= minPlayers;
+    const openSeats = Math.max(0, gameState.maxPlayers - gameState.players.length);
+    const canAddAgents =
+        isRoomCreator &&
+        chainId === 50312 &&
+        gameState.phase === GamePhase.LOBBY &&
+        currentRoomId !== null &&
+        openSeats >= 3;
 
     const handleStart = async () => {
         if (isTxPending) return;
         await startGameOnChain();
+    };
+
+    const handleAddAgents = async () => {
+        if (!currentRoomId || chainId !== 50312 || isAddingAgents) return;
+        setIsAddingAgents(true);
+        setAgentFillError(null);
+        setAgentFillMessage(null);
+        try {
+            const res = await fetch('/api/game/agents/fill-room', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId: currentRoomId.toString(),
+                    chainId,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data?.error || 'Failed to add agents');
+            }
+            const outcomes = Array.isArray(data?.outcomes) ? data.outcomes : [];
+            const filled = outcomes.filter((o: any) =>
+                o?.status === 'filled' || o?.status === 'skipped-already-in-room'
+            ).length;
+            setAgentFillMessage(`Agents ready: ${filled}/3`);
+            await refreshPlayersList(currentRoomId);
+        } catch (err: any) {
+            setAgentFillError(String(err?.message ?? err));
+        } finally {
+            setIsAddingAgents(false);
+        }
     };
 
     return (
@@ -332,17 +370,44 @@ export const WaitingRoom: React.FC = () => {
                 )}
 
                 {/* Room creator can start the game when enough players */}
-                {canStartGame ? (
+                {(canStartGame || canAddAgents) ? (
                     <div className="w-full flex flex-col gap-3">
-                        <Button
-                            onClick={handleStart}
-                            isLoading={isTxPending}
-                            disabled={isTxPending}
-                            variant="primary-lobby"
-                            className="w-full h-[60px] md:h-[70px] text-xl tracking-widest uppercase shadow-[0_10px_40px_rgba(145,106,71,0.2)]"
-                        >
-                            {isTxPending ? "Starting..." : "Start Game"}
-                        </Button>
+                        {canAddAgents && (
+                            <div className="w-full flex flex-col gap-2">
+                                <Button
+                                    onClick={handleAddAgents}
+                                    disabled={isTxPending || isAddingAgents}
+                                    variant="secondary-lobby"
+                                    className="w-full h-[52px] text-sm tracking-widest uppercase"
+                                >
+                                    <span className="inline-flex items-center gap-2">
+                                        {isAddingAgents ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <Bot className="h-4 w-4" />
+                                        )}
+                                        Add 3 Agents
+                                    </span>
+                                </Button>
+                                {(agentFillMessage || agentFillError) && (
+                                    <p className={`text-center text-xs font-mono ${agentFillError ? 'text-red-400/80' : 'text-[#C49A3C]/80'}`}>
+                                        {agentFillError || agentFillMessage}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {canStartGame && (
+                            <Button
+                                onClick={handleStart}
+                                isLoading={isTxPending}
+                                disabled={isTxPending}
+                                variant="primary-lobby"
+                                className="w-full h-[60px] md:h-[70px] text-xl tracking-widest uppercase shadow-[0_10px_40px_rgba(145,106,71,0.2)]"
+                            >
+                                {isTxPending ? "Starting..." : "Start Game"}
+                            </Button>
+                        )}
 
                         {gameState.isTournament && (
                             <button
