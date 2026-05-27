@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Loader2, MessageCircle, Send, X } from 'lucide-react';
 import { useGameContext } from '@/contexts/GameContext';
-import { GamePhase } from '@/types';
 import { gmWs } from '@/services/gmWebSocket';
 import { useSoundEffects } from '@/components/ui/SoundEffects';
 
@@ -63,11 +62,13 @@ export const ChatToggleButton: React.FC<{
         }
     }, [isExpanded, canWrite]);
 
+    const prevDayRef = useRef(gameState.dayCount);
     useEffect(() => {
-        if (gameState.phase !== GamePhase.DAY) {
+        if (gameState.dayCount !== prevDayRef.current) {
+            prevDayRef.current = gameState.dayCount;
             setMessages([]);
         }
-    }, [gameState.phase]);
+    }, [gameState.dayCount]);
 
     useEffect(() => {
         const unAgent = gmWs.on('agent-chat', (data: unknown) => {
@@ -127,17 +128,26 @@ export const ChatToggleButton: React.FC<{
         }
     };
 
+    // Label above a message is the player's on-chain nickname (agents included),
+    // resolved live from the room roster; falls back to whatever the sender sent.
+    const labelFor = useCallback((m: ChatMessage) => {
+        const p = gameState.players.find(
+            (pl) => pl.address.toLowerCase() === m.senderAddress.toLowerCase()
+        );
+        return p?.name || m.sender;
+    }, [gameState.players]);
+
     return (
         <div className="relative flex flex-col items-end">
             <AnimatePresence>
                 {isExpanded && (
                     <motion.div
                         initial={{ opacity: 0, height: 0, scaleY: 0 }}
-                        animate={{ opacity: 1, height: 384, scaleY: 1 }}
+                        animate={{ opacity: 1, height: 480, scaleY: 1 }}
                         exit={{ opacity: 0, height: 0, scaleY: 0 }}
                         transition={{ duration: 0.25, ease: 'easeOut', opacity: { duration: 0.15 } }}
                         style={{ originY: 1, transformOrigin: 'bottom' }}
-                        className="absolute bottom-14 right-0 w-80 mb-2 bg-[#050505] border border-white/5 rounded-md shadow-[0_20px_50px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col z-[99]"
+                        className="absolute bottom-14 right-0 w-96 mb-2 bg-[#050505] border border-white/5 rounded-md shadow-[0_20px_50px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col z-[99]"
                     >
                         <div className="flex items-center justify-between px-4 py-3 border-b border-[#916A47]/15 bg-[#0A0908]">
                             <div className="flex items-center gap-2">
@@ -168,7 +178,7 @@ export const ChatToggleButton: React.FC<{
                                             className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} ${sameSenderAsPrev ? 'mt-0.5' : ''}`}
                                         >
                                             {!sameSenderAsPrev && (
-                                                <span className="text-[10px] text-white/60 mb-0.5 px-2">{msg.sender}</span>
+                                                <span className="text-[10px] text-white/60 mb-0.5 px-2">{labelFor(msg)}</span>
                                             )}
                                             <div
                                                 className={`max-w-[80%] px-3 py-2 rounded-sm text-sm border ${isMe
