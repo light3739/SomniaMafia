@@ -17,6 +17,7 @@ import { useSoundEffects } from '../ui/SoundEffects';
 import { Trophy, Skull, Users, Shield, Search, Home, RotateCcw, Eye, Coins, Share2, Swords } from 'lucide-react';
 import { MicButton } from './MicButton';
 import { ShareModal } from './ShareModal';
+import { AgentReport } from './AgentReport';
 
 // Payload shape matches somnia-mafia-gm-server/src/routes/roomRoutes.ts (rematch-invite broadcast)
 interface RematchInvitePayload {
@@ -974,6 +975,8 @@ export const GameOver: React.FC = React.memo(() => {
                             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
                             className="w-full max-w-2xl mt-10 flex flex-col gap-3"
                         >
+                            <AgentReport />
+
                             {/* Tournament: Fallback distribute */}
                             {gameState.isTournament && prizeDistributionFailed && !prizesClaimed && (
                                 <Button
