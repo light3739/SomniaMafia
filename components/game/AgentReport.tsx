@@ -421,11 +421,27 @@ export const AgentReport: React.FC = React.memo(() => {
 
     useEffect(() => {
         let cancelled = false;
+        let timer: ReturnType<typeof setTimeout> | null = null;
         setAuditByAgent({});
 
-        const load = async () => {
-            if (!publicClient || !currentRoomId || !runtimeContractAddress) return;
-            setAuditLoading(true);
+        // Post-game reveal lands a few seconds AFTER the game ends (the GM
+        // reveals each inference trace once the room is ENDED). The endgame
+        // overlay can't be reopened, so we can't rely on a manual refresh —
+        // instead re-poll the audit logs until every inference commit is
+        // revealed (badge flips committed -> verified live), or we give up.
+        const POLL_MS = 6000;
+        const MAX_ATTEMPTS = 25; // ~2.5 min
+
+        const allInferenceRevealed = (byAgent: AuditByAgent) => {
+            const inference = Object.values(byAgent).flat().filter((e) => e.kind === "inference");
+            return inference.length > 0 && inference.every((e) => e.revealed);
+        };
+
+        const load = async (attempt: number) => {
+            if (!publicClient || !currentRoomId || !runtimeContractAddress) {
+                if (!cancelled) setAuditLoading(false);
+                return;
+            }
             try {
                 const entries = await fetchAgentAuditEntries({
                     publicClient,
@@ -433,17 +449,30 @@ export const AgentReport: React.FC = React.memo(() => {
                     roomId: currentRoomId,
                     dayCount: gameState.dayCount,
                 });
-                if (!cancelled) setAuditByAgent(entries);
+                if (cancelled) return;
+                setAuditByAgent(entries);
+                const done = allInferenceRevealed(entries) || attempt >= MAX_ATTEMPTS;
+                if (done) {
+                    setAuditLoading(false);
+                } else {
+                    timer = setTimeout(() => void load(attempt + 1), POLL_MS);
+                }
             } catch (err) {
                 console.warn("[AgentReport] Failed to fetch agent audit counts:", err);
-            } finally {
-                if (!cancelled) setAuditLoading(false);
+                if (cancelled) return;
+                if (attempt < MAX_ATTEMPTS) {
+                    timer = setTimeout(() => void load(attempt + 1), POLL_MS);
+                } else {
+                    setAuditLoading(false);
+                }
             }
         };
 
-        void load();
+        setAuditLoading(true);
+        void load(0);
         return () => {
             cancelled = true;
+            if (timer) clearTimeout(timer);
         };
     }, [currentRoomId, gameState.dayCount, publicClient, runtimeContractAddress]);
 
